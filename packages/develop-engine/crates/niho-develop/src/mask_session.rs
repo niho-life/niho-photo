@@ -576,7 +576,8 @@ impl Session {
                     self.niho6_last_used.as_ref(),
                 ) {
                     (Quality::Interactive, true, Some((white, analysis)))
-                        if self.niho6_last_detail.as_ref() == Some(&detail_key) =>
+                        if self.niho6_last_detail.as_ref() == Some(&detail_key)
+                            && analysis.kind == niho6::analysis_kind(settings) =>
                     {
                         (*white, analysis.exposure_ev)
                     }

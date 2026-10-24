@@ -1,0 +1,242 @@
+{
+  "kind": "development-teachers-not-independent",
+  "commit": "a220848b8f638037447ecc16b36d72459bfd717f",
+  "rendererSha256": "b19b76d74064697bebc8c20ef2700a7456c0f7f157e8deee4dd84437e6a9c88f",
+  "cohortCounts": {
+    "teachers": 33,
+    "teachers2": 24
+  },
+  "noiseTolerance": 0.02,
+  "halfJnd": 0.5,
+  "blankExcluded": 2,
+  "independentImagesRead": 0,
+  "protocol": {
+    "renderLongEdge": 2048,
+    "compareLongEdge": 1500,
+    "blur": 2,
+    "flatPixels": true,
+    "alignment": true
+  },
+  "summary": [
+    {
+      "engine": "niho-13",
+      "variant": "neutral",
+      "scenes": 57,
+      "mean": 0.25984561403508777,
+      "p99Mean": 0.9206789473684213,
+      "p99Max": 2.2148,
+      "p99Over8": 0
+    },
+    {
+      "engine": "niho-13",
+      "variant": "preset_bluesky2",
+      "scenes": 57,
+      "mean": 2.0975964912280705,
+      "p99Mean": 4.8729473684210545,
+      "p99Max": 10.0498,
+      "p99Over8": 4
+    },
+    {
+      "engine": "niho-13",
+      "variant": "preset_pastel",
+      "scenes": 57,
+      "mean": 2.777317543859648,
+      "p99Mean": 6.21717192982456,
+      "p99Max": 9.583,
+      "p99Over8": 5
+    },
+    {
+      "engine": "niho-13",
+      "variant": "preset_colorful",
+      "scenes": 57,
+      "mean": 2.535831578947368,
+      "p99Mean": 6.3743298245614035,
+      "p99Max": 13.6035,
+      "p99Over8": 14
+    },
+    {
+      "engine": "niho-14",
+      "variant": "neutral",
+      "scenes": 57,
+      "mean": 0.25984561403508777,
+      "p99Mean": 0.9206789473684213,
+      "p99Max": 2.2148,
+      "p99Over8": 0
+    },
+    {
+      "engine": "niho-14",
+      "variant": "preset_bluesky2",
+      "scenes": 57,
+      "mean": 2.097591228070176,
+      "p99Mean": 4.872949122807017,
+      "p99Max": 10.0497,
+      "p99Over8": 4
+    },
+    {
+      "engine": "niho-14",
+      "variant": "preset_pastel",
+      "scenes": 57,
+      "mean": 2.7773263157894728,
+      "p99Mean": 6.217215789473684,
+      "p99Max": 9.5831,
+      "p99Over8": 5
+    },
+    {
+      "engine": "niho-14",
+      "variant": "preset_colorful",
+      "scenes": 57,
+      "mean": 2.5358280701754388,
+      "p99Mean": 6.374149122807018,
+      "p99Max": 13.6034,
+      "p99Over8": 14
+    }
+  ],
+  "comparisons": [
+    {
+      "engine": "niho-14",
+      "baseline": "niho-13",
+      "pairs": 228,
+      "meanRegressions": 11,
+      "p99Regressions": 39,
+      "meanRegressionsOverNoise": 0,
+      "p99RegressionsOverNoise": 0,
+      "meanIncreaseAtLeastHalfJnd": 0,
+      "maxMeanIncrease": 0.00010000000000021103,
+      "maxP99Increase": 0.000700000000000145,
+      "maxMeanDecrease": 0.00019999999999997797,
+      "maxP99Decrease": 0.010200000000000209,
+      "baselineP99Over8": 23,
+      "p99Over8": 23,
+      "newP99Over8": 0,
+      "byVariant": {
+        "neutral": {
+          "pairs": 57,
+          "meanRegressions": 0,
+          "p99Regressions": 0,
+          "meanRegressionsOverNoise": 0,
+          "p99RegressionsOverNoise": 0,
+          "meanIncreaseAtLeastHalfJnd": 0,
+          "maxMeanIncrease": 0.0,
+          "maxP99Increase": 0.0,
+          "maxMeanDecrease": -0.0,
+          "maxP99Decrease": -0.0,
+          "baselineP99Over8": 0,
+          "p99Over8": 0,
+          "newP99Over8": 0
+        },
+        "preset_bluesky2": {
+          "pairs": 57,
+          "meanRegressions": 1,
+          "p99Regressions": 12,
+          "meanRegressionsOverNoise": 0,
+          "p99RegressionsOverNoise": 0,
+          "meanIncreaseAtLeastHalfJnd": 0,
+          "maxMeanIncrease": 9.999999999998899e-05,
+          "maxP99Increase": 0.00039999999999995595,
+          "maxMeanDecrease": 9.999999999998899e-05,
+          "maxP99Decrease": 0.0005000000000006111,
+          "baselineP99Over8": 4,
+          "p99Over8": 4,
+          "newP99Over8": 0
+        },
+        "preset_pastel": {
+          "pairs": 57,
+          "meanRegressions": 5,
+          "p99Regressions": 17,
+          "meanRegressionsOverNoise": 0,
+          "p99RegressionsOverNoise": 0,
+          "meanIncreaseAtLeastHalfJnd": 0,
+          "maxMeanIncrease": 0.00010000000000021103,
+          "maxP99Increase": 0.000700000000000145,
+          "maxMeanDecrease": -0.0,
+          "maxP99Decrease": 0.00019999999999953388,
+          "baselineP99Over8": 5,
+          "p99Over8": 5,
+          "newP99Over8": 0
+        },
+        "preset_colorful": {
+          "pairs": 57,
+          "meanRegressions": 5,
+          "p99Regressions": 10,
+          "meanRegressionsOverNoise": 0,
+          "p99RegressionsOverNoise": 0,
+          "meanIncreaseAtLeastHalfJnd": 0,
+          "maxMeanIncrease": 0.00010000000000021103,
+          "maxP99Increase": 0.00039999999999995595,
+          "maxMeanDecrease": 0.00019999999999997797,
+          "maxP99Decrease": 0.010200000000000209,
+          "baselineP99Over8": 14,
+          "p99Over8": 14,
+          "newP99Over8": 0
+        }
+      }
+    }
+  ],
+  "seconds": 443.54856341698905,
+  "identicalRenders": {
+    "neutral": {
+      "pairs": 57,
+      "sameRenderedPngSha256": 57
+    },
+    "preset_bluesky2": {
+      "pairs": 57,
+      "sameRenderedPngSha256": 0
+    },
+    "preset_pastel": {
+      "pairs": 57,
+      "sameRenderedPngSha256": 0
+    },
+    "preset_colorful": {
+      "pairs": 57,
+      "sameRenderedPngSha256": 0
+    }
+  },
+  "rules": {
+    "perVariantMeanAndP99MeanIncreaseAtMost": 0.02,
+    "perPairMeanIncreaseBelow": 0.5,
+    "p99Over8MustNotIncrease": true
+  },
+  "ruleChecks": {
+    "neutral": {
+      "meanIncrease": 0.0,
+      "p99MeanIncrease": 0.0,
+      "p99Over8": [
+        0,
+        0
+      ]
+    },
+    "preset_bluesky2": {
+      "meanIncrease": -5e-06,
+      "p99MeanIncrease": 2e-06,
+      "p99Over8": [
+        4,
+        4
+      ]
+    },
+    "preset_pastel": {
+      "meanIncrease": 9e-06,
+      "p99MeanIncrease": 4.4e-05,
+      "p99Over8": [
+        5,
+        5
+      ]
+    },
+    "preset_colorful": {
+      "meanIncrease": -4e-06,
+      "p99MeanIncrease": -0.000181,
+      "p99Over8": [
+        14,
+        14
+      ]
+    }
+  },
+  "rulesPassed": true,
+  "measurementHost": "Mac Studio (M1 Max 64GB)",
+  "measurementDate": "2026-10-22",
+  "rustToolchain": "1.98.1",
+  "scopeNotes": [
+    "Development teachers already used by the existing model; not independent evaluation (the sealed independent cohort was not opened)",
+    "niho-13 is the baseline; the teachers (neutral and the three presets) carry no relative white balance, so the difference is the lighter H/S analysis only (neutral does not use the response and draws identical bytes)",
+    "Only anonymous aggregates are published; photos, scene names, private paths, manifest and input hashes and per-pair rows stay private"
+  ]
+}

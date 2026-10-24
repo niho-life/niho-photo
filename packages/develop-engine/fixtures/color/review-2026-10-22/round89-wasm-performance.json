@@ -1,0 +1,1709 @@
+{
+  "schema": "niho.color-review-wasm-timing.v3+runs",
+  "issue": 89,
+  "environment": "Node wasm SIMD on Mac Studio (M1 Max 64GB), nice -n 10, other work on the host; browser/device performance remains separate",
+  "measurementDate": "2026-10-22",
+  "rustToolchain": "1.98.1",
+  "builds": {
+    "base": {
+      "commit": "f4b878b",
+      "note": "before #89 (niho-13 as merged in #27)"
+    },
+    "final": {
+      "commit": "a220848",
+      "note": "#89: pixel-preserving speedups for every engine and the niho-14 engine"
+    }
+  },
+  "tool": "tools/color-review-wasm-bench.cjs (synthetic room/window PNG; Highlights -75, Shadows +55, exposure 0.2, blacks 40, vibrance 10, HSL; a contrast drag, then 5 Interactive ticks of the relative temperature and its release)",
+  "protocol": "6 runs per size; each run starts a fresh Node process per build (base, then final) with the engine order rotated; medians over the 6 runs. coldInteractive is the first frame after opening the photo (it includes the first analysis and the wasm baseline tier).",
+  "sizes": {
+    "1280x960": {
+      "loadAverage1m": {
+        "min": 3.76,
+        "max": 8.17
+      },
+      "node": "v24.18.0",
+      "inputSha256": "29a4d83584f5c7a3c0be63328aa3a66cce411a6ab3bc81cce356c44ecca858d0",
+      "engineBundles": {
+        "base": "niho-develop 0.24.0 (engine niho-13)",
+        "final": "niho-develop 0.25.0 (engine niho-14)"
+      },
+      "medians": {
+        "base/niho-12": {
+          "coldInteractive": 1073.3,
+          "coldFinal": 829.5,
+          "cachedInteractive": 43.6,
+          "cachedFinal": 190.4,
+          "editedInteractiveMedian": 114.9,
+          "editedInteractiveMax": 117.3,
+          "releasedFinal": 285.9,
+          "whiteBalanceInteractiveMedian": 76.4,
+          "whiteBalanceInteractiveMax": 78.9,
+          "whiteBalanceReleasedFinal": 215.6
+        },
+        "base/niho-13": {
+          "coldInteractive": 1067.3,
+          "coldFinal": 818.2,
+          "cachedInteractive": 42.9,
+          "cachedFinal": 186.3,
+          "editedInteractiveMedian": 114.4,
+          "editedInteractiveMax": 116.6,
+          "releasedFinal": 292.2,
+          "whiteBalanceInteractiveMedian": 100.7,
+          "whiteBalanceInteractiveMax": 107.2,
+          "whiteBalanceReleasedFinal": 1189.2
+        },
+        "final/niho-12": {
+          "coldInteractive": 782.3,
+          "coldFinal": 818.4,
+          "cachedInteractive": 43.7,
+          "cachedFinal": 186.8,
+          "editedInteractiveMedian": 113.8,
+          "editedInteractiveMax": 115.5,
+          "releasedFinal": 285.5,
+          "whiteBalanceInteractiveMedian": 75.3,
+          "whiteBalanceInteractiveMax": 78.5,
+          "whiteBalanceReleasedFinal": 220.4
+        },
+        "final/niho-13": {
+          "coldInteractive": 799.9,
+          "coldFinal": 788.0,
+          "cachedInteractive": 43.4,
+          "cachedFinal": 186.1,
+          "editedInteractiveMedian": 113.3,
+          "editedInteractiveMax": 116.2,
+          "releasedFinal": 288.9,
+          "whiteBalanceInteractiveMedian": 101.9,
+          "whiteBalanceInteractiveMax": 105.1,
+          "whiteBalanceReleasedFinal": 988.1
+        },
+        "final/niho-14": {
+          "coldInteractive": 352.2,
+          "coldFinal": 817.1,
+          "cachedInteractive": 44.8,
+          "cachedFinal": 186.1,
+          "editedInteractiveMedian": 114.2,
+          "editedInteractiveMax": 121.3,
+          "releasedFinal": 289.1,
+          "whiteBalanceInteractiveMedian": 102.9,
+          "whiteBalanceInteractiveMax": 104.5,
+          "whiteBalanceReleasedFinal": 551.0
+        }
+      },
+      "rows": [
+        {
+          "build": "base",
+          "run": 0,
+          "order": [
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            8.17,
+            7.59
+          ],
+          "timingsMs": {
+            "coldInteractive": 1200.2,
+            "coldFinal": 863.4,
+            "cachedInteractive": 45.4,
+            "cachedFinal": 194.9,
+            "editedInteractiveMedian": 116.3,
+            "editedInteractiveMax": 118.6,
+            "releasedFinal": 283.8,
+            "whiteBalanceInteractiveMedian": 76.0,
+            "whiteBalanceInteractiveMax": 81.2,
+            "whiteBalanceReleasedFinal": 220.1
+          }
+        },
+        {
+          "build": "base",
+          "run": 0,
+          "order": [
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            8.17,
+            7.59
+          ],
+          "timingsMs": {
+            "coldInteractive": 957.8,
+            "coldFinal": 795.4,
+            "cachedInteractive": 41.4,
+            "cachedFinal": 185.2,
+            "editedInteractiveMedian": 116.0,
+            "editedInteractiveMax": 118.8,
+            "releasedFinal": 295.3,
+            "whiteBalanceInteractiveMedian": 104.1,
+            "whiteBalanceInteractiveMax": 107.7,
+            "whiteBalanceReleasedFinal": 1187.2
+          }
+        },
+        {
+          "build": "final",
+          "run": 0,
+          "order": [
+            "niho-12",
+            "niho-13",
+            "niho-14"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            7.59,
+            6.81
+          ],
+          "timingsMs": {
+            "coldInteractive": 969.6,
+            "coldFinal": 825.0,
+            "cachedInteractive": 43.7,
+            "cachedFinal": 187.4,
+            "editedInteractiveMedian": 112.4,
+            "editedInteractiveMax": 113.1,
+            "releasedFinal": 284.1,
+            "whiteBalanceInteractiveMedian": 76.8,
+            "whiteBalanceInteractiveMax": 83.5,
+            "whiteBalanceReleasedFinal": 226.0
+          }
+        },
+        {
+          "build": "final",
+          "run": 0,
+          "order": [
+            "niho-12",
+            "niho-13",
+            "niho-14"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            7.59,
+            6.81
+          ],
+          "timingsMs": {
+            "coldInteractive": 775.0,
+            "coldFinal": 780.6,
+            "cachedInteractive": 42.2,
+            "cachedFinal": 186.2,
+            "editedInteractiveMedian": 113.7,
+            "editedInteractiveMax": 118.2,
+            "releasedFinal": 295.3,
+            "whiteBalanceInteractiveMedian": 102.5,
+            "whiteBalanceInteractiveMax": 115.9,
+            "whiteBalanceReleasedFinal": 1010.0
+          }
+        },
+        {
+          "build": "final",
+          "run": 0,
+          "order": [
+            "niho-12",
+            "niho-13",
+            "niho-14"
+          ],
+          "engine": "niho-14",
+          "loadAverage1m": [
+            7.59,
+            6.81
+          ],
+          "timingsMs": {
+            "coldInteractive": 349.8,
+            "coldFinal": 780.7,
+            "cachedInteractive": 44.8,
+            "cachedFinal": 185.6,
+            "editedInteractiveMedian": 117.5,
+            "editedInteractiveMax": 124.0,
+            "releasedFinal": 295.5,
+            "whiteBalanceInteractiveMedian": 99.0,
+            "whiteBalanceInteractiveMax": 99.4,
+            "whiteBalanceReleasedFinal": 534.2
+          }
+        },
+        {
+          "build": "base",
+          "run": 1,
+          "order": [
+            "niho-13",
+            "niho-12"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            6.81,
+            6.45
+          ],
+          "timingsMs": {
+            "coldInteractive": 1138.0,
+            "coldFinal": 853.2,
+            "cachedInteractive": 44.1,
+            "cachedFinal": 195.5,
+            "editedInteractiveMedian": 116.0,
+            "editedInteractiveMax": 117.9,
+            "releasedFinal": 296.6,
+            "whiteBalanceInteractiveMedian": 102.9,
+            "whiteBalanceInteractiveMax": 108.1,
+            "whiteBalanceReleasedFinal": 1191.1
+          }
+        },
+        {
+          "build": "base",
+          "run": 1,
+          "order": [
+            "niho-13",
+            "niho-12"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            6.81,
+            6.45
+          ],
+          "timingsMs": {
+            "coldInteractive": 949.8,
+            "coldFinal": 779.9,
+            "cachedInteractive": 42.9,
+            "cachedFinal": 185.5,
+            "editedInteractiveMedian": 110.4,
+            "editedInteractiveMax": 111.5,
+            "releasedFinal": 282.3,
+            "whiteBalanceInteractiveMedian": 72.6,
+            "whiteBalanceInteractiveMax": 76.3,
+            "whiteBalanceReleasedFinal": 215.8
+          }
+        },
+        {
+          "build": "final",
+          "run": 1,
+          "order": [
+            "niho-13",
+            "niho-14",
+            "niho-12"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            6.45,
+            5.93
+          ],
+          "timingsMs": {
+            "coldInteractive": 995.2,
+            "coldFinal": 876.0,
+            "cachedInteractive": 43.2,
+            "cachedFinal": 187.1,
+            "editedInteractiveMedian": 112.7,
+            "editedInteractiveMax": 113.4,
+            "releasedFinal": 281.5,
+            "whiteBalanceInteractiveMedian": 98.8,
+            "whiteBalanceInteractiveMax": 103.7,
+            "whiteBalanceReleasedFinal": 966.3
+          }
+        },
+        {
+          "build": "final",
+          "run": 1,
+          "order": [
+            "niho-13",
+            "niho-14",
+            "niho-12"
+          ],
+          "engine": "niho-14",
+          "loadAverage1m": [
+            6.45,
+            5.93
+          ],
+          "timingsMs": {
+            "coldInteractive": 335.6,
+            "coldFinal": 782.8,
+            "cachedInteractive": 43.8,
+            "cachedFinal": 185.5,
+            "editedInteractiveMedian": 113.4,
+            "editedInteractiveMax": 113.6,
+            "releasedFinal": 282.4,
+            "whiteBalanceInteractiveMedian": 103.0,
+            "whiteBalanceInteractiveMax": 107.6,
+            "whiteBalanceReleasedFinal": 572.0
+          }
+        },
+        {
+          "build": "final",
+          "run": 1,
+          "order": [
+            "niho-13",
+            "niho-14",
+            "niho-12"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            6.45,
+            5.93
+          ],
+          "timingsMs": {
+            "coldInteractive": 793.4,
+            "coldFinal": 814.2,
+            "cachedInteractive": 44.1,
+            "cachedFinal": 185.7,
+            "editedInteractiveMedian": 111.2,
+            "editedInteractiveMax": 113.4,
+            "releasedFinal": 281.9,
+            "whiteBalanceInteractiveMedian": 73.9,
+            "whiteBalanceInteractiveMax": 74.1,
+            "whiteBalanceReleasedFinal": 215.0
+          }
+        },
+        {
+          "build": "base",
+          "run": 2,
+          "order": [
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            5.93,
+            5.32
+          ],
+          "timingsMs": {
+            "coldInteractive": 1145.4,
+            "coldFinal": 862.0,
+            "cachedInteractive": 41.8,
+            "cachedFinal": 186.1,
+            "editedInteractiveMedian": 113.4,
+            "editedInteractiveMax": 116.9,
+            "releasedFinal": 296.2,
+            "whiteBalanceInteractiveMedian": 77.8,
+            "whiteBalanceInteractiveMax": 79.2,
+            "whiteBalanceReleasedFinal": 226.2
+          }
+        },
+        {
+          "build": "base",
+          "run": 2,
+          "order": [
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            5.93,
+            5.32
+          ],
+          "timingsMs": {
+            "coldInteractive": 1001.2,
+            "coldFinal": 783.1,
+            "cachedInteractive": 41.1,
+            "cachedFinal": 186.2,
+            "editedInteractiveMedian": 112.0,
+            "editedInteractiveMax": 114.9,
+            "releasedFinal": 281.8,
+            "whiteBalanceInteractiveMedian": 98.5,
+            "whiteBalanceInteractiveMax": 102.8,
+            "whiteBalanceReleasedFinal": 1202.0
+          }
+        },
+        {
+          "build": "final",
+          "run": 2,
+          "order": [
+            "niho-14",
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-14",
+          "loadAverage1m": [
+            5.32,
+            4.88
+          ],
+          "timingsMs": {
+            "coldInteractive": 513.4,
+            "coldFinal": 851.6,
+            "cachedInteractive": 46.0,
+            "cachedFinal": 194.6,
+            "editedInteractiveMedian": 118.0,
+            "editedInteractiveMax": 120.1,
+            "releasedFinal": 296.3,
+            "whiteBalanceInteractiveMedian": 105.2,
+            "whiteBalanceInteractiveMax": 110.6,
+            "whiteBalanceReleasedFinal": 541.3
+          }
+        },
+        {
+          "build": "final",
+          "run": 2,
+          "order": [
+            "niho-14",
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            5.32,
+            4.88
+          ],
+          "timingsMs": {
+            "coldInteractive": 771.3,
+            "coldFinal": 817.2,
+            "cachedInteractive": 45.1,
+            "cachedFinal": 186.2,
+            "editedInteractiveMedian": 112.9,
+            "editedInteractiveMax": 113.6,
+            "releasedFinal": 283.0,
+            "whiteBalanceInteractiveMedian": 72.9,
+            "whiteBalanceInteractiveMax": 75.3,
+            "whiteBalanceReleasedFinal": 215.3
+          }
+        },
+        {
+          "build": "final",
+          "run": 2,
+          "order": [
+            "niho-14",
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            5.32,
+            4.88
+          ],
+          "timingsMs": {
+            "coldInteractive": 762.8,
+            "coldFinal": 791.3,
+            "cachedInteractive": 44.3,
+            "cachedFinal": 194.8,
+            "editedInteractiveMedian": 117.3,
+            "editedInteractiveMax": 120.0,
+            "releasedFinal": 296.3,
+            "whiteBalanceInteractiveMedian": 102.1,
+            "whiteBalanceInteractiveMax": 103.8,
+            "whiteBalanceReleasedFinal": 1015.5
+          }
+        },
+        {
+          "build": "base",
+          "run": 3,
+          "order": [
+            "niho-13",
+            "niho-12"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            4.88,
+            4.43
+          ],
+          "timingsMs": {
+            "coldInteractive": 1133.5,
+            "coldFinal": 823.9,
+            "cachedInteractive": 47.0,
+            "cachedFinal": 186.1,
+            "editedInteractiveMedian": 112.8,
+            "editedInteractiveMax": 115.3,
+            "releasedFinal": 289.8,
+            "whiteBalanceInteractiveMedian": 98.7,
+            "whiteBalanceInteractiveMax": 106.8,
+            "whiteBalanceReleasedFinal": 1220.1
+          }
+        },
+        {
+          "build": "base",
+          "run": 3,
+          "order": [
+            "niho-13",
+            "niho-12"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            4.88,
+            4.43
+          ],
+          "timingsMs": {
+            "coldInteractive": 1011.9,
+            "coldFinal": 779.9,
+            "cachedInteractive": 41.9,
+            "cachedFinal": 185.7,
+            "editedInteractiveMedian": 113.5,
+            "editedInteractiveMax": 114.8,
+            "releasedFinal": 282.5,
+            "whiteBalanceInteractiveMedian": 75.1,
+            "whiteBalanceInteractiveMax": 78.6,
+            "whiteBalanceReleasedFinal": 214.9
+          }
+        },
+        {
+          "build": "final",
+          "run": 3,
+          "order": [
+            "niho-12",
+            "niho-13",
+            "niho-14"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            4.43,
+            4.13
+          ],
+          "timingsMs": {
+            "coldInteractive": 940.6,
+            "coldFinal": 830.3,
+            "cachedInteractive": 43.7,
+            "cachedFinal": 197.7,
+            "editedInteractiveMedian": 121.2,
+            "editedInteractiveMax": 123.2,
+            "releasedFinal": 297.2,
+            "whiteBalanceInteractiveMedian": 77.1,
+            "whiteBalanceInteractiveMax": 81.7,
+            "whiteBalanceReleasedFinal": 226.9
+          }
+        },
+        {
+          "build": "final",
+          "run": 3,
+          "order": [
+            "niho-12",
+            "niho-13",
+            "niho-14"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            4.43,
+            4.13
+          ],
+          "timingsMs": {
+            "coldInteractive": 824.8,
+            "coldFinal": 782.5,
+            "cachedInteractive": 43.0,
+            "cachedFinal": 185.8,
+            "editedInteractiveMedian": 112.8,
+            "editedInteractiveMax": 113.2,
+            "releasedFinal": 281.5,
+            "whiteBalanceInteractiveMedian": 101.7,
+            "whiteBalanceInteractiveMax": 103.7,
+            "whiteBalanceReleasedFinal": 964.7
+          }
+        },
+        {
+          "build": "final",
+          "run": 3,
+          "order": [
+            "niho-12",
+            "niho-13",
+            "niho-14"
+          ],
+          "engine": "niho-14",
+          "loadAverage1m": [
+            4.43,
+            4.13
+          ],
+          "timingsMs": {
+            "coldInteractive": 347.7,
+            "coldFinal": 813.1,
+            "cachedInteractive": 44.4,
+            "cachedFinal": 185.3,
+            "editedInteractiveMedian": 114.9,
+            "editedInteractiveMax": 122.6,
+            "releasedFinal": 295.5,
+            "whiteBalanceInteractiveMedian": 103.1,
+            "whiteBalanceInteractiveMax": 104.6,
+            "whiteBalanceReleasedFinal": 560.7
+          }
+        },
+        {
+          "build": "base",
+          "run": 4,
+          "order": [
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            4.13,
+            4.19
+          ],
+          "timingsMs": {
+            "coldInteractive": 1134.8,
+            "coldFinal": 823.4,
+            "cachedInteractive": 44.4,
+            "cachedFinal": 194.9,
+            "editedInteractiveMedian": 118.2,
+            "editedInteractiveMax": 118.8,
+            "releasedFinal": 288.0,
+            "whiteBalanceInteractiveMedian": 76.8,
+            "whiteBalanceInteractiveMax": 81.1,
+            "whiteBalanceReleasedFinal": 215.3
+          }
+        },
+        {
+          "build": "base",
+          "run": 4,
+          "order": [
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            4.13,
+            4.19
+          ],
+          "timingsMs": {
+            "coldInteractive": 957.0,
+            "coldFinal": 812.5,
+            "cachedInteractive": 44.9,
+            "cachedFinal": 194.4,
+            "editedInteractiveMedian": 117.7,
+            "editedInteractiveMax": 119.8,
+            "releasedFinal": 294.7,
+            "whiteBalanceInteractiveMedian": 102.4,
+            "whiteBalanceInteractiveMax": 109.5,
+            "whiteBalanceReleasedFinal": 1171.4
+          }
+        },
+        {
+          "build": "final",
+          "run": 4,
+          "order": [
+            "niho-13",
+            "niho-14",
+            "niho-12"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            4.19,
+            4.01
+          ],
+          "timingsMs": {
+            "coldInteractive": 940.3,
+            "coldFinal": 824.3,
+            "cachedInteractive": 43.5,
+            "cachedFinal": 186.0,
+            "editedInteractiveMedian": 112.9,
+            "editedInteractiveMax": 114.2,
+            "releasedFinal": 282.5,
+            "whiteBalanceInteractiveMedian": 107.5,
+            "whiteBalanceInteractiveMax": 111.1,
+            "whiteBalanceReleasedFinal": 1011.1
+          }
+        },
+        {
+          "build": "final",
+          "run": 4,
+          "order": [
+            "niho-13",
+            "niho-14",
+            "niho-12"
+          ],
+          "engine": "niho-14",
+          "loadAverage1m": [
+            4.19,
+            4.01
+          ],
+          "timingsMs": {
+            "coldInteractive": 354.6,
+            "coldFinal": 821.1,
+            "cachedInteractive": 48.4,
+            "cachedFinal": 198.4,
+            "editedInteractiveMedian": 112.0,
+            "editedInteractiveMax": 124.2,
+            "releasedFinal": 282.6,
+            "whiteBalanceInteractiveMedian": 101.0,
+            "whiteBalanceInteractiveMax": 101.4,
+            "whiteBalanceReleasedFinal": 539.9
+          }
+        },
+        {
+          "build": "final",
+          "run": 4,
+          "order": [
+            "niho-13",
+            "niho-14",
+            "niho-12"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            4.19,
+            4.01
+          ],
+          "timingsMs": {
+            "coldInteractive": 755.8,
+            "coldFinal": 786.1,
+            "cachedInteractive": 43.5,
+            "cachedFinal": 185.4,
+            "editedInteractiveMedian": 114.7,
+            "editedInteractiveMax": 117.4,
+            "releasedFinal": 286.9,
+            "whiteBalanceInteractiveMedian": 78.2,
+            "whiteBalanceInteractiveMax": 82.9,
+            "whiteBalanceReleasedFinal": 225.4
+          }
+        },
+        {
+          "build": "base",
+          "run": 5,
+          "order": [
+            "niho-13",
+            "niho-12"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            4.01,
+            3.77
+          ],
+          "timingsMs": {
+            "coldInteractive": 1171.3,
+            "coldFinal": 823.9,
+            "cachedInteractive": 41.7,
+            "cachedFinal": 186.5,
+            "editedInteractiveMedian": 111.7,
+            "editedInteractiveMax": 112.4,
+            "releasedFinal": 282.0,
+            "whiteBalanceInteractiveMedian": 98.9,
+            "whiteBalanceInteractiveMax": 103.7,
+            "whiteBalanceReleasedFinal": 1159.7
+          }
+        },
+        {
+          "build": "base",
+          "run": 5,
+          "order": [
+            "niho-13",
+            "niho-12"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            4.01,
+            3.77
+          ],
+          "timingsMs": {
+            "coldInteractive": 960.0,
+            "coldFinal": 835.7,
+            "cachedInteractive": 46.7,
+            "cachedFinal": 194.7,
+            "editedInteractiveMedian": 117.1,
+            "editedInteractiveMax": 117.8,
+            "releasedFinal": 296.0,
+            "whiteBalanceInteractiveMedian": 77.3,
+            "whiteBalanceInteractiveMax": 78.4,
+            "whiteBalanceReleasedFinal": 215.4
+          }
+        },
+        {
+          "build": "final",
+          "run": 5,
+          "order": [
+            "niho-14",
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-14",
+          "loadAverage1m": [
+            3.77,
+            3.76
+          ],
+          "timingsMs": {
+            "coldInteractive": 515.6,
+            "coldFinal": 822.0,
+            "cachedInteractive": 44.7,
+            "cachedFinal": 186.5,
+            "editedInteractiveMedian": 112.6,
+            "editedInteractiveMax": 113.7,
+            "releasedFinal": 282.6,
+            "whiteBalanceInteractiveMedian": 102.8,
+            "whiteBalanceInteractiveMax": 104.5,
+            "whiteBalanceReleasedFinal": 568.8
+          }
+        },
+        {
+          "build": "final",
+          "run": 5,
+          "order": [
+            "niho-14",
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            3.77,
+            3.76
+          ],
+          "timingsMs": {
+            "coldInteractive": 769.8,
+            "coldFinal": 819.6,
+            "cachedInteractive": 43.2,
+            "cachedFinal": 193.6,
+            "editedInteractiveMedian": 118.2,
+            "editedInteractiveMax": 119.2,
+            "releasedFinal": 296.8,
+            "whiteBalanceInteractiveMedian": 72.5,
+            "whiteBalanceInteractiveMax": 74.6,
+            "whiteBalanceReleasedFinal": 215.4
+          }
+        },
+        {
+          "build": "final",
+          "run": 5,
+          "order": [
+            "niho-14",
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            3.77,
+            3.76
+          ],
+          "timingsMs": {
+            "coldInteractive": 765.7,
+            "coldFinal": 784.8,
+            "cachedInteractive": 45.7,
+            "cachedFinal": 185.7,
+            "editedInteractiveMedian": 118.4,
+            "editedInteractiveMax": 118.8,
+            "releasedFinal": 295.5,
+            "whiteBalanceInteractiveMedian": 100.3,
+            "whiteBalanceInteractiveMax": 106.4,
+            "whiteBalanceReleasedFinal": 965.8
+          }
+        }
+      ]
+    },
+    "1024x768": {
+      "loadAverage1m": {
+        "min": 2.44,
+        "max": 3.76
+      },
+      "node": "v24.18.0",
+      "inputSha256": "95c149d7585cb77d833e21943d494e6bfbd3c5501b1a66123cc6269c125a9e5a",
+      "engineBundles": {
+        "base": "niho-develop 0.24.0 (engine niho-13)",
+        "final": "niho-develop 0.25.0 (engine niho-14)"
+      },
+      "medians": {
+        "base/niho-12": {
+          "coldInteractive": 1070.9,
+          "coldFinal": 708.8,
+          "cachedInteractive": 28.8,
+          "cachedFinal": 121.9,
+          "editedInteractiveMedian": 98.5,
+          "editedInteractiveMax": 101.2,
+          "releasedFinal": 220.6,
+          "whiteBalanceInteractiveMedian": 48.4,
+          "whiteBalanceInteractiveMax": 48.9,
+          "whiteBalanceReleasedFinal": 139.3
+        },
+        "base/niho-13": {
+          "coldInteractive": 1064.7,
+          "coldFinal": 700.6,
+          "cachedInteractive": 29.2,
+          "cachedFinal": 119.2,
+          "editedInteractiveMedian": 99.2,
+          "editedInteractiveMax": 102.6,
+          "releasedFinal": 221.4,
+          "whiteBalanceInteractiveMedian": 65.4,
+          "whiteBalanceInteractiveMax": 70.3,
+          "whiteBalanceReleasedFinal": 1030.1
+        },
+        "final/niho-12": {
+          "coldInteractive": 774.6,
+          "coldFinal": 681.5,
+          "cachedInteractive": 28.3,
+          "cachedFinal": 119.3,
+          "editedInteractiveMedian": 96.6,
+          "editedInteractiveMax": 97.4,
+          "releasedFinal": 215.2,
+          "whiteBalanceInteractiveMedian": 48.1,
+          "whiteBalanceInteractiveMax": 48.9,
+          "whiteBalanceReleasedFinal": 137.7
+        },
+        "final/niho-13": {
+          "coldInteractive": 755.9,
+          "coldFinal": 670.8,
+          "cachedInteractive": 28.0,
+          "cachedFinal": 119.0,
+          "editedInteractiveMedian": 98.3,
+          "editedInteractiveMax": 99.8,
+          "releasedFinal": 215.2,
+          "whiteBalanceInteractiveMedian": 63.8,
+          "whiteBalanceInteractiveMax": 66.9,
+          "whiteBalanceReleasedFinal": 853.6
+        },
+        "final/niho-14": {
+          "coldInteractive": 347.2,
+          "coldFinal": 696.7,
+          "cachedInteractive": 29.1,
+          "cachedFinal": 124.3,
+          "editedInteractiveMedian": 102.5,
+          "editedInteractiveMax": 106.0,
+          "releasedFinal": 226.2,
+          "whiteBalanceInteractiveMedian": 66.8,
+          "whiteBalanceInteractiveMax": 71.1,
+          "whiteBalanceReleasedFinal": 424.1
+        }
+      },
+      "rows": [
+        {
+          "build": "base",
+          "run": 0,
+          "order": [
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            3.76,
+            3.62
+          ],
+          "timingsMs": {
+            "coldInteractive": 1204.2,
+            "coldFinal": 740.5,
+            "cachedInteractive": 29.1,
+            "cachedFinal": 119.6,
+            "editedInteractiveMedian": 97.4,
+            "editedInteractiveMax": 100.9,
+            "releasedFinal": 215.3,
+            "whiteBalanceInteractiveMedian": 46.9,
+            "whiteBalanceInteractiveMax": 47.4,
+            "whiteBalanceReleasedFinal": 138.7
+          }
+        },
+        {
+          "build": "base",
+          "run": 0,
+          "order": [
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            3.76,
+            3.62
+          ],
+          "timingsMs": {
+            "coldInteractive": 987.8,
+            "coldFinal": 662.3,
+            "cachedInteractive": 27.5,
+            "cachedFinal": 118.9,
+            "editedInteractiveMedian": 97.5,
+            "editedInteractiveMax": 100.2,
+            "releasedFinal": 217.5,
+            "whiteBalanceInteractiveMedian": 62.6,
+            "whiteBalanceInteractiveMax": 66.1,
+            "whiteBalanceReleasedFinal": 1030.5
+          }
+        },
+        {
+          "build": "final",
+          "run": 0,
+          "order": [
+            "niho-12",
+            "niho-13",
+            "niho-14"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            3.62,
+            3.29
+          ],
+          "timingsMs": {
+            "coldInteractive": 990.7,
+            "coldFinal": 741.8,
+            "cachedInteractive": 31.7,
+            "cachedFinal": 124.7,
+            "editedInteractiveMedian": 101.5,
+            "editedInteractiveMax": 102.6,
+            "releasedFinal": 221.4,
+            "whiteBalanceInteractiveMedian": 48.0,
+            "whiteBalanceInteractiveMax": 49.6,
+            "whiteBalanceReleasedFinal": 137.6
+          }
+        },
+        {
+          "build": "final",
+          "run": 0,
+          "order": [
+            "niho-12",
+            "niho-13",
+            "niho-14"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            3.62,
+            3.29
+          ],
+          "timingsMs": {
+            "coldInteractive": 756.0,
+            "coldFinal": 664.0,
+            "cachedInteractive": 30.7,
+            "cachedFinal": 118.6,
+            "editedInteractiveMedian": 98.8,
+            "editedInteractiveMax": 99.7,
+            "releasedFinal": 215.3,
+            "whiteBalanceInteractiveMedian": 63.7,
+            "whiteBalanceInteractiveMax": 66.8,
+            "whiteBalanceReleasedFinal": 834.1
+          }
+        },
+        {
+          "build": "final",
+          "run": 0,
+          "order": [
+            "niho-12",
+            "niho-13",
+            "niho-14"
+          ],
+          "engine": "niho-14",
+          "loadAverage1m": [
+            3.62,
+            3.29
+          ],
+          "timingsMs": {
+            "coldInteractive": 329.1,
+            "coldFinal": 694.8,
+            "cachedInteractive": 29.5,
+            "cachedFinal": 124.0,
+            "editedInteractiveMedian": 105.3,
+            "editedInteractiveMax": 108.8,
+            "releasedFinal": 232.0,
+            "whiteBalanceInteractiveMedian": 69.5,
+            "whiteBalanceInteractiveMax": 71.0,
+            "whiteBalanceReleasedFinal": 422.2
+          }
+        },
+        {
+          "build": "base",
+          "run": 1,
+          "order": [
+            "niho-13",
+            "niho-12"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            3.29,
+            3.1
+          ],
+          "timingsMs": {
+            "coldInteractive": 1141.6,
+            "coldFinal": 705.8,
+            "cachedInteractive": 30.0,
+            "cachedFinal": 118.7,
+            "editedInteractiveMedian": 96.2,
+            "editedInteractiveMax": 98.3,
+            "releasedFinal": 215.5,
+            "whiteBalanceInteractiveMedian": 65.4,
+            "whiteBalanceInteractiveMax": 68.7,
+            "whiteBalanceReleasedFinal": 1027.5
+          }
+        },
+        {
+          "build": "base",
+          "run": 1,
+          "order": [
+            "niho-13",
+            "niho-12"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            3.29,
+            3.1
+          ],
+          "timingsMs": {
+            "coldInteractive": 1002.3,
+            "coldFinal": 697.8,
+            "cachedInteractive": 28.5,
+            "cachedFinal": 124.5,
+            "editedInteractiveMedian": 101.2,
+            "editedInteractiveMax": 101.5,
+            "releasedFinal": 225.2,
+            "whiteBalanceInteractiveMedian": 48.4,
+            "whiteBalanceInteractiveMax": 48.8,
+            "whiteBalanceReleasedFinal": 139.9
+          }
+        },
+        {
+          "build": "final",
+          "run": 1,
+          "order": [
+            "niho-13",
+            "niho-14",
+            "niho-12"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            3.1,
+            3.08
+          ],
+          "timingsMs": {
+            "coldInteractive": 948.7,
+            "coldFinal": 710.0,
+            "cachedInteractive": 27.7,
+            "cachedFinal": 119.0,
+            "editedInteractiveMedian": 97.8,
+            "editedInteractiveMax": 99.9,
+            "releasedFinal": 215.2,
+            "whiteBalanceInteractiveMedian": 65.8,
+            "whiteBalanceInteractiveMax": 67.4,
+            "whiteBalanceReleasedFinal": 868.5
+          }
+        },
+        {
+          "build": "final",
+          "run": 1,
+          "order": [
+            "niho-13",
+            "niho-14",
+            "niho-12"
+          ],
+          "engine": "niho-14",
+          "loadAverage1m": [
+            3.1,
+            3.08
+          ],
+          "timingsMs": {
+            "coldInteractive": 331.8,
+            "coldFinal": 689.9,
+            "cachedInteractive": 29.3,
+            "cachedFinal": 124.7,
+            "editedInteractiveMedian": 102.5,
+            "editedInteractiveMax": 106.0,
+            "releasedFinal": 226.3,
+            "whiteBalanceInteractiveMedian": 65.8,
+            "whiteBalanceInteractiveMax": 66.2,
+            "whiteBalanceReleasedFinal": 420.6
+          }
+        },
+        {
+          "build": "final",
+          "run": 1,
+          "order": [
+            "niho-13",
+            "niho-14",
+            "niho-12"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            3.1,
+            3.08
+          ],
+          "timingsMs": {
+            "coldInteractive": 747.1,
+            "coldFinal": 663.8,
+            "cachedInteractive": 27.9,
+            "cachedFinal": 119.2,
+            "editedInteractiveMedian": 100.0,
+            "editedInteractiveMax": 105.2,
+            "releasedFinal": 214.5,
+            "whiteBalanceInteractiveMedian": 48.3,
+            "whiteBalanceInteractiveMax": 48.9,
+            "whiteBalanceReleasedFinal": 144.6
+          }
+        },
+        {
+          "build": "base",
+          "run": 2,
+          "order": [
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            3.08,
+            3.08
+          ],
+          "timingsMs": {
+            "coldInteractive": 1140.3,
+            "coldFinal": 719.7,
+            "cachedInteractive": 28.9,
+            "cachedFinal": 124.3,
+            "editedInteractiveMedian": 103.0,
+            "editedInteractiveMax": 107.2,
+            "releasedFinal": 226.7,
+            "whiteBalanceInteractiveMedian": 49.0,
+            "whiteBalanceInteractiveMax": 49.3,
+            "whiteBalanceReleasedFinal": 144.1
+          }
+        },
+        {
+          "build": "base",
+          "run": 2,
+          "order": [
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            3.08,
+            3.08
+          ],
+          "timingsMs": {
+            "coldInteractive": 980.3,
+            "coldFinal": 661.8,
+            "cachedInteractive": 29.5,
+            "cachedFinal": 118.6,
+            "editedInteractiveMedian": 100.6,
+            "editedInteractiveMax": 105.0,
+            "releasedFinal": 225.3,
+            "whiteBalanceInteractiveMedian": 67.4,
+            "whiteBalanceInteractiveMax": 71.5,
+            "whiteBalanceReleasedFinal": 1032.3
+          }
+        },
+        {
+          "build": "final",
+          "run": 2,
+          "order": [
+            "niho-14",
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-14",
+          "loadAverage1m": [
+            3.08,
+            2.83
+          ],
+          "timingsMs": {
+            "coldInteractive": 525.7,
+            "coldFinal": 705.0,
+            "cachedInteractive": 28.2,
+            "cachedFinal": 119.1,
+            "editedInteractiveMedian": 102.9,
+            "editedInteractiveMax": 104.4,
+            "releasedFinal": 226.1,
+            "whiteBalanceInteractiveMedian": 67.0,
+            "whiteBalanceInteractiveMax": 72.0,
+            "whiteBalanceReleasedFinal": 431.3
+          }
+        },
+        {
+          "build": "final",
+          "run": 2,
+          "order": [
+            "niho-14",
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            3.08,
+            2.83
+          ],
+          "timingsMs": {
+            "coldInteractive": 789.8,
+            "coldFinal": 697.7,
+            "cachedInteractive": 28.6,
+            "cachedFinal": 124.0,
+            "editedInteractiveMedian": 96.0,
+            "editedInteractiveMax": 97.3,
+            "releasedFinal": 215.4,
+            "whiteBalanceInteractiveMedian": 47.2,
+            "whiteBalanceInteractiveMax": 47.8,
+            "whiteBalanceReleasedFinal": 137.8
+          }
+        },
+        {
+          "build": "final",
+          "run": 2,
+          "order": [
+            "niho-14",
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            3.08,
+            2.83
+          ],
+          "timingsMs": {
+            "coldInteractive": 744.7,
+            "coldFinal": 663.8,
+            "cachedInteractive": 27.2,
+            "cachedFinal": 119.2,
+            "editedInteractiveMedian": 96.2,
+            "editedInteractiveMax": 97.8,
+            "releasedFinal": 215.1,
+            "whiteBalanceInteractiveMedian": 63.1,
+            "whiteBalanceInteractiveMax": 63.2,
+            "whiteBalanceReleasedFinal": 844.7
+          }
+        },
+        {
+          "build": "base",
+          "run": 3,
+          "order": [
+            "niho-13",
+            "niho-12"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            2.83,
+            2.77
+          ],
+          "timingsMs": {
+            "coldInteractive": 1215.1,
+            "coldFinal": 707.8,
+            "cachedInteractive": 28.5,
+            "cachedFinal": 119.5,
+            "editedInteractiveMedian": 97.7,
+            "editedInteractiveMax": 98.5,
+            "releasedFinal": 215.0,
+            "whiteBalanceInteractiveMedian": 63.9,
+            "whiteBalanceInteractiveMax": 73.2,
+            "whiteBalanceReleasedFinal": 1030.2
+          }
+        },
+        {
+          "build": "base",
+          "run": 3,
+          "order": [
+            "niho-13",
+            "niho-12"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            2.83,
+            2.77
+          ],
+          "timingsMs": {
+            "coldInteractive": 948.2,
+            "coldFinal": 661.4,
+            "cachedInteractive": 28.6,
+            "cachedFinal": 118.3,
+            "editedInteractiveMedian": 99.6,
+            "editedInteractiveMax": 102.7,
+            "releasedFinal": 230.8,
+            "whiteBalanceInteractiveMedian": 51.5,
+            "whiteBalanceInteractiveMax": 54.7,
+            "whiteBalanceReleasedFinal": 147.2
+          }
+        },
+        {
+          "build": "final",
+          "run": 3,
+          "order": [
+            "niho-12",
+            "niho-13",
+            "niho-14"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            2.77,
+            2.5
+          ],
+          "timingsMs": {
+            "coldInteractive": 994.1,
+            "coldFinal": 721.9,
+            "cachedInteractive": 28.0,
+            "cachedFinal": 119.2,
+            "editedInteractiveMedian": 96.0,
+            "editedInteractiveMax": 97.0,
+            "releasedFinal": 215.1,
+            "whiteBalanceInteractiveMedian": 48.8,
+            "whiteBalanceInteractiveMax": 48.9,
+            "whiteBalanceReleasedFinal": 137.6
+          }
+        },
+        {
+          "build": "final",
+          "run": 3,
+          "order": [
+            "niho-12",
+            "niho-13",
+            "niho-14"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            2.77,
+            2.5
+          ],
+          "timingsMs": {
+            "coldInteractive": 755.7,
+            "coldFinal": 663.1,
+            "cachedInteractive": 28.2,
+            "cachedFinal": 119.0,
+            "editedInteractiveMedian": 102.0,
+            "editedInteractiveMax": 105.0,
+            "releasedFinal": 225.6,
+            "whiteBalanceInteractiveMedian": 67.5,
+            "whiteBalanceInteractiveMax": 70.4,
+            "whiteBalanceReleasedFinal": 852.5
+          }
+        },
+        {
+          "build": "final",
+          "run": 3,
+          "order": [
+            "niho-12",
+            "niho-13",
+            "niho-14"
+          ],
+          "engine": "niho-14",
+          "loadAverage1m": [
+            2.77,
+            2.5
+          ],
+          "timingsMs": {
+            "coldInteractive": 346.2,
+            "coldFinal": 696.4,
+            "cachedInteractive": 28.9,
+            "cachedFinal": 124.4,
+            "editedInteractiveMedian": 102.4,
+            "editedInteractiveMax": 106.0,
+            "releasedFinal": 220.7,
+            "whiteBalanceInteractiveMedian": 64.6,
+            "whiteBalanceInteractiveMax": 65.3,
+            "whiteBalanceReleasedFinal": 408.2
+          }
+        },
+        {
+          "build": "base",
+          "run": 4,
+          "order": [
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            2.5,
+            2.46
+          ],
+          "timingsMs": {
+            "coldInteractive": 1139.5,
+            "coldFinal": 742.8,
+            "cachedInteractive": 29.4,
+            "cachedFinal": 124.8,
+            "editedInteractiveMedian": 97.2,
+            "editedInteractiveMax": 98.1,
+            "releasedFinal": 216.1,
+            "whiteBalanceInteractiveMedian": 46.7,
+            "whiteBalanceInteractiveMax": 47.1,
+            "whiteBalanceReleasedFinal": 137.2
+          }
+        },
+        {
+          "build": "base",
+          "run": 4,
+          "order": [
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            2.5,
+            2.46
+          ],
+          "timingsMs": {
+            "coldInteractive": 962.4,
+            "coldFinal": 695.4,
+            "cachedInteractive": 28.9,
+            "cachedFinal": 124.4,
+            "editedInteractiveMedian": 102.1,
+            "editedInteractiveMax": 105.7,
+            "releasedFinal": 225.3,
+            "whiteBalanceInteractiveMedian": 65.4,
+            "whiteBalanceInteractiveMax": 69.2,
+            "whiteBalanceReleasedFinal": 1029.9
+          }
+        },
+        {
+          "build": "final",
+          "run": 4,
+          "order": [
+            "niho-13",
+            "niho-14",
+            "niho-12"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            2.46,
+            2.72
+          ],
+          "timingsMs": {
+            "coldInteractive": 965.0,
+            "coldFinal": 706.1,
+            "cachedInteractive": 27.8,
+            "cachedFinal": 118.8,
+            "editedInteractiveMedian": 97.3,
+            "editedInteractiveMax": 99.1,
+            "releasedFinal": 215.3,
+            "whiteBalanceInteractiveMedian": 63.0,
+            "whiteBalanceInteractiveMax": 67.1,
+            "whiteBalanceReleasedFinal": 854.7
+          }
+        },
+        {
+          "build": "final",
+          "run": 4,
+          "order": [
+            "niho-13",
+            "niho-14",
+            "niho-12"
+          ],
+          "engine": "niho-14",
+          "loadAverage1m": [
+            2.46,
+            2.72
+          ],
+          "timingsMs": {
+            "coldInteractive": 348.2,
+            "coldFinal": 697.0,
+            "cachedInteractive": 28.7,
+            "cachedFinal": 124.2,
+            "editedInteractiveMedian": 102.4,
+            "editedInteractiveMax": 104.0,
+            "releasedFinal": 221.0,
+            "whiteBalanceInteractiveMedian": 66.7,
+            "whiteBalanceInteractiveMax": 71.2,
+            "whiteBalanceReleasedFinal": 426.1
+          }
+        },
+        {
+          "build": "final",
+          "run": 4,
+          "order": [
+            "niho-13",
+            "niho-14",
+            "niho-12"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            2.46,
+            2.72
+          ],
+          "timingsMs": {
+            "coldInteractive": 749.7,
+            "coldFinal": 665.4,
+            "cachedInteractive": 29.6,
+            "cachedFinal": 119.4,
+            "editedInteractiveMedian": 97.2,
+            "editedInteractiveMax": 97.6,
+            "releasedFinal": 216.9,
+            "whiteBalanceInteractiveMedian": 48.9,
+            "whiteBalanceInteractiveMax": 49.6,
+            "whiteBalanceReleasedFinal": 138.7
+          }
+        },
+        {
+          "build": "base",
+          "run": 5,
+          "order": [
+            "niho-13",
+            "niho-12"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            2.72,
+            2.61
+          ],
+          "timingsMs": {
+            "coldInteractive": 1148.8,
+            "coldFinal": 741.1,
+            "cachedInteractive": 30.1,
+            "cachedFinal": 126.6,
+            "editedInteractiveMedian": 104.3,
+            "editedInteractiveMax": 105.4,
+            "releasedFinal": 231.3,
+            "whiteBalanceInteractiveMedian": 67.9,
+            "whiteBalanceInteractiveMax": 74.0,
+            "whiteBalanceReleasedFinal": 1024.9
+          }
+        },
+        {
+          "build": "base",
+          "run": 5,
+          "order": [
+            "niho-13",
+            "niho-12"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            2.72,
+            2.61
+          ],
+          "timingsMs": {
+            "coldInteractive": 943.8,
+            "coldFinal": 663.2,
+            "cachedInteractive": 27.2,
+            "cachedFinal": 118.6,
+            "editedInteractiveMedian": 96.1,
+            "editedInteractiveMax": 96.6,
+            "releasedFinal": 214.6,
+            "whiteBalanceInteractiveMedian": 48.4,
+            "whiteBalanceInteractiveMax": 49.0,
+            "whiteBalanceReleasedFinal": 138.3
+          }
+        },
+        {
+          "build": "final",
+          "run": 5,
+          "order": [
+            "niho-14",
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-14",
+          "loadAverage1m": [
+            2.61,
+            2.44
+          ],
+          "timingsMs": {
+            "coldInteractive": 528.6,
+            "coldFinal": 756.1,
+            "cachedInteractive": 33.2,
+            "cachedFinal": 128.4,
+            "editedInteractiveMedian": 101.2,
+            "editedInteractiveMax": 106.0,
+            "releasedFinal": 226.8,
+            "whiteBalanceInteractiveMedian": 67.2,
+            "whiteBalanceInteractiveMax": 71.3,
+            "whiteBalanceReleasedFinal": 428.2
+          }
+        },
+        {
+          "build": "final",
+          "run": 5,
+          "order": [
+            "niho-14",
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-12",
+          "loadAverage1m": [
+            2.61,
+            2.44
+          ],
+          "timingsMs": {
+            "coldInteractive": 759.5,
+            "coldFinal": 662.6,
+            "cachedInteractive": 27.1,
+            "cachedFinal": 118.6,
+            "editedInteractiveMedian": 95.9,
+            "editedInteractiveMax": 96.7,
+            "releasedFinal": 214.5,
+            "whiteBalanceInteractiveMedian": 47.6,
+            "whiteBalanceInteractiveMax": 47.9,
+            "whiteBalanceReleasedFinal": 137.4
+          }
+        },
+        {
+          "build": "final",
+          "run": 5,
+          "order": [
+            "niho-14",
+            "niho-12",
+            "niho-13"
+          ],
+          "engine": "niho-13",
+          "loadAverage1m": [
+            2.61,
+            2.44
+          ],
+          "timingsMs": {
+            "coldInteractive": 747.2,
+            "coldFinal": 677.6,
+            "cachedInteractive": 28.5,
+            "cachedFinal": 124.8,
+            "editedInteractiveMedian": 101.0,
+            "editedInteractiveMax": 101.8,
+            "releasedFinal": 215.0,
+            "whiteBalanceInteractiveMedian": 63.8,
+            "whiteBalanceInteractiveMax": 66.1,
+            "whiteBalanceReleasedFinal": 870.0
+          }
+        }
+      ]
+    }
+  }
+}

@@ -34,7 +34,9 @@ pub const LEGACY_SHARE: f64 = 0.5;
 /// changes cube entry precision, `niho-10` adds hue-stable saturation,
 /// `niho-12` is `niho-10` with float cubes and `niho-13` is `niho-12` with
 /// the relative white balance applied to the source (the analysis reads the
-/// balanced source); all deliberately reuse this response.
+/// balanced source); all deliberately reuse this response. `niho-14` is
+/// `niho-13` with a lighter analysis of the same response
+/// ([`AnalysisKind::Light`]).
 pub fn uses_raster_formula(settings: &DevelopSettings) -> bool {
     matches!(
         settings.engine.as_str(),
@@ -43,7 +45,38 @@ pub fn uses_raster_formula(settings: &DevelopSettings) -> bool {
             | crate::settings::ENGINE_NIHO_10
             | crate::settings::ENGINE_NIHO_12
             | crate::settings::ENGINE_NIHO_13
+            | crate::settings::ENGINE_NIHO_14
     )
+}
+
+/// How the response's analysis (features and networks) is computed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum AnalysisKind {
+    /// `niho-6`〜`niho-13`: the frozen features and `f64` networks
+    /// ([`niho6_response`]).
+    Frozen,
+    /// `niho-14`: the same response with the large local levels on reduced
+    /// planes and `f32` SIMD networks ([`crate::niho14_analysis`]).
+    Light,
+}
+
+impl AnalysisKind {
+    /// Part of the cache keys of what an analysis makes.
+    pub fn key(self) -> &'static str {
+        match self {
+            Self::Frozen => "frozen",
+            Self::Light => "light",
+        }
+    }
+}
+
+/// The analysis `settings`' engine uses.
+pub fn analysis_kind(settings: &DevelopSettings) -> AnalysisKind {
+    if settings.engine == crate::settings::ENGINE_NIHO_14 {
+        AnalysisKind::Light
+    } else {
+        AnalysisKind::Frozen
+    }
 }
 
 /// What a source's pixels are: decoded JPEG / PNG originals are extended
@@ -79,6 +112,8 @@ pub struct Analysis {
     pub maps: CoefficientMaps,
     /// The exposure the analysis was made at ([`analysis_exposure`]).
     pub exposure_ev: f64,
+    /// How it was made.
+    pub kind: AnalysisKind,
     pub source_width: usize,
     pub source_height: usize,
 }
@@ -144,11 +179,26 @@ pub fn source_features(
     source: &LinearImage,
     space: SourceSpace,
 ) -> Result<SourceFeatures, PrepareError> {
+    source_features_of(source, space, AnalysisKind::Frozen)
+}
+
+/// [`source_features`] made the `kind` way.
+pub fn source_features_of(
+    source: &LinearImage,
+    space: SourceSpace,
+    kind: AnalysisKind,
+) -> Result<SourceFeatures, PrepareError> {
     let small = analysis_image(source, space);
-    let features = niho6_response::features(&small.data, small.width, small.height)
-        .map_err(PrepareError::Response)?;
+    let features = match kind {
+        AnalysisKind::Frozen => niho6_response::features(&small.data, small.width, small.height),
+        AnalysisKind::Light => {
+            crate::niho14_analysis::features(&small.data, small.width, small.height)
+        }
+    }
+    .map_err(PrepareError::Response)?;
     Ok(SourceFeatures {
         features,
+        kind,
         source_width: source.width,
         source_height: source.height,
     })
@@ -158,17 +208,27 @@ pub fn source_features(
 #[derive(Debug)]
 pub struct SourceFeatures {
     pub features: niho6_response::Features,
+    /// How they were made (their networks are the same kind's).
+    pub kind: AnalysisKind,
     pub source_width: usize,
     pub source_height: usize,
 }
 
 /// The analysis of a source's features as seen at `exposure_ev`.
 pub fn analysis_at(features: &SourceFeatures, exposure_ev: f64) -> Result<Analysis, PrepareError> {
-    let maps = niho6_response::coefficient_maps_at(&features.features, exposure_ev)
-        .map_err(PrepareError::Response)?;
+    let maps = match features.kind {
+        AnalysisKind::Frozen => {
+            niho6_response::coefficient_maps_at(&features.features, exposure_ev)
+        }
+        AnalysisKind::Light => {
+            crate::niho14_analysis::coefficient_maps_at(&features.features, exposure_ev)
+        }
+    }
+    .map_err(PrepareError::Response)?;
     Ok(Analysis {
         maps,
         exposure_ev,
+        kind: features.kind,
         source_width: features.source_width,
         source_height: features.source_height,
     })
@@ -180,7 +240,17 @@ pub fn analysis(
     space: SourceSpace,
     exposure_ev: f64,
 ) -> Result<Analysis, PrepareError> {
-    analysis_at(&source_features(source, space)?, exposure_ev)
+    analysis_of(source, space, exposure_ev, AnalysisKind::Frozen)
+}
+
+/// [`analysis`] made the `kind` way.
+pub fn analysis_of(
+    source: &LinearImage,
+    space: SourceSpace,
+    exposure_ev: f64,
+    kind: AnalysisKind,
+) -> Result<Analysis, PrepareError> {
+    analysis_at(&source_features_of(source, space, kind)?, exposure_ev)
 }
 
 /// ProPhoto luminance of a value in `space` (`PP_LUMA`, and for linear sRGB
@@ -219,8 +289,13 @@ pub fn preparation_key(
             )
         },
     );
+    // The frozen analysis keeps its key as it was.
+    let kind = match analysis_kind(settings) {
+        AnalysisKind::Frozen => String::new(),
+        kind => format!("|{}", kind.key()),
+    };
     format!(
-        "niho6|{width}x{height}|{detail}|{}|{}|{analysis_exposure_ev}",
+        "niho6{kind}|{width}x{height}|{detail}|{}|{}|{analysis_exposure_ev}",
         settings.highlights.min(0.0),
         settings.shadows.max(0.0),
     )

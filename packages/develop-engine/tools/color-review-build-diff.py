@@ -5,7 +5,10 @@ Python environment (numpy/Pillow/OpenCV).
 
   color-review-build-diff.py --repo <checkout> --work <private-outside-repo> \
       --baseline-bin <niho-develop-render A> --candidate-bin <niho-develop-render B> \
-      [--engine niho-13] [--workers 6]
+      [--engine niho-13] [--candidate-engine niho-14] [--workers 6]
+
+`--candidate-engine` (default: `--engine`) renders the candidate with another
+engine, so one build can compare two engines (#89: niho-13 against niho-14).
 
 Every teacher input (`<work>/data/teachers*/inputs/<scene>__neutral.jpg`, blank
 ones excluded) is rendered by both builds at a 2048px long edge with each
@@ -43,11 +46,12 @@ def run_job(job):
     repo, work = Path(repo), Path(work)
     source = work / 'data' / cohort / 'inputs' / f'{scene}__neutral.jpg'
     settings = work / 'build-diff' / 'settings' / f'{preset}__{wb}.json'
+    candidate_settings = work / 'build-diff' / 'settings' / f'{preset}__{wb}__candidate.json'
     out = work / 'build-diff' / 'renders'
     a = out / 'baseline' / cohort / f'{scene}__{preset}__{wb}.png'
     b = out / 'candidate' / cohort / f'{scene}__{preset}__{wb}.png'
     render(baseline, settings, source, a)
-    render(candidate, settings, source, b)
+    render(candidate, candidate_settings, source, b)
     sys.path.insert(0, str(repo / 'packages/develop-engine/tools/colorcheck'))
     from colorcheck.compare import run_compare
     if digest(a) == digest(b):
@@ -68,7 +72,9 @@ def aggregate(rows):
     return {'pairs': len(rows), 'identical': sum(r['identical'] for r in rows),
             'meanOfMeans': sum(r['mean'] for r in rows) / len(rows), 'maxMean': max(r['mean'] for r in rows),
             'meanOfP99': sum(r['p99'] for r in rows) / len(rows), 'maxP99': max(r['p99'] for r in rows),
-            'maxMax': max(r['max'] for r in rows)}
+            'maxMax': max(r['max'] for r in rows),
+            # The #27 rule for an analysis that may move pixels: mean <= 0.3 and p99 <= 1.5 per pair.
+            'meanOver0_3': sum(r['mean'] > 0.3 for r in rows), 'p99Over1_5': sum(r['p99'] > 1.5 for r in rows)}
 
 
 def main():
@@ -78,8 +84,10 @@ def main():
     ap.add_argument('--baseline-bin', required=True, type=Path)
     ap.add_argument('--candidate-bin', required=True, type=Path)
     ap.add_argument('--engine', default='niho-13')
+    ap.add_argument('--candidate-engine', default=None)
     ap.add_argument('--workers', default=4, type=int)
     args = ap.parse_args()
+    candidate_engine = args.candidate_engine or args.engine
     if args.work.resolve() == args.repo.resolve() or args.repo.resolve() in args.work.resolve().parents:
         raise SystemExit('Private inputs/outputs must be outside the repository')
     settings_root = args.work / 'build-diff' / 'settings'
@@ -100,7 +108,10 @@ def main():
             value['whiteBalance'] = {'mode': 'relative'}
             value['relativeTemperature'] = temperature
             value['relativeTint'] = tint
+            value['engine'] = args.engine
             (settings_root / f'{preset}__{wb}.json').write_text(json.dumps(value))
+            value['engine'] = candidate_engine
+            (settings_root / f'{preset}__{wb}__candidate.json').write_text(json.dumps(value))
     sys.path.insert(0, str(args.repo / 'packages/develop-engine/tools/calibrate'))
     from fit_niho6_response import blank_input
     jobs, counts, skipped = [], {}, 0
@@ -128,6 +139,7 @@ def main():
     summary = {
         'kind': 'development-teachers-build-difference-not-independent',
         'engine': args.engine,
+        'candidateEngine': candidate_engine,
         'baselineSha256': digest(args.baseline_bin),
         'candidateSha256': digest(args.candidate_bin),
         'cohortCounts': counts, 'blankExcluded': skipped, 'independentImagesRead': 0,

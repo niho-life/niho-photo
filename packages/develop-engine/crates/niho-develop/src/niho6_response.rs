@@ -67,13 +67,14 @@ pub struct CoefficientMaps {
 }
 
 /// One response: its feature subset, normalization and network.
-struct Model {
-    features: Vec<usize>,
-    hidden1: usize,
-    hidden2: usize,
-    weights: Vec<f64>,
-    mean: Vec<f64>,
-    scale: Vec<f64>,
+pub(crate) struct Model {
+    pub(crate) features: Vec<usize>,
+    pub(crate) hidden1: usize,
+    pub(crate) hidden2: usize,
+    /// `W1` (input-major), `b1`, `W2`, `b2`, `W3`, `b3`.
+    pub(crate) weights: Vec<f64>,
+    pub(crate) mean: Vec<f64>,
+    pub(crate) scale: Vec<f64>,
 }
 
 impl Model {
@@ -84,6 +85,65 @@ impl Model {
     /// `(a, b)`. Every output adds its bias, then its inputs in order (no
     /// FMA, `libm`): native and wasm give the same bits.
     fn infer(&self, feature: &[f32; FEATURE_COUNT]) -> [f64; 2] {
+        match (self.features.len(), self.hidden1, self.hidden2) {
+            (FEATURE_COUNT, 8, 4) => self.infer_fixed::<FEATURE_COUNT, 8, 4>(feature),
+            _ => self.infer_reference(feature),
+        }
+    }
+
+    /// [`Self::infer`] for the embedded shape: the same additions in the
+    /// same order per output, with the outputs of a layer side by side (each
+    /// input adds to every output before the next input), so the compiler
+    /// keeps independent outputs in SIMD lanes. Bit for bit the reference.
+    #[inline]
+    fn infer_fixed<const N: usize, const H1: usize, const H2: usize>(
+        &self,
+        feature: &[f32; FEATURE_COUNT],
+    ) -> [f64; 2] {
+        let w1 = &self.weights[..N * H1];
+        let b1 = &self.weights[N * H1..N * H1 + H1];
+        let w2 = &self.weights[N * H1 + H1..N * H1 + H1 + H1 * H2];
+        let b2 = &self.weights[N * H1 + H1 + H1 * H2..N * H1 + H1 + H1 * H2 + H2];
+        let w3 = &self.weights[N * H1 + H1 + H1 * H2 + H2..N * H1 + H1 + H1 * H2 + H2 + H2 * 2];
+        let b3 = &self.weights[N * H1 + H1 + H1 * H2 + H2 + H2 * 2..];
+        let mut x = [0.0_f64; N];
+        for (slot, ((&index, mean), scale)) in x
+            .iter_mut()
+            .zip(self.features.iter().zip(&self.mean).zip(&self.scale))
+        {
+            *slot = ((f64::from(feature[index]) - mean) / scale).clamp(-6.0, 6.0);
+        }
+        let mut first = [0.0_f64; H1];
+        first.copy_from_slice(b1);
+        for (x, weights) in x.iter().zip(w1.chunks_exact(H1)) {
+            for (value, weight) in first.iter_mut().zip(weights) {
+                *value += x * weight;
+            }
+        }
+        for value in &mut first {
+            *value = libm::tanh(*value);
+        }
+        let mut second = [0.0_f64; H2];
+        second.copy_from_slice(b2);
+        for (x, weights) in first.iter().zip(w2.chunks_exact(H2)) {
+            for (value, weight) in second.iter_mut().zip(weights) {
+                *value += x * weight;
+            }
+        }
+        for value in &mut second {
+            *value = libm::tanh(*value);
+        }
+        let mut result = [b3[0], b3[1]];
+        for (x, weights) in second.iter().zip(w3.chunks_exact(2)) {
+            result[0] += x * weights[0];
+            result[1] += x * weights[1];
+        }
+        result.map(softplus)
+    }
+
+    /// The frozen definition: each output adds its bias, then its inputs in
+    /// order (no FMA, `libm`).
+    fn infer_reference(&self, feature: &[f32; FEATURE_COUNT]) -> [f64; 2] {
         let n = self.features.len();
         let (h1, h2) = (self.hidden1, self.hidden2);
         let w1 = 0;
@@ -135,8 +195,8 @@ fn softplus(value: f64) -> f64 {
 /// `out = rgb·G + (rgb − Y)·(C − G)`, `G = 2^(gH + gS)`,
 /// `C = 2^(αH·gH + αS·gS)` ([`crate::niho6`]).
 pub(crate) struct Models {
-    highlight: Model,
-    shadow: Model,
+    pub(crate) highlight: Model,
+    pub(crate) shadow: Model,
     pub(crate) highlight_chroma_alpha: f32,
     pub(crate) shadow_chroma_alpha: f32,
 }
@@ -267,13 +327,13 @@ fn parse_model(value: &Value, expected_sha: &str) -> Result<Model, String> {
 pub struct Features {
     pub width: usize,
     pub height: usize,
-    vectors: Vec<[f32; FEATURE_COUNT]>,
+    pub(crate) vectors: Vec<[f32; FEATURE_COUNT]>,
 }
 
 /// Feature indices that move with the exposure: `logY` and `meanLogY`. The
 /// others are differences or ratios of log luminances (local and global),
 /// so scaling the analysis image by `2^ev` leaves them as they are.
-const EXPOSURE_FEATURES: [usize; 2] = [0, 1];
+pub(crate) const EXPOSURE_FEATURES: [usize; 2] = [0, 1];
 
 pub fn features(
     linear_prophoto_rgb: &[f32],
@@ -398,6 +458,34 @@ pub fn gains(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn side_by_side_outputs_are_the_reference_accumulation() {
+        let models = models().expect("embedded models");
+        let mut state = 0x6c07_8965u32;
+        for model in [&models.highlight, &models.shadow] {
+            assert_eq!(
+                (model.features.len(), model.hidden1, model.hidden2),
+                (FEATURE_COUNT, 8, 4),
+                "the embedded shape takes the fast path"
+            );
+            for sample in 0..4096 {
+                let mut feature = [0.0_f32; FEATURE_COUNT];
+                for value in &mut feature {
+                    state = state.wrapping_mul(1_664_525).wrapping_add(1_013_904_223);
+                    let unit = state as f64 / u32::MAX as f64;
+                    *value = match sample % 3 {
+                        0 => (unit * 16.0 - 8.0) as f32,
+                        1 => (unit * 200.0 - 100.0) as f32,
+                        _ => (unit * 0.02 - 0.01) as f32,
+                    };
+                }
+                let fast = model.infer(&feature);
+                let reference = model.infer_reference(&feature);
+                assert_eq!(fast.map(f64::to_bits), reference.map(f64::to_bits));
+            }
+        }
+    }
 
     #[test]
     fn embedded_models_parse_and_give_signed_gains() {

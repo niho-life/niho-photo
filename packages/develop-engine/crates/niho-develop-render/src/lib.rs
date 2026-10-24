@@ -443,12 +443,12 @@ pub fn load_settings(text: &str) -> Result<DevelopSettings, CliError> {
         Some(Value::String(e)) if niho_develop::settings::is_known_engine(e) => {}
         Some(e) => {
             return Err(unsupported(format!(
-                "developSettings engine {e} is not supported (this build renders niho-1 through niho-8, niho-10, niho-11, niho-12, and niho-13)"
+                "developSettings engine {e} is not supported (this build renders niho-1 through niho-8 and niho-10 through niho-14)"
             )))
         }
         None => {
             return Err(unsupported(
-                "developSettings has no engine (this build renders niho-1 through niho-8, niho-10, niho-11, niho-12, and niho-13)".to_owned(),
+                "developSettings has no engine (this build renders niho-1 through niho-8 and niho-10 through niho-14)".to_owned(),
             ))
         }
     }

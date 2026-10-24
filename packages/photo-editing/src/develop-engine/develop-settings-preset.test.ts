@@ -113,12 +113,14 @@ describe("presetDevelopSettings", () => {
     expect(presetDevelopSettings(base, { ...base, contrast: 12 }).engine).toBe("niho-1");
   });
 
-  it("niho-10・niho-12・niho-13・signed の写真は Rust と同じく niho-2 へ昇格させず、写真の数式のまま", () => {
+  it("niho-10・niho-12・niho-13・niho-14・signed の写真は Rust と同じく niho-2 へ昇格させず、写真の数式のまま", () => {
     const relative = { relativeTemperature: 20, relativeTint: -10, whiteBalance: { mode: "relative" } };
     const raster: DevelopSettings = neutralDevelopSettings();
-    expect(raster.engine).toBe("niho-13");
-    expect(presetDevelopSettings(raster, { ...raster, ...relative, engine: "niho-2" })).toMatchObject({ engine: "niho-13", ...relative });
-    expect(presetDevelopSettings(raster, { ...raster, contrast: 12 }).engine).toBe("niho-13");
+    expect(raster.engine).toBe("niho-14");
+    expect(presetDevelopSettings(raster, { ...raster, ...relative, engine: "niho-2" })).toMatchObject({ engine: "niho-14", ...relative });
+    expect(presetDevelopSettings(raster, { ...raster, contrast: 12 }).engine).toBe("niho-14");
+    const raster13: DevelopSettings = { ...raster, engine: "niho-13" };
+    expect(presetDevelopSettings(raster13, { ...raster13, ...relative, engine: "niho-2" })).toMatchObject({ engine: "niho-13", ...relative });
     const raster12: DevelopSettings = { ...raster, engine: "niho-12" };
     expect(presetDevelopSettings(raster12, { ...raster12, ...relative, engine: "niho-2" })).toMatchObject({ engine: "niho-12", ...relative });
     const raster10: DevelopSettings = { ...raster, engine: "niho-10" };
@@ -134,11 +136,11 @@ describe("presetDevelopSettings", () => {
     });
     const signed9: DevelopSettings = { ...signed7, engine: "niho-11" };
     expect(presetDevelopSettings(signed9, { ...signed9, ...relative, engine: "niho-2" }).engine).toBe("niho-11");
-    // unsigned RAW の作業コピーの新規（niho-13）・保存済みの niho-2 はそのまま
+    // unsigned RAW の作業コピーの新規（niho-14）・保存済みの niho-2 はそのまま
     const raw: DevelopSettings = neutralDevelopSettings("raw-apple.d8.p1.e1.cal-none");
-    expect(raw.engine).toBe("niho-13");
-    expect(presetDevelopSettings(raw, { ...raw, ...relative }).engine).toBe("niho-13");
-    expect(presetDevelopSettings(raw, { ...raw, ...relative, engine: "niho-2" }).engine).toBe("niho-13");
+    expect(raw.engine).toBe("niho-14");
+    expect(presetDevelopSettings(raw, { ...raw, ...relative }).engine).toBe("niho-14");
+    expect(presetDevelopSettings(raw, { ...raw, ...relative, engine: "niho-2" }).engine).toBe("niho-14");
     const raw2: DevelopSettings = { ...raw, engine: "niho-2" };
     expect(presetDevelopSettings(raw2, { ...raw2, ...relative }).engine).toBe("niho-2");
   });

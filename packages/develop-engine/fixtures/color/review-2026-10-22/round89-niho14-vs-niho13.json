@@ -1,0 +1,330 @@
+{
+  "kind": "development-teachers-build-difference-not-independent",
+  "engine": "niho-13",
+  "candidateEngine": "niho-14",
+  "baselineSha256": "b19b76d74064697bebc8c20ef2700a7456c0f7f157e8deee4dd84437e6a9c88f",
+  "candidateSha256": "b19b76d74064697bebc8c20ef2700a7456c0f7f157e8deee4dd84437e6a9c88f",
+  "cohortCounts": {
+    "teachers": 33,
+    "teachers2": 24
+  },
+  "blankExcluded": 2,
+  "independentImagesRead": 0,
+  "protocol": {
+    "renderLongEdge": 2048,
+    "compareLongEdge": 1500,
+    "blur": 2,
+    "flatPixels": true,
+    "alignment": true,
+    "presets": [
+      "preset_bluesky2",
+      "preset_pastel",
+      "preset_colorful"
+    ],
+    "whiteBalances": {
+      "tp30": {
+        "relativeTemperature": 30,
+        "relativeTint": 0
+      },
+      "tm30": {
+        "relativeTemperature": -30,
+        "relativeTint": 0
+      },
+      "gp20": {
+        "relativeTemperature": 0,
+        "relativeTint": 20
+      },
+      "gm20": {
+        "relativeTemperature": 0,
+        "relativeTint": -20
+      },
+      "warm": {
+        "relativeTemperature": 30,
+        "relativeTint": 20
+      }
+    }
+  },
+  "all": {
+    "pairs": 855,
+    "identical": 0,
+    "meanOfMeans": 0.0001459649122807035,
+    "maxMean": 0.0007,
+    "meanOfP99": 0.003938596491228067,
+    "maxP99": 0.0098,
+    "maxMax": 0.1478,
+    "meanOver0_3": 0,
+    "p99Over1_5": 0
+  },
+  "byWhiteBalance": {
+    "tp30": {
+      "pairs": 171,
+      "identical": 0,
+      "meanOfMeans": 0.00013391812865497048,
+      "maxMean": 0.0006,
+      "meanOfP99": 0.0036695906432748556,
+      "maxP99": 0.0094,
+      "maxMax": 0.0736,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "tm30": {
+      "pairs": 171,
+      "identical": 0,
+      "meanOfMeans": 0.0001479532163742687,
+      "maxMean": 0.0007,
+      "meanOfP99": 0.003874853801169591,
+      "maxP99": 0.0083,
+      "maxMax": 0.1478,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gp20": {
+      "pairs": 171,
+      "identical": 0,
+      "meanOfMeans": 0.00016023391812865475,
+      "maxMean": 0.0005,
+      "meanOfP99": 0.004344444444444447,
+      "maxP99": 0.0089,
+      "maxMax": 0.1042,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gm20": {
+      "pairs": 171,
+      "identical": 0,
+      "meanOfMeans": 0.00015263157894736818,
+      "maxMean": 0.0005,
+      "meanOfP99": 0.004102923976608188,
+      "maxP99": 0.0084,
+      "maxMax": 0.0926,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "warm": {
+      "pairs": 171,
+      "identical": 0,
+      "meanOfMeans": 0.00013508771929824533,
+      "maxMean": 0.0006,
+      "meanOfP99": 0.0037011695906432754,
+      "maxP99": 0.0098,
+      "maxMax": 0.1024,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    }
+  },
+  "byPreset": {
+    "preset_bluesky2": {
+      "pairs": 285,
+      "identical": 0,
+      "meanOfMeans": 0.00011543859649122787,
+      "maxMean": 0.0005,
+      "meanOfP99": 0.003338245614035088,
+      "maxP99": 0.0087,
+      "maxMax": 0.1042,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "preset_pastel": {
+      "pairs": 285,
+      "identical": 0,
+      "meanOfMeans": 0.00013824561403508772,
+      "maxMean": 0.0007,
+      "meanOfP99": 0.003731228070175435,
+      "maxP99": 0.0083,
+      "maxMax": 0.1478,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "preset_colorful": {
+      "pairs": 285,
+      "identical": 0,
+      "meanOfMeans": 0.00018421052631578967,
+      "maxMean": 0.0006,
+      "meanOfP99": 0.004746315789473681,
+      "maxP99": 0.0098,
+      "maxMax": 0.076,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    }
+  },
+  "byWhiteBalanceAndPreset": {
+    "tp30/preset_bluesky2": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 9.824561403508773e-05,
+      "maxMean": 0.0003,
+      "meanOfP99": 0.003052631578947369,
+      "maxP99": 0.0076,
+      "maxMax": 0.0736,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "tp30/preset_pastel": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 0.00013508771929824566,
+      "maxMean": 0.0003,
+      "meanOfP99": 0.003585964912280701,
+      "maxP99": 0.0083,
+      "maxMax": 0.0547,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "tp30/preset_colorful": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 0.00016842105263157892,
+      "maxMean": 0.0006,
+      "meanOfP99": 0.00437017543859649,
+      "maxP99": 0.0094,
+      "maxMax": 0.0575,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "tm30/preset_bluesky2": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 0.00011754385964912282,
+      "maxMean": 0.0004,
+      "meanOfP99": 0.003443859649122806,
+      "maxP99": 0.0067,
+      "maxMax": 0.1016,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "tm30/preset_pastel": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 0.00014210526315789474,
+      "maxMean": 0.0007,
+      "meanOfP99": 0.003591228070175439,
+      "maxP99": 0.0072,
+      "maxMax": 0.1478,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "tm30/preset_colorful": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 0.00018421052631578943,
+      "maxMean": 0.0005,
+      "meanOfP99": 0.004589473684210525,
+      "maxP99": 0.0083,
+      "maxMax": 0.0642,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gp20/preset_bluesky2": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 0.00013508771929824566,
+      "maxMean": 0.0005,
+      "meanOfP99": 0.0037157894736842096,
+      "maxP99": 0.0087,
+      "maxMax": 0.1042,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gp20/preset_pastel": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 0.00014736842105263158,
+      "maxMean": 0.0004,
+      "meanOfP99": 0.004038596491228069,
+      "maxP99": 0.0081,
+      "maxMax": 0.0986,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gp20/preset_colorful": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 0.00019824561403508764,
+      "maxMean": 0.0004,
+      "meanOfP99": 0.005278947368421053,
+      "maxP99": 0.0089,
+      "maxMax": 0.076,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gm20/preset_bluesky2": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 0.00012631578947368423,
+      "maxMean": 0.0005,
+      "meanOfP99": 0.0034210526315789453,
+      "maxP99": 0.0073,
+      "maxMax": 0.0701,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gm20/preset_pastel": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 0.00013508771929824563,
+      "maxMean": 0.0003,
+      "meanOfP99": 0.0038719298245614036,
+      "maxP99": 0.0078,
+      "maxMax": 0.0926,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gm20/preset_colorful": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 0.0001964912280701754,
+      "maxMean": 0.0005,
+      "meanOfP99": 0.005015789473684209,
+      "maxP99": 0.0084,
+      "maxMax": 0.0678,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "warm/preset_bluesky2": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 0.00010000000000000003,
+      "maxMean": 0.0003,
+      "meanOfP99": 0.003057894736842104,
+      "maxP99": 0.0075,
+      "maxMax": 0.0633,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "warm/preset_pastel": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 0.0001315789473684211,
+      "maxMean": 0.0003,
+      "meanOfP99": 0.00356842105263158,
+      "maxP99": 0.0081,
+      "maxMax": 0.1024,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "warm/preset_colorful": {
+      "pairs": 57,
+      "identical": 0,
+      "meanOfMeans": 0.0001736842105263158,
+      "maxMean": 0.0006,
+      "meanOfP99": 0.004477192982456138,
+      "maxP99": 0.0098,
+      "maxMax": 0.0704,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    }
+  },
+  "seconds": 1362.8719165840012,
+  "question": "Pixel difference of niho-14 (lighter H/S analysis) against niho-13 on the development teachers with relative white balance (#89)",
+  "commit": "a220848",
+  "rule": "Each pair: mean <= 0.3 and p99 <= 1.5 (the #27 rule for an analysis that may move pixels), fixed before measuring (NIHO14.md)",
+  "rulePassed": true,
+  "measurementHost": "Mac Studio (M1 Max 64GB)",
+  "measurementDate": "2026-10-22",
+  "rustToolchain": "1.98.1",
+  "tool": "tools/color-review-build-diff.py --engine niho-13 --candidate-engine niho-14 (one build)",
+  "scopeNotes": [
+    "Development teachers; not independent evaluation (the sealed independent cohort was not opened)",
+    "Only anonymous aggregates are published; renders, rows and paths stay private"
+  ]
+}

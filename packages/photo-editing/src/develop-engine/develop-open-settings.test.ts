@@ -116,7 +116,7 @@ describe("resolveDevelopOpenSettings", () => {
     });
   });
 
-  it("未保存の raster・unsigned RAW の作業コピーは niho-13 で開き、保存済みの niho-2 / niho-10 / niho-12 は昇格させない（#27・#29）", () => {
+  it("未保存の raster・unsigned RAW の作業コピーは niho-14 で開き、保存済みの niho-2 / niho-10 / niho-12 / niho-13 は昇格させない（#89・#27・#29）", () => {
     const legacyRaw = "raw-apple.d8.p1.e1.cal-none";
     const raster = "raster.ci2.p2.e2.icc-srgb";
     for (const [baseVersion, workMeta] of [
@@ -125,7 +125,7 @@ describe("resolveDevelopOpenSettings", () => {
     ] as const) {
       expect(resolveDevelopOpenSettings({ cloudPhoto: cloudPhoto(), baseVersion, workMeta })).toMatchObject({
         kind: "settings",
-        baseSettings: { engine: "niho-13", look: "niho-standard-1", base: baseVersion },
+        baseSettings: { engine: "niho-14", look: "niho-standard-1", base: baseVersion },
         settingsSource: "none",
       });
     }
@@ -140,7 +140,7 @@ describe("resolveDevelopOpenSettings", () => {
       kind: "settings",
       baseSettings: { engine: "niho-10", base: raster },
     });
-    for (const engine of ["niho-12", "niho-13"]) {
+    for (const engine of ["niho-12", "niho-13", "niho-14"]) {
       expect(
         resolveDevelopOpenSettings({ cloudPhoto: cloudPhoto(saved(engine, legacyRaw)), baseVersion: legacyRaw, workMeta: { kind: "raw" } }),
       ).toMatchObject({ kind: "settings", baseSettings: { engine, base: legacyRaw }, settingsSource: "develop" });

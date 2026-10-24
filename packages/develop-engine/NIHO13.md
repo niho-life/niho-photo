@@ -1,6 +1,6 @@
 # niho-13 raster の相対 WB を先頭へ（#27）
 
-`niho-13` は Issue #27 の engine で、JPEG / PNG の原本・raster 作業コピー・unsigned（旧）RAW 作業コピーの**新規編集の既定**である。[`niho-12`](NIHO12.md) の数式（raster は `niho-10`、旧 RAW は `niho-2`、色の cube は float）のまま、raster の相対 WB（`relativeTemperature` / `relativeTint`）を**出力の最後ではなく処理の先頭**で当てる。保存済みの `niho-1`〜`niho-12` の補正はその engine のまま描き、`niho-13` へ昇格させない。
+`niho-13` は Issue #27 の engine で、JPEG / PNG の原本・raster 作業コピー・unsigned（旧）RAW 作業コピーの新規編集の既定だった（2026-10-22 の #89 で、H/S 応答の解析を軽くした [`niho-14`](NIHO14.md) が既定を引き継いだ。保存済みの `niho-13` は `niho-14` へ昇格させない）。[`niho-12`](NIHO12.md) の数式（raster は `niho-10`、旧 RAW は `niho-2`、色の cube は float）のまま、raster の相対 WB（`relativeTemperature` / `relativeTint`）を**出力の最後ではなく処理の先頭**で当てる。保存済みの `niho-1`〜`niho-12` の補正はその engine のまま描き、`niho-13` へ昇格させない。
 
 ## 数式と入力境界
 
@@ -113,7 +113,7 @@ p99 の悪化は端の飽和色（純青・純緑付近）に集まる。悪化�
 | 1280×960 | niho-13 | 124.0 / 304.1ms | 106.9 / 112.8ms | 1281.5ms |
 
 - WB の drag の 1 コマは、WB 済みの元画像（1280×960 で約 55ms）と `niho-6` の master を作り直す分だけ `niho-12`（出力側の LUT）より遅い。1280×960 で目安の 100ms をわずかに超えるが、同じ写真のコントラストの drag（124ms）より速い。
-- WB の確定は 1.1〜1.3 秒で、目安の 1 秒を超える（下の内訳。H/S 応答を使う設定のとき。使わない設定には解析が無く、確定は `niho-12` と同じ程度）。
+- WB の確定は 1.1〜1.3 秒で、目安の 1 秒を超える（下の内訳。H/S 応答を使う設定のとき。使わない設定には解析が無く、確定は `niho-12` と同じ程度）。#89 で解析を画素を変えずに速くし、軽い解析の [`niho-14`](NIHO14.md) を足した（再計測は NIHO14.md）。
 - 確定 cube の持ち越しの前（`6a73289`）は、WB の確定が 1594 / 1754ms、コントラストの確定が 625 / 698ms だった。
 - 旧 RAW の作業コピーは `niho-12` と同じ画素で、時間も同じ（[計測](fixtures/color/review-2026-10-21/round27-wasm-performance.json)の `legacyRaw`）。
 
@@ -162,6 +162,8 @@ p99 の悪化は端の飽和色（純青・純緑付近）に集まる。悪化�
 855 組全体では mean の平均 0.183・p99 の平均 0.560 だが、mean > 0.3 が 171 組、p99 > 1.5 が 40 組（どちらかを超えるのは 182 組、57 場面のうち 47 場面）あり、最大は mean 1.50・p99 4.34。組の平均でも温度 +30（と温度 +30 + tint +20）の colorful は mean 0.46 / 0.42 で規則を超える。差は温度を上げる WB で大きい（WB 済みの写真と WB 前の写真で、H/S 応答の解析が見る輝度と特徴が変わる）。規則を満たさないので代案は採らず、`niho-13` の解析は WB 済みの写真から作る定義のままとした。
 
 ## 既定と互換
+
+以下は `niho-13` が既定だったとき（crate 0.24.0）の記録。#89 以降の既定・版は [NIHO14.md](NIHO14.md) の「既定と互換」。
 
 - crate: `ENGINE_VERSION` は `niho-13`（reader capability）、workspace は 0.24.0。`DevelopSettings::neutral()` / `new_edit()` は互換の既定（`niho-1`）のまま。
 - 画面（`packages/photo-editing` の `develop-settings.ts`）: `DEVELOP_SETTINGS_ENGINE` は `niho-13`、保存済みの `niho-12` は `NIHO12_DEVELOP_SETTINGS_ENGINE`。直接描く JPEG / PNG、`raster.*`、unsigned の `raw-apple.*` の未保存の写真は `niho-13` で開く。作業コピーの無い RAW と版の分からない作業コピーは `niho-2`、signed RAW の既定（`niho-3` / `niho-11`）は変えない。

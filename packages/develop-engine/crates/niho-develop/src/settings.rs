@@ -119,6 +119,18 @@ pub const ENGINE_NIHO_12: &str = "niho-12";
 /// The pixels of saved `niho-13` settings are frozen from here on: a later
 /// formula change is a new engine, never a change of `niho-13`.
 pub const ENGINE_NIHO_13: &str = "niho-13";
+/// #89 renderer for new raster and legacy (unsigned) RAW edits: `niho-13`
+/// with a lighter analysis of the `niho-6` H/S response (`NIHO14.md`,
+/// `niho14_analysis.rs`): the local means of the two large levels (σ = 64
+/// and 128) are blurred on planes reduced 4 times and read back bilinearly,
+/// and the response networks run in `f32` (four pixels per SIMD vector,
+/// `exp`-based `tanh` / softplus). The response's coefficients, the analysis
+/// image, the gain and every other formula are `niho-13`'s; settings that do
+/// not use the response (no Highlights < 0 / Shadows > 0 on a raster
+/// source) and legacy unsigned RAW working copies draw `niho-13`'s bytes.
+/// Signed RAW and camera-linear input are refused. The pixels of saved
+/// `niho-14` settings are frozen from here on.
+pub const ENGINE_NIHO_14: &str = "niho-14";
 
 pub fn is_known_engine(engine: &str) -> bool {
     matches!(
@@ -135,20 +147,26 @@ pub fn is_known_engine(engine: &str) -> bool {
             | ENGINE_NIHO_8
             | ENGINE_NIHO_12
             | ENGINE_NIHO_13
+            | ENGINE_NIHO_14
     )
 }
 
 /// Engines whose raster / legacy-RAW cubes keep unquantized f32 entries
-/// (the `niho-8` candidate, `niho-12` and `niho-13`). Older engines keep
-/// their original cube precision so their saved pixels never change.
+/// (the `niho-8` candidate, `niho-12`, `niho-13` and `niho-14`). Older
+/// engines keep their original cube precision so their saved pixels never
+/// change.
 pub fn uses_float_cubes(engine: &str) -> bool {
-    matches!(engine, ENGINE_NIHO_8 | ENGINE_NIHO_12 | ENGINE_NIHO_13)
+    matches!(
+        engine,
+        ENGINE_NIHO_8 | ENGINE_NIHO_12 | ENGINE_NIHO_13 | ENGINE_NIHO_14
+    )
 }
 
 /// Engines that apply the relative white balance of a raster source to the
-/// source itself (`niho-13`, `head_wb.rs`) rather than to the output.
+/// source itself (`niho-13`, `niho-14`, `head_wb.rs`) rather than to the
+/// output.
 pub fn uses_head_white_balance(engine: &str) -> bool {
-    engine == ENGINE_NIHO_13
+    matches!(engine, ENGINE_NIHO_13 | ENGINE_NIHO_14)
 }
 /// Look versions (`look`): `niho-interim-1` is the identity and the default
 /// of settings that do not name one (S5 photos and converted Photo Bench
@@ -2219,7 +2237,13 @@ mod tests {
                 .engine,
             ENGINE_NIHO_13
         );
-        for unknown in ["niho-9", "niho-14"] {
+        assert_eq!(
+            DevelopSettings::from_json(r#"{"engine":"niho-14"}"#)
+                .unwrap()
+                .engine,
+            ENGINE_NIHO_14
+        );
+        for unknown in ["niho-9", "niho-15"] {
             assert_eq!(
                 DevelopSettings::from_json(&format!(r#"{{"engine":"{unknown}"}}"#))
                     .unwrap_err()

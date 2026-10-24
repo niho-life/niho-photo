@@ -1,0 +1,220 @@
+{
+  "issue": 89,
+  "measurementDate": "2026-10-22",
+  "rustToolchain": "1.98.1",
+  "environment": "Node wasm SIMD on Mac Studio (M1 Max 64GB), nice -n 10",
+  "input": "The synthetic photo of color-review-wasm-bench.cjs at 1280x960, linear sRGB; its 750x563 analysis image (linear ProPhoto)",
+  "tool": "A measuring build (not committed) that exposes the analysis stages of the same commit to JavaScript; timings are performance.now() around each call. Pixels are the same as the published build.",
+  "protocol": "3 processes per build (alternating); in each process 4 rounds, the first reported separately (it includes the wasm baseline tier), median of the other 3; the summary is the median over the 3 processes",
+  "builds": {
+    "base": "f4b878b",
+    "final": "a220848"
+  },
+  "stages": {
+    "frozenFeatures": "niho-6..13 features (26 per pixel)",
+    "frozenNetworks": "niho-6..13 highlight + shadow networks (f64)",
+    "blurSigmaN": "one Gaussian blur (sigma N, radius 4 sigma; sigma 1 is the 3-channel radius-4 pre-blur) of one plane; the features blur two planes at sigma 4/16/64/128",
+    "lightFeatures": "niho-14 features (sigma 64/128 on 4x reduced planes)",
+    "lightNetworks": "niho-14 networks (f32, 4 pixels per SIMD vector)"
+  },
+  "processes": {
+    "base": [
+      {
+        "size": [
+          1280,
+          960
+        ],
+        "loadAverage1m": 2.44,
+        "firstRound": {
+          "frozenFeatures": 370,
+          "frozenNetworks": 472.3,
+          "blurSigma1": 7.3,
+          "blurSigma4": 7.8,
+          "blurSigma16": 15.1,
+          "blurSigma64": 45.6,
+          "blurSigma128": 83.5
+        },
+        "median": {
+          "frozenFeatures": 333.5,
+          "frozenNetworks": 444.6,
+          "blurSigma1": 6.9,
+          "blurSigma4": 7.3,
+          "blurSigma16": 14.5,
+          "blurSigma64": 45.5,
+          "blurSigma128": 85
+        }
+      },
+      {
+        "size": [
+          1280,
+          960
+        ],
+        "loadAverage1m": 2.46,
+        "firstRound": {
+          "frozenFeatures": 361.6,
+          "frozenNetworks": 448.9,
+          "blurSigma1": 7,
+          "blurSigma4": 7.5,
+          "blurSigma16": 14.2,
+          "blurSigma64": 43.6,
+          "blurSigma128": 83.3
+        },
+        "median": {
+          "frozenFeatures": 336.7,
+          "frozenNetworks": 452.6,
+          "blurSigma1": 6.9,
+          "blurSigma4": 7.2,
+          "blurSigma16": 14.4,
+          "blurSigma64": 43.9,
+          "blurSigma128": 83.3
+        }
+      },
+      {
+        "size": [
+          1280,
+          960
+        ],
+        "loadAverage1m": 2.38,
+        "firstRound": {
+          "frozenFeatures": 370.1,
+          "frozenNetworks": 500.2,
+          "blurSigma1": 7.2,
+          "blurSigma4": 7.4,
+          "blurSigma16": 14.4,
+          "blurSigma64": 43.6,
+          "blurSigma128": 83
+        },
+        "median": {
+          "frozenFeatures": 335.2,
+          "frozenNetworks": 485.9,
+          "blurSigma1": 6.8,
+          "blurSigma4": 7.2,
+          "blurSigma16": 14.3,
+          "blurSigma64": 43.8,
+          "blurSigma128": 83.3
+        }
+      }
+    ],
+    "final": [
+      {
+        "size": [
+          1280,
+          960
+        ],
+        "loadAverage1m": 2.32,
+        "firstRound": {
+          "frozenFeatures": 352.5,
+          "frozenNetworks": 270.5,
+          "blurSigma1": 6.6,
+          "blurSigma4": 7.1,
+          "blurSigma16": 13.7,
+          "blurSigma64": 43.4,
+          "blurSigma128": 78.1,
+          "lightFeatures": 91.7,
+          "lightNetworks": 76.6
+        },
+        "median": {
+          "frozenFeatures": 326.2,
+          "frozenNetworks": 279.2,
+          "blurSigma1": 6.8,
+          "blurSigma4": 7.2,
+          "blurSigma16": 14.2,
+          "blurSigma64": 43.8,
+          "blurSigma128": 81.5,
+          "lightFeatures": 93.5,
+          "lightNetworks": 75.7
+        }
+      },
+      {
+        "size": [
+          1280,
+          960
+        ],
+        "loadAverage1m": 2.5,
+        "firstRound": {
+          "frozenFeatures": 339.3,
+          "frozenNetworks": 271.7,
+          "blurSigma1": 6.7,
+          "blurSigma4": 7.1,
+          "blurSigma16": 13.5,
+          "blurSigma64": 41.6,
+          "blurSigma128": 79.9,
+          "lightFeatures": 93,
+          "lightNetworks": 77
+        },
+        "median": {
+          "frozenFeatures": 331.1,
+          "frozenNetworks": 279.3,
+          "blurSigma1": 6.8,
+          "blurSigma4": 7.1,
+          "blurSigma16": 14.1,
+          "blurSigma64": 43.2,
+          "blurSigma128": 81.3,
+          "lightFeatures": 93.3,
+          "lightNetworks": 76
+        }
+      },
+      {
+        "size": [
+          1280,
+          960
+        ],
+        "loadAverage1m": 2.38,
+        "firstRound": {
+          "frozenFeatures": 337,
+          "frozenNetworks": 283.5,
+          "blurSigma1": 7,
+          "blurSigma4": 7.4,
+          "blurSigma16": 14.2,
+          "blurSigma64": 43.8,
+          "blurSigma128": 81.3,
+          "lightFeatures": 96.2,
+          "lightNetworks": 79.7
+        },
+        "median": {
+          "frozenFeatures": 331,
+          "frozenNetworks": 279.3,
+          "blurSigma1": 6.8,
+          "blurSigma4": 7.3,
+          "blurSigma16": 14.7,
+          "blurSigma64": 44.9,
+          "blurSigma128": 80.3,
+          "lightFeatures": 89.9,
+          "lightNetworks": 72.6
+        }
+      }
+    ]
+  },
+  "median": {
+    "base": {
+      "frozenFeatures": 335.2,
+      "frozenNetworks": 452.6,
+      "blurSigma1": 6.9,
+      "blurSigma4": 7.2,
+      "blurSigma16": 14.4,
+      "blurSigma64": 43.9,
+      "blurSigma128": 83.3
+    },
+    "baseFirstRound": {
+      "frozenFeatures": 370,
+      "frozenNetworks": 472.3
+    },
+    "final": {
+      "frozenFeatures": 331,
+      "frozenNetworks": 279.3,
+      "blurSigma1": 6.8,
+      "blurSigma4": 7.2,
+      "blurSigma16": 14.2,
+      "blurSigma64": 43.8,
+      "blurSigma128": 81.3,
+      "lightFeatures": 93.3,
+      "lightNetworks": 75.7
+    },
+    "finalFirstRound": {
+      "frozenFeatures": 339.3,
+      "frozenNetworks": 271.7,
+      "lightFeatures": 93,
+      "lightNetworks": 77
+    }
+  }
+}

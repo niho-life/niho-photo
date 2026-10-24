@@ -1,0 +1,332 @@
+{
+  "kind": "development-teachers-build-difference-not-independent",
+  "engine": "niho-13",
+  "candidateEngine": "niho-13",
+  "baselineSha256": "9eca5cd650e3ff6b971a26b7ce746c75f0adbae6aea9b436887e24b28873d82d",
+  "candidateSha256": "e9ed7157f32647f8166ccdf0f4c1d43e42400279074b4cc67e068b3bf55ae68f",
+  "cohortCounts": {
+    "teachers": 33,
+    "teachers2": 24
+  },
+  "blankExcluded": 2,
+  "independentImagesRead": 0,
+  "protocol": {
+    "renderLongEdge": 2048,
+    "compareLongEdge": 1500,
+    "blur": 2,
+    "flatPixels": true,
+    "alignment": true,
+    "presets": [
+      "preset_bluesky2",
+      "preset_pastel",
+      "preset_colorful"
+    ],
+    "whiteBalances": {
+      "tp30": {
+        "relativeTemperature": 30,
+        "relativeTint": 0
+      },
+      "tm30": {
+        "relativeTemperature": -30,
+        "relativeTint": 0
+      },
+      "gp20": {
+        "relativeTemperature": 0,
+        "relativeTint": 20
+      },
+      "gm20": {
+        "relativeTemperature": 0,
+        "relativeTint": -20
+      },
+      "warm": {
+        "relativeTemperature": 30,
+        "relativeTint": 20
+      }
+    }
+  },
+  "all": {
+    "pairs": 855,
+    "identical": 855,
+    "meanOfMeans": 0.0,
+    "maxMean": 0.0,
+    "meanOfP99": 0.0,
+    "maxP99": 0.0,
+    "maxMax": 0.0,
+    "meanOver0_3": 0,
+    "p99Over1_5": 0
+  },
+  "byWhiteBalance": {
+    "tp30": {
+      "pairs": 171,
+      "identical": 171,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "tm30": {
+      "pairs": 171,
+      "identical": 171,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gp20": {
+      "pairs": 171,
+      "identical": 171,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gm20": {
+      "pairs": 171,
+      "identical": 171,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "warm": {
+      "pairs": 171,
+      "identical": 171,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    }
+  },
+  "byPreset": {
+    "preset_bluesky2": {
+      "pairs": 285,
+      "identical": 285,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "preset_pastel": {
+      "pairs": 285,
+      "identical": 285,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "preset_colorful": {
+      "pairs": 285,
+      "identical": 285,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    }
+  },
+  "byWhiteBalanceAndPreset": {
+    "tp30/preset_bluesky2": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "tp30/preset_pastel": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "tp30/preset_colorful": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "tm30/preset_bluesky2": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "tm30/preset_pastel": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "tm30/preset_colorful": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gp20/preset_bluesky2": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gp20/preset_pastel": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gp20/preset_colorful": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gm20/preset_bluesky2": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gm20/preset_pastel": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "gm20/preset_colorful": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "warm/preset_bluesky2": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "warm/preset_pastel": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    },
+    "warm/preset_colorful": {
+      "pairs": 57,
+      "identical": 57,
+      "meanOfMeans": 0.0,
+      "maxMean": 0.0,
+      "meanOfP99": 0.0,
+      "maxP99": 0.0,
+      "maxMax": 0.0,
+      "meanOver0_3": 0,
+      "p99Over1_5": 0
+    }
+  },
+  "seconds": 1032.1184146669984,
+  "question": "Does #89 keep the pixels of niho-13 (and the engines sharing its code) on real photos? The build before #89 against the build after it, same engine and settings",
+  "baseline": "f4b878b (before #89)",
+  "candidate": "5b4c555 (#89: pixel-preserving speedups and niho-14; niho-13 code paths unchanged by the later niho-14-only commit a220848)",
+  "rule": "Every pair byte-identical (rendered PNG SHA-256)",
+  "rulePassed": true,
+  "measurementHost": "Mac Studio (M1 Max 64GB)",
+  "measurementDate": "2026-10-22",
+  "rustToolchain": "1.98.1",
+  "tool": "tools/color-review-build-diff.py --engine niho-13 (two builds)",
+  "scopeNotes": [
+    "Development teachers at a 2048px long edge with the three bundled presets and five relative white balances (the niho-6 analysis, local pass, head white balance and cubes all run)",
+    "Development teachers; not independent evaluation (the sealed independent cohort was not opened)",
+    "Only anonymous aggregates are published; renders, rows and paths stay private"
+  ]
+}

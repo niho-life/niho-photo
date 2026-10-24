@@ -542,7 +542,7 @@ enum Border {
 use crate::raw_response_simd as simd;
 
 // Preserve each output's tap order. Padding makes horizontal loads contiguous;
-// 16 independent accumulators let native and Wasm SIMD share exactly the same
+// 32 (then 16) independent accumulators let native and Wasm SIMD share exactly the same
 // multiply-then-add arithmetic, without an approximate blur or fused operations.
 fn gaussian_blur(
     source: &[f32],

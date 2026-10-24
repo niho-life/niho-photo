@@ -1112,6 +1112,7 @@ impl PreparedColorOps {
                         | crate::settings::ENGINE_NIHO_10
                         | crate::settings::ENGINE_NIHO_12
                         | crate::settings::ENGINE_NIHO_13
+                        | crate::settings::ENGINE_NIHO_14
                 )
             ),
             raster_niho6: !toned
@@ -1122,8 +1123,9 @@ impl PreparedColorOps {
                         | crate::settings::ENGINE_NIHO_10
                         | crate::settings::ENGINE_NIHO_12
                         | crate::settings::ENGINE_NIHO_13
+                        | crate::settings::ENGINE_NIHO_14
                 ),
-            // `niho-12` / `niho-13` are the `niho-10` formula on raster input
+            // `niho-12`〜`niho-14` are the `niho-10` formula on raster input
             // only; their legacy RAW path is the `niho-2` formula (no hue
             // restoration).
             hue_stable_saturation: matches!(
@@ -1133,7 +1135,9 @@ impl PreparedColorOps {
                     crate::settings::ENGINE_NIHO_10 | crate::settings::ENGINE_NIHO_11
                 ) | (
                     false,
-                    crate::settings::ENGINE_NIHO_12 | crate::settings::ENGINE_NIHO_13
+                    crate::settings::ENGINE_NIHO_12
+                        | crate::settings::ENGINE_NIHO_13
+                        | crate::settings::ENGINE_NIHO_14
                 )
             ),
         }

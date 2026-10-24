@@ -31,6 +31,7 @@ pub mod look;
 pub mod lut;
 mod mask_session;
 pub mod mask_surface;
+pub mod niho14_analysis;
 mod niho3;
 mod niho4;
 #[allow(dead_code)] // Keep the frozen R317/R364 diagnostic surface intact.
@@ -73,7 +74,7 @@ use std::{collections::BTreeMap, fmt, sync::Arc};
 
 /// Latest formula version this bundle can render. Settings constructors keep
 /// their own compatibility defaults; this advertises reader capability.
-pub const ENGINE_VERSION: &str = settings::ENGINE_NIHO_13;
+pub const ENGINE_VERSION: &str = settings::ENGINE_NIHO_14;
 /// Crate version (build artifacts are published per version).
 pub const CRATE_VERSION: &str = env!("CARGO_PKG_VERSION");
 
@@ -1355,21 +1356,25 @@ impl Session {
     }
 
     /// The `niho-6` analysis of the whole photo balanced by `white` and
-    /// reduced by the active detail settings. The shared LRU keeps two feature
-    /// sets keyed by white balance and detail amounts, and two analyses keyed
-    /// by those values plus exposure.
+    /// reduced by the active detail settings, made the way `settings`' engine
+    /// makes it ([`niho6::analysis_kind`]). The shared LRU keeps two feature
+    /// sets keyed by that kind, white balance and detail amounts, and two
+    /// analyses keyed by those values plus exposure.
     fn niho6_analysis(
         &self,
         white: Option<HeadWhiteBalance>,
         exposure_ev: f64,
         settings: &DevelopSettings,
     ) -> Result<Arc<niho6::Analysis>, Error> {
+        let kind = niho6::analysis_kind(settings);
         let detail_key = settings.detail.map_or_else(
-            || "none".to_string(),
+            || format!("{}|none", kind.key()),
             |detail| {
                 format!(
-                    "{}|{:?}",
-                    detail.luminance_noise_reduction, detail.color_noise_reduction
+                    "{}|{}|{:?}",
+                    kind.key(),
+                    detail.luminance_noise_reduction,
+                    detail.color_noise_reduction
                 )
             },
         );
@@ -1422,7 +1427,7 @@ impl Session {
                     .expect("validated NIHO 6 session detail input"),
                 });
                 let image = prepared.as_ref().unwrap_or(source);
-                niho6::source_features(image, whole.space())
+                niho6::source_features_of(image, whole.space(), kind)
                     .map(Arc::new)
                     .map_err(|error| error.to_string())
             })
@@ -1791,23 +1796,26 @@ impl Session {
             },
         );
         let exposure = niho6::analysis_exposure(settings);
+        let kind = niho6::analysis_kind(settings);
         // During an interactive white-balance drag, keep the previous
-        // analysis for this session and detail amount. A released frame uses
-        // the exact current exposure and source balance.
+        // analysis for this session, detail amount and kind of analysis. A
+        // released frame uses the exact current exposure and source balance.
         let (analysis_white, analysis) = match (
             quality,
             self.niho6_reuse_while_dragging,
             self.niho6_last_used.clone(),
         ) {
             (Quality::Interactive, true, Some((white, analysis)))
-                if self.niho6_last_detail.as_ref() == Some(&detail_key) =>
+                if self.niho6_last_detail.as_ref() == Some(&detail_key)
+                    && analysis.kind == kind =>
             {
                 (white, analysis)
             }
             (_, _, Some((white, analysis)))
                 if analysis.exposure_ev.to_bits() == exposure.to_bits()
                     && white == self.source_white
-                    && self.niho6_last_detail.as_ref() == Some(&detail_key) =>
+                    && self.niho6_last_detail.as_ref() == Some(&detail_key)
+                    && analysis.kind == kind =>
             {
                 (white, analysis)
             }

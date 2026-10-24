@@ -118,11 +118,11 @@
     "package-lock.json"
   ],
   "engine": {
-    "version": "niho-13",
-    "crateVersion": "0.25.0",
+    "version": "niho-14",
+    "crateVersion": "0.26.0",
     "runtimePackageName": "niho-photo-develop-engine-runtime",
-    "assetDirectory": "packages/develop-engine/public/develop-engine/niho-13",
-    "manifestName": "manifest-0.25.0.json",
+    "assetDirectory": "packages/develop-engine/public/develop-engine/niho-14",
+    "manifestName": "manifest-0.26.0.json",
     "requiredExtensions": [
       ".js",
       ".wasm",

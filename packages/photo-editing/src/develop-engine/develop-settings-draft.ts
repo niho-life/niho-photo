@@ -4,6 +4,7 @@ import {
   NIHO6_DEVELOP_SETTINGS_ENGINE,
   NIHO10_DEVELOP_SETTINGS_ENGINE,
   NIHO12_DEVELOP_SETTINGS_ENGINE,
+  NIHO13_DEVELOP_SETTINGS_ENGINE,
   NIHO4_DEVELOP_SETTINGS_ENGINE,
   NIHO4_DEVELOP_SETTINGS_LOOK,
   NIHO7_DEVELOP_SETTINGS_ENGINE,
@@ -304,7 +305,7 @@ export function markDevelopSettingsDraftConflicted(identity: DevelopSettingsDraf
 /**
  * 未保存の補正（draft の `settings`）を今開いている写真へ戻せるか。draft が直せる形で、土台の版（`base`）が今の入力の版と、数式・
  * ルックが今の編集内容と同じときだけ戻す（違う土台・数式で作った補正を読み替えない）。ただし保存したことの無い写真で、新規編集の
- * 既定を niho-2 / niho-6 / niho-10 / niho-12 → niho-13 に変える前に作った draft（土台とルックは同じ）は、draft の旧数式のまま戻す。
+ * 既定を niho-2 / niho-6 / niho-10 / niho-12 / niho-13 → niho-14 に変える前に作った draft（土台とルックは同じ）は、draft の旧数式のまま戻す。
  * 同様に、対応校正 signed RAW の既定を niho-4/3/7 → niho-11 に変える前の正しい旧pairも、未保存かつ同じ土台に限って旧pairのまま戻す
  * （既定が変わっただけで未保存の補正を失わない。移行元設計、移行元設計）。
  */
@@ -339,7 +340,8 @@ export function canRestoreDevelopSettingsDraft(params: {
       (draftSettings.engine === NIHO2_DEVELOP_SETTINGS_ENGINE ||
         draftSettings.engine === NIHO6_DEVELOP_SETTINGS_ENGINE ||
         draftSettings.engine === NIHO10_DEVELOP_SETTINGS_ENGINE ||
-        draftSettings.engine === NIHO12_DEVELOP_SETTINGS_ENGINE) &&
+        draftSettings.engine === NIHO12_DEVELOP_SETTINGS_ENGINE ||
+        draftSettings.engine === NIHO13_DEVELOP_SETTINGS_ENGINE) &&
       currentSettings.engine === DEVELOP_SETTINGS_ENGINE)
   );
 }

@@ -132,9 +132,10 @@ fn engine_look_pairs_fail_closed() {
         "invalid_settings: look (engineLookMismatch): niho-3 requires niho-standard-2, and niho-standard-2 requires niho-3"
     );
     assert!(parse_settings(r#"{"engine":"niho-2","look":"niho-standard-2"}"#).is_err());
-    assert!(parse_settings(r#"{"engine":"niho-14"}"#).is_err());
+    assert!(parse_settings(r#"{"engine":"niho-15"}"#).is_err());
     assert!(parse_settings(r#"{"engine":"niho-12","look":"niho-standard-2"}"#).is_err());
     assert!(parse_settings(r#"{"engine":"niho-13","look":"niho-standard-2"}"#).is_err());
+    assert!(parse_settings(r#"{"engine":"niho-14","look":"niho-standard-2"}"#).is_err());
 }
 
 #[test]

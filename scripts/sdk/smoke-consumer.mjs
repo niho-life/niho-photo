@@ -123,8 +123,8 @@ assert.deepEqual([...supportedDevelopSettingsVersions], [1, 2, 3, 4, 5, 6, 7, 8,
 assert.ok(developSettingsEngineIdentifiers.includes("niho-13"));
 assert.ok(DEVELOP_SETTINGS_LOOKS.includes("niho-standard-1"));
 assert.ok(NIHO6_DEVELOP_SETTINGS_LOOKS.includes("niho-interim-1"));
-assert.equal(newDevelopSettingsEngine("raster.d1"), "niho-13");
-assert.equal(neutralDevelopSettings("raster.d1").engine, "niho-13");
+assert.equal(newDevelopSettingsEngine("raster.d1"), "niho-14");
+assert.equal(neutralDevelopSettings("raster.d1").engine, "niho-14");
 assert.equal(signedWorkingCopyState("raster.d1", null), "unsigned");
 for (const v of supportedDevelopSettingsVersions) assert.ok(readDevelopSettings({ v, engine: "niho-1" }));
 const unknown = { v: 1, engine: "niho-1", futureTopLevel: { keep: true } };

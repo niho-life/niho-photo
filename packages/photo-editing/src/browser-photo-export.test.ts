@@ -144,7 +144,7 @@ describe("resolveBrowserPhotoExportChoices: JPEG の経路の優先順", () => {
     // wasm を使えない写真は S1 の canvas で描けるときだけ（1 枚で開くと書き出せる）
     expect(choices({ engineUsable: false }).jpeg).toEqual(disabled("1 枚で開くと書き出せます"));
     // 新しい版の NIHO で補正された写真・1 枚で開いて直せないと分かった写真は wasm で描かない（押せない）
-    expect(choices({ photo: photo({ hasDevelopSettings: true, developSettings: { v: 1, engine: "niho-14" } }) }).jpeg).toEqual(
+    expect(choices({ photo: photo({ hasDevelopSettings: true, developSettings: { v: 1, engine: "niho-15" } }) }).jpeg).toEqual(
       disabled("ページを読み込み直すと書き出せます"),
     );
     expect(choices({ loupe: true, locked: true }).jpeg).toEqual(disabled("ページを読み込み直すと書き出せます"));
@@ -191,7 +191,7 @@ describe("resolveBrowserPhotoExportChoices: JPEG の経路の優先順", () => {
     expect(choices({ photo: { ...RAW, hasWebImage: false, workStatus: "ready" }, loupe: true, locked: true }).jpeg).toEqual(reason);
     expect(choices({ photo: photo({ hasDevelopSettings: true, hasWebImage: false }), loupe: true, locked: true }).jpeg).toEqual(reason);
     expect(
-      choices({ photo: photo({ hasDevelopSettings: true, hasWebImage: false, developSettings: { v: 1, engine: "niho-14" } }) }).jpeg,
+      choices({ photo: photo({ hasDevelopSettings: true, hasWebImage: false, developSettings: { v: 1, engine: "niho-15" } }) }).jpeg,
     ).toEqual(reason);
     // オリジナルも記事用の画像も無い写真
     expect(choices({ photo: photo({ hasOriginal: false, hasWebImage: false }) }).jpeg).toEqual(disabled("書き出せる画像がありません"));

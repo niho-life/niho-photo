@@ -236,3 +236,72 @@ fn native_and_wasm_render_the_same_niho_13_bytes() {
         assert_eq!(frames[1], expected);
     }
 }
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn native_and_wasm_render_the_same_niho_14_bytes() {
+    // niho-14 (#89) is niho-13 with the lighter H/S analysis (reduced large
+    // local levels, f32 SIMD networks): its raster Final / Interactive bytes
+    // with and without a white balance, and its coefficient maps, are frozen
+    // on both targets.
+    const EDITS: &str = r#""look":"niho-standard-1","exposure":0.2,"contrast":18,"highlights":-75,"shadows":55,"blacks":40,"vibrance":10,"saturation":-25,"hsl":{"orange":{"hue":0,"saturation":-10,"luminance":20}}"#;
+    const WARM: &str =
+        r#","whiteBalance":{"mode":"relative"},"relativeTemperature":30,"relativeTint":20"#;
+    let input = photo();
+    let draw = |white: &str| {
+        let settings = niho_develop::parse_settings(&format!(
+            r#"{{"v":1,"engine":"niho-14",{EDITS}{white}}}"#
+        ))
+        .unwrap();
+        let final_frame = render(
+            &input,
+            &settings.to_json(),
+            &RenderOptions {
+                max_dimension: 0,
+                ..Default::default()
+            },
+        )
+        .unwrap();
+        let mut session =
+            niho_develop::Session::open_raster(&input, 0, niho_develop::Filter::Lanczos3).unwrap();
+        let drag = session
+            .render(&settings, 0, niho_develop::Quality::Interactive)
+            .unwrap();
+        let released = session
+            .render(&settings, 0, niho_develop::Quality::Final)
+            .unwrap();
+        assert_eq!(released.rgba, final_frame.rgba);
+        assert_eq!((final_frame.width, final_frame.height), (160, 120));
+        (fnv1a64(&final_frame.rgba), fnv1a64(&drag.rgba))
+    };
+    let plain = draw("");
+    let warm = draw(WARM);
+    // The maps themselves (the networks' f32 lanes).
+    let raster =
+        niho_develop::decode::decode_raster(&input, 0, niho_develop::Filter::Lanczos3).unwrap();
+    let analysis = niho_develop::niho6::analysis_of(
+        &raster.image,
+        niho_develop::niho6::SourceSpace::LinearSrgb,
+        0.2,
+        niho_develop::niho6::AnalysisKind::Light,
+    )
+    .unwrap();
+    let maps = &analysis.maps;
+    let bytes: Vec<u8> = [
+        &maps.highlight_a,
+        &maps.highlight_b,
+        &maps.shadow_a,
+        &maps.shadow_b,
+    ]
+    .into_iter()
+    .flat_map(|map| map.iter().flat_map(|v| v.to_le_bytes()))
+    .collect();
+    assert_eq!(
+        (plain, warm, fnv1a64(&bytes)),
+        (
+            (2_745_694_606_260_728_920, 8_524_083_090_913_131_645),
+            (8_951_835_942_816_357_385, 14_020_425_707_676_210_481),
+            16_180_419_554_140_804_340
+        )
+    );
+}

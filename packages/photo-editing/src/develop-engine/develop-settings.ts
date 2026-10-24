@@ -33,18 +33,23 @@ export type DevelopSettings = {
 };
 
 /**
- * 新規編集の数式（#27）。JPEG / PNG をオリジナルから直接描く（`base: null`）写真、raster の作業コピー（`raster.*`。HEIC / TIFF /
- * 大きな JPEG）と unsigned RAW の作業コピー（`raw-apple.*` の p0〜2 / e1）の上で直す写真はこれ。niho-12（raster は niho-10、
- * unsigned RAW は niho-2 の数式で、色の cube を float で持つ）に対し、raster の相対の色温度 / 色かぶり補正を出力の最後ではなく
- * 処理の先頭（入力の符号化 sRGB）に当てる。unsigned RAW は niho-12 と同じ画。signed RAW・camera-linear は描かない
- * （crate の IncompatibleWorkingCopy）ので、作業コピーの無い RAW・版の分からない作業コピーの新規編集は
+ * 新規編集の数式（#89）。JPEG / PNG をオリジナルから直接描く（`base: null`）写真、raster の作業コピー（`raster.*`。HEIC / TIFF /
+ * 大きな JPEG）と unsigned RAW の作業コピー（`raw-apple.*` の p0〜2 / e1）の上で直す写真はこれ。niho-13（niho-12 の数式で、raster の
+ * 相対の色温度 / 色かぶり補正を処理の先頭に当てる）のまま、ハイライト / シャドウの応答の解析（特徴量と網）を軽くした版で、WB を
+ * 変えた後の確定が速い。画は niho-13 と丸めの差だけ違う（H/S を使わない設定と unsigned RAW は同じ画）。signed RAW・camera-linear は
+ * 描かない（crate の IncompatibleWorkingCopy）ので、作業コピーの無い RAW・版の分からない作業コピーの新規編集は
  * {@link NIHO2_DEVELOP_SETTINGS_ENGINE}（{@link newDevelopSettingsEngine}）。signed RAW の新規既定は metadata を確認して別途選ぶ。
- * 保存済みの編集内容は、その数式のまま描き・直す（決まりごと 4。niho-1〜niho-12 を niho-13 へ変えない）。
+ * 保存済みの編集内容は、その数式のまま描き・直す（決まりごと 4。niho-1〜niho-13 を niho-14 へ変えない）。
  */
-export const DEVELOP_SETTINGS_ENGINE = "niho-13";
+export const DEVELOP_SETTINGS_ENGINE = "niho-14";
+/**
+ * 保存済みの raster・unsigned RAW 編集の旧数式（#27。niho-14 の前の新規既定。H/S の解析が凍結した計算）。新規設定へは昇格させない。
+ * 描ける入力とルックは niho-14 と同じ。
+ */
+export const NIHO13_DEVELOP_SETTINGS_ENGINE = "niho-13";
 /**
  * 保存済みの raster・unsigned RAW 編集の旧数式（#29。niho-13 の前の新規既定。相対 WB は出力側）。新規設定へは昇格させない。
- * 描ける入力とルックは niho-13 と同じ。
+ * 描ける入力とルックは niho-14 と同じ。
  */
 export const NIHO12_DEVELOP_SETTINGS_ENGINE = "niho-12";
 /** 保存済み raster 編集の旧数式（niho-12 の前の raster の新規既定）。新規設定へは昇格させない。 */
@@ -53,7 +58,7 @@ export const NIHO10_DEVELOP_SETTINGS_ENGINE = "niho-10";
 export const NIHO6_DEVELOP_SETTINGS_ENGINE = "niho-6";
 /**
  * raster 専用数式・float cube より前の新規編集の数式。今も作業コピーの無い RAW・版の分からない作業コピーの新規編集はこれ
- * （作業コピーが signed になるか決まる前・版の分からない作業コピーには niho-12 / niho-13 を約束しない）。保存済みの unsigned RAW の
+ * （作業コピーが signed になるか決まる前・版の分からない作業コピーには niho-12〜niho-14 を約束しない）。保存済みの unsigned RAW の
  * 作業コピーの補正も niho-2 のまま描く。
  */
 export const NIHO2_DEVELOP_SETTINGS_ENGINE = "niho-2";
@@ -85,9 +90,9 @@ export const DEVELOP_SETTINGS_LOOKS: readonly string[] = [
   NIHO4_DEVELOP_SETTINGS_LOOK,
   NIHO7_DEVELOP_SETTINGS_LOOK,
 ];
-/** niho-6 / niho-10 / niho-12 / niho-13 が描けるルック（crate と同じ。無ければ {@link DEVELOP_SETTINGS_LOOK_WHEN_MISSING}）。 */
+/** niho-6 / niho-10 / niho-12〜niho-14 が描けるルック（crate と同じ。無ければ {@link DEVELOP_SETTINGS_LOOK_WHEN_MISSING}）。 */
 export const NIHO6_DEVELOP_SETTINGS_LOOKS: readonly string[] = [DEVELOP_SETTINGS_LOOK_WHEN_MISSING, DEVELOP_SETTINGS_LOOK];
-/** raster の作業コピーの土台の版の頭（niho-6 / niho-10 / niho-12 / niho-13 で描ける作業コピー）。 */
+/** raster の作業コピーの土台の版の頭（niho-6 / niho-10 / niho-12〜niho-14 で描ける作業コピー）。 */
 const RASTER_WORKING_COPY_BASE_PREFIX = "raster.";
 
 const NIHO4_CALIBRATION_PATTERN = /^apple-ciraw8\/linear-prophoto-d50\/cal-(?:panasonic-dc-s5|sony-zv-e10m2|sony-ilme-fx30)-apple-v[0-9]+$/u;
@@ -312,15 +317,15 @@ export type NewDevelopSettingsEngineOptions = {
   /**
    * RAW の写真（作業コピーの無い RAW など、`base` が null でも JPEG / PNG のオリジナルから直接描くのではない写真）なら true。
    * `base` によらず {@link NIHO2_DEVELOP_SETTINGS_ENGINE} にする（作業コピーが signed になるか決まる前なので、signed を描かない
-   * niho-13 にしない）。
+   * niho-14 にしない）。
    */
   raw?: boolean;
 };
 
 /**
- * 新しく作る（保存したことの無い写真の）編集内容の数式（#27・#29。移行元設計）。JPEG / PNG をオリジナルから直接描く（`base: null`）・
+ * 新しく作る（保存したことの無い写真の）編集内容の数式（#89・#27・#29。移行元設計）。JPEG / PNG をオリジナルから直接描く（`base: null`）・
  * raster の作業コピー（`raster.*`）・unsigned RAW の作業コピー（`raw-apple.*` の p0〜2 / e1）なら {@link DEVELOP_SETTINGS_ENGINE}
- * （niho-13）、版の分からない作業コピー・RAW の写真（`raw: true`）は {@link NIHO2_DEVELOP_SETTINGS_ENGINE}。signed RAW は
+ * （niho-14）、版の分からない作業コピー・RAW の写真（`raw: true`）は {@link NIHO2_DEVELOP_SETTINGS_ENGINE}。signed RAW は
  * {@link signedNeutralDevelopSettings}。
  */
 export function newDevelopSettingsEngine(base: string | null, options: NewDevelopSettingsEngineOptions = {}): string {
@@ -428,10 +433,10 @@ export class DevelopSettingsBaseMismatchError extends Error {
 
 /**
  * 作業コピー（`baseVersion`）の上で直す編集内容にする（移行元設計）。設定が無ければその版の neutral（NIHO 標準ルック。数式は
- * raster・unsigned RAW の作業コピーなら niho-13、版の分からない作業コピーなら niho-2、signed RAW なら niho-3 / niho-4 / niho-7 /
+ * raster・unsigned RAW の作業コピーなら niho-14、版の分からない作業コピーなら niho-2、signed RAW なら niho-3 / niho-4 / niho-7 /
  * niho-11）。保存済みの nonempty `base` があれば同じ版だけを使い、新しい版へ無言で上書きしない。数式・ルックも保存済みの版のまま
  * （S8 移行元設計）。niho-6 / niho-10 の保存済みの設定は raster の作業コピーの上でだけ開く（RAW・版の分からない作業コピーの上では
- * `engine_mismatch`。移行元設計）。niho-12 / niho-13 は signed RAW の上では開かない（`engine_mismatch`）。
+ * `engine_mismatch`。移行元設計）。niho-12〜niho-14 は signed RAW の上では開かない（`engine_mismatch`）。
  */
 export function developSettingsOnWorkingCopy(
   settings: DevelopSettings | null,
@@ -452,7 +457,7 @@ export function developSettingsOnWorkingCopy(
   ) {
     throw new DevelopSettingsBaseMismatchError("engine_mismatch");
   }
-  // niho-12 / niho-13 は raster と unsigned RAW の作業コピーを描く（signed RAW は下の照合で止める）。ルックは niho-6 / niho-10 と同じ版だけ
+  // niho-12〜niho-14 は raster と unsigned RAW の作業コピーを描く（signed RAW は下の照合で止める）。ルックは niho-6 / niho-10 と同じ版だけ
   if (isFloatCubeEngine(settings.engine) && !isNiho6Look(settings.look)) {
     throw new DevelopSettingsBaseMismatchError("engine_mismatch");
   }
@@ -538,7 +543,7 @@ export function isEditableDevelopSettings(value: unknown, options: { geometry?: 
   }
   if (value.v < developSettingsVersion(value)) return false;
   if (value.look !== undefined && (typeof value.look !== "string" || !DEVELOP_SETTINGS_LOOKS.includes(value.look))) return false;
-  // niho-6 / niho-10 / niho-12 / niho-13 は NIHO 標準ルック（standard-1）と恒等（interim-1・無し）だけを描く
+  // niho-6 / niho-10 / niho-12〜niho-14 は NIHO 標準ルック（standard-1）と恒等（interim-1・無し）だけを描く
   if ((niho6Engine || niho12Engine) && !isNiho6Look(value.look)) return false;
   if (signedEngine !== (value.look === SIGNED_DEVELOP_SETTINGS_LOOK)) return false;
   if (niho4Engine !== (value.look === NIHO4_DEVELOP_SETTINGS_LOOK)) return false;
@@ -547,14 +552,18 @@ export function isEditableDevelopSettings(value: unknown, options: { geometry?: 
 }
 
 /**
- * float cube の数式（niho-12・新規既定の niho-13）か。どちらも raster と unsigned RAW の作業コピーを描き、ルックは niho-6 と同じ版
- * だけ。違いは raster の相対 WB を当てる場所（niho-12 は出力側、niho-13 は先頭）。
+ * float cube の数式（niho-12・niho-13・新規既定の niho-14）か。どれも raster と unsigned RAW の作業コピーを描き、ルックは niho-6 と
+ * 同じ版だけ。違いは raster の相対 WB を当てる場所（niho-12 は出力側、niho-13 / niho-14 は先頭）と H/S の解析（niho-14 は軽い計算）。
  */
 function isFloatCubeEngine(engine: unknown): boolean {
-  return engine === DEVELOP_SETTINGS_ENGINE || engine === NIHO12_DEVELOP_SETTINGS_ENGINE;
+  return (
+    engine === DEVELOP_SETTINGS_ENGINE ||
+    engine === NIHO13_DEVELOP_SETTINGS_ENGINE ||
+    engine === NIHO12_DEVELOP_SETTINGS_ENGINE
+  );
 }
 
-/** niho-6 / niho-10 / niho-12 / niho-13 が描けるルックか（無ければ恒等のルックとして描ける）。 */
+/** niho-6 / niho-10 / niho-12〜niho-14 が描けるルックか（無ければ恒等のルックとして描ける）。 */
 function isNiho6Look(look: unknown): boolean {
   return look === undefined || (typeof look === "string" && NIHO6_DEVELOP_SETTINGS_LOOKS.includes(look));
 }
@@ -579,7 +588,7 @@ export function resetDevelopSettingsColors(current: DevelopSettings | null, base
  * プリセットを当てた結果（crate の `presetSettings`）を、当てる前の編集内容 `base` の枠に入れる（F2b 移行元設計）。プリセットは色の
  * 補正だけを変え、ルック・土台の版（`look`・`base`）と幾何（切り抜き・回転）は当てる前のまま保つ
  * （`engine` は通常 base のまま。旧式 niho-1 の写真に非 0 の増分 WB を当てたときの Rust の `niho-2` 昇格だけ保持する。niho-3 /
- * niho-4 / niho-6〜niho-13 の写真は Rust も昇格させない）
+ * niho-4 / niho-6〜niho-14 の写真は Rust も昇格させない）
  * （移行時の設計文書「プリセットの適用量・書き出し・見本」）。形の版 `v` は保った幾何から決め直す。効果
  * （`grayscale`・`grayMixer`・`vignette`・`grain`）は色の補正と同じくプリセットの結果のまま入れる（モノクロのプリセットを当てると
  * 白黒になる。E1b 移行元設計）。
@@ -711,7 +720,7 @@ export function readBrowserAdjustmentsFromDevelopSettings(settings: DevelopSetti
 }
 
 /**
- * スライダーの値を編集内容に重ねる。土台（`base`。無ければ JPEG / PNG をオリジナルから直接描く neutral〔niho-13〕。RAW の写真は
+ * スライダーの値を編集内容に重ねる。土台（`base`。無ければ JPEG / PNG をオリジナルから直接描く neutral〔niho-14〕。RAW の写真は
  * `neutralDevelopSettings(null, { raw: true })` を土台に渡す）の知らない項目は残す。相対の色温度 / 色かぶり補正を
  * 動かしたら `whiteBalance.mode` を `relative` にし（段 2 はそれを求める）、両方 0 に戻したら撮影時（`asShot`）に戻す。
  */

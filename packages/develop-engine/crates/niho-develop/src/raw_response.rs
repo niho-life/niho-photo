@@ -163,6 +163,20 @@ pub fn feature_vectors(
     Ok(features)
 }
 
+/// [`feature_vectors`] with the local levels' means made on planes reduced
+/// by `reductions` (`niho-14`, [`crate::niho14_analysis`]).
+pub(crate) fn feature_vectors_reduced(
+    linear_prophoto_rgb: &[f32],
+    width: usize,
+    height: usize,
+    reductions: [usize; 4],
+) -> Result<Vec<[f32; FEATURE_COUNT]>, RawResponseError> {
+    validate_input(linear_prophoto_rgb, width, height)?;
+    let features = extract_features_with(linear_prophoto_rgb, width, height, reductions);
+    validate_features(&features)?;
+    Ok(features)
+}
+
 /// Evaluates the frozen highlight and shadow responses independently.
 ///
 /// `highlights` is in `[-100, 0]`; `shadows` is in `[0, 100]`.
@@ -294,6 +308,20 @@ fn validate_amounts(highlights: f32, shadows: f32) -> Result<(), RawResponseErro
 }
 
 fn extract_features(input: &[f32], width: usize, height: usize) -> Vec<[f32; FEATURE_COUNT]> {
+    extract_features_with(input, width, height, [1; 4])
+}
+
+/// The local levels' blur sizes (σ, in analysis pixels).
+const LOCAL_SIGMAS: [usize; 4] = [4, 16, 64, 128];
+
+/// [`extract_features`] with level `i`'s local means made on the planes
+/// reduced by `reductions[i]` (1: the frozen full-size blur).
+fn extract_features_with(
+    input: &[f32],
+    width: usize,
+    height: usize,
+    reductions: [usize; 4],
+) -> Vec<[f32; FEATURE_COUNT]> {
     let blurred = gaussian_blur(input, width, height, 3, 1.0, 4, Border::Reflect101);
     let pixels = width * height;
     let mut y = Vec::with_capacity(pixels);
@@ -327,25 +355,37 @@ fn extract_features(input: &[f32], width: usize, height: usize) -> Vec<[f32; FEA
         }
     }
 
-    for (level, sigma) in [4_usize, 16, 64, 128].into_iter().enumerate() {
-        let local_log = gaussian_blur(
-            &ln,
-            width,
-            height,
-            1,
-            sigma as f64,
-            sigma * 4,
-            Border::Reflect,
-        );
-        let arithmetic = gaussian_blur(
-            &y,
-            width,
-            height,
-            1,
-            sigma as f64,
-            sigma * 4,
-            Border::Reflect,
-        );
+    let mut reduced_planes: Vec<(usize, ReducedPlanes)> = Vec::new();
+    for (level, sigma) in LOCAL_SIGMAS.into_iter().enumerate() {
+        let (local_log, arithmetic) = if reductions[level] <= 1 {
+            (
+                gaussian_blur(
+                    &ln,
+                    width,
+                    height,
+                    1,
+                    sigma as f64,
+                    sigma * 4,
+                    Border::Reflect,
+                ),
+                gaussian_blur(
+                    &y,
+                    width,
+                    height,
+                    1,
+                    sigma as f64,
+                    sigma * 4,
+                    Border::Reflect,
+                ),
+            )
+        } else {
+            let factor = reductions[level];
+            if !reduced_planes.iter().any(|(f, _)| *f == factor) {
+                reduced_planes.push((factor, ReducedPlanes::new(&ln, &y, width, height, factor)));
+            }
+            let planes = &reduced_planes.iter().find(|(f, _)| *f == factor).unwrap().1;
+            planes.blurred(sigma as f64, width, height)
+        };
         let base = 4 + level * 3;
         for index in 0..pixels {
             let local = local_log[index];
@@ -362,8 +402,120 @@ fn extract_features(input: &[f32], width: usize, height: usize) -> Vec<[f32; FEA
     features
 }
 
+const QUANTILES: [f64; 7] = [0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99];
+
+/// `ln` and `y` area-averaged onto a grid `factor` times coarser (a
+/// uniform grid over the same extent), for the large local levels.
+struct ReducedPlanes {
+    width: usize,
+    height: usize,
+    /// Interleaved `ln`, `y`.
+    data: Vec<f32>,
+}
+
+impl ReducedPlanes {
+    fn new(ln: &[f32], y: &[f32], width: usize, height: usize, factor: usize) -> Self {
+        let small_width = ((width as f64 / factor as f64).round() as usize).max(1);
+        let small_height = ((height as f64 / factor as f64).round() as usize).max(1);
+        let packed: Vec<f32> = ln.iter().zip(y).flat_map(|(&l, &v)| [l, v, 0.0]).collect();
+        let small = crate::resize::resample(
+            &packed,
+            width,
+            height,
+            small_width,
+            small_height,
+            crate::resize::Filter::Area,
+        );
+        Self {
+            width: small_width,
+            height: small_height,
+            data: small.chunks_exact(3).flat_map(|p| [p[0], p[1]]).collect(),
+        }
+    }
+
+    /// The Gaussian blur of σ (analysis pixels) of both planes, on the
+    /// coarse grid (σ and the 4σ radius in its own spacing per axis, the
+    /// frozen reflect border at the same edges), then bilinear at each
+    /// analysis pixel's center.
+    fn blurred(&self, sigma: f64, width: usize, height: usize) -> (Vec<f32>, Vec<f32>) {
+        let step_x = width as f64 / self.width as f64;
+        let step_y = height as f64 / self.height as f64;
+        let axis = |step: f64| {
+            let sigma = sigma / step;
+            (sigma, (sigma * 4.0).ceil() as usize)
+        };
+        let small = gaussian_blur_axes(
+            &self.data,
+            self.width,
+            self.height,
+            2,
+            axis(step_x),
+            axis(step_y),
+            Border::Reflect,
+        );
+        let taps = |size: usize, small_size: usize, step: f64| -> Vec<(usize, usize, f32)> {
+            (0..size)
+                .map(|i| {
+                    let u = ((i as f64 + 0.5) / step - 0.5).clamp(0.0, (small_size - 1) as f64);
+                    let lower = u.floor() as usize;
+                    let upper = (lower + 1).min(small_size - 1);
+                    (lower, upper, (u - lower as f64) as f32)
+                })
+                .collect()
+        };
+        let columns = taps(width, self.width, step_x);
+        let rows = taps(height, self.height, step_y);
+        let mut local_log = Vec::with_capacity(width * height);
+        let mut arithmetic = Vec::with_capacity(width * height);
+        let row_len = self.width * 2;
+        for &(top, bottom, fy) in &rows {
+            let (a, b) = (&small[top * row_len..], &small[bottom * row_len..]);
+            for &(left, right, fx) in &columns {
+                for (channel, out) in [&mut local_log, &mut arithmetic].into_iter().enumerate() {
+                    let upper = a[left * 2 + channel]
+                        + (a[right * 2 + channel] - a[left * 2 + channel]) * fx;
+                    let lower = b[left * 2 + channel]
+                        + (b[right * 2 + channel] - b[left * 2 + channel]) * fx;
+                    out.push(upper + (lower - upper) * fy);
+                }
+            }
+        }
+        (local_log, arithmetic)
+    }
+}
+
+/// NumPy's linear quantiles of `values`. Only the order statistics they
+/// read are selected (each among the values after the previous one), which
+/// are the values a full sort puts there: `f32::total_cmp` orders bit
+/// patterns.
 fn linear_quantiles(values: &[f32]) -> [f64; 7] {
-    const QUANTILES: [f64; 7] = [0.10, 0.25, 0.50, 0.75, 0.90, 0.95, 0.99];
+    let mut ordered = values.to_vec();
+    let last = ordered.len() - 1;
+    let mut ranks: Vec<usize> = QUANTILES
+        .iter()
+        .flat_map(|quantile| {
+            let position = last as f64 * quantile;
+            [position.floor() as usize, position.ceil() as usize]
+        })
+        .collect();
+    ranks.sort_unstable();
+    ranks.dedup();
+    let mut start = 0;
+    for rank in ranks {
+        ordered[start..].select_nth_unstable_by(rank - start, f32::total_cmp);
+        start = rank + 1;
+    }
+    QUANTILES.map(|quantile| {
+        let position = last as f64 * quantile;
+        let lower = position.floor() as usize;
+        let upper = position.ceil() as usize;
+        let fraction = position - lower as f64;
+        f64::from(ordered[lower]) * (1.0 - fraction) + f64::from(ordered[upper]) * fraction
+    })
+}
+
+#[cfg(test)]
+fn linear_quantiles_sorted(values: &[f32]) -> [f64; 7] {
     let mut sorted = values.to_vec();
     sorted.sort_unstable_by(f32::total_cmp);
     let last = sorted.len() - 1;
@@ -470,7 +622,7 @@ enum Border {
 use crate::raw_response_simd as simd;
 
 // Preserve each output's tap order. Padding makes horizontal loads contiguous;
-// 16 independent accumulators let native and Wasm SIMD share exactly the same
+// 32 (then 16) independent accumulators let native and Wasm SIMD share exactly the same
 // multiply-then-add arithmetic, without an approximate blur or fused operations.
 fn gaussian_blur(
     source: &[f32],
@@ -479,6 +631,27 @@ fn gaussian_blur(
     channels: usize,
     sigma: f64,
     radius: usize,
+    border: Border,
+) -> Vec<f32> {
+    gaussian_blur_axes(
+        source,
+        width,
+        height,
+        channels,
+        (sigma, radius),
+        (sigma, radius),
+        border,
+    )
+}
+
+/// [`gaussian_blur`] with its own σ and radius per axis.
+fn gaussian_blur_axes(
+    source: &[f32],
+    width: usize,
+    height: usize,
+    channels: usize,
+    (sigma, radius): (f64, usize),
+    (sigma_y, radius_y): (f64, usize),
     border: Border,
 ) -> Vec<f32> {
     let kernel = gaussian_kernel(sigma, radius);
@@ -504,11 +677,19 @@ fn gaussian_blur(
             &mut horizontal[y * row_len..(y + 1) * row_len],
         );
     }
+    let kernel = if (sigma_y, radius_y) == (sigma, radius) {
+        kernel
+    } else {
+        gaussian_kernel(sigma_y, radius_y)
+    };
     let mut starts = vec![0_usize; kernel.len()];
     for y in 0..height {
         for (tap, start) in starts.iter_mut().enumerate() {
-            *start =
-                border_index(y as isize + tap as isize - radius as isize, height, border) * row_len;
+            *start = border_index(
+                y as isize + tap as isize - radius_y as isize,
+                height,
+                border,
+            ) * row_len;
         }
         simd::convolve_row(
             &horizontal,
@@ -831,9 +1012,16 @@ mod unit_tests {
 
     #[test]
     fn vector_blur_preserves_tap_order_and_borders() {
-        for (width, height, channels) in
-            [(1, 1, 1), (1, 19, 3), (21, 1, 1), (17, 13, 3), (37, 23, 1)]
-        {
+        // Rows of 32-wide blocks, a 16-wide block and the scalar rest.
+        for (width, height, channels) in [
+            (1, 1, 1),
+            (1, 19, 3),
+            (21, 1, 1),
+            (17, 13, 3),
+            (37, 23, 1),
+            (53, 9, 1),
+            (29, 7, 3),
+        ] {
             let source: Vec<f32> = (0..width * height * channels)
                 .map(|i| (i * 7919 % 10007) as f32 / 1000.0 - 5.0)
                 .collect();
@@ -852,6 +1040,36 @@ mod unit_tests {
                         "{width}x{height} channels={channels} sigma={sigma}"
                     );
                 }
+            }
+        }
+    }
+
+    #[test]
+    fn selected_quantiles_are_those_of_the_sorted_values() {
+        let mut state = 0x2545_f491u32;
+        for length in [1usize, 2, 3, 7, 10, 101, 1000, 4097] {
+            for ties in [false, true] {
+                let values: Vec<f32> = (0..length)
+                    .map(|_| {
+                        state ^= state << 13;
+                        state ^= state >> 17;
+                        state ^= state << 5;
+                        if ties {
+                            [-0.0, 0.0, 1.5, -3.25][(state % 4) as usize]
+                        } else {
+                            (state as f64 / u32::MAX as f64 * 20.0 - 16.0) as f32
+                        }
+                    })
+                    .collect();
+                let selected = linear_quantiles(&values);
+                let sorted = linear_quantiles_sorted(&values);
+                assert!(
+                    selected
+                        .iter()
+                        .zip(&sorted)
+                        .all(|(a, b)| a.to_bits() == b.to_bits()),
+                    "{length} {ties}: {selected:?} {sorted:?}"
+                );
             }
         }
     }

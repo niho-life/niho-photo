@@ -8,10 +8,10 @@
  */
 
 /** 公開 bundle が読める最新の数式の版（新規設定の既定とは別）。 */
-export const DEVELOP_ENGINE_VERSION = "niho-13";
+export const DEVELOP_ENGINE_VERSION = "niho-14";
 
 /** この画面が読む crate の版（manifest の `version` とファイル名）。 */
-export const DEVELOP_ENGINE_CRATE_VERSION = "0.25.0";
+export const DEVELOP_ENGINE_CRATE_VERSION = "0.26.0";
 
 /** バージョン付きのファイル名や診断表示で使う build ID。 */
 export const DEVELOP_ENGINE_BUILD = `${DEVELOP_ENGINE_VERSION}-${DEVELOP_ENGINE_CRATE_VERSION}`;

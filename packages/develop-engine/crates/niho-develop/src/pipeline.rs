@@ -1766,12 +1766,17 @@ fn niho6_one_shot(
         &raster.image
     };
     Some(
-        crate::niho6::analysis(image, space, crate::niho6::analysis_exposure(s))
-            .and_then(|analysis| crate::niho6::apply(image, space, &analysis, s))
-            .map(|image| Raster {
-                image,
-                info: raster.info.clone(),
-            }),
+        crate::niho6::analysis_of(
+            image,
+            space,
+            crate::niho6::analysis_exposure(s),
+            crate::niho6::analysis_kind(s),
+        )
+        .and_then(|analysis| crate::niho6::apply(image, space, &analysis, s))
+        .map(|image| Raster {
+            image,
+            info: raster.info.clone(),
+        }),
     )
 }
 
@@ -2528,8 +2533,13 @@ fn niho6_working_copy_one_shot(
         wc.image
     };
     Some(
-        crate::niho6::analysis(image, space, crate::niho6::analysis_exposure(s))
-            .and_then(|analysis| crate::niho6::apply(image, space, &analysis, s)),
+        crate::niho6::analysis_of(
+            image,
+            space,
+            crate::niho6::analysis_exposure(s),
+            crate::niho6::analysis_kind(s),
+        )
+        .and_then(|analysis| crate::niho6::apply(image, space, &analysis, s)),
     )
 }
 
