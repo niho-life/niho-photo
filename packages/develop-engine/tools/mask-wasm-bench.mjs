@@ -5,11 +5,13 @@
 //   cargo run --release -p niho-develop --example mask_timing -- --dump <inputs>
 //   cargo +1.98.1 build --release --config .cargo/config.toml --target wasm32-unknown-unknown -p niho-develop-wasm
 //   wasm-bindgen --target web --out-dir <pkg> target/wasm32-unknown-unknown/release/niho_develop_wasm.wasm
-//   node tools/mask-wasm-bench.mjs <pkg> <inputs> [--source raster|raw|all] [--trials 3]
+//   node tools/mask-wasm-bench.mjs <pkg> <inputs> [--source raster|raw|all] [--trials 3] [--drag <px>]
 //
 // One JSON line per (source, masks, delta), each measured in its own Node process (a cold wasm instance): the least of
 // `trials` runs per timing (other load on the machine only adds time) and the wasm linear memory after them (it never
-// shrinks: the case's high-water).
+// shrinks: the case's high-water). `--drag` is the long edge of the Interactive frames (default 1280; the editor draws 640
+// while a mask is active). dragGlobalFirst is the first frame of the global drag (it draws the layers, #92), and
+// dragGlobalFast the mean of 6 more frames moving Contrast by 10 each.
 // Node on a Mac is a reference environment, not a browser / device performance claim.
 import { spawnSync } from "node:child_process";
 import { copyFileSync, mkdtempSync, readFileSync } from "node:fs";
@@ -27,6 +29,7 @@ const flag = (name, fallback) => {
 const only = flag("--source", "all");
 const trials = Number(flag("--trials", "3"));
 const one = flag("--one", null);
+const DRAG = Number(flag("--drag", "1280"));
 
 // Through a .mjs copy: the build directory has no "type": "module".
 const glue = join(mkdtempSync(join(tmpdir(), "niho-mask-bench-")), "niho_develop_wasm.mjs");
@@ -89,19 +92,25 @@ function scenario(source, count, delta) {
   const moved = (i) => (count === 0 ? settings(source, 0, delta, 0, contrast + i) : settings(source, count, delta, i, contrast));
   let developer = open(source);
   const first = timed(() => developer.render(settings(source, count, delta, 0, contrast), UI, false));
-  const dragFirst = timed(() => developer.render(moved(1), UI, true));
-  const dragMask = median(Array.from({ length: DRAG_FRAMES }, (_, i) => timed(() => developer.render(moved(i + 2), UI, true))));
+  const dragFirst = timed(() => developer.render(moved(1), DRAG, true));
+  const dragMask = median(Array.from({ length: DRAG_FRAMES }, (_, i) => timed(() => developer.render(moved(i + 2), DRAG, true))));
   const release = timed(() => developer.render(moved(1 + DRAG_FRAMES), UI, false));
-  const dragGlobal = median(
-    Array.from({ length: DRAG_FRAMES }, (_, i) =>
-      timed(() => developer.render(settings(source, count, delta, 1 + DRAG_FRAMES, contrast + i + 1), UI, true)),
+  const global = Array.from({ length: DRAG_FRAMES }, (_, i) =>
+    timed(() => developer.render(settings(source, count, delta, 1 + DRAG_FRAMES, contrast + i + 1), DRAG, true)),
+  );
+  const dragGlobalFirst = global[0];
+  const dragGlobal = median(global);
+  const fast = Array.from({ length: DRAG_FRAMES }, (_, i) =>
+    timed(() =>
+      developer.render(settings(source, count, delta, 1 + DRAG_FRAMES, contrast + DRAG_FRAMES + 10 * (i + 1)), DRAG, true),
     ),
   );
+  const dragGlobalFast = Math.round((fast.reduce((a, b) => a + b, 0) / fast.length) * 10) / 10;
   developer.free();
   developer = open(source);
   const full = timed(() => developer.render(settings(source, count, delta, 0, contrast), 0, false));
   developer.free();
-  return { first, dragFirst, dragMask, dragGlobal, release, full };
+  return { first, dragFirst, dragMask, dragGlobal, dragGlobalFirst, dragGlobalFast, release, full };
 }
 
 if (one) {
@@ -117,10 +126,13 @@ if (one) {
       masks: Number(count),
       delta: name,
       trials,
+      dragPx: DRAG,
       firstMs: best.first,
       dragFirstMs: best.dragFirst,
       dragMaskMs: best.dragMask,
       dragGlobalMs: best.dragGlobal,
+      dragGlobalFirstMs: best.dragGlobalFirst,
+      dragGlobalFastMs: best.dragGlobalFast,
       releaseMs: best.release,
       fullMs: best.full,
       memoryMiB: Math.round(exports.memory.buffer.byteLength / 1048576),
@@ -135,7 +147,17 @@ if (one) {
         if (count === 0 && name !== "cube") continue;
         const child = spawnSync(
           process.execPath,
-          [fileURLToPath(import.meta.url), pkgDir, inputsDir, "--one", `${source}:${count}:${name}`, "--trials", String(trials)],
+          [
+            fileURLToPath(import.meta.url),
+            pkgDir,
+            inputsDir,
+            "--one",
+            `${source}:${count}:${name}`,
+            "--trials",
+            String(trials),
+            "--drag",
+            String(DRAG),
+          ],
           { encoding: "utf8", stdio: ["ignore", "pipe", "inherit"] },
         );
         if (child.status !== 0) throw new Error(`${source} ${count} ${name} failed`);

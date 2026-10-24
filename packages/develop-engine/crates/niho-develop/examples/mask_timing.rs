@@ -14,7 +14,11 @@
 //! - `dragFirst`: the first drag frame (Interactive 1280) moving one mask's
 //!   slider (with no mask, Contrast);
 //! - `dragMask`: the median of 6 further drag frames moving that slider;
-//! - `dragGlobal`: the median of 6 drag frames moving Contrast;
+//! - `dragGlobal`: the median of 6 drag frames moving Contrast by 1 (after
+//!   the release; `dragGlobalFirst` is the first of them, which draws the
+//!   layers: the drag's anchor, #92);
+//! - `dragGlobalFast`: the mean of the next 6 drag frames moving Contrast by
+//!   10 each (past the reuse bound of 25 every third frame, #92);
 //! - `release`: the Final 1280 frame after the mask's drag;
 //! - `full`: a Final frame at the working size in a new Session.
 //!
@@ -169,14 +173,14 @@ fn median(mut xs: Vec<f64>) -> f64 {
 }
 
 /// The scenario's timings (ms): first, dragFirst, dragMask, dragGlobal,
-/// release, full.
+/// release, full, dragGlobalFirst, dragGlobalFast.
 fn scenario(
     open: &dyn Fn() -> Session,
     source: &str,
     count: usize,
     delta: (&str, &str, f64),
     drag: usize,
-) -> [f64; 6] {
+) -> [f64; 8] {
     let (kind, key, value) = delta;
     let base = global(source);
     let contrast = base["contrast"].as_f64().unwrap();
@@ -221,22 +225,43 @@ fn scenario(
         .render(&moved(1 + DRAG_FRAMES), UI, Quality::Final)
         .unwrap();
     let release = ms(t);
-    let drag_global = median(
-        (1..=DRAG_FRAMES)
-            .map(|i| {
-                let s = at(1.0 + DRAG_FRAMES as f64, contrast + i as f64);
-                let t = Instant::now();
-                session.render(&s, drag, Quality::Interactive).unwrap();
-                ms(t)
-            })
-            .collect(),
-    );
+    let global: Vec<f64> = (1..=DRAG_FRAMES)
+        .map(|i| {
+            let s = at(1.0 + DRAG_FRAMES as f64, contrast + i as f64);
+            let t = Instant::now();
+            session.render(&s, drag, Quality::Interactive).unwrap();
+            ms(t)
+        })
+        .collect();
+    let drag_global_first = global[0];
+    let drag_global = median(global);
+    let fast: Vec<f64> = (1..=DRAG_FRAMES)
+        .map(|i| {
+            let s = at(
+                1.0 + DRAG_FRAMES as f64,
+                contrast + DRAG_FRAMES as f64 + 10.0 * i as f64,
+            );
+            let t = Instant::now();
+            session.render(&s, drag, Quality::Interactive).unwrap();
+            ms(t)
+        })
+        .collect();
+    let drag_global_fast = (fast.iter().sum::<f64>() / fast.len() as f64 * 10.0).round() / 10.0;
     drop(session);
     let mut fresh = open();
     let t = Instant::now();
     fresh.render(&at(0.0, contrast), 0, Quality::Final).unwrap();
     let full = ms(t);
-    [first, drag_first, drag_mask, drag_global, release, full]
+    [
+        first,
+        drag_first,
+        drag_mask,
+        drag_global,
+        release,
+        full,
+        drag_global_first,
+        drag_global_fast,
+    ]
 }
 
 /// The least of `trials` runs per timing (the machine's other load only
@@ -249,20 +274,22 @@ fn measure(
     trials: usize,
     drag: usize,
 ) {
-    let mut best = [f64::INFINITY; 6];
+    let mut best = [f64::INFINITY; 8];
     for _ in 0..trials {
         let t = scenario(open, source, count, delta, drag);
         for (b, v) in best.iter_mut().zip(t) {
             *b = b.min(v);
         }
     }
-    let [first, drag_first, drag_mask, drag_global, release, full] = best;
+    let [first, drag_first, drag_mask, drag_global, release, full, drag_global_first, drag_global_fast] =
+        best;
     println!(
         "{}",
         json!({
             "source": source, "masks": count, "delta": delta.0, "trials": trials, "dragPx": drag,
             "firstMs": first, "dragFirstMs": drag_first, "dragMaskMs": drag_mask,
-            "dragGlobalMs": drag_global, "releaseMs": release, "fullMs": full
+            "dragGlobalMs": drag_global, "dragGlobalFirstMs": drag_global_first,
+            "dragGlobalFastMs": drag_global_fast, "releaseMs": release, "fullMs": full
         })
     );
 }

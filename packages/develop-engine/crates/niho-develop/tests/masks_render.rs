@@ -251,6 +251,134 @@ fn a_final_render_invalidates_interactive_frames_from_frozen_niho6_analysis() {
     );
 }
 
+/// `clamp(R0 + sum_k ((R_k^a - R0^a) * w_k + 32768) >> 16)` per channel:
+/// the layers' differences of the anchor frame on another `R0`.
+fn on_r0(r0: &[u8], anchor: &[u8], layers: &[(Vec<u8>, Vec<u32>)]) -> Vec<u8> {
+    let mut out = r0.to_vec();
+    for p in 0..r0.len() / 4 {
+        for c in 0..3 {
+            let mut acc = i32::from(r0[p * 4 + c]);
+            for (rgba, weights) in layers {
+                let diff = i32::from(rgba[p * 4 + c]) - i32::from(anchor[p * 4 + c]);
+                acc += (diff * weights[p] as i32 + 32768) >> 16;
+            }
+            out[p * 4 + c] = acc.clamp(0, 255) as u8;
+        }
+    }
+    out
+}
+
+#[test]
+fn a_global_drag_reuses_the_layers_differences_and_anything_else_is_exact() {
+    use niho_develop::local_render::{self, SourceMap};
+    let q = Quality::Interactive;
+    let masks = json!([
+        {"id": "sky", "kind": "linear", "zero": {"x": 0.5, "y": 0.6}, "full": {"x": 0.5, "y": 0.15},
+         "adjust": {"exposure": -0.6, "saturation": 15}},
+        {"id": "spot", "kind": "radial", "center": {"x": 0.6, "y": 0.6}, "radius": {"x": 0.25, "y": 0.3},
+         "angle": 20, "feather": 60, "adjust": {"shadows": 25, "clarity": 20}}
+    ]);
+    for (name, photo) in Photo::all() {
+        let base = photo.base();
+        let at = |extra: Value| {
+            let mut s = settings(&base, extra);
+            s.masks = settings(&base, json!({ "masks": masks.clone() })).masks;
+            s
+        };
+        let fresh = |s: &DevelopSettings, size: usize| photo.open().render(s, size, q).unwrap();
+        let anchor = at(json!({"contrast": 10}));
+        let dragged = at(json!({"contrast": 16}));
+        let mut session = photo.open();
+        // The anchor frame is the exact one.
+        let first = session.render(&anchor, 48, q).unwrap();
+        assert_eq!(first.rgba, fresh(&anchor, 48).rgba, "{name}: the anchor");
+        // A drag frame: R0 as the global path draws it in the same drag, plus
+        // the anchor's differences of the layers (each as a new Session
+        // draws it, with its plane).
+        let frame = session.render(&dragged, 48, q).unwrap();
+        let mut global = photo.open();
+        let r0_anchor = global
+            .render(&local_render::without_masks(&anchor), 48, q)
+            .unwrap();
+        let r0 = global
+            .render(&local_render::without_masks(&dragged), 48, q)
+            .unwrap();
+        let (ws, hs) = match &photo {
+            Photo::Raster(_) => (120, 80),
+            _ => (96, 64),
+        };
+        let map = SourceMap::new(None, ws, hs).unwrap();
+        let layers: Vec<(Vec<u8>, Vec<u32>)> = anchor
+            .masks
+            .iter()
+            .map(|mask| {
+                let local = local_render::local_settings(
+                    &local_render::without_masks(&anchor),
+                    &mask.adjust,
+                );
+                let rk = fresh(&local, 48);
+                let weights =
+                    local_render::mask_weights(mask, &map, r0.width, r0.height, None).unwrap();
+                (rk.rgba, weights)
+            })
+            .collect();
+        assert_eq!(
+            frame.rgba,
+            on_r0(&r0.rgba, &r0_anchor.rgba, &layers),
+            "{name}: R0 plus the anchor's differences"
+        );
+        assert_ne!(frame.rgba, fresh(&dragged, 48).rgba, "{name}: approximate");
+        // Anything but one global slider within its bound draws the layers:
+        // the exact frame after the same first frame (a drag's frames keep
+        // the niho-6 analysis of its first one, so the legacy RAW's differ
+        // from a new Session's whether or not the layers are reused).
+        let mut edited = dragged.clone();
+        edited.masks[0].invert = true;
+        let mut preset =
+            at(json!({"contrast": 30, "vibrance": 20, "hsl": ["blue", {"saturation": -20}]}));
+        preset.masks = dragged.masks.clone();
+        let turned = at(json!({"contrast": 16, "geometry": {"rotate": 90}}));
+        let curve = at(
+            json!({"contrast": 16, "toneCurves": [{"channel": "rgb", "points": [{"x": 0, "y": 0.05}, {"x": 1, "y": 1}]}]}),
+        );
+        let far = at(json!({"contrast": 36}));
+        let mut white = at(json!({"contrast": 16, "relativeTemperature": 10}));
+        white.white_balance.mode = niho_develop::settings::WhiteBalanceMode::Relative;
+        for (change, s, size) in [
+            ("a mask edited", &edited, 48),
+            ("a preset", &preset, 48),
+            ("another size", &dragged, 40),
+            ("a turn", &turned, 48),
+            ("a curve", &curve, 48),
+            ("past the bound", &far, 48),
+            ("the white balance's mode", &white, 48),
+        ] {
+            // From the drag frame (its anchor), as the editor goes on.
+            let mut session = photo.open();
+            session.render(&anchor, 48, q).unwrap();
+            session.render(&dragged, 48, q).unwrap();
+            let mut exact = photo.open();
+            exact.render(&anchor, 48, q).unwrap();
+            assert_eq!(
+                session.render(s, size, q).unwrap().rgba,
+                exact.render(s, size, q).unwrap().rgba,
+                "{name}: {change}"
+            );
+        }
+        // Released after the drag: the Final frame is a new Session's.
+        let released = session.render(&dragged, 0, Quality::Final).unwrap();
+        assert_eq!(
+            released.rgba,
+            photo
+                .open()
+                .render(&dragged, 0, Quality::Final)
+                .unwrap()
+                .rgba,
+            "{name}: released"
+        );
+    }
+}
+
 #[test]
 fn a_linear_exposure_mask_darkens_only_past_its_ramp() {
     let png = photo_png(120, 80);

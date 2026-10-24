@@ -10551,18 +10551,18 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/local_render.rs",
-      "sha256": "e2ef256adbb5ca2a74be03bdfadb61a0ff27323a1203bbd94876b32d133ab6e9",
-      "origin": "Issue #66の公開仕様 docs/local-adjustments.md だけから新規作成した部分補正（マスク）の面の式・出力から作業画像への写像・局所の設定・固定小数点の合算のRust実装。実写真・非公開コード・私有参照出力を含まない。\n変更理由: 部分補正（マスク）#68: 面の双一次補間の面と、その寸法の照合を足す\n変更理由: 部分補正（マスク）#66: 遠近（perspective）のあるジオメトリでも、マスクの出力→作業画像の写像を描画と TS にそろえる。"
+      "sha256": "5d4f593c92cfdecdc9269f541bc633de42c8cb6a18b5f4ff136370256d7dbf69",
+      "origin": "Issue #66の公開仕様 docs/local-adjustments.md だけから新規作成した部分補正（マスク）の面の式・出力から作業画像への写像・局所の設定・固定小数点の合算のRust実装。実写真・非公開コード・私有参照出力を含まない。\n変更理由: 部分補正（マスク）#68: 面の双一次補間の面と、その寸法の照合を足す\n変更理由: 部分補正（マスク）#92: 全体のスライダーの drag 中は層の差分（起点の合算の項）を使い回し、R0 だけを描く。final は変えない。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/mask_session.rs",
-      "sha256": "f8747d1631e2a494187ad38a9074f8c405d01c06843396556fbe720029291b5e",
-      "origin": "Issue #66の公開仕様 docs/local-adjustments.md だけから新規作成した、Sessionの層の描画（層ごとのキャッシュの入れ替え・同じ画像の共有・結果の使い回し）とマスクの面の書き出しのRust実装。実写真・非公開コード・私有参照出力を含まない。\n変更理由: Final描画後に古いInteractiveマスクフレームを破棄し再描画する。\n変更理由: 部分補正（マスク）#68: 局所の値が全体で潰れて描かれない層は、その面も要らない（Codex 指摘）。\n変更理由: PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。\n変更理由: PR #90: mask layerのimage identityをNIHO6 masterのWB付きkeyへ統一。\n変更理由: PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。\n変更理由: PR #90: mask layerのimage identityをNIHO6 masterのWB付きkeyへ統一。"
+      "sha256": "815bd047c99704357d88b5a1775baac3fa0938f01c088d7257bbd1492cdf4876",
+      "origin": "Issue #66の公開仕様 docs/local-adjustments.md だけから新規作成した、Sessionの層の描画（層ごとのキャッシュの入れ替え・同じ画像の共有・結果の使い回し）とマスクの面の書き出しのRust実装。実写真・非公開コード・私有参照出力を含まない。\n変更理由: Final描画後に古いInteractiveマスクフレームを破棄し再描画する。\n変更理由: 部分補正（マスク）#68: 局所の値が全体で潰れて描かれない層は、その面も要らない（Codex 指摘）。\n変更理由: PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。\n変更理由: PR #90: mask layerのimage identityをNIHO6 masterのWB付きkeyへ統一。\n変更理由: PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。\n変更理由: PR #90: mask layerのimage identityをNIHO6 masterのWB付きkeyへ統一。\n変更理由: 部分補正（マスク）#92: 全体のスライダーの drag 中は層の差分（起点の合算の項）を使い回し、R0 だけを描く。final は変えない。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/masks_render.rs",
-      "sha256": "cb06453d883fcc9e63751f776cf727e0d97535bc719d9aa01cd4bfee83927ddc",
-      "origin": "Issue #66の公開仕様と合成画像だけから新規作成した、部分補正の層の描画（面1でR_k・面0でR0・幾何への追従・順序非依存・無効なマスクのbit一致）のRust回帰。実写真・非公開コード・私有参照出力を含まない。\n変更理由: niho-6 Final解析後に古いInteractiveマスクフレームを再利用しない回帰テスト。\n変更理由: niho-6 Final解析後にInteractiveマスクフレームを再利用しない回帰テスト。"
+      "sha256": "973fd06399e5de9ad23afde9ce13163d3dfeaee549bfa9cff961d3d32ea0e514",
+      "origin": "Issue #66の公開仕様と合成画像だけから新規作成した、部分補正の層の描画（面1でR_k・面0でR0・幾何への追従・順序非依存・無効なマスクのbit一致）のRust回帰。実写真・非公開コード・私有参照出力を含まない。\n変更理由: niho-6 Final解析後に古いInteractiveマスクフレームを再利用しない回帰テスト。\n変更理由: niho-6 Final解析後にInteractiveマスクフレームを再利用しない回帰テスト。\n変更理由: 部分補正（マスク）#92: 全体のスライダーの drag 中は層の差分（起点の合算の項）を使い回し、R0 だけを描く。final は変えない。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/masks_geometry_map.rs",
@@ -10571,8 +10571,8 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/masks_cross_target.rs",
-      "sha256": "cfc4a2b28f49c3893e6862600a79d0b8e2037bcc0e0d511b0fd7da9863f2de9f",
-      "origin": "Issue #66の公開仕様と合成画像だけから新規作成した、マスク付きの描画と面がnativeとwasmで同じbyteになるRust回帰（FNV-1a固定）。実写真・非公開コード・私有参照出力を含まない。\n変更理由: 部分補正（マスク）#68: 面のマスクの描画・書き出し・面がnativeとwasmで同じbyteになる回帰を足す"
+      "sha256": "466ad85e07e9b681ddc0c8dbe5d107dbf7a1e7b6a7e197a1a5bade58cf00f597",
+      "origin": "Issue #66の公開仕様と合成画像だけから新規作成した、マスク付きの描画と面がnativeとwasmで同じbyteになるRust回帰（FNV-1a固定）。実写真・非公開コード・私有参照出力を含まない。\n変更理由: 部分補正（マスク）#68: 面のマスクの描画・書き出し・面がnativeとwasmで同じbyteになる回帰を足す\n変更理由: 部分補正（マスク）#92: 全体のスライダーの drag 中は層の差分（起点の合算の項）を使い回し、R0 だけを描く。final は変えない。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/fixtures/masks/geometry-map-cases.json",
@@ -10581,13 +10581,13 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/examples/mask_timing.rs",
-      "sha256": "61af1a94aefef1c80dcc1afc3c5d122c6eeb9af30d4a4904b6ecfbd23beeb0b1",
-      "origin": "Issue #66の公開仕様と合成画像だけから新規作成した、部分補正の層の描画のnative計測の道具。実写真・非公開コード・私有参照出力を含まない。\n変更理由: 計測の example に drag の長辺の引数（--drag）を足す。#67 の 640px の実測用。\n変更理由: 計測の example に drag の長辺の引数（--drag）を足す。#67 の 640px の実測用。"
+      "sha256": "381e6d1e676f721b30361d5baa34ad4fa2da8bfb41363271b491ec39baa2fda0",
+      "origin": "Issue #66の公開仕様と合成画像だけから新規作成した、部分補正の層の描画のnative計測の道具。実写真・非公開コード・私有参照出力を含まない。\n変更理由: 計測の example に drag の長辺の引数（--drag）を足す。#67 の 640px の実測用。\n変更理由: 計測の example に drag の長辺の引数（--drag）を足す。#67 の 640px の実測用。\n変更理由: 部分補正（マスク）#92: 全体のスライダーの drag 中は層の差分（起点の合算の項）を使い回し、R0 だけを描く。final は変えない。"
     },
     {
       "path": "packages/develop-engine/tools/mask-wasm-bench.mjs",
-      "sha256": "a9e08119723042722c2cbd3a42ec091b07c6be9728d5a8b78fc49e60718b5aec",
-      "origin": "Issue #66の公開仕様と合成画像だけから新規作成した、部分補正の層の描画のwasm（Node）計測の道具。実写真・npm依存・非公開コード・私有参照出力を含まない。"
+      "sha256": "099ada3d4833c1fd1e51e2bf6891dd6e16c1777a95839a0cfb43a5439207aba8",
+      "origin": "Issue #66の公開仕様と合成画像だけから新規作成した、部分補正の層の描画のwasm（Node）計測の道具。実写真・npm依存・非公開コード・私有参照出力を含まない。\n変更理由: 部分補正（マスク）#92: 全体のスライダーの drag 中は層の差分（起点の合算の項）を使い回し、R0 だけを描く。final は変えない。"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-masks-geometry-map.test.ts",

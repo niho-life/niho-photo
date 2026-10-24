@@ -545,6 +545,73 @@ pub fn blend(base: &[u8], layers: &[(&[u8], &[u32])]) -> Vec<u8> {
     out
 }
 
+/// The layers' terms of [`blend`] at pixel `p`:
+/// `sum_k ((R_k - R0) * w_k + 32768) >> 16` per RGB channel (each term
+/// within ±255, so at most ±2040 for the 8 masks).
+#[inline(always)]
+fn terms_at(base: &[u8], layers: &[(&[u8], &[u32])], p: usize) -> [i32; 3] {
+    let src = &base[p * 4..p * 4 + 3];
+    let mut sum = [0i32; 3];
+    for (frame, weights) in layers {
+        let w = weights[p] as i32;
+        if w == 0 {
+            continue;
+        }
+        let layer = &frame[p * 4..p * 4 + 3];
+        for c in 0..3 {
+            let diff = i32::from(layer[c]) - i32::from(src[c]);
+            sum[c] += (diff * w + 32768) >> 16;
+        }
+    }
+    sum
+}
+
+/// [`blend`] (the same bytes) together with the layers' summed terms per
+/// pixel and RGB channel (`S`, row-major, 3 per pixel), so that
+/// `blend == add_sum(base, S)`. A drag of a global slider reuses `S` on the
+/// next frames' `R0` ([`add_sum`], `docs/local-adjustments.md` "層の持ち方").
+pub fn blend_keeping_sum(base: &[u8], layers: &[(&[u8], &[u32])]) -> (Vec<u8>, Vec<i16>) {
+    let pixels = base.len() / 4;
+    for (frame, weights) in layers {
+        assert_eq!(frame.len(), base.len(), "a layer of another size");
+        assert_eq!(weights.len(), pixels, "a plane of another size");
+    }
+    let mut out = vec![0u8; base.len()];
+    let mut sum = vec![0i16; pixels * 3];
+    for (p, (dst, s)) in out
+        .chunks_exact_mut(4)
+        .zip(sum.chunks_exact_mut(3))
+        .enumerate()
+    {
+        let terms = terms_at(base, layers, p);
+        for c in 0..3 {
+            s[c] = terms[c] as i16;
+            dst[c] = (i32::from(base[p * 4 + c]) + terms[c]).clamp(0, 255) as u8;
+        }
+        dst[3] = 255;
+    }
+    (out, sum)
+}
+
+/// `out = clamp(R0 + S, 0, 255)` per RGB channel, alpha 255: [`blend`] with
+/// the layers' terms `S` of another frame ([`blend_keeping_sum`]). Integers
+/// only.
+pub fn add_sum(base: &[u8], sum: &[i16]) -> Vec<u8> {
+    assert_eq!(sum.len(), base.len() / 4 * 3, "a sum of another size");
+    let mut out = vec![0u8; base.len()];
+    for ((dst, src), s) in out
+        .chunks_exact_mut(4)
+        .zip(base.chunks_exact(4))
+        .zip(sum.chunks_exact(3))
+    {
+        for c in 0..3 {
+            dst[c] = (i32::from(src[c]) + i32::from(s[c])).clamp(0, 255) as u8;
+        }
+        dst[3] = 255;
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -989,6 +1056,56 @@ mod tests {
         // A half weight of a difference of 1 rounds half up.
         let one = vec![11u8, 200, 128, 255, 0, 255, 7, 255];
         assert_eq!(blend(&base, &[(&one, &half)])[0], 11);
+    }
+
+    /// A pseudo-random RGBA frame and plane of `pixels`.
+    fn noise(pixels: usize, seed: u32) -> (Vec<u8>, Vec<u32>) {
+        let mut state = seed;
+        let mut next = move || {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            state
+        };
+        let rgba = (0..pixels * 4)
+            .map(|i| if i % 4 == 3 { 255 } else { next() as u8 })
+            .collect();
+        let weights = (0..pixels)
+            .map(|i| match i % 5 {
+                0 => 0,
+                1 => FULL_WEIGHT,
+                _ => next() % (FULL_WEIGHT + 1),
+            })
+            .collect();
+        (rgba, weights)
+    }
+
+    #[test]
+    fn the_kept_sum_adds_back_to_the_blend_on_any_base() {
+        let pixels = 7 * 5;
+        let (base, _) = noise(pixels, 1);
+        let (other, _) = noise(pixels, 2);
+        let layers: Vec<(Vec<u8>, Vec<u32>)> = (3..11).map(|seed| noise(pixels, seed)).collect();
+        let terms: Vec<(&[u8], &[u32])> = layers
+            .iter()
+            .map(|(rgba, weights)| (rgba.as_slice(), weights.as_slice()))
+            .collect();
+        let (out, sum) = blend_keeping_sum(&base, &terms);
+        assert_eq!(out, blend(&base, &terms));
+        assert_eq!(add_sum(&base, &sum), out);
+        // On another base: R0' + S, clamped, with the differences of `base`.
+        let moved = add_sum(&other, &sum);
+        for p in 0..pixels {
+            for c in 0..3 {
+                let mut acc = i32::from(other[p * 4 + c]);
+                for (rgba, weights) in &layers {
+                    let diff = i32::from(rgba[p * 4 + c]) - i32::from(base[p * 4 + c]);
+                    acc += (diff * weights[p] as i32 + 32768) >> 16;
+                }
+                assert_eq!(i32::from(moved[p * 4 + c]), acc.clamp(0, 255));
+            }
+            assert_eq!(moved[p * 4 + 3], 255);
+        }
     }
 
     fn surface_mask(width: u32, height: u32) -> LocalMask {

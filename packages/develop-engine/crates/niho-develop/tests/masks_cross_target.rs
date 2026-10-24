@@ -85,6 +85,84 @@ fn native_and_wasm_render_the_same_masked_bytes() {
     );
 }
 
+/// A drag of a global slider (Vibrance) under the masks of [`SETTINGS`]
+/// (`docs/local-adjustments.md` "層の持ち方", #92): the first frame draws
+/// the layers (a new Session's frame), the next ones are `R0` plus the
+/// first frame's differences of the layers, `clamp(R0 + sum_k ((R_k^a -
+/// R0^a) * w_k + 32768) >> 16)`, written out here from each layer drawn
+/// alone and its plane. The same bytes on both targets.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn native_and_wasm_reuse_the_same_layer_differences_in_a_global_drag() {
+    use niho_develop::local_render::{self, SourceMap};
+    let input = photo();
+    let open = || Session::open_raster(&input, 0, Filter::Lanczos3).unwrap();
+    let at = |vibrance: f64| {
+        let mut s = parse_settings(SETTINGS).unwrap();
+        s.vibrance = vibrance;
+        s
+    };
+    let q = Quality::Interactive;
+    let mut session = open();
+    let mut global = open();
+    let anchor = at(10.0);
+    let first = session.render(&anchor, 96, q).unwrap();
+    assert_eq!(first.rgba, open().render(&anchor, 96, q).unwrap().rgba);
+    let r0_anchor = global
+        .render(&local_render::without_masks(&anchor), 96, q)
+        .unwrap();
+    let (w, h) = (first.width, first.height);
+    let map = SourceMap::new(anchor.geometry.as_ref(), 160, 120).unwrap();
+    let layers: Vec<(Vec<u8>, Vec<u32>)> = anchor
+        .masks
+        .iter()
+        .map(|mask| {
+            let local =
+                local_render::local_settings(&local_render::without_masks(&anchor), &mask.adjust);
+            let rk = open().render(&local, 96, q).unwrap();
+            let weights = local_render::mask_weights(mask, &map, w, h, None).unwrap();
+            (rk.rgba, weights)
+        })
+        .collect();
+    let mut hashes = vec![fnv1a64(&first.rgba)];
+    for vibrance in [14.0, 18.0, 22.0] {
+        let frame = session.render(&at(vibrance), 96, q).unwrap();
+        let r0 = global
+            .render(&local_render::without_masks(&at(vibrance)), 96, q)
+            .unwrap();
+        let mut expected = r0.rgba.clone();
+        for p in 0..w * h {
+            for c in 0..3 {
+                let mut acc = i32::from(r0.rgba[p * 4 + c]);
+                for (rgba, weights) in &layers {
+                    let diff = i32::from(rgba[p * 4 + c]) - i32::from(r0_anchor.rgba[p * 4 + c]);
+                    acc += (diff * weights[p] as i32 + 32768) >> 16;
+                }
+                expected[p * 4 + c] = acc.clamp(0, 255) as u8;
+            }
+        }
+        assert_eq!(frame.rgba, expected, "{vibrance}");
+        hashes.push(fnv1a64(&frame.rgba));
+    }
+    // Released: the exact Final frame.
+    let released = session.render(&at(22.0), 0, Quality::Final).unwrap();
+    assert_eq!(
+        released.rgba,
+        open().render(&at(22.0), 0, Quality::Final).unwrap().rgba
+    );
+    hashes.push(fnv1a64(&released.rgba));
+    assert_eq!(
+        hashes,
+        [
+            12_440_713_395_875_544_195,
+            9_714_812_268_290_276_759,
+            4_067_884_575_321_943_044,
+            6_869_771_056_534_690_060,
+            2_590_382_600_995_111_407
+        ]
+    );
+}
+
 /// A soft painted stroke with a hard spot (every value 0..=255 appears).
 fn surface_png() -> Vec<u8> {
     let (w, h) = (73u32, 41u32);
