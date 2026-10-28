@@ -122,6 +122,12 @@ async function run() {
     [frame, ms] = timed(() => developer.render(json, UI_MAX, false));
     record(`preset:${other.id}`, ms, frame);
   }
+  // A color-only change after a preset (Final's local pass is drawn again when cube Q's statistics move).
+  const pastel = presetSettings(pkg, presets.find((p) => p.id === "niho-pastel"), exposed, asShot);
+  [frame, ms] = timed(() => developer.render(JSON.stringify(pastel), UI_MAX, false));
+  record("pastelAgain", ms, frame);
+  [frame, ms] = timed(() => developer.render(JSON.stringify({ ...pastel, vibrance: pastel.vibrance + 20 }), UI_MAX, false));
+  record("pastelVibrance", ms, frame);
   process.stdout.write(JSON.stringify({ mode: how, preset: first.id, steps }));
 }
 
