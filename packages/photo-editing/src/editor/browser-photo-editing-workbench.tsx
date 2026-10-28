@@ -22,6 +22,7 @@ import {
   isBrowserCloudRawPhoto,
 } from "../browser-photo-cloud-source";
 import {
+  BROWSER_PHOTO_EXPORT_BATCH_LARGE_CHOICE,
   isBrowserPhotoCutoutFullSizeAvailable,
   browserPhotoExportJpegRoute,
   resolveBrowserPhotoBatchExportChoices,
@@ -205,6 +206,7 @@ import {
 } from "./use-browser-photo-effects";
 import { photoEditingMaskExportBlocked, useBrowserPhotoMasks, useBrowserPhotoMasksSupport } from "./use-browser-photo-masks";
 import { useBrowserPhotoExportAndDelete } from "./use-browser-photo-export-delete";
+import { useBrowserPhotoExportLargeLongEdge } from "./use-browser-photo-export-large";
 import { useBrowserPhotoFlagKeys } from "./use-browser-photo-flag-keys";
 import { useBrowserPhotoFolders } from "./use-browser-photo-folders";
 import { useBrowserPhotoHealKeys } from "./use-browser-photo-heal";
@@ -425,6 +427,8 @@ export function BrowserPhotoEditingWorkbench(props: {
   const saveGenerationRef = useRef(0);
   const [status, setStatus] = useState<FooterStatus | null>(null);
   const [exportSheetOpen, setExportSheetOpen] = useState(false);
+  /** スマホの編集面の書き出すのシートを開いている（「大きく」の長辺を読む間。niho-photo#134） */
+  const [mobileExportSheetOpen, setMobileExportSheetOpen] = useState(false);
   const [cloudShareSheetOpen, setCloudShareSheetOpen] = useState(false);
   const batchExportFocusPendingRef = useRef(false);
   const [wide, setWide] = useState(isWideWindow);
@@ -1499,6 +1503,7 @@ export function BrowserPhotoEditingWorkbench(props: {
               : "書き出せない写真が含まれています",
           route: batchJpegEnabled ? "engine" : null,
           sizeSelectable: batchSizeSelectable,
+          ...(batchSizeSelectable ? { large: BROWSER_PHOTO_EXPORT_BATCH_LARGE_CHOICE } : {}),
           // 一部だけに付くとき「撮影日時を付けます」と全枚数へ読める文を出さない。
           captureExif: batchResolvedChoices.every(({ choices }) => choices.jpeg.captureExif),
         },
@@ -1550,10 +1555,21 @@ export function BrowserPhotoEditingWorkbench(props: {
       : selectedItem?.photo.developSettings ?? {};
   const nativeExportBlockers = photoEditingNativeExportBlockers(selectedExportSettings);
   const nativeFullSizeUnsupported = nativeExportBlockers.length > 0;
+  // 「大きく」（niho-photo#134）で書き出す長辺（1 枚で wasm で開いた写真の今の切り抜き。書き出すのシートを開いている間だけ読む）
+  const exportLargeLongEdge = useBrowserPhotoExportLargeLongEdge({
+    mountedRef,
+    engineRef: develop.engineRef,
+    developSessionRef: develop.developSessionRef,
+    photoKey: wasmPhotoKey,
+    settingsKey: open.settingsKey,
+    settingsRef: open.settingsRef,
+    active: exportSheetOpen || mobileExportSheetOpen,
+  });
   const exportChoices = selectedItem
     ? resolveBrowserPhotoExportChoices({
         photo: selectedItem.photo,
         loupe: viewMode === "loupe",
+        largeLongEdge: wasmPhotoKey === selectedItem.key ? exportLargeLongEdge : null,
         editing: loupeEditing ? (loupeOpened?.mode === "wasm" ? "wasm" : "canvas") : null,
         locked: loupeOpened?.lockedReason != null,
         wide: editingAllowed,
@@ -2543,7 +2559,11 @@ export function BrowserPhotoEditingWorkbench(props: {
               runExport(format, { saveRoute, size, jpegRoute: exportChoices?.jpeg.route ?? null })
             }
             onSharePending={sharePending}
-            onExportSheetClosed={clearPendingShare}
+            onExportSheetOpened={() => setMobileExportSheetOpen(true)}
+            onExportSheetClosed={() => {
+              setMobileExportSheetOpen(false);
+              clearPendingShare();
+            }}
           />
         ) : null}
 
