@@ -542,17 +542,18 @@ pub const LEGACY_RENDER_MAX_PIXELS: u64 = 40_000_000;
 /// 原寸の書き出しの一番重い段に使ってよいメモリ（物理メモリのこの割合。ほかのアプリと macOS の分を残す）。
 pub const FULL_SIZE_MEMORY_SHARE: f64 = 0.75;
 /// niho-develop-render の原寸（`--max-dimension 0`）の peak memory footprint の 1 画素あたりの bytes。補正の無い描画と、補正ごとの
-/// 足し（Studio・release・合成の作業コピー 24 / 45 / 61MP の実測。`niho-develop-render` の `tests/cli.rs` の
-/// `full_size_peak_memory`。安全側に丸める）。
-const RENDER_BYTES_PER_PIXEL: f64 = 60.0;
-const RENDER_MASK_BYTES_PER_PIXEL: f64 = 16.0;
-const RENDER_DETAIL_BYTES_PER_PIXEL: f64 = 16.0;
-const RENDER_GEOMETRY_BYTES_PER_PIXEL: f64 = 16.0;
+/// 足し（niho-photo#132。Studio・release・合成の作業コピー 24 / 45 / 61MP の実測〔`niho-develop-render` の `tests/cli.rs` の
+/// `full_size_peak_memory`〕を安全側に丸めた値）。実測は基本の補正だけで 1 画素 40〜41 bytes、マスク 3 枚で 77〜79、ディテール
+/// で 75〜81、遠近で 56〜60、修復で 53〜55、レンズで 57〜61、全部で 157〜181（61MP・全部で 10.3 GiB）。
+const RENDER_BYTES_PER_PIXEL: f64 = 44.0;
+const RENDER_MASK_BYTES_PER_PIXEL: f64 = 14.0;
+const RENDER_DETAIL_BYTES_PER_PIXEL: f64 = 42.0;
+const RENDER_GEOMETRY_BYTES_PER_PIXEL: f64 = 22.0;
 const RENDER_HEAL_BYTES_PER_PIXEL: f64 = 16.0;
-const RENDER_LENS_BYTES_PER_PIXEL: f64 = 32.0;
+const RENDER_LENS_BYTES_PER_PIXEL: f64 = 22.0;
 /// apple-raw-linear の原寸の段（RAW の `render --long-edge full`・HEIC / TIFF の `raster --long-edge full`）の 1 画素あたり
 /// （DC-S5 の 24MP で peak memory footprint 1.4〜1.5 GiB。`tools/apple-raw-linear/README.md`）。
-const SOURCE_STAGE_BYTES_PER_PIXEL: f64 = 66.0;
+const SOURCE_STAGE_BYTES_PER_PIXEL: f64 = 68.0;
 
 /// 原寸では書き出せない写真（読める画素数を超える・この Mac のメモリに収まらない見込み。niho-photo#132）。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

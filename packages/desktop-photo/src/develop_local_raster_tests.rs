@@ -711,6 +711,28 @@ fn full_size_peak_grows_with_the_pixels_and_the_corrections() {
   );
 }
 
+/// 見積もりは Studio の実測（renderer の段・61MP 9566×6377 の合成の作業コピー・peak memory footprint）を下回らない。
+#[test]
+fn full_size_peak_is_at_least_the_measured_render() {
+  let pixels = 9566 * 6377;
+  let mib = 1_u64 << 20;
+  for (settings, measured_mib) in [
+    (json!({}), 2348),
+    (json!({ "masks": [{}, {}, {}] }), 4482),
+    (json!({ "detail": { "sharpening": { "amount": 40 } } }), 4347),
+    (json!({ "geometry": { "perspective": { "vertical": -15 } } }), 3482),
+    (json!({ "heal": [{}] }), 3091),
+    (json!({ "lens": { "distortion": 8 } }), 3523),
+    (every_correction(), 10547),
+  ] {
+    let estimate = full_size_peak_bytes(pixels, ExportInput::Raster, &settings);
+    assert!(
+      estimate >= measured_mib * mib,
+      "{settings}: {estimate} < {measured_mib} MiB"
+    );
+  }
+}
+
 #[test]
 fn full_size_is_refused_beyond_the_renderer_bound_or_the_memory() {
   let gib = 1_u64 << 30;

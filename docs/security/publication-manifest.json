@@ -4632,7 +4632,7 @@
         "path": "packages/desktop-photo/src/develop.rs",
         "sha256": "7f13c1e41e82bf4bc91bef5e4a8b61f092ab0b986a6a95c5559c2246bb74d864"
       },
-      "outputSha256": "38c2832d0e9f3f002a5d9a7734683da89839649c83443dd54a45d312a96b58be",
+      "outputSha256": "2dc1368ccf2c99d395b2cf5d4ce8ef46f18f04fe89a01abb48e53db2fc2cdea4",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #5の共有入力能力レジストリ、段階別検証、公開回帰契約に合わせて更新。",
@@ -4658,7 +4658,7 @@
         "path": "packages/desktop-photo/src/develop_local_raster_tests.rs",
         "sha256": "b45869e304ecb1bfa8cc4c3aea903fd7771f60c1b140f6f3c7be2f9f2b929bc2"
       },
-      "outputSha256": "b1209108f5392475cdaad88404938146c48f36b7c41b312998fc1a01509054e8",
+      "outputSha256": "8a9cbbd593db29b205541874f99166ddec93090c93d9d2e6bd3cdbc4387b6515",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #5の共有入力能力レジストリ、段階別検証、公開回帰契約に合わせて更新。",
