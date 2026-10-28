@@ -3,7 +3,7 @@
 // page's result with POST /result and exits.
 // node server.mjs <static root> <data dir> <result file> <port>
 import { createServer } from "node:http";
-import { readFile, writeFile } from "node:fs/promises";
+import { appendFile, readFile, stat, writeFile } from "node:fs/promises";
 import { extname, join, normalize, sep } from "node:path";
 
 const [root, dataDir, out, port] = process.argv.slice(2);
@@ -25,6 +25,13 @@ createServer(async (req, res) => {
     "Cross-Origin-Embedder-Policy": "require-corp",
     "Cache-Control": "no-store",
   };
+  if (req.method === "POST" && req.url === "/log") {
+    let body = "";
+    for await (const chunk of req) body += chunk;
+    await appendFile(`${out}.log`, `${body}\n`);
+    res.writeHead(204, headers).end();
+    return;
+  }
   if (req.method === "POST" && req.url === "/result") {
     let body = "";
     for await (const chunk of req) body += chunk;
@@ -39,8 +46,11 @@ createServer(async (req, res) => {
     : inside(root, pathname === "/" ? "index.html" : pathname.slice(1));
   try {
     if (!path) throw new Error("outside");
-    const body = await readFile(path);
-    res.writeHead(200, { ...headers, "Content-Type": types[extname(path)] ?? "application/octet-stream" });
+    // wasm-bindgen-rayon's workers import('../../..'): the package directory
+    // stands for its glue (what a bundler resolves).
+    const file = (await stat(path)).isDirectory() ? join(path, "niho_develop_wasm.js") : path;
+    const body = await readFile(file);
+    res.writeHead(200, { ...headers, "Content-Type": types[extname(file)] ?? "application/octet-stream" });
     res.end(body);
   } catch {
     res.writeHead(404, headers).end();

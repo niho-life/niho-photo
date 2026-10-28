@@ -4,11 +4,14 @@ const params = new URL(self.location.href).searchParams;
 const pkg = params.get("pkg");
 const threads = Number(params.get("threads") ?? "0");
 const steps = [];
+const log = (message) => fetch("/log", { method: "POST", body: message }).catch(() => undefined);
 try {
   const glue = await import(`./${pkg}/niho_develop_wasm.js`);
   let t = performance.now();
   const wasm = await glue.default({ module_or_path: `./${pkg}/niho_develop_wasm_bg.wasm` });
+  await log(`init ${performance.now() - t}`);
   if (threads > 0) await glue.initThreadPool(threads);
+  await log(`pool ${threads}`);
   steps.push({ step: "init", ms: performance.now() - t });
   const [png, meta] = await Promise.all([
     fetch("/data/signed.png").then((r) => r.arrayBuffer()),
@@ -31,7 +34,9 @@ try {
     const frame = developer.render(JSON.stringify(settings), 1280, false);
     await record(step, performance.now() - start, frame);
   };
+  await log("opened");
   await render("first", base);
+  await log("first");
   const exposed = { ...base, exposure: 0.3 };
   await render("exposure", exposed);
   for (const id of ["niho-bluesky2", "niho-pastel", "niho-colorful"]) await render(`preset:${id}`, preset(id, exposed));
