@@ -116,7 +116,7 @@ test("現像の公開CIは固定toolchain・実RAW・fit再生成・WASM parity�
   assert.ok(commands.some(([command,args]) => command === "cargo" && args.includes("test") && args.includes("color_points")));
   assert.ok(commands.some(([command,args]) => command === "cargo" && args.includes("test") && args.includes("geometry_perspective")));
   assert.ok(commands.some(([command,args]) => command === "cargo" && args.includes("test") && args.includes("detail_cross_target")));
-  for (const test of ["masks_settings", "masks_geometry_map", "masks_cross_target", "upright", "heal", "lens"]) {
+  for (const test of ["masks_settings", "masks_geometry_map", "masks_cross_target", "upright", "heal", "lens", "session_reuse"]) {
     assert.ok(commands.some(([command,args]) => command === "cargo" && args.includes("wasm32-unknown-unknown") && args.includes("test") && args.includes(test)), test);
   }  assert.equal(commands.some(([command]) => command === "swift"), false, "SwiftはmacOS 26の専用jobで実行する");
 });

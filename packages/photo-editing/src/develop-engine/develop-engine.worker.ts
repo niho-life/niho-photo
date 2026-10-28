@@ -31,6 +31,17 @@ async function encodeJpeg(width: number, height: number, rgba: ArrayBuffer, qual
   return blob.arrayBuffer();
 }
 
+/**
+ * 開く入力の bytes の SHA-256（#129。同じ写真を開き直したときに保っている写真を使い回す鍵）。`crypto.subtle` が無い（安全でない
+ * 文脈）なら null（写真を保たない）。
+ */
+async function digest(bytes: ArrayBuffer): Promise<string | null> {
+  const subtle = globalThis.crypto?.subtle;
+  if (!subtle) return null;
+  const hash = new Uint8Array(await subtle.digest("SHA-256", bytes));
+  return Array.from(hash, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 const handler = createDevelopEngineWorkerHandler({
   fetch: (url, init) => fetch(url, init),
   importModule: (url) => import(/* webpackIgnore: true */ /* turbopackIgnore: true */ url),
@@ -39,6 +50,7 @@ const handler = createDevelopEngineWorkerHandler({
   // 診断フラグがないと handler はこの口を呼ばない。
   logPerf: (record) => scope.postMessage({ type: "perf", id: 0, record }, []),
   encodeJpeg,
+  digest,
 });
 
 scope.addEventListener("message", (event) => {

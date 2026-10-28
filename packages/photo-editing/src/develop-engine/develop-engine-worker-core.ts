@@ -10,6 +10,14 @@ import { parseDevelopEngineManifest } from "./develop-engine-manifest";
  *   を返し、以後の要求はすべて `error`（呼び出し側は S1 の canvas に戻る）
  * - `open` は 1 回デコードして持つ（`Developer`）。前の写真は手放す。`render` はそれで描き、`exportJpeg` は持っている写真を
  *   変えずに別の bytes から描く（記事用の画像・書き出し）
+ * - 同じ写真の使い回し（#129）: `digest` があれば、開く入力（開き方と bytes の SHA-256）を鍵に、手放した写真（`open` /
+ *   `openWorkingCopy` で替えた・`close` した）を開いている写真と合わせて {@link HELD_PHOTO_LIMIT} 枚まで保つ。同じ鍵をもう一度開くと
+ *   デコード・解析・cube・master を作り直さずにそれを使う（面は外し、新しく開いたのと同じく面を持たずに始める）。新しい写真を
+ *   デコードする前に古いほうから手放す。保っている間も描いた画素は同じ（engine の cache は鍵が同じときだけ使う）
+ * - 解析を先に作る（#129）: 開いている写真を丁寧に（final）描いたら、その設定と同梱のプリセットを当てた設定で H/S が読む解析
+ *   （signed RAW の CNR の元・応答の係数・niho-7 の面）のうちまだ作っていないものを、通常の要求が {@link ANALYSIS_AHEAD_QUIET_MS}
+ *   来なかったら 1 件ずつ `Developer.prepareAnalysis` で作る（今の写真の CNR と、違う CNR の 1 つまで）。通常の要求が来たら次の
+ *   1 件を始めない（動いている 1 件は止められない）。写真を替えると捨てる。口の無い glue では何もしない。描く画素は同じ
  * - `openWorkingCopy` は作業コピー（16bit PNG とメタデータの JSON。RAW など、移行元設計）を開いて持つ（`open` と同じく前の写真は
  *   手放す。作業コピーは長辺 2560px のまま持ち、描く大きさは `render` で決める）。`exportWorkingCopyJpeg` は持っている写真を
  *   変えずに、別の作業コピーを一時的に開いて丁寧に描き（final）、`OffscreenCanvas` で JPEG にする（sRGB・撮影情報なし）。
@@ -229,10 +237,15 @@ export type DevelopEngineWorkerDeps = {
    * なら null（画素を返してメインスレッドで JPEG にする）
    */
   encodeJpeg?: (width: number, height: number, rgba: ArrayBuffer, quality: number) => Promise<ArrayBuffer | null>;
+  /**
+   * 開く入力の bytes の SHA-256（小文字の 16 進）。同じ写真を開き直したときに、保っている `Developer` を使い回す鍵にする（#129）。
+   * 省略・null は写真を保たない（今までどおり手放す）
+   */
+  digest?: (bytes: ArrayBuffer) => Promise<string | null>;
 };
 
 export type DevelopEnginePerfRecord = {
-  stage: "manifestFetch" | "glueImport" | "wasmInit" | "open" | "openWorkingCopy" | "renderFinal" | "renderInteractive" | "presetThumbnail" | "autoSettings";
+  stage: "manifestFetch" | "glueImport" | "wasmInit" | "open" | "openWorkingCopy" | "renderFinal" | "renderInteractive" | "presetThumbnail" | "autoSettings" | "prepareAnalysis";
   durationMs: number;
   wasmMemoryBytes: number | null;
   status: "ok" | "error";
@@ -255,6 +268,8 @@ type DevelopDeveloper = {
   maskPlane?: (settingsJson: string, maskId: string, maxDimension: number) => unknown;
   /** Upright: 今の設定の枠で推定した遠近の JSON（crate 0.23.0 から。無い glue もある） */
   estimateUpright?: (settingsJson: string, mode: number) => unknown;
+  /** H/S の解析だけを先に作る（描かない。画素は同じ。#129 の glue から。無い glue もある） */
+  prepareAnalysis?: (settingsJson: string) => unknown;
 /** 面の受け渡し（M4 の glue から。無い glue もある） */
   setMaskSurface?: (surfaceId: string, png: Uint8Array) => unknown;
   dropMaskSurface?: (surfaceId: string) => unknown;
@@ -266,6 +281,27 @@ const ONE_SHOT_DECODE_CAP = 4096;
 
 /** 見本用の session の長辺（見本 1 枚は、これを行の大きさに縮めて描く）。 */
 const PRESET_THUMBNAIL_SESSION_MAX_DIMENSION = 256;
+
+/**
+ * 1 つの Worker が持つ写真の `Developer` の数（開いている 1 枚と、直前に開いていた 1 枚。#129）。新しい写真をデコードする前に、
+ * 古いほうから手放してこの数に収める。
+ */
+const HELD_PHOTO_LIMIT = 2;
+
+/**
+ * 解析を先に作る（#129）のは、通常の要求が来なくなってからこれだけたってから。1 回は途中で止められない（signed RAW 2560px で
+ * Studio の wasm 1.4〜2.4 秒）ので、操作の続いている間は始めない。
+ */
+const ANALYSIS_AHEAD_QUIET_MS = 500;
+
+/** 開いていないが手放さずに持っている写真（同じ入力をもう一度開いたら、デコード・解析・master を作り直さずに使う）。 */
+type KeptPhoto = {
+  /** 開き方と入力の bytes の鍵（{@link DevelopEngineWorkerDeps.digest}） */
+  key: string;
+  developer: DevelopDeveloper;
+  thumbnailSession: DevelopDeveloper | null;
+  analysisKey: string | null;
+};
 
 /** 型ガードで確かめた glue（`import init, * as dev from "<js>"`）。 */
 type DevelopGlue = {
@@ -621,6 +657,28 @@ function readAsShotWhiteFromMeta(glue: DevelopGlue, metaJson: string | null): st
   return white;
 }
 
+/**
+ * 同梱のプリセットを `settingsJson` に 100% で当てた設定の JSON（#129 の解析を先に作る候補。口の無い glue・当てられない・読めない
+ * 結果は除く）。
+ */
+function presetVariants(glue: DevelopGlue, developer: DevelopDeveloper, settingsJson: string): string[] {
+  if (!glue.builtinPresets || !glue.applyPreset) return [];
+  try {
+    const presets: unknown = JSON.parse(String(glue.builtinPresets()));
+    if (!Array.isArray(presets)) return [];
+    const asShot = readAsShotWhite(developer);
+    const variants: string[] = [];
+    for (const preset of presets) {
+      if (!isRecord(preset) || typeof preset.xmp !== "string") continue;
+      const applied: unknown = JSON.parse(String(glue.applyPreset(preset.xmp, settingsJson, 1, asShot)));
+      if (isRecord(applied) && isRecord(applied.settings)) variants.push(JSON.stringify(applied.settings));
+    }
+    return variants;
+  } catch {
+    return [];
+  }
+}
+
 function isPositiveInteger(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value > 0;
 }
@@ -731,11 +789,19 @@ export function createDevelopEngineWorkerHandler(
   const heldSurfaces = new Map<string, Uint8Array>();
   const thumbnailSurfaces = new Set<string>();
   let currentAnalysisKey: string | null = null;
+  // 開いている写真の入力の鍵（鍵が無い写真は手放すときに保たない）と、開いていないが保っている写真（古い順）
+  let currentKey: string | null = null;
+  const kept: KeptPhoto[] = [];
   let chain: Promise<void> = Promise.resolve();
   let warmAuto: Extract<DevelopEngineWorkerRequest, { type: "warmAutoSettings" }> | null = null;
   let warmTimer: ReturnType<typeof setTimeout> | null = null;
   let scheduledWarm: object | null = null;
   let normalPending = 0;
+  // 解析を先に作る（#129）: 開いている写真を丁寧に描いた設定（静かな間に、それと同梱のプリセットの解析を 1 件ずつ作る）と、
+  // 写真ごとに作った（作ろうとした）解析の鍵
+  let analysisAhead: { developer: DevelopDeveloper; settingsJson: string } | null = null;
+  let analysisTimer: ReturnType<typeof setTimeout> | null = null;
+  const preparedAnalyses = new WeakMap<DevelopDeveloper, Set<string>>();
   let handle: (message: DevelopEngineWorkerRequest) => Promise<void>;
 
   const recordPerf = (stage: DevelopEnginePerfRecord["stage"], started: number, status: DevelopEnginePerfRecord["status"]) => {
@@ -813,6 +879,69 @@ export function createDevelopEngineWorkerHandler(
     }, delayMs);
   };
 
+  const clearAnalysisTimer = () => {
+    if (analysisTimer !== null) clearTimeout(analysisTimer);
+    analysisTimer = null;
+  };
+
+  const dropAnalysisAhead = () => {
+    analysisAhead = null;
+    clearAnalysisTimer();
+  };
+
+  /**
+   * 次に先に作る解析の設定: 丁寧に描いた設定、次に同梱のプリセットを当てた設定のうち、解析（engine・CNR・ノイズ軽減）がまだ
+   * 作っていないもの。解析の種類は今の写真の分と、もう 1 つ（colorful の CNR 25 など）まで（engine が保つ解析も 2 つまで）。
+   */
+  const nextAnalysisAhead = (job: { developer: DevelopDeveloper; settingsJson: string }): string | null => {
+    const prepared = preparedAnalyses.get(job.developer);
+    const keys = new Set<string>();
+    const candidates = [job.settingsJson];
+    for (let index = 0; index < candidates.length; index += 1) {
+      const candidate = candidates[index] as string;
+      const key = analysisSettingsKeyFromJson(candidate);
+      if (key !== null && !keys.has(key)) {
+        if (keys.size === 2) break;
+        keys.add(key);
+        if (!prepared?.has(key)) return candidate;
+      }
+      if (index === 0 && glue) candidates.push(...presetVariants(glue, job.developer, job.settingsJson));
+    }
+    return null;
+  };
+
+  /** 解析を先に作る 1 件を、通常の要求が {@link ANALYSIS_AHEAD_QUIET_MS} 来なかったら動かす（動かしたら次の 1 件を待つ）。 */
+  const scheduleAnalysisAhead = () => {
+    if (!analysisAhead || analysisTimer !== null || normalPending > 0) return;
+    analysisTimer = setTimeout(() => {
+      analysisTimer = null;
+      const job = analysisAhead;
+      if (!job || normalPending > 0) return;
+      const next = chain
+        .then(() => {
+          // 待つ間に通常の要求・写真の切り替えが来たら動かさない
+          if (analysisAhead !== job || normalPending > 0 || developer !== job.developer) return;
+          const settingsJson = nextAnalysisAhead(job);
+          if (settingsJson === null) {
+            analysisAhead = null;
+            return;
+          }
+          const key = analysisSettingsKeyFromJson(settingsJson);
+          let prepared = preparedAnalyses.get(job.developer);
+          if (!prepared) {
+            prepared = new Set();
+            preparedAnalyses.set(job.developer, prepared);
+          }
+          // 作れなくても同じ解析を何度も試さない（描くときに作る。画素は同じ）
+          if (key !== null) prepared.add(key);
+          measure("prepareAnalysis", () => job.developer.prepareAnalysis?.(settingsJson));
+        })
+        .catch(() => undefined);
+      chain = next;
+      void next.then(() => scheduleAnalysisAhead());
+    }, ANALYSIS_AHEAD_QUIET_MS);
+  };
+
   const freeQuietly = (target: DevelopDeveloper | null) => {
     try {
       target?.free();
@@ -828,13 +957,87 @@ export function createDevelopEngineWorkerHandler(
     freeQuietly(current);
   };
 
+  const freeKept = (photo: KeptPhoto | undefined) => {
+    freeQuietly(photo?.thumbnailSession ?? null);
+    freeQuietly(photo?.developer ?? null);
+  };
+
+  /** 保っている写真を、開いている写真と合わせて `limit` 枚に収まるまで古いほうから手放す。 */
+  const trimKept = (limit: number) => {
+    while (kept.length > 0 && kept.length + (developer ? 1 : 0) > limit) freeKept(kept.shift());
+  };
+
+  /** 開いている写真の面を外す（使い回す写真も、新しい `Developer` と同じく面を持たずに始める。client は渡し直す）。 */
+  const dropHeldSurfaces = () => {
+    try {
+      for (const surfaceId of heldSurfaces.keys()) developer?.dropMaskSurface?.(surfaceId);
+      for (const surfaceId of thumbnailSurfaces) thumbnailSession?.dropMaskSurface?.(surfaceId);
+    } catch {
+      // 外せなくても面は中身の sha256 で呼ぶので、別の面として描くことはない
+    }
+    heldSurfaces.clear();
+    thumbnailSurfaces.clear();
+  };
+
+  /**
+   * 開いている写真を手放す。入力の鍵があれば面を外して保ち（{@link HELD_PHOTO_LIMIT} 枚を超えたら古いほうから手放す）、
+   * 無ければ見本用の session ごと free する。
+   */
   const releaseDeveloper = () => {
     const current = developer;
+    if (current && currentKey !== null) {
+      dropHeldSurfaces();
+      kept.push({ key: currentKey, developer: current, thumbnailSession, analysisKey: currentAnalysisKey });
+      thumbnailSession = null;
+    } else {
+      releaseThumbnailSession();
+      heldSurfaces.clear();
+      freeQuietly(current);
+    }
     developer = null;
-    releaseThumbnailSession();
-    heldSurfaces.clear();
+    currentKey = null;
     currentAnalysisKey = null;
-    freeQuietly(current);
+    trimKept(HELD_PHOTO_LIMIT);
+  };
+
+  /**
+   * `key` の写真を開く: 開いている写真・保っている写真と同じ入力なら、それを開いている写真にして true（面は外す）。違えば
+   * 開いている写真を手放し、新しい写真の分を空けて false（呼び出し側がデコードして {@link adoptDeveloper} する）。
+   */
+  const reuseDeveloper = (key: string | null): boolean => {
+    if (key !== null && developer && currentKey === key) {
+      dropHeldSurfaces();
+      return true;
+    }
+    const index = key === null ? -1 : kept.findIndex((photo) => photo.key === key);
+    const [photo] = index < 0 ? [] : kept.splice(index, 1);
+    releaseDeveloper();
+    if (!photo) {
+      trimKept(HELD_PHOTO_LIMIT - 1);
+      return false;
+    }
+    developer = photo.developer;
+    thumbnailSession = photo.thumbnailSession;
+    currentKey = photo.key;
+    currentAnalysisKey = photo.analysisKey;
+    trimKept(HELD_PHOTO_LIMIT);
+    return true;
+  };
+
+  const adoptDeveloper = (next: DevelopDeveloper, key: string | null) => {
+    developer = next;
+    currentKey = key;
+  };
+
+  /** 開き方と入力の bytes の鍵（`digest` が無い・読めなければ null = 保たない）。 */
+  const inputKey = async (kind: string, bytes: ArrayBuffer, detail: string): Promise<string | null> => {
+    if (!deps.digest) return null;
+    try {
+      const digest = await deps.digest(bytes);
+      return typeof digest === "string" && digest ? `${kind}\u0000${detail}\u0000${digest}` : null;
+    } catch {
+      return null;
+    }
   };
 
   /** 見本用の session の面を、開いている写真の `Developer` に渡した面とそろえる（口の無い glue では何もしない）。 */
@@ -972,22 +1175,26 @@ export function createDevelopEngineWorkerHandler(
           await init(id, message.manifestUrl, message.diagnostics === true);
           return;
         case "open": {
-          const opened = measure("open", () => {
+          dropAnalysisAhead();
+          const opened = await measureAsync("open", async () => {
             const loaded = requireGlue();
-            releaseDeveloper();
+            const key = await inputKey("open", message.bytes, String(message.workingMaxDimension));
+            if (reuseDeveloper(key) && developer) return developer;
             const next = new loaded.Developer(new Uint8Array(message.bytes), message.workingMaxDimension);
-            developer = next;
+            adoptDeveloper(next, key);
             return next;
           });
           deps.post({ type: "opened", id, width: opened.width, height: opened.height });
           return;
         }
         case "openWorkingCopy": {
-          const opened = measure("openWorkingCopy", () => {
+          dropAnalysisAhead();
+          const opened = await measureAsync("openWorkingCopy", async () => {
             requireGlue();
-            releaseDeveloper();
+            const key = await inputKey("openWorkingCopy", message.png, message.metaJson);
+            if (reuseDeveloper(key) && developer) return developer;
             const next = openWorkingCopy(message.png, message.metaJson);
-            developer = next;
+            adoptDeveloper(next, key);
             return next;
           });
           deps.post({ type: "opened", id, width: opened.width, height: opened.height });
@@ -998,6 +1205,10 @@ export function createDevelopEngineWorkerHandler(
             requireGlue();
             if (!developer) throw new Error("no photo is open");
             const frame = readFrame(developer.render(message.settingsJson, message.maxDimension, message.interactive));
+            // 丁寧に描いた設定から、静かな間に H/S の解析を先に作る（#129。口の無い glue では何もしない）
+            if (!message.interactive && typeof developer.prepareAnalysis === "function") {
+              analysisAhead = { developer, settingsJson: message.settingsJson };
+            }
             const nextAnalysisKey = analysisSettingsKeyFromJson(message.settingsJson);
             if (nextAnalysisKey !== null) {
               if (currentAnalysisKey !== null && nextAnalysisKey !== currentAnalysisKey) releaseThumbnailSession();
@@ -1263,6 +1474,7 @@ case "setMaskSurface": {
         }
         case "close":
           requireGlue();
+          dropAnalysisAhead();
           releaseDeveloper();
           deps.post({ type: "closed", id });
           return;
@@ -1303,9 +1515,10 @@ case "setMaskSurface": {
       return Promise.resolve();
     }
 
-    // 通常要求を保留中の先読みより先に処理する。
+    // 通常要求を保留中の先読み・解析を先に作るより先に処理する。
     normalPending += 1;
     clearWarmTimer();
+    clearAnalysisTimer();
     scheduledWarm = null;
     // 受け取った順に 1 つずつ（前の失敗で後を止めない）
     const next = chain
@@ -1315,7 +1528,10 @@ case "setMaskSurface": {
       })
       .catch(() => undefined);
     chain = next;
-    void next.then(() => scheduleWarm());
+    void next.then(() => {
+      scheduleWarm();
+      scheduleAnalysisAhead();
+    });
     return next;
   };
 }

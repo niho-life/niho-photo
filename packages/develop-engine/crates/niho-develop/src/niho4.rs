@@ -243,27 +243,53 @@ pub fn preparation_key(
     )
 }
 
-/// Prepares a signed RAW master from the full CNR/analysis cache. `target`
-/// reduces that CNR-complete source before the display-only controls; `None`
-/// preserves the frozen full-source preparation order.
-pub fn prepare(
+/// What of the response analysis a preparation reads: the canonical
+/// response coefficients (Highlights or Shadows used) and the NIHO 7
+/// highlight maps (Highlights used by niho-7 / niho-11).
+#[derive(Clone, Copy)]
+struct AnalysisNeeds {
+    coefficients: bool,
+    niho7_highlights: bool,
+}
+
+impl AnalysisNeeds {
+    fn of(settings: &DevelopSettings) -> Self {
+        Self {
+            coefficients: settings.highlights < 0.0 || settings.shadows > 0.0,
+            niho7_highlights: uses_niho7_highlights(settings),
+        }
+    }
+}
+
+fn uses_niho7_highlights(settings: &DevelopSettings) -> bool {
+    uses_niho7_engine(settings) && settings.highlights < 0.0
+}
+
+fn uses_niho7_engine(settings: &DevelopSettings) -> bool {
+    matches!(
+        settings.engine.as_str(),
+        crate::settings::ENGINE_NIHO_7 | crate::settings::ENGINE_NIHO_11
+    )
+}
+
+/// The response analysis of `settings` (CNR source, then what `needs` asks
+/// for), reusing `cached` when it serves them. The coefficients and maps
+/// are set in `cached`'s shared cells, so the sessions sharing it see them.
+fn make_analysis(
     image: &LinearImage,
     meta: &WorkingCopyMeta,
     settings: &DevelopSettings,
-    white_balance: Option<[[f32; 3]; 3]>,
-    approximate_white_balance: bool,
-    target: Option<PreparationTarget>,
+    camera: Camera,
     cached_analysis: Option<AnalysisCache>,
-) -> Result<Prepared, PrepareError> {
-    let camera = camera(meta).ok_or(PrepareError::UnsupportedCamera)?;
+    needs: AnalysisNeeds,
+) -> Result<AnalysisCache, PrepareError> {
     let baseline_ev = match meta {
         WorkingCopyMeta::Raw { baseline_ev, .. } => *baseline_ev,
         WorkingCopyMeta::Raster { .. } => 0.0,
     };
-    let key = preparation_key(camera, meta, settings, white_balance, target);
     let cnr_amount = effective_cnr_amount(settings);
     let luminance_nr_amount = luminance_nr_amount(settings);
-    let mut analysis = if let Some(cached) = cached_analysis.filter(|cached| {
+    let analysis = if let Some(cached) = cached_analysis.filter(|cached| {
         cached.camera == camera
             && cached.cnr_amount == cnr_amount
             && cached.luminance_nr_amount == luminance_nr_amount
@@ -318,9 +344,7 @@ pub fn prepare(
     // Canonical analysis must finish before allocating the full prepared
     // master (or preview source), so its full-size quantized copy never
     // overlaps an otherwise unnecessary clone of the CNR source.
-    if (settings.highlights < 0.0 || settings.shadows > 0.0)
-        && analysis.coefficients.get().is_none()
-    {
+    if needs.coefficients && analysis.coefficients.get().is_none() {
         let (canonical, width, height) = analysis_copy(
             analysis.cnr_source.data(&image.data),
             image.width,
@@ -333,11 +357,7 @@ pub fn prepare(
         let _ = analysis.coefficients.set(coefficients);
     }
 
-    let uses_niho7_highlights = matches!(
-        settings.engine.as_str(),
-        crate::settings::ENGINE_NIHO_7 | crate::settings::ENGINE_NIHO_11
-    ) && settings.highlights < 0.0;
-    if uses_niho7_highlights && analysis.niho7_highlights.get().is_none() {
+    if needs.niho7_highlights && analysis.niho7_highlights.get().is_none() {
         let coefficients = analysis.coefficients.get().expect("response coefficients");
         let source = analysis.cnr_source.data(&image.data);
         let maps = match camera {
@@ -361,6 +381,63 @@ pub fn prepare(
         // A shared derived session may have initialized the identical maps.
         let _ = analysis.niho7_highlights.set(maps);
     }
+
+    Ok(analysis)
+}
+
+/// Makes ahead the response analysis frames of `settings`' engine and noise
+/// reduction read once they use Highlights or Shadows (#129: while the
+/// editor is idle), so the first such frame does not wait for it. It is the
+/// analysis [`prepare`] makes: given back as `cached_analysis`, the frames
+/// are the same bytes. A `cached_analysis` that serves is filled in place.
+pub fn prepare_analysis(
+    image: &LinearImage,
+    meta: &WorkingCopyMeta,
+    settings: &DevelopSettings,
+    cached_analysis: Option<AnalysisCache>,
+) -> Result<AnalysisCache, PrepareError> {
+    let camera = camera(meta).ok_or(PrepareError::UnsupportedCamera)?;
+    make_analysis(
+        image,
+        meta,
+        settings,
+        camera,
+        cached_analysis,
+        AnalysisNeeds {
+            coefficients: true,
+            niho7_highlights: uses_niho7_engine(settings),
+        },
+    )
+}
+
+/// Prepares a signed RAW master from the full CNR/analysis cache. `target`
+/// reduces that CNR-complete source before the display-only controls; `None`
+/// preserves the frozen full-source preparation order.
+pub fn prepare(
+    image: &LinearImage,
+    meta: &WorkingCopyMeta,
+    settings: &DevelopSettings,
+    white_balance: Option<[[f32; 3]; 3]>,
+    approximate_white_balance: bool,
+    target: Option<PreparationTarget>,
+    cached_analysis: Option<AnalysisCache>,
+) -> Result<Prepared, PrepareError> {
+    let camera = camera(meta).ok_or(PrepareError::UnsupportedCamera)?;
+    let baseline_ev = match meta {
+        WorkingCopyMeta::Raw { baseline_ev, .. } => *baseline_ev,
+        WorkingCopyMeta::Raster { .. } => 0.0,
+    };
+    let key = preparation_key(camera, meta, settings, white_balance, target);
+    let cnr_amount = effective_cnr_amount(settings);
+    let uses_niho7_highlights = uses_niho7_highlights(settings);
+    let mut analysis = make_analysis(
+        image,
+        meta,
+        settings,
+        camera,
+        cached_analysis,
+        AnalysisNeeds::of(settings),
+    )?;
 
     // Detect on the immutable full-resolution signed CNR source before the
     // NIHO 5 pre-H reconstruction mutates a prepared master. A preview gets
