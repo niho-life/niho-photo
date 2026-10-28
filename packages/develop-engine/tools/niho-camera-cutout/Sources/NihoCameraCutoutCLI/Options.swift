@@ -6,19 +6,21 @@ enum Command: Equatable {
     case version
     case detect(DetectOptions)
     case compose(ComposeOptions)
+    case surface(SurfaceOptions)
     case cutout(Options)
 
     static let usage = """
         usage: niho-camera-cutout --input PATH --output PATH [--subject largest|all|ID] [--background transparent|white|#RRGGBB] [--jpeg-quality 0...1]
                niho-camera-cutout detect --input PATH --masks-dir DIR
                niho-camera-cutout compose --input PATH --mask PATH --output PATH [--mask-sha256 HEX] [--background transparent|white|#RRGGBB] [--strokes FILE.json] [--jpeg-quality 0...1]
+               niho-camera-cutout surface --input PATH --output PATH --kind subject|sky [--max-side 1...4096]
                niho-camera-cutout version | help
         """
 
     /// `help` / `version` only as the sole argument, so a path named
     /// "version" after `--input` still parses as a path. `detect` /
-    /// `compose` only as the first argument (the one-shot form starts with
-    /// a flag).
+    /// `compose` / `surface` only as the first argument (the one-shot form
+    /// starts with a flag).
     static func parse(_ arguments: [String]) throws -> Command {
         if arguments.count == 1 {
             switch arguments[0] {
@@ -30,6 +32,7 @@ enum Command: Equatable {
         switch arguments.first {
         case "detect": return .detect(try DetectOptions(arguments: Array(arguments.dropFirst())))
         case "compose": return .compose(try ComposeOptions(arguments: Array(arguments.dropFirst())))
+        case "surface": return .surface(try SurfaceOptions(arguments: Array(arguments.dropFirst())))
         default: return .cutout(try Options(arguments: arguments))
         }
     }
@@ -128,6 +131,36 @@ struct ComposeOptions: Equatable {
     }
 }
 
+/// `surface`: the surface of a local-adjustment mask (every foreground
+/// subject of the working image) as the canonical 8-bit gray PNG. `sky` is
+/// accepted and refused (`unsupported_kind`) until it has a detector.
+struct SurfaceOptions: Equatable {
+    enum Kind: String, Equatable { case subject, sky }
+    let input: URL
+    let output: URL
+    let kind: Kind
+    let maxSide: Int
+
+    init(arguments: [String]) throws {
+        let values = try flagValues(arguments, allowed: ["--input", "--output", "--kind", "--max-side"])
+        for required in ["--input", "--output", "--kind"] where values[required] == nil {
+            throw CLIError.missingOption(required)
+        }
+        input = URL(fileURLWithPath: values["--input"]!)
+        output = URL(fileURLWithPath: values["--output"]!)
+        guard let kind = Kind(rawValue: values["--kind"]!) else { throw CLIError.invalidKind(values["--kind"]!) }
+        self.kind = kind
+        if let side = values["--max-side"] {
+            guard let parsed = Int(side), (1...MaskSurface.maxSide).contains(parsed) else {
+                throw CLIError.invalidMaxSide(side)
+            }
+            maxSide = parsed
+        } else {
+            maxSide = MaskSurface.maxSide
+        }
+    }
+}
+
 /// `--key value` pairs for the subcommands: unknown, repeated or valueless
 /// options are errors (the one-shot form keeps Photo Bench's looser parser).
 private func flagValues(_ arguments: [String], allowed: Set<String>) throws -> [String: String] {
@@ -177,6 +210,8 @@ enum CLIError: LocalizedError, Equatable {
     case invalidQuality(String)
     case invalidDigest(String)
     case invalidStrokes(String)
+    case invalidKind(String)
+    case invalidMaxSide(String)
 
     var errorDescription: String? {
         switch self {
@@ -191,6 +226,8 @@ enum CLIError: LocalizedError, Equatable {
         case let .invalidQuality(value): "JPEG品質が不正です: \(value)"
         case let .invalidDigest(value): "SHA-256 は小文字の 16 進 64 文字で指定してください: \(value)"
         case let .invalidStrokes(reason): "ブラシの指定を読めません: \(reason)"
+        case let .invalidKind(value): "面の種類は subject か sky で指定してください: \(value)"
+        case let .invalidMaxSide(value): "--max-side は 1〜4096 の整数で指定してください: \(value)"
         }
     }
 }

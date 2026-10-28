@@ -196,6 +196,24 @@ describe("PhotoEditingMaskMobileTools", () => {
     expect(container.textContent).toContain("まだマスクはありません");
   });
 
+  it("写真から作れる出どころでは「被写体」を足せ、探している間は 1 行と取り消し（押せる範囲 44px）を出す（niho-photo#135）", async () => {
+    await render({ kinds: ["linear", "radial", "brush", "subject"] });
+    expect(texts(toolbar("マスクを追加"))).toEqual(["線形", "円形", "ブラシ", "被写体", "範囲を表示", "初期化"]);
+    await click(byLabel("被写体"));
+    expect(props.add).toHaveBeenCalledWith("subject");
+
+    const cancelDetect = vi.fn();
+    await render({ kinds: ["linear", "radial", "brush", "subject"], canAdd: false, detecting: "subject", cancelDetect });
+    const status = container.querySelector<HTMLElement>('[data-testid="photo-mask-detecting"]')!;
+    expect(status.getAttribute("role")).toBe("status");
+    expect(status.textContent).toContain("被写体を探しています…");
+    const cancel = byText(status, "キャンセル");
+    expect(cancel.className).toContain("min-h-11");
+    await click(cancel);
+    expect(cancelDetect).toHaveBeenCalledTimes(1);
+    expect(byLabel("被写体").disabled).toBe(true);
+  });
+
   it("足せない間はボタンを押せず、理由を 1 行出す（読み上げはボタンの説明に結ぶ）。複製も押せない", async () => {
     const reason = "マスクは 8 枚までです。使わないマスクを削除すると追加できます。";
     await render({ canAdd: false, addBlockedReason: reason });

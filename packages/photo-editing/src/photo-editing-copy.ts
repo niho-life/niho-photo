@@ -971,6 +971,26 @@ export const PHOTO_EDITING_MASK_BRUSH_AREA_LABEL = "ブラシで塗る";
 export const PHOTO_EDITING_MASK_BRUSH_LOADING_TEXT = "マスクの面を読み込んでいます…";
 export const PHOTO_EDITING_MASK_BRUSH_SAVE_FAILED_TEXT = "塗った範囲を保存できませんでした。もう一度塗ってください。";
 export const PHOTO_EDITING_MASK_BRUSH_ADD_FAILED_TEXT = "ブラシのマスクを追加できませんでした。もう一度お試しください。";
+// 被写体・空のマスクを写真から作る（niho-photo#135。能力のある出どころだけ）。
+export const PHOTO_EDITING_MASK_ADD_SUBJECT_LABEL = "被写体";
+export const PHOTO_EDITING_MASK_ADD_SKY_LABEL = "空";
+/** 写真から範囲を探している間の 1 行（取り消せる）。 */
+export const PHOTO_EDITING_MASK_DETECTING_TEXTS = {
+  subject: "被写体を探しています…",
+  sky: "空を探しています…",
+} as const;
+/** 写真にその範囲が無かった。 */
+export const PHOTO_EDITING_MASK_DETECT_NOT_FOUND_TEXTS = {
+  subject: "被写体が見つかりませんでした。ブラシや円形グラデーションで範囲を選べます。",
+  sky: "空が見つかりませんでした。ブラシや線形グラデーションで範囲を選べます。",
+} as const;
+/** 探せなかった（被写体が無いのとは別の失敗）。 */
+export const PHOTO_EDITING_MASK_DETECT_FAILED_TEXTS = {
+  subject: "被写体のマスクを追加できませんでした。もう一度お試しください。",
+  sky: "空のマスクを追加できませんでした。もう一度お試しください。",
+} as const;
+/** 探しているのをやめる。 */
+export const PHOTO_EDITING_MASK_DETECT_CANCEL_LABEL = "キャンセル";
 /** 被写体・空（写真から選んだ範囲。この画面では塗らない）。 */
 export const PHOTO_EDITING_MASK_DETECTED_TEXT = "この範囲は写真から選んだものです。補正・反転・当てる / 外す・削除ができます。";
 /** 面を読めない（置き場に無い・壊れている）マスクの理由と次の一歩。 */
@@ -986,7 +1006,7 @@ export const PHOTO_EDITING_MASK_SURFACE_EXPORT_FAILED_TEXT =
 /** 選んだマスクのカラーミキサーの「初期化」の読み上げ名（全体の「カラーミキサーを初期化」と呼び分ける）。 */
 export const PHOTO_EDITING_MASK_HSL_RESET_LABEL = "このマスクのカラーミキサーを初期化";
 /** スマホの足すボタンの見える名前（読み上げは PC と同じ「線形グラデーション」など）。 */
-export const PHOTO_EDITING_MASK_ADD_SHORT_LABELS = { linear: "線形", radial: "円形", brush: "ブラシ" } as const;
+export const PHOTO_EDITING_MASK_ADD_SHORT_LABELS = { linear: "線形", radial: "円形", brush: "ブラシ", subject: "被写体", sky: "空" } as const;
 /** スマホの範囲の重ね表示の切り替え（キーの O は添えない）。 */
 export const PHOTO_EDITING_MASK_OVERLAY_SHORT_LABEL = "範囲を表示";
 /** スマホの選んだマスクの操作の見える名前（読み上げは「線形 1 を反転」など）。 */

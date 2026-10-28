@@ -124,6 +124,22 @@ describe("PhotoEditingMaskTools", () => {
     expect(() => button("円形グラデーション")).toThrow();
   });
 
+  it("写真から作れる出どころでは「被写体」を出し、探している間は 1 行と取り消しを出す（niho-photo#135）", async () => {
+    await render({ kinds: ["linear", "radial", "subject"] });
+    await click(button("被写体"));
+    expect(props.add).toHaveBeenCalledWith("subject");
+    expect(container.querySelector('[data-testid="photo-mask-detecting"]')).toBeNull();
+
+    const cancelDetect = vi.fn();
+    await render({ kinds: ["linear", "radial", "subject"], canAdd: false, detecting: "subject", cancelDetect });
+    const status = container.querySelector('[data-testid="photo-mask-detecting"]');
+    expect(status?.getAttribute("role")).toBe("status");
+    expect(status?.textContent).toContain("被写体を探しています…");
+    expect(button("被写体").disabled).toBe(true);
+    await click(button("キャンセル"));
+    expect(cancelDetect).toHaveBeenCalledTimes(1);
+  });
+
   it("足せない間はボタンを押せず、理由を見える文で出す（読み上げはボタンの説明に結ぶ）", async () => {
     const reason = "マスクは 8 枚までです。使わないマスクを削除すると追加できます。";
     await render({ canAdd: false, addBlockedReason: reason });

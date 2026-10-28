@@ -184,6 +184,18 @@ export type PhotoLibrary = {
    * `maskSurfaces` が無い置き場でも、読めるなら読む）
    */
   loadMaskSurface?(photoId: string, surfaceId: string): Promise<Uint8Array | null>;
+  /**
+   * 写真の作業画像（マスクの座標の基準。RAW は作業コピー）から被写体・空のマスクの面を作って写真に保存する
+   * （`capabilities.maskDetection` の種類だけ。niho-photo#135・`docs/local-adjustments.md`「面の検出」）。`developSettings` は編集面が
+   * いま描いている補正（作業画像を描く数式と土台を読むだけで、補正・幾何・マスクは当てない）。面は {@link PhotoLibrary.saveMaskSurface}
+   * と同じ置き場・同じ形で、補正の `masks[].surface` に `id`・`width`・`height` をそのまま書く。見つからなければ `notFound`。
+   * `signal` で止めたら AbortError で reject。ほかの失敗は投げる
+   */
+  detectMaskSurface?(
+    photoId: string,
+    kind: PhotoLibraryMaskDetectionKind,
+    options: { developSettings: object; signal?: AbortSignal },
+  ): Promise<PhotoLibraryMaskDetectionResult>;
 
   // ---- 書き出す
   /** 「オリジナル」の書き出し（オリジナルのバイト列と元の名前）。補正を当てた JPEG は編集面が段 2 の wasm で描く */
@@ -258,6 +270,17 @@ export type PhotoLibraryWorkingCopyRequestOptions = PhotoLibraryRequestOptions &
   sourceContext?: PhotoLibraryDevelopSourceContext;
 };
 
+/** 写真から作るマスクの面の種類（{@link PhotoLibrary.detectMaskSurface}）。 */
+export type PhotoLibraryMaskDetectionKind = "subject" | "sky";
+
+/** 写真から作れるマスクの面の種類ごとの可否（{@link PhotoLibraryCapabilities.maskDetection}）。 */
+export type PhotoLibraryMaskDetectionCapabilities = Readonly<Record<PhotoLibraryMaskDetectionKind, boolean>>;
+
+/** {@link PhotoLibrary.detectMaskSurface} の答え（面を保存した・その種類の範囲が写真に無かった）。 */
+export type PhotoLibraryMaskDetectionResult =
+  | { kind: "detected"; id: string; width: number; height: number }
+  | { kind: "notFound" };
+
 /**
  * 原寸の書き出しの描画（Mac の `niho-develop-render`）が描ける設定（`niho-develop-render capabilities`。niho-photo#131）。原寸へ
  * 渡せる設定は、描画の版ではなくこれで決める（`photo-editing-native-export.ts`）。
@@ -309,6 +332,11 @@ export type PhotoLibraryCapabilities = {
    * 面を読むだけなら {@link PhotoLibrary.loadMaskSurface} の有無で決まる）
    */
   maskSurfaces?: boolean;
+  /**
+   * 写真から作れるマスクの面の種類（{@link PhotoLibrary.detectMaskSurface}。niho-photo#135）。省略・false = 作れない = 画面は
+   * 「被写体」「空」の追加を出さない（クラウド・古い Mac・macOS 13 など）
+   */
+  maskDetection?: PhotoLibraryMaskDetectionCapabilities;
   /** 背景除去（C4） */
   cutout: boolean;
   favorites: boolean;
