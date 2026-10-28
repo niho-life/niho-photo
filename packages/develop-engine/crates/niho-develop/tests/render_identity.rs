@@ -128,6 +128,13 @@ fn cases(engine: &str) -> Vec<(&'static str, DevelopSettings)> {
     cases
 }
 
+/// Why a case was refused, with `RENDER_IDENTITY_VERBOSE=1` (natively).
+fn explain(line: &str) {
+    if std::env::var_os("RENDER_IDENTITY_VERBOSE").is_some() {
+        eprintln!("{line}");
+    }
+}
+
 fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
@@ -146,7 +153,10 @@ fn digests() -> Vec<String> {
                 _ => Session::open_working_copy(&signed, &meta, Filter::Lanczos3),
             };
             match session {
-                Err(_) => digest.update(b"open refused\n"),
+                Err(error) => {
+                    explain(&format!("{photo} {engine}: open: {error}"));
+                    digest.update(b"open refused\n");
+                }
                 Ok(mut session) => {
                     for (case, settings) in cases(engine) {
                         for (size, quality) in [(0, Quality::Final), (96, Quality::Interactive)] {
@@ -157,7 +167,10 @@ fn digests() -> Vec<String> {
                                     frame.height,
                                     hex(&Sha256::digest(&frame.rgba))
                                 ),
-                                Err(_) => format!("{case} {size} refused\n"),
+                                Err(error) => {
+                                    explain(&format!("{photo} {engine} {case} {size}: {error}"));
+                                    format!("{case} {size} refused\n")
+                                }
                             };
                             digest.update(line.as_bytes());
                         }
