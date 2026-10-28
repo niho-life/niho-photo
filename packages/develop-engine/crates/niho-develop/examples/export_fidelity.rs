@@ -24,23 +24,29 @@
 //! - `heal` / `heal-large`: a wire across textured grass removed along its
 //!   length / a rock removed with one large mark (more than 2^20 hole
 //!   pixels at 6000 px);
-//! - `sharpen`: the branches over a fine texture, Amount 80, Radius 1,
-//!   Detail 25.
+//! - `sharpen` / `sharpen-edges` / `sharpen-texture`: the branches over a
+//!   fine texture / over a flat sky / the texture alone, Amount 80, Radius
+//!   1, Detail 25.
+//!
+//! `--sharpen-options` compares the ways the export could sharpen
+//! ([`sharpen_options`]).
 //!
 //! Prints one JSON line per case. `--full-only` renders the full size once
 //! (with the effect, or without it with `--neutral`) and prints its time,
 //! for `/usr/bin/time -l` to measure the process's peak memory.
 
+use niho_develop::detail::sharpen_linear_srgb;
 use niho_develop::mask_surface::{self, MaskSurface};
 use niho_develop::pipeline::Rendered;
 use niho_develop::research::linear_jpeg_wb::delta_e00;
 use niho_develop::resize::resample;
+use niho_develop::settings::SharpeningSettings;
 use niho_develop::{encode, DevelopSettings, Filter, Quality, Session};
 use serde_json::{json, Value};
 use std::time::Instant;
 
 const SCREEN: usize = 2560;
-const CASES: [&str; 9] = [
+const CASES: [&str; 11] = [
     "fringe",
     "chromatic",
     "chromatic-weak",
@@ -49,6 +55,8 @@ const CASES: [&str; 9] = [
     "heal",
     "heal-large",
     "sharpen",
+    "sharpen-edges",
+    "sharpen-texture",
     "neutral",
 ];
 
@@ -294,15 +302,34 @@ fn make_case(name: &str, w: f64, h: f64) -> Case {
                 profile: None,
             }
         }
-        "sharpen" => plain(
-            Box::new(move |x, y| {
-                let e = branch_distance(w, h, x, y) - half;
-                let dark = coverage(e);
-                let level = sky(h, y) * (0.9 + 0.2 * value_noise(x / 2.5, y / 2.5, 5));
-                ([(1.0 - dark) * level + dark * 0.03; 3], e.abs() < 8.0)
-            }),
-            json!({"detail": {"sharpening": {"amount": 80, "radius": 1, "detail": 25, "masking": 0}, "luminanceNoiseReduction": 0, "colorNoiseReduction": 0}}),
-        ),
+        "sharpen" | "sharpen-edges" | "sharpen-texture" => {
+            let (bars, texture) = match name {
+                "sharpen" => (true, true),
+                "sharpen-edges" => (true, false),
+                _ => (false, true),
+            };
+            plain(
+                Box::new(move |x, y| {
+                    let e = if bars {
+                        branch_distance(w, h, x, y) - half
+                    } else {
+                        f64::INFINITY
+                    };
+                    let dark = coverage(e);
+                    let grain = if texture {
+                        0.9 + 0.2 * value_noise(x / 2.5, y / 2.5, 5)
+                    } else {
+                        1.0
+                    };
+                    let level = sky(h, y) * grain;
+                    (
+                        [(1.0 - dark) * level + dark * 0.03; 3],
+                        !bars || e.abs() < 8.0,
+                    )
+                }),
+                json!({"detail": {"sharpening": {"amount": 80, "radius": 1, "detail": 25, "masking": 0}, "luminanceNoiseReduction": 0, "colorNoiseReduction": 0}}),
+            )
+        }
         // Every effect at once, for the floor of a busy photo.
         "neutral" => plain(
             Box::new(move |x, y| {
@@ -424,6 +451,7 @@ fn stats(mut v: Vec<f64>) -> Value {
 fn compare(a: &Frame, b: &Frame, roi: &[bool]) -> Value {
     let (mut all, mut inside) = (Vec::with_capacity(roi.len()), Vec::new());
     let (mut ca, mut cb) = (0.0, 0.0);
+    let mut worst: Vec<(f64, usize)> = Vec::new();
     for (i, &r) in roi.iter().enumerate() {
         let (la, lb) = (lab(&a.lin[i * 3..i * 3 + 3]), lab(&b.lin[i * 3..i * 3 + 3]));
         let d = delta_e00(la, lb);
@@ -432,13 +460,28 @@ fn compare(a: &Frame, b: &Frame, roi: &[bool]) -> Value {
             inside.push(d);
             ca += la[1].hypot(la[2]);
             cb += lb[1].hypot(lb[2]);
+            if worst.len() < 6 || d > worst[5].0 {
+                worst.push((d, i));
+                worst.sort_by(|x, y| y.0.total_cmp(&x.0));
+                worst.truncate(6);
+            }
         }
     }
     let n = inside.len().max(1) as f64;
+    let worst: Vec<Value> = worst
+        .iter()
+        .map(|&(d, i)| {
+            let (la, lb) = (lab(&a.lin[i * 3..i * 3 + 3]), lab(&b.lin[i * 3..i * 3 + 3]));
+            json!({"x": i % a.w, "y": i / a.w, "de": round3(d),
+                "screen": la.map(|v| (v * 10.0).round() / 10.0),
+                "export": lb.map(|v| (v * 10.0).round() / 10.0)})
+        })
+        .collect();
     json!({
         "all": stats(all),
         "roi": stats(inside),
         "chroma": {"screen": round3(ca / n), "export": round3(cb / n)},
+        "worst": worst,
     })
 }
 
@@ -613,6 +656,130 @@ fn run(name: &str, long: usize, full_only: bool, neutral_only: bool) {
     println!("{out}");
 }
 
+const SHARP: SharpeningSettings = SharpeningSettings {
+    amount: 80.0,
+    radius: 1.0,
+    detail: 25.0,
+    masking: 0.0,
+};
+
+fn luma3(p: &[f32]) -> f32 {
+    0.2126 * p[0] + 0.7152 * p[1] + 0.0722 * p[2]
+}
+
+fn sharpened(f: &Frame, whole_long_edge: usize) -> Frame {
+    let mut lin = f.lin.clone();
+    sharpen_linear_srgb(&mut lin, f.w, f.h, whole_long_edge, SHARP).unwrap();
+    Frame {
+        w: f.w,
+        h: f.h,
+        lin,
+    }
+}
+
+/// The screen's change of luma (`sharp - plain`) enlarged to `full`'s size
+/// (Lanczos 3) and added there, RGB scaled to the new luma.
+fn enlarged_change(full: &Frame, plain: &Frame, sharp: &Frame) -> Frame {
+    let delta: Vec<f32> = plain
+        .lin
+        .chunks_exact(3)
+        .zip(sharp.lin.chunks_exact(3))
+        .flat_map(|(p, q)| {
+            let d = luma3(q) - luma3(p);
+            [d, d, d]
+        })
+        .collect();
+    let up = resample(&delta, plain.w, plain.h, full.w, full.h, Filter::Lanczos3);
+    let lin = full
+        .lin
+        .chunks_exact(3)
+        .zip(up.chunks_exact(3))
+        .flat_map(|(p, d)| {
+            let level = luma3(p);
+            let target = (level + d[0]).max(0.0);
+            if level >= 1e-4 {
+                let r = target / level;
+                [p[0] * r, p[1] * r, p[2] * r]
+            } else {
+                let add = target - level;
+                [p[0] + add, p[1] + add, p[2] + add]
+            }
+        })
+        .collect();
+    Frame {
+        w: full.w,
+        h: full.h,
+        lin,
+    }
+}
+
+/// Mean absolute horizontal step of `sqrt(luma)` (x 1000): how crisp a
+/// frame is at its own size.
+fn crispness(f: &Frame) -> f64 {
+    let mut sum = 0.0f64;
+    for y in 0..f.h {
+        for x in 0..f.w - 1 {
+            sum += (luma(f, x + 1, y).sqrt() - luma(f, x, y).sqrt()).abs();
+        }
+    }
+    round3(sum / ((f.w - 1) * f.h) as f64 * 1000.0)
+}
+
+/// The ways the export could sharpen (#133 item 5), on the photos without
+/// sharpening rendered at both sizes:
+///
+/// - `now`: the full size sharpened as today (radii at a 1500 px long edge);
+/// - `screenChange`: the screen's change of luma enlarged to the full size;
+/// - `originalPixels`: radii in the original's pixels (Lightroom), at both
+///   sizes (the screen at `1500 * 2560 / long`).
+///
+/// Each export, reduced to the screen's size, is compared with the screen
+/// that goes with it; `screenMoves` is how far the original-pixel screen is
+/// from today's, `crisp` the full size's crispness.
+fn sharpen_options(long: usize) {
+    let (w, h) = (long, long * 2 / 3);
+    for name in ["sharpen", "sharpen-edges", "sharpen-texture"] {
+        let case = make_case(name, w as f64, h as f64);
+        let png = photo_png(&case.photo, w, h);
+        let plain = base_settings(&json!({}));
+        let effect = base_settings(&case.effect);
+        let (screen_now, _, _) = render(&png, SCREEN, &case, &effect);
+        let screen_now = linear(&screen_now);
+        let (sp, _, _) = render(&png, SCREEN, &case, &plain);
+        let sp = linear(&sp);
+        let (fp, _, _) = render(&png, 0, &case, &plain);
+        let fp = linear(&fp);
+        let (sw, sh) = (sp.w, sp.h);
+        let (kx, ky) = (w as f64 / sw as f64, h as f64 / sh as f64);
+        let roi: Vec<bool> = (0..sh)
+            .flat_map(|y| (0..sw).map(move |x| (x, y)))
+            .map(|(x, y)| (case.photo)((x as f64 + 0.5) * kx, (y as f64 + 0.5) * ky).1)
+            .collect();
+        let roi_stats = |a: &Frame, b: &Frame| compare(a, b, &roi)["roi"].clone();
+        let screen = sharpened(&sp, sw.max(sh));
+        let now = sharpened(&fp, w);
+        let change = enlarged_change(&fp, &sp, &screen);
+        let original_screen = sharpened(&sp, 1500 * sw.max(sh) / w);
+        let original = sharpened(&fp, 1500);
+        let small = |f: &Frame| reduce(f, sw, sh);
+        println!(
+            "{}",
+            json!({
+                "case": name, "long": long,
+                "sanity": roi_stats(&screen_now, &screen),
+                "now": roi_stats(&screen, &small(&now)),
+                "screenChange": roi_stats(&screen, &small(&change)),
+                "originalPixels": roi_stats(&original_screen, &small(&original)),
+                "screenMoves": roi_stats(&screen, &original_screen),
+                "crisp": {
+                    "plain": crispness(&fp), "now": crispness(&now),
+                    "screenChange": crispness(&change), "originalPixels": crispness(&original),
+                },
+            })
+        );
+    }
+}
+
 fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let value = |flag: &str| {
@@ -624,6 +791,10 @@ fn main() {
     let which = value("--case").unwrap_or_else(|| "all".into());
     let full_only = args.iter().any(|a| a == "--full-only");
     let neutral_only = args.iter().any(|a| a == "--neutral");
+    if args.iter().any(|a| a == "--sharpen-options") {
+        sharpen_options(long);
+        return;
+    }
     let names: Vec<&str> = if which == "all" {
         CASES.to_vec()
     } else {

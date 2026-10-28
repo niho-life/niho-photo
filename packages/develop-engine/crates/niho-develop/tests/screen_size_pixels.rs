@@ -174,4 +174,18 @@ fn the_screen_sizes_render_as_before() {
     assert_eq!(hashes, EXPECTED);
 }
 
-const EXPECTED: [&str; 9] = [""; 9];
+/// Taken with the renderer of `origin/main` before #133 (`a73a0b3`), and the
+/// same after it:
+/// the raster at 2560 px (Final 2560 / 1280, Interactive 640), the screen of
+/// a 3000 px raster opened at 2560 px, and the signed RAW working copy.
+const EXPECTED: [&str; 9] = [
+    "2560x1707:e52be7aa09dcca0c",
+    "1280x854:bc0fca965608aefa",
+    "640x427:86ad056a88990bb5",
+    "2560x1707:9198f4b0e29394aa",
+    "1280x854:f1176d374f49a8e9",
+    "640x427:5a78631cc432da25",
+    "2560x1707:e533b6cad31207cd",
+    "1280x854:6f3023c0fc20e5a7",
+    "640x427:7b0a8b403fac8c59",
+];
