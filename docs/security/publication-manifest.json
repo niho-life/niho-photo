@@ -2094,7 +2094,7 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-presets.ts",
         "sha256": "26a858ef3b1649f0f10d0bf47887871119ccd7dea542edc1b896cc0a86e07089"
       },
-      "outputSha256": "db421edf90afb42ea7fa29f4091d8ca4ccc19bb19c4676516097a4674b6e38e5",
+      "outputSha256": "74a1ec5af908338c868abaae04dec31b2d91e59409cb9aeaac2ab2bad2516e80",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -2102,7 +2102,8 @@
         "進行中のpreset・量・hover全体の完了を待てるようにしてhandoffによる入力破棄を防ぐ。",
         "部分補正（マスク）#69: マスクを持つプリセットは作業画像の大きさを読み、写真の座標へ写して当てる",
         "押した・乗せたときに次の見本を出させず、当てるまでの時間を診断に出す（#126）",
-        "押して当てた結果の key を面の描画へ渡し、乗せた仮の表示の丁寧な画までの待ちを定める（#127）"
+        "押して当てた結果の key を面の描画へ渡し、乗せた仮の表示の丁寧な画までの待ちを定める（#127）",
+        "押した結果の key を確定した編集内容から取り、テストのプリセットを結果ごとに分ける（#127）"
       ]
     },
     {
@@ -10216,8 +10217,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-progressive-open.test.tsx",
-      "origin": "Issue #13のため独立作成。actual React hooksと合成library/engine/frameだけで、provisional編集、canonical handoff、history、retry、abort、旧frame遮断を検証。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 公開signed RAW契約に合う合成metadataで実hookの正規切替を検証。\n変更理由: preview取得失敗でも正規入力の実hookで補正を続けられる回帰を追加。\n変更理由: fallback後の補正を実際にflushし通常保存のbaseと値まで検証。\n変更理由: preset適用・量drag・量commitを未解決のままhandoffに重ねるfailure injectionを追加。\n変更理由: 非同期プリセットfixtureにも実契約のversionとengineを含め型検査する\n変更理由: 同一内容draftの再表示から正規base確定後の既存saverまで実hookで回帰検証する\n変更理由: draft復元テストでも一覧復帰の成功値を明示確認しact補助のvoid型契約に合わせる\n変更理由: Expect current niho-11 default in handoff tests\n変更理由: niho-photo#36 描いた画をヒストグラムへ渡すことを検証。\n変更理由: niho-photo#41 比較の間の補正前の描画（描き直さない・ヒストグラムへ渡さない・canonical差し替え）を検証。\n変更理由: niho-photo#41 の比較UIを #72 のヒストグラム・Jキー契約と併存するようmainへ積み直した。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: niho-photo#46 で engine の mock に supportsPerspective を足した。\n変更理由: PR #97積み直し後の現行develop engine能力stubに更新。\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: ドラッグ中の描画の順序管理の修正に伴う変更。\n変更理由: テスト用の engine に yieldToEdit を足す（#126）\n変更理由: 粗い画を先に出す順番と、乗せてから押したときに描き直さないことを検査（#127）",
-      "sha256": "5cbb498437284008d26d72a9f2b6f25d7fe6aa43f491a01b4f4fbd2199ea2be8"
+      "origin": "Issue #13のため独立作成。actual React hooksと合成library/engine/frameだけで、provisional編集、canonical handoff、history、retry、abort、旧frame遮断を検証。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 公開signed RAW契約に合う合成metadataで実hookの正規切替を検証。\n変更理由: preview取得失敗でも正規入力の実hookで補正を続けられる回帰を追加。\n変更理由: fallback後の補正を実際にflushし通常保存のbaseと値まで検証。\n変更理由: preset適用・量drag・量commitを未解決のままhandoffに重ねるfailure injectionを追加。\n変更理由: 非同期プリセットfixtureにも実契約のversionとengineを含め型検査する\n変更理由: 同一内容draftの再表示から正規base確定後の既存saverまで実hookで回帰検証する\n変更理由: draft復元テストでも一覧復帰の成功値を明示確認しact補助のvoid型契約に合わせる\n変更理由: Expect current niho-11 default in handoff tests\n変更理由: niho-photo#36 描いた画をヒストグラムへ渡すことを検証。\n変更理由: niho-photo#41 比較の間の補正前の描画（描き直さない・ヒストグラムへ渡さない・canonical差し替え）を検証。\n変更理由: niho-photo#41 の比較UIを #72 のヒストグラム・Jキー契約と併存するようmainへ積み直した。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: niho-photo#46 で engine の mock に supportsPerspective を足した。\n変更理由: PR #97積み直し後の現行develop engine能力stubに更新。\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: ドラッグ中の描画の順序管理の修正に伴う変更。\n変更理由: テスト用の engine に yieldToEdit を足す（#126）\n変更理由: 粗い画を先に出す順番と、乗せてから押したときに描き直さないことを検査（#127）\n変更理由: 押した結果の key を確定した編集内容から取り、テストのプリセットを結果ごとに分ける（#127）",
+      "sha256": "9782ba857d60ac98cef68441fc3aa8b5862c7148159488c48a316a2d880578b8"
     },
     {
       "path": ".github/workflows/public-ci.yml",

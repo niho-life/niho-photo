@@ -1163,8 +1163,19 @@ describe("useBrowserPhotoOpen の描いた順（つまみを動かしている�
     expect(current.heal.ready).toBe(true);
   });
 
+  /** プリセットごとに違う結果（「暗い」はコントラスト −30、ほかは 40）にする（同じ結果だと、覚えた画がほかのプリセットにも当たる）。 */
+  const distinctPresets = (engine: DevelopEngine) => {
+    vi.mocked(engine.presetSettings).mockImplementation(async (xmp: string, base: object | null) => ({
+      converted: true,
+      name: xmp.includes("dark") ? "暗い" : "明るい",
+      unsupported: [],
+      settings: { ...((base as DevelopSettings | null) ?? neutralDevelopSettings()), contrast: xmp.includes("dark") ? -30 : 40 },
+    }));
+  };
+
   it("行に載せたプリセットの仮の表示は、粗い画を先に出して止まっていれば丁寧な画に差し替え、前の仮の表示・補正の描き途中の画を描かない。押したら粗い画→丁寧な画。適用量を動かす間は途中の画を描く（#127）", async () => {
-    const { held } = await openHeld("preview");
+    const { engine, held } = await openHeld("preview");
+    distinctPresets(engine);
     const before = mainPaints().length;
     const bright = { key: "builtin:bright", name: "明るい", xmp: "<xmp />" };
     const dark = { key: "builtin:dark", name: "暗い", xmp: "<xmp dark />" };
@@ -1190,8 +1201,8 @@ describe("useBrowserPhotoOpen の描いた順（つまみを動かしている�
     expect(held.map(({ settings, options }) => [settings.contrast ?? 0, options.interactive])).toEqual([
       [0, false],
       [40, true],
-      [40, true],
-      [40, false],
+      [-30, true],
+      [-30, false],
     ]);
     await run(() => held[3]!.result.resolve(frame(113)));
     expect(mainPaints().slice(before)).toEqual([103, 113]);
@@ -1227,7 +1238,8 @@ describe("useBrowserPhotoOpen の描いた順（つまみを動かしている�
   });
 
   it("載せてから押したときは、載せて描いた丁寧な画を使って描き直さない（届く前に押しても待って使う。#127）", async () => {
-    const { held } = await openHeld("preview-apply");
+    const { engine, held } = await openHeld("preview-apply");
+    distinctPresets(engine);
     const before = mainPaints().length;
     const bright = { key: "builtin:bright", name: "明るい", xmp: "<xmp />" };
     await run(() => current.presets.requestPreview(bright));

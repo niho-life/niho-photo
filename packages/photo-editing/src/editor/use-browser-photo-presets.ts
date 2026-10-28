@@ -423,18 +423,16 @@ export function useBrowserPhotoPresets(params: {
         return;
       }
       const next = presetDevelopSettings(base, result.settings, placement);
-      const nextKey = developSettingsKey(next);
-      coarseFirstKeyRef.current = nextKey;
-      if (!latestRef.current.commitEdit(next)) {
-        coarseFirstKeyRef.current = null;
-        return;
-      }
+      const committedFrom = settingsRef.current;
+      if (!latestRef.current.commitEdit(next)) return;
+      // 面の描画は確定した編集内容（版を付け直した後）で受け取る。状態の更新はこの後に描かれる（変わらなければ描かない）
+      if (settingsRef.current !== committedFrom) coarseFirstKeyRef.current = developSettingsKey(settingsRef.current);
       const entry: RememberedPreset = {
         photoKey: key,
         presetKey: preset.key,
         xmp: preset.xmp,
         base,
-        resultKey: nextKey,
+        resultKey: developSettingsKey(next),
         amount: BROWSER_PRESET_AMOUNT_DEFAULT,
       };
       rememberedRef.current = entry;
