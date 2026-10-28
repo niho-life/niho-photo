@@ -9926,8 +9926,8 @@
     },
     {
       "path": "packages/desktop-account/Cargo.lock",
-      "sha256": "6c5d55982d09cf316d4ddd7388784edd73f07deb49906db058e9ff1b1e176e3e",
-      "origin": "公開crates.io依存だけからCargoで解決したlock。署名・認証secretなし。開発専用mock HMAC依存を含む。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。"
+      "sha256": "94159269f8f004684146deedb055c6993d03ddfb394da88f7630dcb68aa81e96",
+      "origin": "公開crates.io依存だけからCargoで解決したlock。署名・認証secretなし。開発専用mock HMAC依存を含む。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: dependabot で tokio を 1.54.0 から 1.54.1 へ上げた（公開 crates.io の依存だけ。#124）。"
     },
     {
       "path": "packages/desktop-account/Cargo.toml",
