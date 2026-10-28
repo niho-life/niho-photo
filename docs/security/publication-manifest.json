@@ -171,7 +171,7 @@
         "path": "packages/photo-editing/src/browser-photo-export-render.test.ts",
         "sha256": "37f9b00d27256499f945ff515f75837c197b608a7c0c2de01be7d8bcbe96241c"
       },
-      "outputSha256": "7cd895187d482e9d8a6d1d37732f04b6e37abe51150eb0ce0602137acf42d0b3",
+      "outputSha256": "d468fb9677f2601295938852cbba7ce668a8ffab9b23040c0606bf279975a7d9",
       "modifications": [
         "Issue #30 Oklch色ミキサーとengine 10/11対応を反映",
         "Issue 13 provisional export and rebind regression",
@@ -183,7 +183,8 @@
         "niho-photo#46 後半で engine の mock に supportsUpright と estimateUpright を足した。",
         "niho-photo#44 前半で DevelopEngine の supportsHeal を偽の engine に足した。",
         "PR #96統合でcrate 0.24・v8対応",
-        "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。"
+        "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
+        "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
       ]
     },
     {
@@ -194,12 +195,13 @@
         "path": "packages/photo-editing/src/browser-photo-export-render.ts",
         "sha256": "5439449d2a25e316c7bbf45530b66af7cd74d7725a93edc57380a1f50918de2b"
       },
-      "outputSha256": "b535b7570228a279e626a06eb7d929c2451be26e766e2c6903a491466043def5",
+      "outputSha256": "7e9c1bc321a32ff32dc36e1d5e332e666f61769364843f1682a9ee0823a85eb8",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "PR #99を#91マージ後のmainへ積み直し、遠近補正後のブラシ半径を局所ヤコビアンで写す。",
-        "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。"
+        "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
+        "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
       ]
     },
     {
@@ -221,7 +223,7 @@
         "path": "packages/photo-editing/src/browser-photo-export.test.ts",
         "sha256": "60c3cd32192302e933a8941375069b4a4625309e054716b8417fbe6752cf87b5"
       },
-      "outputSha256": "9ab3a56d47c5da9cb84e6130f71249339ea1a3e298f4342e83538cfdc9540653",
+      "outputSha256": "011f97a0b9d86d83e1a1ff5e90cd847d4cc2ca7b4baa59f2500166ba9ebda9c8",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -235,7 +237,8 @@
         "PR #74: #80 統合後に float-cube の変更を重ね、最終ハッシュを反映。",
         "PR #90: rasterの相対WBをniho-13へ移し、新規編集の既定とsettings/UI契約を同期。",
         "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
-        "PR #102を更新済み#101へ積み直し、原寸native書き出し直前に最新保存設定を再判定する。"
+        "PR #102を更新済み#101へ積み直し、原寸native書き出し直前に最新保存設定を再判定する。",
+        "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
       ]
     },
     {
@@ -246,13 +249,14 @@
         "path": "packages/photo-editing/src/browser-photo-export.ts",
         "sha256": "866f98dfe091c3ac0eec072666e6be07b7df11c85687a22b5c11ebb4941bf4d5"
       },
-      "outputSha256": "999de2edd2e8cd1c0ca4b526c1d1c9e93a5352a17cd990d721dc8206bca9b371",
+      "outputSha256": "7e99b528a05ab51e204ac88f12de60b8ab7781f05ad9a47693ca00f09689df81",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "原寸native書き出しの輝度互換性ガードと色相ホイール操作を修正。",
         "PR #80 のカラーグレーディングを最新HSL UIと統合。",
-        "PR #102を更新済み#101へ積み直し、原寸native書き出し直前に最新保存設定を再判定する。"
+        "PR #102を更新済み#101へ積み直し、原寸native書き出し直前に最新保存設定を再判定する。",
+        "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
       ]
     },
     {
@@ -274,10 +278,11 @@
         "path": "packages/photo-editing/src/browser-photo-source.ts",
         "sha256": "532cd3290758b1b07e8e0fd28b8df99a4eb0a9bfd1a204d8a84b66b9ab6c526a"
       },
-      "outputSha256": "32e272feb97bfa93e9adbac9f0a746256032b9dee8c8e4d5e1f90b59288b8d93",
+      "outputSha256": "ec61593595d94b530c8f698b62b5c02281e6dcdc3fc7619c02da281decd27c57",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
       ]
     },
     {
@@ -884,10 +889,11 @@
         "path": "packages/photo-editing/src/editor/browser-photo-editing-export-sheet.tsx",
         "sha256": "2a5042fd92584dee1aa94144dcbef8e3815a77fa64db6491b4182c702dfb4c91"
       },
-      "outputSha256": "b3338249d80414a8ea92ebc49ae069976cbc888693875dec750f95a19f7af220",
+      "outputSha256": "1ac348d5e9019c81d99d542196820450a17a7654520f6c393933971e024a3c75",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
       ]
     },
     {
@@ -898,10 +904,11 @@
         "path": "packages/photo-editing/src/editor/browser-photo-editing-export-size.tsx",
         "sha256": "f9aec40cb1d4e306a63442b583162294d9596ddcdd067740af380da9fe545c40"
       },
-      "outputSha256": "1e9534772fc9a706254baa29aa0c3b1421ae56faaedbb111f172af240ceaf0a3",
+      "outputSha256": "af8d9711ec8e3818a9860cccd5bdf8b9921e879bc31936f76bd10a479e420720",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
       ]
     },
     {
@@ -1071,7 +1078,7 @@
         "path": "packages/photo-editing/src/editor/browser-photo-editing-mobile-editor.tsx",
         "sha256": "cf0ebc1e3a23b7a2e8ecea7538cc6f2d9880cbf4e181d79db61f26dc293c3d1a"
       },
-      "outputSha256": "b2498d2b1d6f4cbc2334ad85ff9be2d0c5b8a8b0b7fe32b60a557eb56a9b76ba",
+      "outputSha256": "632c4c4e4da722674f519ac585ae511167e4e8c7aaa292395dcceff401300a1a",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -1087,7 +1094,8 @@
         "niho-photo#39 スマホの編集の層にカラーグレーディングの道具を足した。",
         "PR #80 のカラーグレーディングを最新HSL UIと統合。",
         "niho-photo#86: スマホの道具の帯の末尾にディテールを置き、項目はよく使う 3 つを先・シャープの応用の 3 つを後ろへ",
-        "部分補正（マスク）#93: スマホの編集の層の道具の帯に「マスク」を足し（hookの入る・出るに合わせる）、マスクの間は長押しの補正前を止め、写真の面に拡大の印を付けた"
+        "部分補正（マスク）#93: スマホの編集の層の道具の帯に「マスク」を足し（hookの入る・出るに合わせる）、マスクの間は長押しの補正前を止め、写真の面に拡大の印を付けた",
+        "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
       ]
     },
     {
@@ -1098,10 +1106,11 @@
         "path": "packages/photo-editing/src/editor/browser-photo-editing-mobile-export-sheet.tsx",
         "sha256": "b20067868ba541428d80fd76b587e03df2d65b83f517f2cd05a65503782c9319"
       },
-      "outputSha256": "6ac7bfdb9f216b9ebe36ad0bd869d76377ac22cd03f9020b3f16545cdbb9efc7",
+      "outputSha256": "864fe61a9560ec818de6962418e185211b07c662d2c57066e306a7201ccbf6b4",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
       ]
     },
     {
@@ -1360,9 +1369,10 @@
         "PR #102を更新済み#101へ積み直し、原寸native書き出し直前に最新保存設定を再判定する。",
         "niho-photo#86: スマホの道具の帯の末尾にディテールを置き、項目はよく使う 3 つを先・シャープの応用の 3 つを後ろへ",
         "niho-photo#86: main とスマホのディテールの変更を merge",
-        "部分補正（マスク）#93: マスクの道具をスマホの全画面の編集の層でも出し（写真の上の操作・段・マスクだけの初期化）を渡した"
+        "部分補正（マスク）#93: マスクの道具をスマホの全画面の編集の層でも出し（写真の上の操作・段・マスクだけの初期化）を渡した",
+        "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
       ],
-      "outputSha256": "b800d713539a0135a5d95a670d1657f75efd550a073c9d72546813816f20e23b"
+      "outputSha256": "c5d6a0976835cb3f36b3a4414a7b44c30a409ef6eb506a5e01b4f8337e597760"
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-adjustment-controls-effects.test.tsx",
@@ -1978,9 +1988,10 @@
         "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
         "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
         "PR #102を更新済み#101へ積み直し、原寸native書き出し直前に最新保存設定を再判定する。",
-        "原寸native書き出しで最新保存済み補正を再判定し一覧情報の陳腐化を防ぐ。"
+        "原寸native書き出しで最新保存済み補正を再判定し一覧情報の陳腐化を防ぐ。",
+        "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
       ],
-      "outputSha256": "7c733d31bc23f215cbe952e22c626ee87b6651ce3edb2f4d96760b41f98209b0"
+      "outputSha256": "b19906a80f8d44b6db0b3c985b8206d709dc93378cd9f8f5df617172eb669db2"
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-folders.ts",
@@ -2465,9 +2476,10 @@
         "PR #102を更新済み#101へ積み直し、原寸native書き出し直前に最新保存設定を再判定する。",
         "niho-photo#86: スマホの道具の帯の末尾にディテールを置き、項目はよく使う 3 つを先・シャープの応用の 3 つを後ろへ",
         "niho-photo#86: main とスマホのディテールの変更を merge",
-        "部分補正（マスク）#93: 局所のカラーミキサーの初期化とスマホのマスクの道具の文言を足した"
+        "部分補正（マスク）#93: 局所のカラーミキサーの初期化とスマホのマスクの道具の文言を足した",
+        "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
       ],
-      "outputSha256": "96c35c3fb942813388605e64a7eb8b81d14149852695cdd6c1f20d866eb5d89f"
+      "outputSha256": "53daeda9a6d9e7bff921d9d74fc12e695137d5fce5ed4daf798aacf5e5998c00"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-crop.test.ts",
@@ -2561,10 +2573,11 @@
         "path": "packages/photo-editing/src/photo-editing-local-settings.ts",
         "sha256": "4d1b64f30e0c96dc4670e155f5c3ccbf3fd4399dce527321ba18c5b4c278bee6"
       },
-      "outputSha256": "6c39601987d8a2386da542854423289ea6984892b8fb015644695104d9281733",
+      "outputSha256": "93e27844418868b1d553a7872bb5f8043b992c4bc1480e11465c0adabb59dc63",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
       ]
     },
     {
@@ -10009,7 +10022,7 @@
     {
       "path": "packages/photo-editing/src/editor/browser-photo-cloud-share-sheet.test.tsx",
       "sha256": "5243922f185aaea7138529d0fa1a53481c4e050835f999f3e814a4b4f8c21eb7",
-      "origin": "Issue #8 の共有UIを合成resourceとmockで検証する独立新規component test。\n変更理由: 後続ページの共有リンク操作をcomponent testで検証。\n変更理由: 画面を閉じて再表示した後も同一idempotencyキーを使うcomponent testを追加。\n変更理由: 有効な共有リンクの期限が2026-10-27で過ぎ、実時刻で判定する画面の試験が落ちるため、期限を2099年にした。"
+      "origin": "Issue #8 の共有UIを合成resourceとmockで検証する独立新規component test。\n変更理由: 後続ページの共有リンク操作をcomponent testで検証。\n変更理由: 画面を閉じて再表示した後も同一idempotencyキーを使うcomponent testを追加。\n変更理由: 有効な共有リンクの期限を固定日（2026-10-27）から遠い未来にし、日付が過ぎて落ちないようにする。"
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-cloud-share-sheet.tsx",
@@ -11450,6 +11463,11 @@
       "path": "packages/photo-editing/src/editor/use-photo-editing-coarse-pointer.ts",
       "sha256": "15195b274e3b9769e538ae264304a116c3eb7cc8d605fa071586825ecfcd69ce",
       "origin": "Issue #93の公開仕様 docs/local-adjustments.md だけから新規作成した、主なポインタが指か（pointer: coarse）を読むReactフック。外部画像・非公開コード・個体metadataを含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/editor/use-browser-photo-export-large.ts",
+      "sha256": "106993e4b0b8f8dffdad2cb549a64e81f7615f2f83eb59795a6b7e150bcb444d",
+      "origin": "公開repoで新規作成（niho-photo#134）。書き出しの「大きく」の長辺を、開いている写真の今の切り抜きから wasm の geometryOutputSize で読む hook。外部のコード・実写真・非公開の情報を含まない。"
     }
   ],
   "excludedSources": [
