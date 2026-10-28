@@ -23,6 +23,12 @@ test("現像Swift packageは新しいCore Image SDKのGitHub-hosted runnerで検
   const e2e = job.steps.find((step) => step.run === "swift test --package-path packages/develop-engine/tools/niho-camera-cutout --filter VisionEndToEndTests");
   assert.deepEqual(e2e?.env, { NIHO_CUTOUT_E2E: "1" });
 });
+test("native（Client）は廃止される macos-14 ではなく macos-26 で検証する（2026-11-02 に macos-14 は廃止）", () => {
+  assert.equal(workflow.jobs.native?.["runs-on"], "macos-26");
+  const deprecated = structuredClone(workflow);
+  deprecated.jobs.native["runs-on"] = "macos-14";
+  assert.ok(workflowFailures(deprecated).length > 0);
+});
 for (const [name, mutate] of [
   ["tag Action", (w) => { w.jobs.plan.steps[0].uses = "actions/checkout@v4"; }],
   ["unverified Action commit", (w) => { w.jobs.plan.steps[0].uses = `actions/checkout@${"a".repeat(40)}`; }],
