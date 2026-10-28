@@ -1,7 +1,7 @@
 "use client";
 
 import { useId, useState } from "react";
-import { CircleDot, Copy, Eraser, Eye, EyeOff, FlipVertical2, Paintbrush, Plus, Trash2 } from "lucide-react";
+import { CircleDot, Copy, Eraser, Eye, EyeOff, FlipVertical2, Loader2, Paintbrush, Plus, Trash2 } from "lucide-react";
 
 import type { DevelopMask, DevelopMaskAdjustKey } from "../develop-engine/develop-masks";
 import {
@@ -19,6 +19,8 @@ import {
   PHOTO_EDITING_MASK_BRUSH_SIZE_LABEL,
   PHOTO_EDITING_MASK_BRUSH_TITLE,
   PHOTO_EDITING_MASK_DETECTED_TEXT,
+  PHOTO_EDITING_MASK_DETECTING_TEXTS,
+  PHOTO_EDITING_MASK_DETECT_CANCEL_LABEL,
   PHOTO_EDITING_MASK_FEATHER_LABEL,
   PHOTO_EDITING_MASK_HINT_MOBILE_TEXT,
   PHOTO_EDITING_MASK_LIST_EMPTY_TEXT,
@@ -433,6 +435,27 @@ export function PhotoEditingMaskMobileTools(props: PhotoEditingMaskMobileToolsPr
         <p id={reasonId} className={NOTE_CLASS_NAME}>
           {props.addBlockedReason}
         </p>
+      ) : null}
+      {props.detecting ? (
+        <div
+          role="status"
+          data-testid="photo-mask-detecting"
+          className="mx-3 mb-1 flex items-center gap-2 rounded-lg bg-niho-pale/60 px-2.5"
+        >
+          <Loader2 className="h-4 w-4 shrink-0 animate-spin text-niho-text-sub motion-reduce:animate-none" aria-hidden />
+          <p className="min-w-0 flex-1 py-2 text-xs leading-relaxed text-niho-text-sub">
+            {PHOTO_EDITING_MASK_DETECTING_TEXTS[props.detecting]}
+          </p>
+          {props.cancelDetect ? (
+            <button
+              type="button"
+              onClick={props.cancelDetect}
+              className={cn("min-h-11 shrink-0 px-1 text-xs font-bold text-niho-accent-ink", FOCUS_RING_CLASS_NAME)}
+            >
+              {PHOTO_EDITING_MASK_DETECT_CANCEL_LABEL}
+            </button>
+          ) : null}
+        </div>
       ) : null}
       {props.notice ? (
         <div role="status" data-testid="photo-mask-notice" className="mx-3 mb-1 space-y-1 rounded-lg bg-niho-pale/60 px-2.5 py-2">

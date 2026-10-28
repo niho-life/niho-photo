@@ -1,6 +1,6 @@
 # niho-camera-cutout
 
-NIHO camera（Epic #18387）の**背景除去**。Apple Vision の端末内推論（`VNGenerateForegroundInstanceMaskRequest`）で被写体ごとのソフトマスクを作り、透明・白・任意色の背景に合成して、原寸の PNG（sRGB RGBA）か背景を合成した JPEG に書き出す。写真をネットへ送らない。C4 #18392。設計の正は `specs/initiatives/niho-camera-app.md`（決まりごと 7: Photo Bench から持ち込むのはこれだけで、Swift の sidecar として同梱する）。
+NIHO camera（Epic #18387）の**背景除去**。Apple Vision の端末内推論（`VNGenerateForegroundInstanceMaskRequest`）で被写体ごとのソフトマスクを作り、透明・白・任意色の背景に合成して、原寸の PNG（sRGB RGBA）か背景を合成した JPEG に書き出す。写真をネットへ送らない。C4 #18392。0.3.0 から、部分補正の**被写体のマスクの面**（`surface`。niho-photo#135）も同じ推論で作る。設計の正は `specs/initiatives/niho-camera-app.md`（決まりごと 7: Photo Bench から持ち込むのはこれだけで、Swift の sidecar として同梱する）。
 
 - 移植元: Photo Bench（`takuyatakahamaT/photoedit`）c76775b（NIHO camera 0.4.0）の `Sources/NihoCameraCutout`・`Sources/NihoCameraCutoutCLI`・`Tests/NihoCameraCutoutTests`。ライブラリ 5 ファイルと `CutoutComposerTests.swift` は 0.1.0 でバイト単位で同じ（SHA-256 一致）。0.2.0 で `MaskRaster.swift` のブラシの落ちる不具合だけを直した（下の「決めたこと」）。CLI は引数の解析を `Options.swift` に分けてテストできるようにし、`version`・`help` を足しただけで、切り抜きの経路は変えていない。設計の背景（マスクと座標の契約・書き出しの保護・実写真の受入）は Photo Bench の `docs/NIHO_CAMERA_BACKGROUND_REMOVAL.md`。
 - Photo Bench の色・トーンのコード（PhotoCore・LibRaw・Adobe の DCP）は持ち込まない。このツールはそれらに依存しない。
@@ -14,9 +14,11 @@ swift build -c release          # .build/release/niho-camera-cutout（arm64）
 swift test                      # 合成のマスク: Float32 のマスクの量子化・PNG の往復・ソフトマスクと元の alpha の乗算・透明 / 白 / 任意色・
                                 # 半透明の元画像を色の背景で不透明にする・消す / 戻すのブラシ（左上原点の正規化座標）・
                                 # 既存の出力を上書きしない・PNG は透明を保ち JPEG は白へ合成・CLI の引数と版の行・
-                                # compose（マスク・ブラシ・背景・縦横比の拒否・SHA-256 の照合）と失敗の code / 終了コード
+                                # compose（マスク・ブラシ・背景・縦横比の拒否・SHA-256 の照合）と失敗の code / 終了コード・
+                                # surface（正規形の PNG・Adler-32 / CRC-32・向きを当てて --max-side まで縮める・推論の前の失敗）
 NIHO_CUTOUT_E2E=1 swift test    # Apple Vision を実際に回す（合成画像の物体を切り抜き、透明 PNG を書き、元画像の hash が変わらない。
-                                # detect がマスクを 1 回だけ置き、もう一度回しても書き直さず、compose がそのマスクで切り抜く）
+                                # detect がマスクを 1 回だけ置き、もう一度回しても書き直さず、compose がそのマスクで切り抜く。
+                                # surface が物体を 255・壁を 0 にした面を --max-side の大きさで書き、既にある出力には書かない）
 ```
 
 - ブラシの照合: 編集面のプレビューは同じブラシを TS で塗る（`packages/photo-editing/src/photo-cutout.ts` の `applyCutoutStrokes`）。2 つが同じ fixture（`packages/photo-editing/src/fixtures/cutout-brush-parity.json`。公開 repo のために新しく作った 5×5 の合成の値で、期待値は手計算）を読み、`BrushParityTests` は `MaskRaster.applying` が、`photo-cutout.test.ts` は TS が、その `expected` のバイト列を塗ることを確かめる（Swift の `hypot` と JS の `Math.hypot` を含めて一致）。ブラシを意図して変えたら fixture の `expected` と両方のテストを一緒に直す。
@@ -29,7 +31,8 @@ NIHO_CUTOUT_E2E=1 swift test    # Apple Vision を実際に回す（合成画像
 niho-camera-cutout --input PATH --output PATH [--subject largest|all|ID] [--background transparent|white|#RRGGBB] [--jpeg-quality 0...1]
 niho-camera-cutout detect  --input PATH --masks-dir DIR
 niho-camera-cutout compose --input PATH --mask PATH --output PATH [--mask-sha256 HEX] [--background transparent|white|#RRGGBB] [--strokes FILE.json] [--jpeg-quality 0...1]
-niho-camera-cutout version      → niho-camera-cutout 0.2.0
+niho-camera-cutout surface --input PATH --output PATH --kind subject|sky [--max-side 1...4096]
+niho-camera-cutout version      → niho-camera-cutout 0.3.0
 niho-camera-cutout help         → 使い方
 ```
 
@@ -44,7 +47,7 @@ niho-camera-cutout help         → 使い方
 - 失敗: 標準エラーに 1 行 `niho-camera-cutout: <理由>`、終了コード 1（被写体が見つからない・読めない・既にある・形式が違う・引数の誤り）。
 - `version`・`help` は引数がそれ 1 つのときだけ（`--input version` は `version` という名前のファイル）。
 
-### 機械が読む契約（`detect`・`compose`。0.2.0）
+### 機械が読む契約（`detect`・`compose`。0.2.0。`surface`。0.3.0）
 
 編集面の「背景を除去」は、推論を 1 回だけ回してマスクを保存し（`detect`）、背景とブラシを何度でも当て直して書き出す（`compose`）。プレビューは画面の側で同じマスクとブラシを描く（`packages/photo-editing` の `photo-cutout`）。
 
@@ -55,18 +58,22 @@ detect  → {"engine":"VNGenerateForegroundInstanceMaskRequest","engineRevision"
                        …, {"selection":"all",…}],
            "durationMs":1141}
 compose → {"width":6000,"height":4000,"format":"png"|"jpeg","output":"…","strokes":3,"durationMs":420}
+surface → {"kind":"subject","engine":"VNGenerateForegroundInstanceMaskRequest","engineRevision":1,
+           "width":4096,"height":2731,"sourceWidth":6000,"sourceHeight":4000,"subjects":2,
+           "surfaceSHA256":"…","bytes":81234,"durationMs":1530}
 失敗    → {"error":"<code>","message":"…"}（標準出力に 1 行）と終了コード
 ```
 
 - `detect`: EXIF の向きを当てた画像で推論し、被写体ごと（と `all`）のマスクを `--masks-dir` に `<マスクの SHA-256>.png`（8bit グレー・0 = 背景・255 = 被写体・画像と同じ寸法）で置く。同じ名前で同じ中身のファイルがあれば書き直さない（同じ写真をもう一度切り抜いても増えない）。中身が違えば置き換える。書きかけは `.<sha>.partial-<pid>` で、終わると消える。`width`・`height` は向きを当てた後の寸法。マスクの参照（`CutoutMaskReference`）に要る値は全部この行にある。
 - `compose`: `--input`（現像した画像。向きを当てる）に `--mask` を当て、`--strokes` のブラシと `--background` を合成して `--output` に書く。`--mask-sha256` を渡すと中身を照合する（違えば `corrupt_mask`）。マスクと画像の縦横比が 1% より違えば `mask_mismatch`（切り抜き・90° 回転の後の画像に、元の枠のマスクを伸ばして当てない）。書き出しの守り（既存・入力・マスクに書かない・壊れたファイルを残さない）は 1 回の形と同じ。
+- `surface`（0.3.0・niho-photo#135）: 部分補正の被写体のマスクの面（`docs/local-adjustments.md`「面の受け渡し」）を作る。`--input` は**作業画像**（マスクの座標の基準。RAW は作業コピーを sRGB 8bit にした画像、JPEG / PNG などは元の写真）で、EXIF の向きを当て、長辺が `--max-side`（既定 4096。エンジンの面の上限）を超えれば縮めてから推論する（大きくはしない）。全部の被写体（`allInstances`）を 1 枚にしたソフトマスク（0 = 外・255 = 被写体）を、推論した画像と同じ寸法の **正規形の PNG** で `--output` に書く: 署名・IHDR（8bit グレー・色の型 0・interlace 無し）・IDAT 1 つ・IEND だけ（tRNS・acTL・色の profile・EXIF を持たない）、行の filter はすべて 0、zlib（Apple の Compression の deflate）。同じ画素は同じ macOS で同じ byte になる（Rust の `encode_surface_png` と同じ byte ではない。面の id は書いた byte の SHA-256 で、`surfaceSHA256` に返す）。8 MiB を超えれば `encode_failed`。`width`・`height` は面の寸法、`sourceWidth`・`sourceHeight` は向きを当てた入力の寸法、`subjects` は Vision が見つけた被写体の数。`--output` は新しいファイルだけ（既にある・ディレクトリ・symlink には書かない。同じフォルダの `.` で始まる一時ファイルから `link(2)` で置く）。`--kind sky` は口だけで、検出の方式が決まるまで `unsupported_kind`（2）で断る（niho-photo#128）。
 - `--strokes`: `[{"mode":"erase"|"restore","radius":0.05,"points":[{"x":0.5,"y":0.5},…]},…]`（`CutoutBrushStroke`）。座標は画像の左上を原点に 0〜1（ドラッグで写真の外へ出た点も残せるよう -1〜2 を受け付ける。外の分は塗らない）、`radius` は短い辺に対する割合（0 より大きく 1 以下）。順に塗る（消す = 被写体を減らす・戻す = 元の画素へ戻す）。
 - オプションは `--key value`。知らない・2 回・値の無いオプションは `invalid_arguments`（1 回の形は Photo Bench のゆるい解析のまま）。
 
 | 終了コード | `error` |
 |---|---|
 | 1 | `invalid_arguments`・`unsupported_output`（PNG / JPEG 以外）・`invalid_strokes`・`unknown_subject`・`internal_error` |
-| 2 | `no_subjects`（切り抜ける被写体が無い）・`engine_failed`（この Mac で Vision が動かない・想定外のマスク） |
+| 2 | `no_subjects`（切り抜ける被写体が無い）・`engine_failed`（この Mac で Vision が動かない・想定外のマスク）・`unsupported_kind`（`surface` のまだ作れない種類） |
 | 3 | `input_unreadable`・`invalid_image`・`corrupt_mask`・`mask_mismatch` |
 | 4 | `destination_exists`・`destination_is_directory`・`source_overwrite`・`encode_failed`・`write_failed` |
 
@@ -96,7 +103,7 @@ node packages/develop-engine/tools/niho-camera-cutout/scripts/sidecar-lock.mjs s
 
 ## ライセンス
 
-- 第三者のコード・モデル・データを含まない。使うのは macOS の framework（Vision・Core Image・Core Graphics・Core Video・ImageIO・CryptoKit・UniformTypeIdentifiers・Foundation）だけで、推論のモデルは macOS に入っているものを使い、同梱しない。`check-binary` は実行ファイルが `/usr/lib`・`/System` の外の dylib を読まないことを確かめる。
+- 第三者のコード・モデル・データを含まない。使うのは macOS の framework（Vision・Core Image・Core Graphics・Core Video・ImageIO・CryptoKit・Compression・UniformTypeIdentifiers・Foundation）だけで、推論のモデルは macOS に入っているものを使い、同梱しない。`check-binary` は実行ファイルが `/usr/lib`・`/System` の外の dylib を読まないことを確かめる。
 - Photo Bench の .app は LibRaw・lcms2・libjpeg・libomp のライセンス文を同梱するが、どれもこのツールは使わないので、NIHO camera の同梱物にライセンス文は増えない。`packages/develop-engine/LICENSES.md` にも同じことを書いた。
 - 写したコードは Photo Bench（owner の私有リポジトリ）で書いた NIHO 自身の成果物で、第三者のコードの写しではない。
 
@@ -104,5 +111,6 @@ node packages/develop-engine/tools/niho-camera-cutout/scripts/sidecar-lock.mjs s
 
 - 0.1.0（2026-10-15・C4 #18392）: Photo Bench c76775b をそのまま写し、`version`・`help` を足した。被写体が無い・引数の誤りなどはすべて終了コード 1（Photo Bench と同じ）。
 - 0.2.0（2026-10-15・C4 #18392 の 2 本目）: `detect`・`compose` を足した（上の「機械が読む契約」）。ライブラリと 1 回の形の画素・出力は 0.1.0 と同じ。決めたこと: (1) マスクは中身の SHA-256 を名前にした不変のファイルにし、参照は名前と SHA-256 で持つ（Photo Bench の「マスクは不変ファイル・JSON は参照だけ」と同じ）。(2) `compose` はマスクと画像の縦横比が違えば拒否する。切り抜き・回転の後の画像へ元の枠のマスクを当てる変換は持たない（編集面で背景除去と切り抜き・回転を同時に使わない。`specs/initiatives/niho-camera-app.md` Decisions）。(3) 1 回の形は人向けの出力のまま残す（Photo Bench と同じ使い方ができる）。(4) Photo Bench の `MaskRaster.paint` は、半径より外にある点（写真の外へドラッグした筆）で `minY...maxY` が逆向きの範囲になって落ちた。外の点は塗らずに返すようにした（画像の中の画素は変わらない）。
+- 0.3.0（2026-10-28・niho-photo#135）: `surface` を足した（上の「機械が読む契約」）。`detect`・`compose`・1 回の形の出力は 0.2.0 と同じ。決めたこと: (1) 推論は元の写真ではなく作業画像に当てる（RAW の作業コピーはレンズ補正を焼き込んでいるので、元の写真の面は端がずれる。作業画像を作るのは呼ぶ側）。(2) 面は全部の被写体を 1 枚にする（Lightroom の「被写体を選択」と同じ。被写体ごとの選び分けは背景除去の `detect` だけ）。(3) PNG はこのツールが自分で組む（ImageIO の PNG は色の profile・EXIF の chunk を足しうるので、エンジンと置き場が受ける最小の形にする）。(4) 4096 を超える作業画像は推論の前に縮める（Vision は内部で縮めて推論し、`generateScaledMaskForImage` が入力の寸法へ戻すので、先に縮めても面の質は変わらず、時間とメモリが減る）。
 - 置き場は `packages/develop-engine/tools/`（apple-raw-linear と同じ）。NIHO Desktop には同梱しない（要るなら別 Issue）。
 - CI は公開 CI の Swift の job（apple-raw-linear と同じ `macos-26`）。公開 repo へ移したときに専用の workflow は持ち込まず、2026-10-28 までこのツールの試験は CI で走っていなかった（その間に公開版の fixture の形と `BrushParityTests` の読み方が食い違っていた）。

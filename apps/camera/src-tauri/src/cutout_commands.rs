@@ -25,7 +25,7 @@ use std::sync::{Arc, Mutex, OnceLock};
 use std::time::SystemTime;
 use tauri::Manager;
 
-const CUTOUT_FAILED_MESSAGE: &str = "背景除去を使えませんでした。もう一度お試しください。";
+pub(crate) const CUTOUT_FAILED_MESSAGE: &str = "背景除去を使えませんでした。もう一度お試しください。";
 const CUTOUT_EXPORT_FAILED_MESSAGE: &str = "背景除去を反映した写真を書き出せませんでした。";
 const ORIGINAL_OVERWRITE_MESSAGE: &str = "元の写真には上書きできません。別の名前で保存してください。";
 const MAX_OPERATION_ID_BYTES: usize = 128;
@@ -54,13 +54,19 @@ impl CameraCutout {
     }
   }
 
-  fn probe(&self) -> bool {
+  pub(crate) fn probe(&self) -> bool {
     *self
       .available
       .get_or_init(|| self.configured && self.engine.probe().is_ok())
   }
 
-  fn begin(self: &Arc<Self>, id: String) -> Result<OperationGuard, CameraError> {
+  /// 同梱の sidecar の本体（被写体のマスクの面の検出 `mask_detection.rs` も使う）。
+  pub(crate) fn engine(&self) -> &PhotoCutout {
+    &self.engine
+  }
+
+  /// sidecar を使う操作を 1 本だけ始める（背景除去と被写体のマスクの面の検出で共有。取り消しは `camera_cutout_cancel`）。
+  pub(crate) fn begin(self: &Arc<Self>, id: String) -> Result<OperationGuard, CameraError> {
     let mut operation = lock(&self.operation);
     if operation.is_some() {
       return Err(CameraError::new("engine_failed", CUTOUT_FAILED_MESSAGE));
@@ -97,18 +103,18 @@ impl CameraCutout {
   }
 }
 
-struct OperationGuard {
+pub(crate) struct OperationGuard {
   owner: Arc<CameraCutout>,
   id: String,
   cancelled: Arc<AtomicBool>,
 }
 
 impl OperationGuard {
-  fn cancelled(&self) -> bool {
+  pub(crate) fn cancelled(&self) -> bool {
     self.cancelled.load(Ordering::SeqCst)
   }
 
-  fn cancellation(&self) -> &AtomicBool {
+  pub(crate) fn cancellation(&self) -> &AtomicBool {
     &self.cancelled
   }
 }
@@ -157,7 +163,7 @@ pub fn install(app: &tauri::AppHandle) {
   });
 }
 
-fn cutout(app: &tauri::AppHandle) -> Result<Arc<CameraCutout>, CameraError> {
+pub(crate) fn cutout(app: &tauri::AppHandle) -> Result<Arc<CameraCutout>, CameraError> {
   app
     .try_state::<CutoutState>()
     .map(|state| state.0.clone())
@@ -170,7 +176,7 @@ pub fn shutdown(app: &tauri::AppHandle) {
   }
 }
 
-fn check_operation_id(id: &str) -> Result<(), CameraError> {
+pub(crate) fn check_operation_id(id: &str) -> Result<(), CameraError> {
   if !id.is_empty()
     && id.len() <= MAX_OPERATION_ID_BYTES
     && id
@@ -183,12 +189,12 @@ fn check_operation_id(id: &str) -> Result<(), CameraError> {
   }
 }
 
-fn verified_photo(photos: &CameraPhotos, photo_id: &str) -> Result<OpenedPhoto, CameraError> {
+pub(crate) fn verified_photo(photos: &CameraPhotos, photo_id: &str) -> Result<OpenedPhoto, CameraError> {
   check_photo_id(photo_id)?;
   photos.verified(photo_id)
 }
 
-fn page_failure(code: &str, export: bool) -> CameraError {
+pub(crate) fn page_failure(code: &str, export: bool) -> CameraError {
   let code = if CUTOUT_ERROR_CODES.contains(&code) {
     code
   } else {
@@ -204,7 +210,7 @@ fn page_failure(code: &str, export: bool) -> CameraError {
   )
 }
 
-fn require_available(cutout: &CameraCutout, export: bool) -> Result<(), CameraError> {
+pub(crate) fn require_available(cutout: &CameraCutout, export: bool) -> Result<(), CameraError> {
   cutout
     .probe()
     .then_some(())
