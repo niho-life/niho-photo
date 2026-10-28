@@ -157,7 +157,7 @@ describe("BrowserPhotoCloudShareSheet", () => {
 
   it("offers more pages before later active links can be revoked", async () => {
     const first = { shareId: "expired-first", resource: TARGET, permission: "read" as const, expiresAt: "2020-01-01T00:00:00.000Z", revokedAt: null };
-    const later = { shareId: "active-later", resource: TARGET, permission: "read" as const, expiresAt: "2026-10-27T00:00:00.000Z", revokedAt: null };
+    const later = { shareId: "active-later", resource: TARGET, permission: "read" as const, expiresAt: "2099-01-01T00:00:00.000Z", revokedAt: null };
     const list = vi.fn(async (request: { cursor?: string }) => ({
       ok: true as const,
       value: request.cursor === "next-page"
