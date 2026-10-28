@@ -6,7 +6,7 @@ import NihoCameraCutout
 
 // niho-camera-cutout — see README.md for the contract.
 // One-shot form: one summary line on stdout; one error line on stderr, exit 1.
-// detect / compose: one JSON line on stdout, also for errors (exit 1–4).
+// detect / compose / surface: one JSON line on stdout, also for errors (exit 1–4).
 
 func runCutout(_ options: Options) async throws {
     let started = ContinuousClock.now
@@ -58,13 +58,14 @@ func emit(_ line: String) {
 }
 
 let arguments = Array(CommandLine.arguments.dropFirst())
-let machineReadable = ["detect", "compose"].contains(arguments.first)
+let machineReadable = ["detect", "compose", "surface"].contains(arguments.first)
 do {
     switch try Command.parse(arguments) {
     case .help: print(Command.usage)
     case .version: print("\(Tool.name) \(Tool.version)")
     case let .detect(options): emit(JSONLine.encode(try await DetectCommand.run(options)))
     case let .compose(options): emit(JSONLine.encode(try ComposeCommand.run(options)))
+    case let .surface(options): emit(JSONLine.encode(try SurfaceCommand.run(options)))
     case let .cutout(options): try await runCutout(options)
     }
 } catch {
