@@ -1,7 +1,11 @@
 import type { PhotoLibraryItem } from "./library/photo-library";
 
 import { browserCanvasLockedReason, browserCloudLockedReason, isBrowserCloudRawPhoto } from "./browser-photo-cloud-source";
-import { BROWSER_PHOTO_EXPORT_LONG_EDGE } from "./browser-photo-source";
+import {
+  BROWSER_PHOTO_EXPORT_LARGE_LONG_EDGE,
+  BROWSER_PHOTO_EXPORT_LONG_EDGE,
+  BROWSER_PHOTO_WORKING_COPY_LONG_EDGE,
+} from "./browser-photo-source";
 import { isEditableDevelopSettings } from "./develop-engine/develop-settings";
 import { isDevelopWorkTarget, type DevelopWorkTargetPhoto } from "./develop-engine/develop-work-target";
 import { workExportWaitingText } from "./develop-engine/develop-work-wait";
@@ -18,6 +22,7 @@ import {
   PHOTO_EDITING_EXPORT_PNG_NO_EXIF_TEXT,
   PHOTO_EDITING_EXPORT_PNG_TEXT,
   photoEditingBatchFolderExportText,
+  photoEditingExportLargeDetail,
 } from "./photo-editing-copy";
 import { photoEditingFileStem } from "./photo-editing-file-names";
 import { photoEditingNativeExportBlockers, photoEditingNativeExportUnsupportedText } from "./photo-editing-native-export";
@@ -61,6 +66,11 @@ export type BrowserPhotoExportJpegChoice = BrowserPhotoExportChoice & {
    * だけ。押せないときは副文に理由（HEIC / TIFF は {@link PHOTO_EDITING_EXPORT_FULL_SIZE_UNSUPPORTED_SOURCE_TEXT}）。
    */
   fullSize?: BrowserPhotoExportChoice;
+  /**
+   * 大きさの「大きく」（niho-photo#134。長辺 2048px より大きく、JPEG / PNG は元の大きさで最大 4096px、作業コピーで直す写真は
+   * 2560px まで）。段 2 の wasm で描く JPEG（`engine`）だけが持ち、スマホで wasm のメモリに収まらない写真は持たない（カードを出さない）
+   */
+  large?: BrowserPhotoExportChoice;
 };
 
 export type BrowserPhotoExportChoices = {
@@ -82,6 +92,15 @@ export function browserPhotoExportChoice(
 ): BrowserPhotoExportChoice | null {
   return format === "png" ? (choices.png ?? null) : choices[format];
 }
+
+/** 複数枚の「大きく」のカード（長辺は写真ごとに違うので、JPEG / PNG と RAW の上限を並べる）。 */
+export const BROWSER_PHOTO_EXPORT_BATCH_LARGE_CHOICE: BrowserPhotoExportChoice = Object.freeze({
+  enabled: true,
+  detail: photoEditingExportLargeDetail({
+    upTo: BROWSER_PHOTO_EXPORT_LARGE_LONG_EDGE,
+    workingCopyUpTo: BROWSER_PHOTO_WORKING_COPY_LONG_EDGE,
+  }),
+});
 
 /**
  * 一覧で選んだ複数写真を ZIP にまとめるシート。JPEG は記事用画像へ替えず、必ず engine で入力から描く。
@@ -127,6 +146,8 @@ export function resolveBrowserPhotoBatchExportChoices(input: {
           route: "engine",
           sizeSelectable: true,
           captureExif: true,
+          // 「大きく」も選べる（1 回の ZIP の合計の上限 500MB はそのまま。niho-photo#134）
+          large: BROWSER_PHOTO_EXPORT_BATCH_LARGE_CHOICE,
         }
       : disabledJpeg(PHOTO_EDITING_EXPORT_ENGINE_UNAVAILABLE_TEXT),
     original: { enabled: true, detail: "そのまま ZIP にまとめます" },
@@ -136,8 +157,11 @@ export function resolveBrowserPhotoBatchExportChoices(input: {
 type ExportPhoto = DevelopWorkTargetPhoto &
   Pick<PhotoLibraryItem, "fileName" | "hasDevelopSettings" | "hasWebImage" | "workStatus" | "capturedAt">;
 
-/** 書き出しの大きさ（`long2048` は長辺 2048px、`width1080` は幅 1080px）。段 2 の wasm で描く大きさ。 */
-export type BrowserPhotoExportSize = "long2048" | "width1080";
+/**
+ * 書き出しの大きさ（`long2048` は長辺 2048px、`width1080` は幅 1080px、`large` は「大きく」〔元の大きさで最大 4096px。
+ * niho-photo#134〕）。段 2 の wasm で描く大きさ。
+ */
+export type BrowserPhotoExportSize = "long2048" | "width1080" | "large";
 
 /**
  * シートの「大きさ」で選べる値（この端末に覚える値も）。`full`（原寸）は原寸の書き出しに対応した NIHO Desktop の口があるときだけ
@@ -145,8 +169,15 @@ export type BrowserPhotoExportSize = "long2048" | "width1080";
  */
 export type BrowserPhotoExportSizeOption = BrowserPhotoExportSize | "full";
 
-/** シートの「大きさ」の 2 枚（モック `idea/mock/photo-editing-mobile-v1.html` の書き出すのシート）。 */
-export const BROWSER_PHOTO_EXPORT_SIZE_OPTIONS: readonly { size: BrowserPhotoExportSize; label: string; detail: string }[] = [
+/**
+ * シートの「大きさ」のいつも出す 2 枚（モック `idea/mock/photo-editing-mobile-v1.html` の書き出すのシート）。「大きく」は写真ごとに
+ * 長辺が違うので `jpeg.large` から、「原寸」は `jpeg.fullSize` から足す。
+ */
+export const BROWSER_PHOTO_EXPORT_SIZE_OPTIONS: readonly {
+  size: Exclude<BrowserPhotoExportSize, "large">;
+  label: string;
+  detail: string;
+}[] = [
   { size: "long2048", label: "長辺 2048px", detail: "標準" },
   { size: "width1080", label: "幅 1080px", detail: "Instagram" },
 ];
@@ -163,13 +194,15 @@ export const BROWSER_PHOTO_EXPORT_CAPTURE_OFFSET_MINUTES = 540;
 /**
  * 書き出しの長辺（段 2 の `maxDimension`）。`frame` は長辺 2048px で描いたときの出力の寸法（切り抜き・回転の後。
  * `geometryOutputSize`）。`long2048` は 2048。`width1080` は横長・正方形は 1080、縦長は幅が 1080 になる長辺（長辺 2048px が上限。
- * 4:5 の 1638×2048 は 1350 で 1080×1350、1:3 は 2048 で頭打ち）。小さい写真は拡大しない（段 2 は縮めるだけ）。
+ * 4:5 の 1638×2048 は 1350 で 1080×1350、1:3 は 2048 で頭打ち）。`large` は 4096（元・作業コピーの大きさで頭打ち）。小さい写真は
+ * 拡大しない（段 2 は縮めるだけ）。
  */
 export function browserPhotoExportLongEdge(
   size: BrowserPhotoExportSize,
   frame: { width: number; height: number },
 ): number {
   if (size === "long2048") return BROWSER_PHOTO_EXPORT_LONG_EDGE;
+  if (size === "large") return BROWSER_PHOTO_EXPORT_LARGE_LONG_EDGE;
   if (frame.width >= frame.height) return BROWSER_PHOTO_EXPORT_INSTAGRAM_WIDTH;
   return Math.min(
     BROWSER_PHOTO_EXPORT_LONG_EDGE,
@@ -196,15 +229,35 @@ export function browserPhotoExportPngFileName(fileName: string): string {
   return `${photoEditingFileStem(fileName) || "photo"}.png`;
 }
 
-/** 段 2 の wasm で入力から描く JPEG（大きさを選べる。撮影日時の EXIF は撮影日時の分かる写真だけに付ける）。 */
-function engineJpeg(photo: ExportPhoto): BrowserPhotoExportJpegChoice {
+/**
+ * 「大きく」のカード（niho-photo#134）。書き出す長辺（`longEdge`。1 枚で開いた写真は切り抜き後の長辺）が分かればそれを、分からなければ
+ * 上限（作業コピーで直す写真は 2560px、JPEG / PNG は 4096px）を出す。
+ */
+export function browserPhotoExportLargeChoice(photo: ExportPhoto, longEdge: number | null): BrowserPhotoExportChoice {
+  if (longEdge !== null && longEdge > 0) return { enabled: true, detail: photoEditingExportLargeDetail({ longEdge }) };
+  const upTo = isDevelopWorkTarget(photo) ? BROWSER_PHOTO_WORKING_COPY_LONG_EDGE : BROWSER_PHOTO_EXPORT_LARGE_LONG_EDGE;
+  return { enabled: true, detail: photoEditingExportLargeDetail({ upTo }) };
+}
+
+/**
+ * 段 2 の wasm で入力から描く JPEG（大きさを選べる。撮影日時の EXIF は撮影日時の分かる写真だけに付ける）。`large` が null なら
+ * 「大きく」を出さない。
+ */
+function engineJpeg(photo: ExportPhoto, large: BrowserPhotoExportChoice | null): BrowserPhotoExportJpegChoice {
   return {
     enabled: true,
     detail: "補正を反映",
     route: "engine",
     sizeSelectable: true,
     captureExif: typeof photo.capturedAt === "string" && photo.capturedAt.length > 0,
+    ...(large ? { large } : {}),
   };
+}
+
+function withoutLarge(jpeg: BrowserPhotoExportJpegChoice): BrowserPhotoExportJpegChoice {
+  const rest = { ...jpeg };
+  delete rest.large;
+  return rest;
 }
 
 function disabledJpeg(detail: string): BrowserPhotoExportJpegChoice {
@@ -325,12 +378,20 @@ export function resolveBrowserPhotoExportChoices(input: {
   /** 上の理由の 1 行（原寸のカードの副文。省略時は保存済み設定から作る） */
   nativeFullSizeUnsupportedText?: string;
   /**
+   * 「大きく」（niho-photo#134）を出すか（省略 = 出す）。スマホで wasm のメモリに収まらない写真は false
+   * （{@link isBrowserPhotoExportLargeWithinMobileMemory}）
+   */
+  large?: boolean;
+  /** 「大きく」で書き出す長辺（1 枚で開いた写真の切り抜き後の長辺。分からなければ省略 = 上限を出す） */
+  largeLongEdge?: number | null;
+  /**
    * 書き出す写真に背景除去を重ねている（NIHO camera だけ。C4 移行元設計。省略 = 無い）。`transparent` は背景が透明、`fullSize` は
    * camera の原寸の書き出しの口がある
    */
   cutout?: { transparent: boolean; fullSize: boolean };
 }): BrowserPhotoExportChoices {
   const { photo, locked } = input;
+  const large = input.large === false ? null : browserPhotoExportLargeChoice(photo, input.largeLongEdge ?? null);
   const savedNativeBlockers = photoEditingNativeExportBlockers(photo.developSettings ?? {});
   const nativeFullSizeUnsupported = input.nativeFullSizeUnsupported ?? savedNativeBlockers.length > 0;
   const nativeFullSizeUnsupportedText =
@@ -338,11 +399,11 @@ export function resolveBrowserPhotoExportChoices(input: {
 
   let jpeg: BrowserPhotoExportJpegChoice;
   if (input.editing === "wasm") {
-    jpeg = engineJpeg(photo);
+    jpeg = engineJpeg(photo, large);
   } else if (input.editing === "canvas") {
     jpeg = { enabled: true, detail: "補正を反映", route: "canvas", sizeSelectable: false, captureExif: false };
   } else if (input.engineUsable && isListRenderable(photo, locked)) {
-    jpeg = engineJpeg(photo);
+    jpeg = engineJpeg(photo, large);
   } else if (!photo.hasOriginal && photo.hasWebImage !== false) {
     jpeg = {
       enabled: true,
@@ -388,7 +449,8 @@ export function resolveBrowserPhotoExportChoices(input: {
         : { enabled: true, detail: PHOTO_EDITING_EXPORT_FULL_SIZE_DETAIL }
       : undefined;
     return {
-      jpeg: { ...jpeg, detail: PHOTO_EDITING_EXPORT_CUTOUT_DETAIL, ...(fullSize ? { fullSize } : {}) },
+      // 背景除去を重ねた書き出しは「大きく」を出さない（長辺 4096px の画への背景の合成は niho-photo#134 では確かめていない）
+      jpeg: { ...withoutLarge(jpeg), detail: PHOTO_EDITING_EXPORT_CUTOUT_DETAIL, ...(fullSize ? { fullSize } : {}) },
       png: { enabled: true, detail: PHOTO_EDITING_EXPORT_CUTOUT_DETAIL },
       original,
       cutout: { transparent: input.cutout.transparent },
@@ -431,13 +493,16 @@ export function defaultBrowserPhotoExportFormat(
 /**
  * シートの「大きさ」で選んでいる大きさ（書き出しに渡す値。原寸の無いシート用）。JPEG を段 2 で描かない（canvas・記事用の画像。
  * `sizeSelectable` が false）なら長辺 2048px（実際に書き出す大きさ）、ほかはこの端末で選んだ大きさ（オリジナルを選んでいる間も、
- * 押せないまま見せる）。原寸を覚えていても、原寸の無いシート（スマホ）では長辺 2048px。
+ * 押せないまま見せる）。原寸を覚えていても、原寸の無いシート（スマホ）では長辺 2048px。「大きく」を覚えていても、「大きく」を出さない
+ * 写真（スマホで wasm のメモリに収まらない写真など）では長辺 2048px。
  */
 export function effectiveBrowserPhotoExportSize(
   choices: BrowserPhotoExportChoices,
   stored: BrowserPhotoExportSizeOption,
 ): BrowserPhotoExportSize {
-  return choices.jpeg.sizeSelectable && stored !== "full" ? stored : "long2048";
+  if (!choices.jpeg.sizeSelectable || stored === "full") return "long2048";
+  if (stored === "large" && choices.jpeg.large?.enabled !== true) return "long2048";
+  return stored;
 }
 
 /**
