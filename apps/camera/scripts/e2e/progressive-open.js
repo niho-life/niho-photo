@@ -178,6 +178,14 @@
       }
     }
     if (presetAt === null) throw new Error("preset-frame-missing");
+    // 丁寧な画に差し替わるまで（先に粗い画を出す #127。粗い画が無ければ最初の変化と同じ）。測れなくても probe は止めない
+    let presetFinalPaintMs = null;
+    try {
+      const finalVisible = await waitFor(() => events.find((event) => event.stage === "finalRenderVisible" && event.at >= presetInputStartedAt), 30000);
+      presetFinalPaintMs = finalVisible.at - presetInputStartedAt;
+    } catch {
+      presetFinalPaintMs = null;
+    }
     observations.timeToEditableMs = Math.max(exposureAt, presetReadyAt) - t0;
     observations.inputAcceptedMs = acceptedMs;
     observations.exposurePaintMs = exposurePaintMs;
@@ -196,7 +204,7 @@
     report({ ok: true, case: config.label, mode: config.mode, iteration: config.iteration,
       timeToEditableMs: Math.max(exposureAt, presetReadyAt) - t0,
       inputAcceptedMs: acceptedMs, exposurePaintMs, presetPaintMs,
-      presetBreakdownMs: presetBreakdown(presetInputStartedAt, presetAt),
+      presetBreakdownMs: presetBreakdown(presetInputStartedAt, presetAt), presetFinalPaintMs,
       proxyReadyMs: events.find((event) => event.stage === "proxyReady")?.elapsedMs ?? null,
       canonicalReadyMs: events.find((event) => event.stage === "canonicalReady")?.elapsedMs ??
         (!events.some((event) => event.stage === "proxyReady") ? events.find((event) => event.stage === "finalVisible")?.elapsedMs ?? null : null),
