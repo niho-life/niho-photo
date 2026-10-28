@@ -114,7 +114,9 @@ export function writePhotoEditingListSort(sort: PhotoEditingListSort): void {
 /** 書き出しの大きさ（この端末で最後に選んだ値。既定は長辺 2048px）。 */
 export function readPhotoEditingExportSize(): BrowserPhotoExportSizeOption {
   const value = readValue(PHOTO_EDITING_EXPORT_SIZE_STORAGE_KEY);
-  return value === "long2048" || value === "width1080" || value === "full" ? value : DEFAULT_PHOTO_EDITING_EXPORT_SIZE;
+  return value === "long2048" || value === "width1080" || value === "large" || value === "full"
+    ? value
+    : DEFAULT_PHOTO_EDITING_EXPORT_SIZE;
 }
 
 export function writePhotoEditingExportSize(size: BrowserPhotoExportSizeOption): void {

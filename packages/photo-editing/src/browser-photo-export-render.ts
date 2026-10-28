@@ -5,7 +5,7 @@ import {
   browserPhotoExportLongEdge,
   type BrowserPhotoExportSize,
 } from "./browser-photo-export";
-import { BROWSER_PHOTO_EXPORT_LONG_EDGE } from "./browser-photo-source";
+import { BROWSER_PHOTO_EXPORT_LARGE_LONG_EDGE, BROWSER_PHOTO_EXPORT_LONG_EDGE } from "./browser-photo-source";
 import {
   DevelopMaskSurfaceError,
   type DevelopEngine,
@@ -33,7 +33,7 @@ export type BrowserPhotoExportRendered = {
   /**
    * 選んだ大きさに届いたか。`width1080` で、写真が小さくて求めた長辺に届かなかった（段 2 は拡大しない）ときだけ false
    * （状態欄に「小さい写真は拡大しません」を足す）。縦に長すぎて長辺 2048px で頭打ちになった写真は、写真が小さいのではないので
-   * true。`long2048` は常に true
+   * true。`long2048`・`large` は常に true
    */
   reachedWidth: boolean;
 };
@@ -41,7 +41,7 @@ export type BrowserPhotoExportRendered = {
 /**
  * 描いて、撮影日時の EXIF を付ける。
  *
- * 1. 長辺を決める: `long2048` は 2048。`width1080` は、元の寸法（`imageSize`。向きを反映）から長辺 2048px で描いたときの出力の寸法
+ * 1. 長辺を決める: `long2048` は 2048、`large` は 4096（元・作業コピーの大きさで頭打ち。niho-photo#134）。`width1080` は、元の寸法（`imageSize`。向きを反映）から長辺 2048px で描いたときの出力の寸法
  *    （`geometryOutputSize`。切り抜き・回転の後）を読み、幅が 1080 になる長辺（{@link browserPhotoExportLongEdge}）
  * 2. その長辺で描く（`exportDevelopJpeg`。`input` は Worker へ渡して手放すので、呼び出し側がコピーを渡す）
  * 3. `capturedAt` があれば NIHO の EXIF（撮影日時を +09:00 で・向き 1・sRGB。位置情報・カメラは付けない）を付ける。付けられ
@@ -64,7 +64,7 @@ export async function renderBrowserPhotoExportJpeg(params: {
   maskSurfaces?: DevelopMaskSurfaceSource | null;
 }): Promise<BrowserPhotoExportRendered> {
   const { engine, input, settings, size } = params;
-  let longEdge = BROWSER_PHOTO_EXPORT_LONG_EDGE;
+  let longEdge = size === "large" ? BROWSER_PHOTO_EXPORT_LARGE_LONG_EDGE : BROWSER_PHOTO_EXPORT_LONG_EDGE;
   if (size === "width1080") {
     // imageSize は bytes をコピーで渡す（この後 exportDevelopJpeg が同じ bytes を手放す）
     const source = await engine.imageSize(input.bytes);

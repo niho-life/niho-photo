@@ -177,6 +177,7 @@ export function BrowserPhotoMobileExportSheet(props: {
         <BrowserPhotoExportSizeCards
           size={size}
           disabled={sizeDisabled}
+          large={choices.jpeg.large}
           busy={props.exporting}
           onChange={setStoredSize}
           className="px-4"
