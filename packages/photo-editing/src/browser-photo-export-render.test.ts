@@ -150,6 +150,21 @@ describe("renderBrowserPhotoExportJpeg（F7b #17127）", () => {
     expect(hasExif(result.bytes)).toBe(true);
   });
 
+  it("「大きく」は寸法を読まずに長辺 4096 で描く（元・作業コピーの大きさで頭打ち。niho-photo#134）", async () => {
+    const engine = fakeEngine({ source: { width: 6000, height: 4000 }, frame: { width: 4096, height: 2731 } });
+    const result = await renderBrowserPhotoExportJpeg({
+      engine,
+      input: originalInput(),
+      settings: SETTINGS,
+      size: "large",
+      capturedAt: null,
+    });
+    expect(engine.imageSize).not.toHaveBeenCalled();
+    expect(engine.geometryOutputSize).not.toHaveBeenCalled();
+    expect(engine.exportJpeg).toHaveBeenLastCalledWith(expect.any(ArrayBuffer), SETTINGS, { maxDimension: 4096, quality: 90 });
+    expect(result.reachedWidth).toBe(true);
+  });
+
   it("長辺 2048px は寸法を読まずに 2048 で描く。横長の幅 1080px は長辺 1080", async () => {
     const landscape = fakeEngine({ source: { width: 6000, height: 4000 }, frame: { width: 2048, height: 1365 } });
     const standard = await renderBrowserPhotoExportJpeg({
