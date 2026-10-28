@@ -302,6 +302,9 @@ pub mod develop_code {
   /// 補正の描かれるマスク（ブラシ・被写体・空）の面が、この Mac の面の置き場（{@link DevelopPhotos::mask_surface}）に無い・
   /// 読めない（エンジンの `maskSurfaceMissing` と同じ語）。書き出しの前に断る
   pub const MASK_SURFACE_MISSING: &str = "maskSurfaceMissing";
+  /// 写真が原寸では大きすぎる（同梱の renderer が読める画素数を超える・この Mac のメモリに収まらない見込み。
+  /// {@link FullSizeTooLarge}）。書き出しの前に断る（niho-photo#132）
+  pub const TOO_LARGE: &str = "tooLarge";
 }
 
 pub const UNAVAILABLE_MESSAGE: &str = "この NIHO Desktop では現像を使えません。NIHO Desktop を入れ直してください。";
@@ -527,6 +530,140 @@ pub fn cloud_work_kind(file_name: &str, size_bytes: u64) -> Option<CloudWorkKind
     "heic" | "heif" | "tif" | "tiff" => Some(CloudWorkKind::Raster),
     "png" if size_bytes > DIRECT_RASTER_MAX_BYTES => Some(CloudWorkKind::Raster),
     _ => None,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 原寸の書き出しの大きさ（niho-photo#132）
+
+/// `capabilities` に答えない古い niho-develop-render が読める画素数（crate の `MAX_DECODE_IMAGE_PIXELS`。配布中の 0.16.0 も
+/// 4,000 万画素を超える作業コピー・オリジナルを読み込みで断る）。
+pub const LEGACY_RENDER_MAX_PIXELS: u64 = 40_000_000;
+/// 原寸の書き出しの一番重い段に使ってよいメモリ（物理メモリのこの割合。ほかのアプリと macOS の分を残す）。
+pub const FULL_SIZE_MEMORY_SHARE: f64 = 0.75;
+/// niho-develop-render の原寸（`--max-dimension 0`）の peak memory footprint の 1 画素あたりの bytes。補正の無い描画と、補正ごとの
+/// 足し（Studio・release・合成の作業コピー 24 / 45 / 61MP の実測。`niho-develop-render` の `tests/cli.rs` の
+/// `full_size_peak_memory`。安全側に丸める）。
+const RENDER_BYTES_PER_PIXEL: f64 = 60.0;
+const RENDER_MASK_BYTES_PER_PIXEL: f64 = 16.0;
+const RENDER_DETAIL_BYTES_PER_PIXEL: f64 = 16.0;
+const RENDER_GEOMETRY_BYTES_PER_PIXEL: f64 = 16.0;
+const RENDER_HEAL_BYTES_PER_PIXEL: f64 = 16.0;
+const RENDER_LENS_BYTES_PER_PIXEL: f64 = 32.0;
+/// apple-raw-linear の原寸の段（RAW の `render --long-edge full`・HEIC / TIFF の `raster --long-edge full`）の 1 画素あたり
+/// （DC-S5 の 24MP で peak memory footprint 1.4〜1.5 GiB。`tools/apple-raw-linear/README.md`）。
+const SOURCE_STAGE_BYTES_PER_PIXEL: f64 = 66.0;
+
+/// 原寸では書き出せない写真（読める画素数を超える・この Mac のメモリに収まらない見込み。niho-photo#132）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FullSizeTooLarge {
+  /// この Mac で原寸の書き出しが描ける長辺の見込み（画素）
+  pub max_long_edge: u64,
+}
+
+impl FullSizeTooLarge {
+  /// 書き出しの前に出す 1 行（「この写真は原寸では大きすぎます（長辺 7,747 px まで）。」）。
+  pub fn message(&self) -> String {
+    format!(
+      "この写真は原寸では大きすぎます（長辺 {} px まで）。",
+      grouped_digits(self.max_long_edge)
+    )
+  }
+}
+
+/// 3 桁ごとに「,」を入れる（画面の数の書き方。`toLocaleString("ja-JP")` と同じ）。
+fn grouped_digits(value: u64) -> String {
+  let digits = value.to_string();
+  let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+  for (i, digit) in digits.chars().enumerate() {
+    if i > 0 && (digits.len() - i) % 3 == 0 {
+      out.push(',');
+    }
+    out.push(digit);
+  }
+  out
+}
+
+/// 原寸の書き出しの一番重い段の最大メモリの見積もり（bytes）。段は 1 つずつ動くので、元を原寸にする段（RAW・HEIC / TIFF）と
+/// niho-develop-render の段の大きい方。後者は補正ごとに足す（マスクは描かれる層の数、8 枚まで）。
+pub fn full_size_peak_bytes(pixels: u64, input: ExportInput, develop_settings: &Value) -> u64 {
+  let present = |key: &str| match develop_settings.get(key) {
+    None | Some(Value::Null) => false,
+    Some(Value::Array(items)) => !items.is_empty(),
+    Some(Value::Object(fields)) => !fields.is_empty(),
+    Some(_) => true,
+  };
+  let masks = develop_settings
+    .get("masks")
+    .and_then(Value::as_array)
+    .map_or(0, |masks| masks.len().min(8));
+  let mut per_pixel = RENDER_BYTES_PER_PIXEL + RENDER_MASK_BYTES_PER_PIXEL * masks as f64;
+  for (key, bytes) in [
+    ("detail", RENDER_DETAIL_BYTES_PER_PIXEL),
+    ("geometry", RENDER_GEOMETRY_BYTES_PER_PIXEL),
+    ("heal", RENDER_HEAL_BYTES_PER_PIXEL),
+    ("lens", RENDER_LENS_BYTES_PER_PIXEL),
+  ] {
+    if present(key) {
+      per_pixel += bytes;
+    }
+  }
+  let source = match input {
+    ExportInput::Raster => 0.0,
+    ExportInput::Raw | ExportInput::RasterFullSize => SOURCE_STAGE_BYTES_PER_PIXEL,
+  };
+  (per_pixel.max(source) * pixels as f64).ceil() as u64
+}
+
+/// `width`×`height`（向きを反映した寸法）の写真を原寸で書き出せないか。`max_pixels` は同梱の renderer が読める画素数、`memory`
+/// はこの Mac の物理メモリ（分からなければ None で、メモリでは断らない）。書き出せる長辺の見込みは、画素数とメモリの両方に収まる
+/// 大きさ（見積もりは画素数に比例する）。
+pub fn full_size_too_large(
+  width: u64,
+  height: u64,
+  input: ExportInput,
+  develop_settings: &Value,
+  max_pixels: u64,
+  memory: Option<u64>,
+) -> Option<FullSizeTooLarge> {
+  let pixels = width.checked_mul(height).filter(|pixels| *pixels > 0)?;
+  let mut share = 1.0_f64;
+  if pixels > max_pixels {
+    share = share.min(max_pixels as f64 / pixels as f64);
+  }
+  if let Some(memory) = memory {
+    let budget = memory as f64 * FULL_SIZE_MEMORY_SHARE;
+    let peak = full_size_peak_bytes(pixels, input, develop_settings) as f64;
+    if peak > budget {
+      share = share.min(budget / peak);
+    }
+  }
+  (share < 1.0).then(|| FullSizeTooLarge {
+    max_long_edge: (width.max(height) as f64 * share.sqrt()).floor() as u64,
+  })
+}
+
+/// この Mac の物理メモリ（bytes。macOS の `hw.memsize`。読めなければ None）。
+pub fn physical_memory_bytes() -> Option<u64> {
+  #[cfg(target_os = "macos")]
+  {
+    let mut value: u64 = 0;
+    let mut size = std::mem::size_of::<u64>();
+    // SAFETY: `hw.memsize` は 64 bit の整数。`value` と `size` はこの呼び出しの間だけ有効な領域を指す。
+    let status = unsafe {
+      libc::sysctlbyname(
+        c"hw.memsize".as_ptr(),
+        (&mut value as *mut u64).cast(),
+        &mut size,
+        std::ptr::null_mut(),
+        0,
+      )
+    };
+    (status == 0 && size == std::mem::size_of::<u64>() && value > 0).then_some(value)
+  }
+  #[cfg(not(target_os = "macos"))]
+  {
+    None
   }
 }
 
@@ -4115,6 +4252,64 @@ impl PhotoDevelop {
     let sidecars = self.sidecars()?;
     self.export_input_of(&sidecars, &photo)?;
     Ok(photo)
+  }
+
+  /// 原寸では大きすぎる写真か（保存ダイアログを出す前・フォルダへの 1 枚ごと。niho-photo#132）。同梱の renderer が読める画素数
+  /// （`capabilities` の `maxPixels`。答えない古い renderer は {@link LEGACY_RENDER_MAX_PIXELS}）と、この Mac のメモリに収まる見込み
+  /// （{@link full_size_peak_bytes}）で決める。写真が開いていない・書き出せない形式・sidecar が使えない・寸法が分からないときは
+  /// None（断らない。失敗は今までどおり書き出しの中で返る）。
+  pub fn full_size_too_large(
+    &self,
+    photos: &dyn DevelopPhotos,
+    photo_id: &str,
+    develop_settings: &Value,
+  ) -> Option<FullSizeTooLarge> {
+    let photo = photos.open_photo(photo_id)?;
+    let sidecars = self.sidecars().ok()?;
+    let input = self.export_input_of(&sidecars, &photo).ok()?;
+    let (width, height) = self.full_size_dimensions(&sidecars, &photo.path, input)?;
+    let max_pixels = sidecars
+      .develop_render_capabilities
+      .as_ref()
+      .map_or(LEGACY_RENDER_MAX_PIXELS, |capabilities| capabilities.max_pixels);
+    let too_large = full_size_too_large(
+      width,
+      height,
+      input,
+      develop_settings,
+      max_pixels,
+      physical_memory_bytes(),
+    );
+    if let Some(too_large) = too_large {
+      self.log(
+        "export_too_large",
+        json!({ "width": width, "height": height, "maxPixels": max_pixels, "maxLongEdge": too_large.max_long_edge }),
+      );
+    }
+    too_large
+  }
+
+  /// 原寸の書き出しの元の寸法（向きを反映。{@link inspect_photo} と同じ読み方: RAW は `apple-raw-linear info`、ほかは ImageIO）。
+  fn full_size_dimensions(&self, sidecars: &Sidecars, path: &Path, input: ExportInput) -> Option<(u64, u64)> {
+    if input == ExportInput::Raw {
+      let run = self.run(
+        &sidecars.paths.apple_raw_linear,
+        &os_args([OsStr::new("info"), path.as_os_str(), OsStr::new("--json")]),
+        self.config.timeouts.query,
+      );
+      let info: Value = run
+        .succeeded()
+        .then(|| serde_json::from_str(&run.stdout).ok())
+        .flatten()?;
+      let page = raw_page_info(&info)?;
+      return Some((page.get("width")?.as_u64()?, page.get("height")?.as_u64()?));
+    }
+    match &self.config.raster_info {
+      Some(read) => read(path),
+      None => read_raster_info(path),
+    }
+    .ok()?
+    .display_dimensions()
   }
 
   /// 原寸の書き出しの入力（{@link export_input_for}）。HEIC / HEIF・TIFF は同梱の apple-raw-linear が `raster` を持つ（0.4.3〜）

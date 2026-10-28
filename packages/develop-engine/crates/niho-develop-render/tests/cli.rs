@@ -1248,7 +1248,7 @@ fn measured_settings(v: u32, extra: Value) -> String {
         value[key] = item.clone();
     }
     let text = value.to_string();
-    niho_develop_render::load_settings(&text).unwrap();
+    niho_develop_render::load_settings(&text).unwrap_or_else(|e| panic!("{}", e.message));
     text
 }
 
@@ -1279,7 +1279,7 @@ fn full_size_peak_memory() {
         {"id": "b", "kind": "radial", "center": {"x": 0.45, "y": 0.55}, "radius": {"x": 0.3, "y": 0.25},
          "angle": 20, "feather": 60, "adjust": {"saturation": -40, "clarity": 25}},
         {"id": "c", "kind": "linear", "zero": {"x": 0.1, "y": 0.5}, "full": {"x": 0.4, "y": 0.5},
-         "adjust": {"temperature": 10, "texture": 20}}
+         "adjust": {"relativeTemperature": 10, "texture": 20}}
     ]);
     let heal = serde_json::json!([
         {"id": "h1", "mode": "remove", "radius": 0.02, "feather": 0.5, "points": [[0.5, 0.5], [0.53, 0.52]]},
@@ -1393,6 +1393,9 @@ fn full_size_peak_memory() {
                 mib("maximum resident set size"),
                 summary["totalMs"]
             );
+            if !output.status.success() {
+                println!("  {}", String::from_utf8_lossy(&output.stdout).trim());
+            }
             let _ = fs::remove_file(&out);
         }
     }

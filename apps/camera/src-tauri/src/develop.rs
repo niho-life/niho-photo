@@ -11,9 +11,9 @@ use crate::photos::{check_photo_id, photos, CameraPhotos};
 use crate::{app_log, dialog};
 use niho_desktop_photo::common::{code, new_opaque_id};
 use niho_desktop_photo::develop::{
-  export_input_for, signed_raw_generation_from_var, DevelopConfig, DevelopError, DevelopSourceContext, DevelopTimeouts,
-  ExportInput, LocalRaster, Overwrite, PhotoDevelop, SidecarPaths, APPLE_RAW_LINEAR_NAME, CACHE_DIR_NAME,
-  CACHE_MAX_BYTES, CALIBRATION_RESOURCE_DIR, DEVELOP_RENDER_NAME, TOKEN_NOT_FOUND_MESSAGE,
+  develop_code, export_input_for, signed_raw_generation_from_var, DevelopConfig, DevelopError, DevelopSourceContext,
+  DevelopTimeouts, ExportInput, LocalRaster, Overwrite, PhotoDevelop, SidecarPaths, APPLE_RAW_LINEAR_NAME,
+  CACHE_DIR_NAME, CACHE_MAX_BYTES, CALIBRATION_RESOURCE_DIR, DEVELOP_RENDER_NAME, TOKEN_NOT_FOUND_MESSAGE,
 };
 use niho_desktop_photo::library::is_valid_id;
 use serde::Deserialize;
@@ -196,6 +196,20 @@ fn ensure_jpeg_extension(path: PathBuf) -> PathBuf {
     let mut name = path.file_name().map(|name| name.to_os_string()).unwrap_or_default();
     name.push(".jpg");
     path.with_file_name(name)
+  }
+}
+
+/// 原寸では大きすぎる写真（同梱の renderer が読める画素数を超える・この Mac のメモリに収まらない見込み）を、書き出す前（保存
+/// ダイアログ・作業コピー・描画の前）に断る（niho-photo#132。「この写真は原寸では大きすぎます（長辺 N px まで）。」）。
+fn refuse_too_large(
+  develop: &PhotoDevelop,
+  photos: &CameraPhotos,
+  photo_id: &str,
+  develop_settings: &Value,
+) -> Result<(), CameraError> {
+  match develop.full_size_too_large(photos, photo_id, develop_settings) {
+    Some(too_large) => Err(CameraError::new(develop_code::TOO_LARGE, &too_large.message())),
+    None => Ok(()),
   }
 }
 
@@ -403,10 +417,16 @@ pub async fn camera_export(app: tauri::AppHandle, request: Option<Value>) -> Res
   check_settings(&request.develop_settings)?;
   check_suggested_name(&request.suggested_file_name)?;
   let (photos, develop) = (photos(&app)?, develop(&app)?);
-  // ダイアログを出す前に、書き出せない写真・使えない sidecar を返す
+  // ダイアログを出す前に、書き出せない写真・使えない sidecar・原寸では大きすぎる写真を返す
   let photo = {
     let (photos, develop, photo_id) = (photos.clone(), develop.clone(), request.photo_id.clone());
-    run_blocking(move || Ok(develop.check_export(photos.as_ref(), &photo_id)?)).await?
+    let settings = request.develop_settings.clone();
+    run_blocking(move || {
+      let photo = develop.check_export(photos.as_ref(), &photo_id)?;
+      refuse_too_large(&develop, &photos, &photo_id, &settings)?;
+      Ok(photo)
+    })
+    .await?
   };
   let file_name = export_file_name(request.suggested_file_name.as_deref(), &photo.file_name);
   let Some(destination) = dialog::save_jpeg(&file_name).await?.map(ensure_jpeg_extension) else {
@@ -477,6 +497,7 @@ pub async fn camera_export_to_folder(app: tauri::AppHandle, request: Option<Valu
   let (photos, develop) = (photos(&app)?, develop(&app)?);
   run_blocking(move || {
     let photo = develop.check_export(photos.as_ref(), &request.photo_id)?;
+    refuse_too_large(&develop, &photos, &request.photo_id, &request.develop_settings)?;
     let file_name = export_file_name(request.suggested_file_name.as_deref(), &photo.file_name);
     let written = export_into_folder(
       &develop,
