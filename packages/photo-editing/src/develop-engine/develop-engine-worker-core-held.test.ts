@@ -226,17 +226,4 @@ describe("Worker が同じ写真を保つ（#129）", () => {
     expect(glue.events).toEqual(["decode A"]);
     expect(posted.at(-1)?.message).toMatchObject({ type: "frame", id: 6 });
   });
-    await handler(open(2, "A"));
-    await handler({ type: "openWorkingCopy", id: 3, png: bytesOf("broken"), metaJson: "{}" });
-    glue.module.Developer.openWorkingCopy = () => {
-      throw new Error("decodeFailed");
-    };
-    await handler({ type: "openWorkingCopy", id: 4, png: bytesOf("X"), metaJson: "{}" });
-    expect(posted.at(-1)?.message).toMatchObject({ type: "error", id: 4 });
-    await handler(open(5, "A"));
-    await handler({ type: "render", id: 6, settingsJson: "{}", maxDimension: 1280, interactive: false });
-
-    expect(glue.events.filter((event) => event === "decode A")).toHaveLength(1);
-    expect(posted.at(-1)?.message).toMatchObject({ type: "frame", id: 6 });
-  });
 });
