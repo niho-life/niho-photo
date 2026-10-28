@@ -14,8 +14,9 @@
 //!
 //! Cases (`--long` is the photo's long edge, 3:2):
 //!
-//! - `fringe`: dark branches over a bright neutral sky with purple fringes
-//!   on the sky side (about 3 px at the full size), defringe purple 100;
+//! - `fringe` / `fringe-wide`: dark branches over a bright neutral sky
+//!   with purple fringes on the sky side (fading over 3 / 8 px at the full
+//!   size), defringe purple 100;
 //! - `chromatic` / `chromatic-weak`: the branches with red and blue
 //!   magnified about the center (a corner shift of about 2 px / 0.6 px at
 //!   6000 px), removeChromaticAberration;
@@ -48,8 +49,9 @@ use serde_json::{json, Value};
 use std::time::Instant;
 
 const SCREEN: usize = 2560;
-const CASES: [&str; 12] = [
+const CASES: [&str; 13] = [
     "fringe",
+    "fringe-wide",
     "chromatic",
     "chromatic-weak",
     "brush",
@@ -182,21 +184,24 @@ fn make_case(name: &str, w: f64, h: f64) -> Case {
         profile: Some(branch_edge(w, h)),
     };
     match name {
-        "fringe" => plain(
-            Box::new(move |x, y| {
-                let e = branch_distance(w, h, x, y) - half;
-                let dark = coverage(e);
-                let level = sky(h, y);
-                let wf = 0.85 * (-e.max(0.0) / 3.0).exp();
-                let purple = [0.6, 0.18, 0.95];
-                let rgb = [0, 1, 2].map(|c| {
-                    let lit = (1.0 - wf) * level + wf * purple[c] * level / 0.7;
-                    (1.0 - dark) * lit + dark * 0.03
-                });
-                (rgb, (-3.0..14.0).contains(&e))
-            }),
-            json!({"lens": {"defringe": {"purple": {"amount": 100}}}}),
-        ),
+        "fringe" | "fringe-wide" => {
+            let reach = if name == "fringe" { 3.0 } else { 8.0 };
+            plain(
+                Box::new(move |x, y| {
+                    let e = branch_distance(w, h, x, y) - half;
+                    let dark = coverage(e);
+                    let level = sky(h, y);
+                    let wf = 0.85 * (-e.max(0.0) / reach).exp();
+                    let purple = [0.6, 0.18, 0.95];
+                    let rgb = [0, 1, 2].map(|c| {
+                        let lit = (1.0 - wf) * level + wf * purple[c] * level / 0.7;
+                        (1.0 - dark) * lit + dark * 0.03
+                    });
+                    (rgb, (-3.0..4.0 * reach + 2.0).contains(&e))
+                }),
+                json!({"lens": {"defringe": {"purple": {"amount": 100}}}}),
+            )
+        }
         "chromatic" | "chromatic-weak" => {
             let scale = if name == "chromatic" {
                 [1.0006, 0.9995]
