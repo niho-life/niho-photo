@@ -23,7 +23,7 @@ import { cn } from "niho-ui/cn";
  * カードを幅いっぱいに足す（副文は「この Mac に保存」、押せない写真では理由）。`fullSizeOnly`（複数枚のフォルダへの書き出し。
  * K2-3b）は 2 枚を出さず「原寸」のカードだけにする（ZIP でしか書き出せない大きさを、理由の無い薄いカードで見せない）。
  *
- * `large`（「大きく」。niho-photo#134。段 2 の wasm で描く JPEG で、スマホで wasm のメモリに収まる写真だけ）があれば、2 枚の下に
+ * `large`（「大きく」。niho-photo#134。段 2 の wasm で描く JPEG だけ）があれば、2 枚の下に
  * 同じ書式のカードを幅いっぱいに足す（副文は書き出す長辺「長辺 4,096px」か上限「長辺 2,560px まで」）。「原寸」はその下。
  */
 export function BrowserPhotoExportSizeCards(props: {

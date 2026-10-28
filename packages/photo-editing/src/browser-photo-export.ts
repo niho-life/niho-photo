@@ -68,7 +68,8 @@ export type BrowserPhotoExportJpegChoice = BrowserPhotoExportChoice & {
   fullSize?: BrowserPhotoExportChoice;
   /**
    * 大きさの「大きく」（niho-photo#134。長辺 2048px より大きく、JPEG / PNG は元の大きさで最大 4096px、作業コピーで直す写真は
-   * 2560px まで）。段 2 の wasm で描く JPEG（`engine`）だけが持ち、スマホで wasm のメモリに収まらない写真は持たない（カードを出さない）
+   * 2560px まで）。段 2 の wasm で描く JPEG（`engine`）だけが持ち、呼び出し側が出さないと決めた写真（`resolveBrowserPhotoExportChoices`
+   * の `large: false`）は持たない（カードを出さない）
    */
   large?: BrowserPhotoExportChoice;
 };
@@ -378,8 +379,8 @@ export function resolveBrowserPhotoExportChoices(input: {
   /** 上の理由の 1 行（原寸のカードの副文。省略時は保存済み設定から作る） */
   nativeFullSizeUnsupportedText?: string;
   /**
-   * 「大きく」（niho-photo#134）を出すか（省略 = 出す）。スマホで wasm のメモリに収まらない写真は false
-   * （{@link isBrowserPhotoExportLargeWithinMobileMemory}）
+   * 「大きく」（niho-photo#134）を出すか（省略 = 出す）。今はどの呼び出し側も渡さず、スマホでも全部の写真に出す。スマホの wasm の
+   * メモリに上限が要ると分かったら、収まらない写真で false を渡す
    */
   large?: boolean;
   /** 「大きく」で書き出す長辺（1 枚で開いた写真の切り抜き後の長辺。分からなければ省略 = 上限を出す） */
@@ -494,7 +495,7 @@ export function defaultBrowserPhotoExportFormat(
  * シートの「大きさ」で選んでいる大きさ（書き出しに渡す値。原寸の無いシート用）。JPEG を段 2 で描かない（canvas・記事用の画像。
  * `sizeSelectable` が false）なら長辺 2048px（実際に書き出す大きさ）、ほかはこの端末で選んだ大きさ（オリジナルを選んでいる間も、
  * 押せないまま見せる）。原寸を覚えていても、原寸の無いシート（スマホ）では長辺 2048px。「大きく」を覚えていても、「大きく」を出さない
- * 写真（スマホで wasm のメモリに収まらない写真など）では長辺 2048px。
+ * 写真（`large: false`）では長辺 2048px。
  */
 export function effectiveBrowserPhotoExportSize(
   choices: BrowserPhotoExportChoices,
