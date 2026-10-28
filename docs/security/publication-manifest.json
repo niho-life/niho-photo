@@ -11466,7 +11466,7 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-export-large.ts",
-      "sha256": "9b9b613de49134a936105aa92165527ca086edfe66bf3dafe9219112cce3d763",
+      "sha256": "c234cd3eb3222fe51ead0df2b68c1a323b2ab135058972e1757539c37d4af969",
       "origin": "公開repoで新規作成（niho-photo#134）。書き出しの「大きく」の長辺を、開いている写真の今の切り抜きから wasm の geometryOutputSize で読む hook。外部のコード・実写真・非公開の情報を含まない。\n変更理由: niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
     }
   ],

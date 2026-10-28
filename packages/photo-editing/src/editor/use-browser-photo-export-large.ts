@@ -4,8 +4,9 @@ import { useEffect, useState, type MutableRefObject } from "react";
 
 import { BROWSER_PHOTO_EXPORT_LARGE_LONG_EDGE } from "../browser-photo-source";
 import type { DevelopEngine } from "../develop-engine/develop-engine-client";
+import type { DevelopSize } from "../develop-engine/develop-geometry";
 import type { DevelopSettings } from "../develop-engine/develop-settings";
-import { readDevelopSize, type DevelopSize } from "../photo-editing-crop";
+import { readDevelopSize } from "../photo-editing-crop";
 import type { DevelopSession } from "./browser-photo-editing-model";
 import { readCropSource } from "./use-browser-photo-crop";
 
