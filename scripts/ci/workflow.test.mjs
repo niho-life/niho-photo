@@ -29,6 +29,15 @@ test("native（Client）は廃止される macos-14 ではなく macos-26 で検
   deprecated.jobs.native["runs-on"] = "macos-14";
   assert.ok(workflowFailures(deprecated).length > 0);
 });
+test("native（Client）の timeout は 45 分まで（macos-26 の develop-engine は 16〜24 分。ほかの job は 30 分まで）", () => {
+  assert.equal(workflow.jobs.native?.["timeout-minutes"], 45);
+  const tooLong = structuredClone(workflow);
+  tooLong.jobs.native["timeout-minutes"] = 46;
+  assert.ok(workflowFailures(tooLong).length > 0);
+  const otherTooLong = structuredClone(workflow);
+  otherTooLong.jobs["photo-editing"]["timeout-minutes"] = 31;
+  assert.ok(workflowFailures(otherTooLong).length > 0);
+});
 for (const [name, mutate] of [
   ["tag Action", (w) => { w.jobs.plan.steps[0].uses = "actions/checkout@v4"; }],
   ["unverified Action commit", (w) => { w.jobs.plan.steps[0].uses = `actions/checkout@${"a".repeat(40)}`; }],
