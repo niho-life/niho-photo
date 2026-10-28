@@ -143,13 +143,18 @@ async function walk() {
     current = pkg.Developer.openWorkingCopy(png, meta);
     const asShot = current.asShotWhite();
     current.render(JSON.stringify(base), UI_MAX, false);
+    if (flag("--prepare", "0") === "1") {
+      const colorful = presets.find((p) => p.id === "niho-colorful");
+      current.prepareAnalysis(JSON.stringify(base));
+      current.prepareAnalysis(JSON.stringify(presetSettings(pkg, colorful, base, asShot)));
+    }
     const exposed = { ...base, exposure: 0.3 };
     current.render(JSON.stringify(exposed), UI_MAX, false);
     const preset = presets[i % presets.length];
     current.render(JSON.stringify(presetSettings(pkg, preset, exposed, asShot)), UI_MAX, false);
     memory.push(exports.memory.buffer.byteLength);
   }
-  process.stdout.write(JSON.stringify({ retain, photos, memory, rss: process.memoryUsage().rss }));
+  process.stdout.write(JSON.stringify({ retain, prepare: flag("--prepare", "0"), photos, memory, rss: process.memoryUsage().rss }));
 }
 
 const median = (xs) => {

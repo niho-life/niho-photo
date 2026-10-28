@@ -20,7 +20,9 @@ wasm-bindgen --target web --out-dir "$W/$NAME" target/wasm32-unknown-unknown/rel
 ls -la "$W/$NAME" "$W/signed.png"
 node tools/reopen-wasm-bench.mjs paired --pkg "$W/$NAME" --png "$W/signed.png" --meta "$W/signed.json" \
   --trials "$TRIALS" --modes "${MODES:-fresh,retained,thumb}" --out "$W/$NAME-reopen.json"
-for r in 0 1 2; do
-  node tools/reopen-wasm-bench.mjs walk --pkg "$W/$NAME" --png "$W/signed.png" --meta "$W/signed.json" --retain "$r" --photos 30
-  echo
+for r in ${RETAINS:-0 1 2}; do
+  for prepare in ${PREPARES:-0}; do
+    node tools/reopen-wasm-bench.mjs walk --pkg "$W/$NAME" --png "$W/signed.png" --meta "$W/signed.json" --retain "$r" --photos 30 --prepare "$prepare"
+    echo
+  done
 done
