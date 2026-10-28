@@ -18,6 +18,10 @@ test("現像Swift packageは新しいCore Image SDKのGitHub-hosted runnerで検
   assert.equal(job?.["runs-on"], "macos-26");
   assert.equal(swiftToolsVersion, "6.0");
   assert.ok(job.steps.some((step) => step.run === "swift test --package-path packages/develop-engine/tools/apple-raw-linear"));
+  // 背景除去・被写体の面の sidecar も同じ runner で試験し、Vision の E2E（合成画像）も回す
+  assert.ok(job.steps.some((step) => step.run === "swift test --package-path packages/develop-engine/tools/niho-camera-cutout"));
+  const e2e = job.steps.find((step) => step.run === "swift test --package-path packages/develop-engine/tools/niho-camera-cutout --filter VisionEndToEndTests");
+  assert.deepEqual(e2e?.env, { NIHO_CUTOUT_E2E: "1" });
 });
 for (const [name, mutate] of [
   ["tag Action", (w) => { w.jobs.plan.steps[0].uses = "actions/checkout@v4"; }],
