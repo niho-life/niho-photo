@@ -1360,9 +1360,10 @@
         "PR #102を更新済み#101へ積み直し、原寸native書き出し直前に最新保存設定を再判定する。",
         "niho-photo#86: スマホの道具の帯の末尾にディテールを置き、項目はよく使う 3 つを先・シャープの応用の 3 つを後ろへ",
         "niho-photo#86: main とスマホのディテールの変更を merge",
-        "部分補正（マスク）#93: マスクの道具をスマホの全画面の編集の層でも出し（写真の上の操作・段・マスクだけの初期化）を渡した"
+        "部分補正（マスク）#93: マスクの道具をスマホの全画面の編集の層でも出し（写真の上の操作・段・マスクだけの初期化）を渡した",
+        "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
       ],
-      "outputSha256": "b800d713539a0135a5d95a670d1657f75efd550a073c9d72546813816f20e23b"
+      "outputSha256": "8693fd2745cc1d9e551038d739945e28b57df5f5e371ae9261f4f73ff909a702"
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-adjustment-controls-effects.test.tsx",
@@ -2261,9 +2262,10 @@
         "PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。",
         "PR #98で選別フラグの保存経路とUIを更新する。",
         "PR #99を#91マージ後のmainへ積み直し、遠近補正後のブラシ半径を局所ヤコビアンで写す。",
-        "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。"
+        "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
+        "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
       ],
-      "outputSha256": "efa1d5da97e0598828294521cf02b3f86a3cb02faca43deb0c9cd5d363a94609"
+      "outputSha256": "c0d466af525944c7dbbcd171b595283e54fe7ead838a50e9fcc2c0cc542fc62c"
     },
     {
       "path": "packages/photo-editing/src/photo-cloud-add-queue.ts",
@@ -2465,9 +2467,10 @@
         "PR #102を更新済み#101へ積み直し、原寸native書き出し直前に最新保存設定を再判定する。",
         "niho-photo#86: スマホの道具の帯の末尾にディテールを置き、項目はよく使う 3 つを先・シャープの応用の 3 つを後ろへ",
         "niho-photo#86: main とスマホのディテールの変更を merge",
-        "部分補正（マスク）#93: 局所のカラーミキサーの初期化とスマホのマスクの道具の文言を足した"
+        "部分補正（マスク）#93: 局所のカラーミキサーの初期化とスマホのマスクの道具の文言を足した",
+        "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
       ],
-      "outputSha256": "96c35c3fb942813388605e64a7eb8b81d14149852695cdd6c1f20d866eb5d89f"
+      "outputSha256": "18830d9299097bd3d8b9c2ef47b6db2b35e7934b3df1510db1717d99bf8bf0dd"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-crop.test.ts",
@@ -3643,10 +3646,11 @@
         "path": "apps/camera/develop-sidecars.lock.json",
         "sha256": "3220ab6ce2a2330819e54aca55bf96464cb5cca4d9a5289784595ec1d70d60ff"
       },
-      "outputSha256": "75dc521ff1efebc4aa02cf4da32ee0dd359f26e0969049fce3f2af320591ee0e",
+      "outputSha256": "2dbc30c0d476ae4d89944b070de467288a19a0f9a1bc322b555637adff85ea9d",
       "modifications": [
         "候補buildのrenderer版を公開SDK 0.25.0へ合わせ、共有source固定はSDK sourceOwnershipへ一本化。",
-        "Issue #89: niho-14 の crate 0.26.0 に合わせ、Mac candidate の renderer lock を更新。"
+        "Issue #89: niho-14 の crate 0.26.0 に合わせ、Mac candidate の renderer lock を更新。",
+        "被写体のマスクの面 #135: 同梱の niho-camera-cutout の版を 0.3.0（surface）へ。"
       ]
     },
     {
@@ -3856,7 +3860,7 @@
         "path": "apps/camera/src-tauri/permissions/camera.toml",
         "sha256": "3dabde32b43f01f12b93d48f2000a51a55abf48cc5866df2daa6dda9f31edae0"
       },
-      "outputSha256": "03abc6cd5d78b1c18c7af6629b4c581f9b97c90bc729d381cd76dfb79db8d24f",
+      "outputSha256": "e8e6b483d0bb81aa6d75c29f12a12689e1423578ba57260656b277c758090abb",
       "modifications": [
         "共有形式フィルターを使う複数写真pickerと参照削除コマンドを同梱UIの権限内に追加 / 選択写真専用commandのbundle permissionを追加。",
         "Issue #3のpublic OAuth/PKCE、ローカル専用UI、安全契約と公開依存を新規接続。実issuer・署名検証器が未契約のため本番接続は無効。",
@@ -3868,7 +3872,8 @@
         "部分補正（マスク）#68: マスクの面の保存・読み出し・有無のコマンドを allow-camera-photos に足す",
         "PR #82: #74 squash merge後に版機能の変更をmainへ積み直し、最終ハッシュを反映。",
         "PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。",
-        "PR #98で選別フラグの保存経路とUIを更新する。"
+        "PR #98で選別フラグの保存経路とUIを更新する。",
+        "被写体のマスクの面 #135: camera_mask_surface_detect（作業画像に niho-camera-cutout surface を当て、写真の面の置き場へ保存）を足す。"
       ]
     },
     {
@@ -3926,10 +3931,11 @@
         "path": "apps/camera/src-tauri/src/cutout.rs",
         "sha256": "6237d483a9322882c99b3c8efb96a13dbc7667b175e725e7fd911732e4e45ab4"
       },
-      "outputSha256": "f8b897634c9bae5ae6b235e541779f7a840944a840898170e5d9ce47b062954d",
+      "outputSha256": "e8dd7e83feddc301faaa79b5e87dee735d54ab8bc9ef12debdd75598b2671c98",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
-        "テスト用の同期ラッパーをテストビルドに限定し、公開native lintを通す。"
+        "テスト用の同期ラッパーをテストビルドに限定し、公開native lintを通す。",
+        "被写体のマスクの面 #135: camera_mask_surface_detect（作業画像に niho-camera-cutout surface を当て、写真の面の置き場へ保存）を足す。"
       ]
     },
     {
@@ -3940,8 +3946,10 @@
         "path": "apps/camera/src-tauri/src/cutout_commands.rs",
         "sha256": "1f9e8b864f746cbff895c150fbe1f33367f027e103e182ff7ea07ec4d5ae5d12"
       },
-      "outputSha256": "1f9e8b864f746cbff895c150fbe1f33367f027e103e182ff7ea07ec4d5ae5d12",
-      "modifications": []
+      "outputSha256": "c187ecfcb89774cb1bdd89f5a416224188a1660709083af429340018bc41f10c",
+      "modifications": [
+        "被写体のマスクの面 #135: camera_mask_surface_detect（作業画像に niho-camera-cutout surface を当て、写真の面の置き場へ保存）を足す。"
+      ]
     },
     {
       "path": "apps/camera/src-tauri/src/cutout_commands_tests.rs",
@@ -3962,10 +3970,11 @@
         "path": "apps/camera/src-tauri/src/cutout_tests.rs",
         "sha256": "0e4ce9e289ff4ff06a9122f5786ba5d9bd92ecd4b3a260d441d1ed16fbd983e5"
       },
-      "outputSha256": "c33a324d7bcef141dbd1e08654c6cba769251af83abcd6c106165df1cfb345d1",
+      "outputSha256": "40ee9ec3c6da20cbc32a35d1043bba2ea8405db531320aabc213bf2e943131a7",
       "modifications": [
         "private絶対path guardに合わせ、合成テスト用のpathを予約済み/test-data配下へ正規化。実装の挙動は変更しない。",
-        "公開現像workspace向けにLibRaw由来値と参照を除去。独立測定DCP・合成テスト・metadata正規化・公開契約と書式へ調整。"
+        "公開現像workspace向けにLibRaw由来値と参照を除去。独立測定DCP・合成テスト・metadata正規化・公開契約と書式へ調整。",
+        "被写体のマスクの面 #135: camera_mask_surface_detect（作業画像に niho-camera-cutout surface を当て、写真の面の置き場へ保存）を足す。"
       ]
     },
     {
@@ -3976,14 +3985,15 @@
         "path": "apps/camera/src-tauri/src/develop.rs",
         "sha256": "e8031f4461b78fd3a74d9011ace89081814e737868a33ee4e39f7b98e39bacb8"
       },
-      "outputSha256": "ed38a0be74646f26a7b667d71b1158b55be49f472b503cc57bb994c8d14021fc",
+      "outputSha256": "522f8ad71caa1ce6c83e2e438e8565d91726228aad042932bdbb97811d19a9b7",
       "modifications": [
         "書き出しcommand境界の引数設計を明記し、Clippyの引数数lintを局所的に許容する。",
         "全open photoの原本をexport destinationから保護",
         "全書き出し経路が全open photo原本を保護",
         "部分補正（マスク）#66: 現像の状態に masks（部分補正の原寸書き出しの可否）を足す",
         "PR #81 のマスク描画を最新mainの変更と統合。",
-        "PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。"
+        "PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。",
+        "被写体のマスクの面 #135: camera_mask_surface_detect（作業画像に niho-camera-cutout surface を当て、写真の面の置き場へ保存）を足す。"
       ]
     },
     {
@@ -4050,7 +4060,7 @@
         "path": "apps/camera/src-tauri/src/lib.rs",
         "sha256": "e6415b3d0633bb4753761b89f8860fffcfa9b67f95832ab971bd9b13eebaaffc"
       },
-      "outputSha256": "9b5edd17563f6e627c543e7cac62a02fe26cdfa8f6299e9744eed6a712997bfa",
+      "outputSha256": "41da46633c0d1911ead81419ee5bc48c8f25c7697eee1724bfc9647511f394b7",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "共有形式フィルターを使う複数写真pickerと参照削除コマンドを同梱UIの権限内に追加 / 選択写真専用commandをinvoke handlerへ登録。",
@@ -4066,7 +4076,8 @@
         "PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。",
         "PR #98で選別フラグの保存経路とUIを更新する。",
         "公式配布では検証可能なSDK専用asset sectionをTauri asset providerへ接続する",
-        "新規runtime asset moduleの宣言順をcargo fmtの規約へ合わせる"
+        "新規runtime asset moduleの宣言順をcargo fmtの規約へ合わせる",
+        "被写体のマスクの面 #135: camera_mask_surface_detect（作業画像に niho-camera-cutout surface を当て、写真の面の置き場へ保存）を足す。"
       ]
     },
     {
@@ -4357,7 +4368,7 @@
         "path": "apps/camera/src/local-library/commands.ts",
         "sha256": "6aa0e7cc890a164709ed5274f020d5070d85b69e9b01f8562ae772a8ba2c57f1"
       },
-      "outputSha256": "234e6a55a4060adfab6be64856c1931f867240ca0c4a6f740c0f75eba111e4f2",
+      "outputSha256": "4bf580a7db601f13fed44c1235b51d2f2c069831fe0d1e522bd3f2a14dc5d289",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "個別写真の追加・件数・一覧・参照削除を不透明なentryIdの既存経路へ接続 / 選択写真一覧を専用IPC commandへ分離。",
@@ -4372,7 +4383,8 @@
         "部分補正（マスク）#68: マスクの面の保存・読み出し・有無の型つきの口を足す",
         "PR #82: #74 squash merge後に版機能の変更をmainへ積み直し、最終ハッシュを反映。",
         "PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。",
-        "PR #98で選別フラグの保存経路とUIを更新する。"
+        "PR #98で選別フラグの保存経路とUIを更新する。",
+        "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
       ]
     },
     {
@@ -4438,9 +4450,10 @@
         "PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。",
         "PR #98で選別フラグの保存経路とUIを更新する。",
         "PR #99を#91マージ後のmainへ積み直し、遠近補正後のブラシ半径を局所ヤコビアンで写す。",
-        "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。"
+        "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
+        "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
       ],
-      "outputSha256": "029c14ac3738fd35179fe8b66cb69adc3510cc54f4a89cbd22501c61e2faca86"
+      "outputSha256": "cfc0060dee560905b9c25ed38968a8392929e8f73667f374e1abe3e1a2af317e"
     },
     {
       "path": "apps/camera/src/local-library/local-photo-library.ts",
@@ -4470,9 +4483,10 @@
         "PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。",
         "PR #98で選別フラグの保存経路とUIを更新する。",
         "PR #99を#91マージ後のmainへ積み直し、遠近補正後のブラシ半径を局所ヤコビアンで写す。",
-        "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。"
+        "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
+        "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
       ],
-      "outputSha256": "7149d6a6cc14341ed7d05fa17957af493b9ba67fb9f15c97398fc789bebc2d9c"
+      "outputSha256": "c4fe0a747c290311ec69e37cafe9dfd26f6675801cc4478f8e64eae038d7650a"
     },
     {
       "path": "apps/camera/src/main.tsx",
@@ -9414,8 +9428,10 @@
         "path": "packages/develop-engine/tools/niho-camera-cutout/README.md",
         "sha256": "4f5c3aab5ed5c1c7a0e386aa14ba5759983a46aa6baf61cf2f5e1a39f23889b6"
       },
-      "outputSha256": "4f5c3aab5ed5c1c7a0e386aa14ba5759983a46aa6baf61cf2f5e1a39f23889b6",
-      "modifications": []
+      "outputSha256": "41e66ff40d59fc56b196ce5a6d6b5ae8b991c454799147768b16438dcce20126",
+      "modifications": [
+        "被写体のマスクの面 #135: niho-camera-cutout に surface（作業画像の全部の被写体を正規形の 8bit グレー PNG の面にする）を足し 0.3.0 にする。"
+      ]
     },
     {
       "path": "packages/develop-engine/tools/niho-camera-cutout/Sources/NihoCameraCutout/CutoutComposer.swift",
@@ -9480,8 +9496,10 @@
         "path": "packages/develop-engine/tools/niho-camera-cutout/Sources/NihoCameraCutoutCLI/Commands.swift",
         "sha256": "b5dff37a6a22050d320ee8cb236942c38dc7e3e3aa280cfe64b326922b9744ef"
       },
-      "outputSha256": "b5dff37a6a22050d320ee8cb236942c38dc7e3e3aa280cfe64b326922b9744ef",
-      "modifications": []
+      "outputSha256": "9f0bde5a32a199d271670b0416909459d0851065df155be8a9c91722c6de68ee",
+      "modifications": [
+        "被写体のマスクの面 #135: niho-camera-cutout に surface（作業画像の全部の被写体を正規形の 8bit グレー PNG の面にする）を足し 0.3.0 にする。"
+      ]
     },
     {
       "path": "packages/develop-engine/tools/niho-camera-cutout/Sources/NihoCameraCutoutCLI/Options.swift",
@@ -9491,8 +9509,10 @@
         "path": "packages/develop-engine/tools/niho-camera-cutout/Sources/NihoCameraCutoutCLI/Options.swift",
         "sha256": "da0a25135b707337491573627670c2c4b98d0e528a1cf2595b34249562e86663"
       },
-      "outputSha256": "da0a25135b707337491573627670c2c4b98d0e528a1cf2595b34249562e86663",
-      "modifications": []
+      "outputSha256": "ca6d56133f1f53cd83b4e7722ecec1c015967b8df81c5faf3de7bd8aeb6a43c1",
+      "modifications": [
+        "被写体のマスクの面 #135: niho-camera-cutout に surface（作業画像の全部の被写体を正規形の 8bit グレー PNG の面にする）を足し 0.3.0 にする。"
+      ]
     },
     {
       "path": "packages/develop-engine/tools/niho-camera-cutout/Sources/NihoCameraCutoutCLI/Tool.swift",
@@ -9502,8 +9522,10 @@
         "path": "packages/develop-engine/tools/niho-camera-cutout/Sources/NihoCameraCutoutCLI/Tool.swift",
         "sha256": "b769b39520e3039dc25524fef1fcd8b5800aeada21d4b21eee861c44f7899bf6"
       },
-      "outputSha256": "b769b39520e3039dc25524fef1fcd8b5800aeada21d4b21eee861c44f7899bf6",
-      "modifications": []
+      "outputSha256": "f8c0718d3e19284a6f61c65001c7135a57be1a437e816d6f04659d2ce98eac72",
+      "modifications": [
+        "被写体のマスクの面 #135: niho-camera-cutout に surface（作業画像の全部の被写体を正規形の 8bit グレー PNG の面にする）を足し 0.3.0 にする。"
+      ]
     },
     {
       "path": "packages/develop-engine/tools/niho-camera-cutout/Sources/NihoCameraCutoutCLI/main.swift",
@@ -9513,8 +9535,10 @@
         "path": "packages/develop-engine/tools/niho-camera-cutout/Sources/NihoCameraCutoutCLI/main.swift",
         "sha256": "9459f5ff909a62bd9bf03d3863f54d2ac3a796fc88fe78849b2d5f3979626d97"
       },
-      "outputSha256": "9459f5ff909a62bd9bf03d3863f54d2ac3a796fc88fe78849b2d5f3979626d97",
-      "modifications": []
+      "outputSha256": "aa1ccf27b7e4f6109f7f8c8eae28ed7ea71975d73d1710073b21a4761a7b6fcb",
+      "modifications": [
+        "被写体のマスクの面 #135: niho-camera-cutout に surface（作業画像の全部の被写体を正規形の 8bit グレー PNG の面にする）を足し 0.3.0 にする。"
+      ]
     },
     {
       "path": "packages/develop-engine/tools/niho-camera-cutout/Tests/NihoCameraCutoutTests/BrushParityTests.swift",
@@ -9568,8 +9592,10 @@
         "path": "packages/develop-engine/tools/niho-camera-cutout/Tests/NihoCameraCutoutTests/VisionEndToEndTests.swift",
         "sha256": "cb7797794aa8fb4b09126758c537cb4d5deb9ba7a68dcfb1cc2299482df861c7"
       },
-      "outputSha256": "cb7797794aa8fb4b09126758c537cb4d5deb9ba7a68dcfb1cc2299482df861c7",
-      "modifications": []
+      "outputSha256": "0cb6d3ffac81eff45cfffd2fea24ee7cfec1b6ec27fe1551819a0060685d32bb",
+      "modifications": [
+        "被写体のマスクの面 #135: niho-camera-cutout に surface（作業画像の全部の被写体を正規形の 8bit グレー PNG の面にする）を足し 0.3.0 にする。"
+      ]
     },
     {
       "path": "packages/develop-engine/tools/niho-camera-cutout/scripts/sidecar-lock.mjs",
@@ -10903,13 +10929,13 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-masks.ts",
-      "sha256": "d5591ef414a5817199096da74ad13c7f8e9132425ca229e70f4cdd5d5cc11293",
-      "origin": "Issue #67の公開仕様だけから新規作成した、マスクの道具の状態（出す条件・足す / 複製 / 削除 / 反転 / 目・局所の補正・形・初期化・キー）と範囲の重ね表示の面を取りに行く係のReact hook。外部画像・非公開コード・個体metadataを含まない。\n変更理由: PR #99を#91マージ後のmainへ積み直し、遠近補正後のブラシ半径を局所ヤコビアンで写す。\n変更理由: PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。\n変更理由: 部分補正（マスク）#93: 局所のカラーミキサーの書き込み・初期化を足し、スマホの全画面の編集の層でも出せるようにした"
+      "sha256": "33d34d95cddeba19164600bb3709250966d30fabef0c73b20db93178a1cd9b2d",
+      "origin": "Issue #67の公開仕様だけから新規作成した、マスクの道具の状態（出す条件・足す / 複製 / 削除 / 反転 / 目・局所の補正・形・初期化・キー）と範囲の重ね表示の面を取りに行く係のReact hook。外部画像・非公開コード・個体metadataを含まない。\n変更理由: PR #99を#91マージ後のmainへ積み直し、遠近補正後のブラシ半径を局所ヤコビアンで写す。\n変更理由: PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。\n変更理由: 部分補正（マスク）#93: 局所のカラーミキサーの書き込み・初期化を足し、スマホの全画面の編集の層でも出せるようにした\n変更理由: 被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-masks.test.tsx",
-      "sha256": "f75a4030d9f675b41faceb55d6175695e48d21e9a4da5b484aedf3f0084626ab",
-      "origin": "Issue #67のため新規作成した、マスクの道具のhook（取り消しの1単位・読める設定・8枚と原寸の書き出しの理由・Esc / Delete）と重ね表示の面の係（rAFでまとめる・古い応答を捨てる）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 部分補正（マスク）#93: 局所のカラーミキサーの書き込みと初期化の回帰を足した"
+      "sha256": "1f9b70dae9b771518a5dfe22a3c929e38d30bd84363a3321aa68966c6cd2f413",
+      "origin": "Issue #67のため新規作成した、マスクの道具のhook（取り消しの1単位・読める設定・8枚と原寸の書き出しの理由・Esc / Delete）と重ね表示の面の係（rAFでまとめる・古い応答を捨てる）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 部分補正（マスク）#93: 局所のカラーミキサーの書き込みと初期化の回帰を足した\n変更理由: 被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-mask-overlay.tsx",
@@ -10923,13 +10949,13 @@
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-mask-tools.tsx",
-      "sha256": "8363ffbd4d610b74ab578ee448edccc0a4f631010ab2615651a2b419958d85b6",
-      "origin": "Issue #67の公開仕様だけから新規作成した、右パネルのマスクの面（足す・一覧・重ね表示の切り替え・局所のスライダー・ぼかし）のReact部品。外部画像・非公開コード・個体metadataを含まない。\n変更理由: PR #99を#91マージ後のmainへ積み直し、遠近補正後のブラシ半径を局所ヤコビアンで写す。\n変更理由: PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。\n変更理由: 部分補正（マスク）#93: 選んだマスクのカラーの群の後ろに局所のカラーミキサーの節を足し、スマホの段と共有する値の書き方を公開した"
+      "sha256": "4c05907173b73338dc71d264030c84277bb9e34e6a2542877a9b59feec7e79d4",
+      "origin": "Issue #67の公開仕様だけから新規作成した、右パネルのマスクの面（足す・一覧・重ね表示の切り替え・局所のスライダー・ぼかし）のReact部品。外部画像・非公開コード・個体metadataを含まない。\n変更理由: PR #99を#91マージ後のmainへ積み直し、遠近補正後のブラシ半径を局所ヤコビアンで写す。\n変更理由: PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。\n変更理由: 部分補正（マスク）#93: 選んだマスクのカラーの群の後ろに局所のカラーミキサーの節を足し、スマホの段と共有する値の書き方を公開した\n変更理由: 被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-mask-tools.test.tsx",
-      "sha256": "bcb8d8f053b7fe61c33426cadd3668d034ed2ba0239d3f4e9be4dcde9a22a7b6",
-      "origin": "Issue #67のため新規作成した、右パネルのマスクの面（押せない理由・行の操作・drag / commit・相対の白の出し分け・ぼかし）のjsdom回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 部分補正（マスク）#93: 局所のカラーミキサーの節のjsdom回帰を足した"
+      "sha256": "4e4238f0c5efd46c8681fdf3b9f5cbbc62966c7ac62951283f480ad5496ec1b0",
+      "origin": "Issue #67のため新規作成した、右パネルのマスクの面（押せない理由・行の操作・drag / commit・相対の白の出し分け・ぼかし）のjsdom回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 部分補正（マスク）#93: 局所のカラーミキサーの節のjsdom回帰を足した\n変更理由: 被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/xmp/masks.rs",
@@ -11263,8 +11289,8 @@
     },
     {
       "path": "apps/camera/src/local-library/local-photo-library-mask-surfaces.test.ts",
-      "sha256": "17cf06298463620f47accdaa44f826e9ddee31bbc9cdd959e4a9f80f5f6fe35f",
-      "origin": "Issue #68のため新規作成した、この Mac の PhotoLibrary のマスクの面（photoIdへの結び・開き直し・無い面・能力）の回帰。外部画像・非公開コード・個体metadataを含まない。"
+      "sha256": "4cd8e4ad6bd3209772386ba3cbb537464025da95eac17f2f8d4de1d35b82c42a",
+      "origin": "Issue #68のため新規作成した、この Mac の PhotoLibrary のマスクの面（photoIdへの結び・開き直し・無い面・能力）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
     },
     {
       "path": "docs/lens-adjustments.md",
@@ -11428,13 +11454,13 @@
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-mask-mobile-tools.tsx",
-      "sha256": "64e20bea0725adaf478b875cd268bc2eb94f3452a352c9f1875bc2e3332234e1",
-      "origin": "Issue #93の公開仕様 docs/local-adjustments.md だけから新規作成した、スマホの全画面の編集の層のマスクの段（足す・一覧・操作・補正の種類・チップと目盛り・ブラシ）のReact部品。外部画像・非公開コード・個体metadataを含まない。"
+      "sha256": "597b7f2f59e173defd7e5cc2d0c13adc848bcdca28ba3755e00882b304ede1c5",
+      "origin": "Issue #93の公開仕様 docs/local-adjustments.md だけから新規作成した、スマホの全画面の編集の層のマスクの段（足す・一覧・操作・補正の種類・チップと目盛り・ブラシ）のReact部品。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-mask-mobile-tools.test.tsx",
-      "sha256": "e4346904f56da58a7daabd6d0519ba9ba932d21d4a8a1db1eefedd60875353a2",
-      "origin": "Issue #93のため新規作成した、スマホのマスクの段（足す・理由・一覧・操作・補正の種類・カラーミキサー・ブラシ・44pxの押せる範囲）のjsdom回帰。外部画像・非公開コード・個体metadataを含まない。"
+      "sha256": "f84b328da88a405f0741be63d728eba8e168d0bbc6fb3d7bc5007582d8800782",
+      "origin": "Issue #93のため新規作成した、スマホのマスクの段（足す・理由・一覧・操作・補正の種類・カラーミキサー・ブラシ・44pxの押せる範囲）のjsdom回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-editing-mobile-editor-mask.test.tsx",
@@ -11450,6 +11476,26 @@
       "path": "packages/photo-editing/src/editor/use-photo-editing-coarse-pointer.ts",
       "sha256": "15195b274e3b9769e538ae264304a116c3eb7cc8d605fa071586825ecfcd69ce",
       "origin": "Issue #93の公開仕様 docs/local-adjustments.md だけから新規作成した、主なポインタが指か（pointer: coarse）を読むReactフック。外部画像・非公開コード・個体metadataを含まない。"
+    },
+    {
+      "path": "apps/camera/src-tauri/src/mask_detection.rs",
+      "sha256": "d63e7383125680bf369dcd67a129b11fd09758db501caa443d85e40d5cde4aa3",
+      "origin": "Issue #135のため独立作成。開いた写真の作業画像（RAW は作業コピーを niho-develop-render で sRGB 8bit）に niho-camera-cutout surface を当て、面の置き場へ保存する Tauri コマンド。パスを受け取らず返さない。"
+    },
+    {
+      "path": "apps/camera/src-tauri/src/mask_detection_tests.rs",
+      "sha256": "ff4751f648c89a2df32dcbae9cc079ecbcc910a79d0006d82dec07c6d8884cc7",
+      "origin": "Issue #135のため独立作成。検出の要求の検査・作業画像を描く設定・覚えた検出の Rust テスト。実写真を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/niho-camera-cutout/Sources/NihoCameraCutout/MaskSurface.swift",
+      "sha256": "79c2b85923db628e7c32517b1d984c103cfe0585f532e2bc9db6ee52ef0ddea8",
+      "origin": "Issue #135のため独立作成。Apple Vision（OS内蔵のモデル）の前景（allInstances）を作業画像の大きさの面にし、IHDR・IDAT・IEND だけの 8bit グレー PNG（zlib・CRC-32・Adler-32 は自作）に組む。外部コード・モデル・実写真を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/niho-camera-cutout/Tests/NihoCameraCutoutTests/SurfaceTests.swift",
+      "sha256": "e0cf1f436d37ed2e5295edc547426357b7c75412447108bb54d515d0026dd782",
+      "origin": "Issue #135のため独立作成。合成画像だけで surface の引数・正規形の PNG・EXIF の向きと縮小・推論の前の失敗を確かめる Swift テスト。実写真を含まない。"
     }
   ],
   "excludedSources": [
