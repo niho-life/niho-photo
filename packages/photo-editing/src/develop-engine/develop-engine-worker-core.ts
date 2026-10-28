@@ -12,8 +12,9 @@ import { parseDevelopEngineManifest } from "./develop-engine-manifest";
  *   変えずに別の bytes から描く（記事用の画像・書き出し）
  * - 同じ写真の使い回し（#129）: `digest` があれば、開く入力（開き方と bytes の SHA-256）を鍵に、手放した写真（`open` /
  *   `openWorkingCopy` で替えた・`close` した）を開いている写真と合わせて {@link HELD_PHOTO_LIMIT} 枚まで保つ。同じ鍵をもう一度開くと
- *   デコード・解析・cube・master を作り直さずにそれを使う（面は外し、新しく開いたのと同じく面を持たずに始める）。新しい写真を
- *   デコードする前に古いほうから手放す。保っている間も描いた画素は同じ（engine の cache は鍵が同じときだけ使う）
+ *   デコード・解析・cube・master を作り直さずにそれを使う（面は外し、新しく開いたのと同じく面を持たずに始める）。保つ前に見本用の
+ *   session と先に作った別の設定の解析は手放す（メモリ）。新しい写真をデコードする前に古いほうから手放す。保っている間も描いた
+ *   画素は同じ（engine の cache は鍵が同じときだけ使う）
  * - 解析を先に作る（#129）: 開いている写真を丁寧に（final）描いたら、その設定と同梱のプリセットを当てた設定で H/S が読む解析
  *   （signed RAW の CNR の元・応答の係数・niho-7 の面）のうちまだ作っていないものを、通常の要求が {@link ANALYSIS_AHEAD_QUIET_MS}
  *   来なかったら 1 件ずつ `Developer.prepareAnalysis` で作る（今の写真の CNR と、違う CNR の 1 つまで）。通常の要求が来たら次の
@@ -270,6 +271,8 @@ type DevelopDeveloper = {
   estimateUpright?: (settingsJson: string, mode: number) => unknown;
   /** H/S の解析だけを先に作る（描かない。画素は同じ。#129 の glue から。無い glue もある） */
   prepareAnalysis?: (settingsJson: string) => unknown;
+  /** 先に作った別の設定の解析を手放す（保つ写真のメモリを減らす。画素は同じ。#129 の glue から） */
+  releaseAnalysisAhead?: () => unknown;
 /** 面の受け渡し（M4 の glue から。無い glue もある） */
   setMaskSurface?: (surfaceId: string, png: Uint8Array) => unknown;
   dropMaskSurface?: (surfaceId: string) => unknown;
@@ -294,12 +297,14 @@ const HELD_PHOTO_LIMIT = 2;
  */
 const ANALYSIS_AHEAD_QUIET_MS = 500;
 
-/** 開いていないが手放さずに持っている写真（同じ入力をもう一度開いたら、デコード・解析・master を作り直さずに使う）。 */
+/**
+ * 開いていないが手放さずに持っている写真（同じ入力をもう一度開いたら、デコード・解析・master を作り直さずに使う）。見本用の
+ * session と、先に作った別の設定の解析は手放してから保つ（メモリ。使い回すときに作り直す）。
+ */
 type KeptPhoto = {
   /** 開き方と入力の bytes の鍵（{@link DevelopEngineWorkerDeps.digest}） */
   key: string;
   developer: DevelopDeveloper;
-  thumbnailSession: DevelopDeveloper | null;
   analysisKey: string | null;
 };
 
@@ -958,7 +963,6 @@ export function createDevelopEngineWorkerHandler(
   };
 
   const freeKept = (photo: KeptPhoto | undefined) => {
-    freeQuietly(photo?.thumbnailSession ?? null);
     freeQuietly(photo?.developer ?? null);
   };
 
@@ -987,8 +991,14 @@ export function createDevelopEngineWorkerHandler(
     const current = developer;
     if (current && currentKey !== null) {
       dropHeldSurfaces();
-      kept.push({ key: currentKey, developer: current, thumbnailSession, analysisKey: currentAnalysisKey });
-      thumbnailSession = null;
+      releaseThumbnailSession();
+      try {
+        current.releaseAnalysisAhead?.();
+      } catch {
+        // 手放せなくても描く画素は同じ（メモリが減らないだけ）
+      }
+      preparedAnalyses.delete(current);
+      kept.push({ key: currentKey, developer: current, analysisKey: currentAnalysisKey });
     } else {
       releaseThumbnailSession();
       heldSurfaces.clear();
@@ -1017,7 +1027,6 @@ export function createDevelopEngineWorkerHandler(
       return false;
     }
     developer = photo.developer;
-    thumbnailSession = photo.thumbnailSession;
     currentKey = photo.key;
     currentAnalysisKey = photo.analysisKey;
     trimKept(HELD_PHOTO_LIMIT);

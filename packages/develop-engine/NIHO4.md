@@ -58,6 +58,30 @@ HかSの片方だけを使う設定では、使わない補正の全画面ゲイ
 
 参考にする公開設計は、Adobeの[Smart Preview](https://helpx.adobe.com/uk/lightroom-classic/desktop/viewing-photos/lightroom-smart-previews.html)と[Camera Raw cache](https://helpx.adobe.com/lightroom-classic/desktop/technical-support/performance-guidelines/optimize-performance-lightroom.html)、libvipsの[領域単位の遅延計算](https://www.libvips.org/API/current/how-it-works.html)です。これらは先行表示・再計算の回避・原寸中間配列の削減を考える根拠であり、Lightroomが同条件のFinal 1秒・Wasm 200MBを達成している証拠ではありません。
 
+## 同じ写真の使い回しと H/S の解析の先行（#129）
+
+画素を変えない速さの手を 2 つ入れました（engine は上げません）。
+
+- **同じ写真の Developer を保つ**: 画面の Worker は、開き方と入力の bytes の SHA-256 を鍵に、開いている 1 枚と直前に開いていた 1 枚の `Developer` を保ちます。同じ入力をもう一度開くと、デコード・解析・cube・master を作り直さずに使います。新しい写真をデコードする前に古いほうから手放します。
+- **H/S の解析を先に作る**: `Session::prepare_analysis`（wasm の `Developer.prepareAnalysis`）は描かずに解析（CNR の元・応答の係数・niho-7 の面）だけを作ります。master の解析が設定の CNR に合えばその中へ、合わなければ「先に作った解析」として 1 つ持ち、master の解析と入れ替えるときは前の解析を取っておきます（colorful の CNR 25 と行き来しても作り直さない。最大 2 つ）。Worker は丁寧に描いた後、通常の要求が 500ms 来なければ、今の設定と同梱のプリセットの解析（違う CNR は 1 つまで）を 1 件ずつ作ります。
+
+`niho4::prepare` の解析の段は `make_analysis` に切り出しただけで、処理と順番は同じです。`tests/session_reuse.rs` で、他の露光・プリセット・CNR・見本・drag を描いた後の Session と、解析を先に作った Session の Final が、新しく開いた Session と同じ byte になることを native と wasm で確かめます。
+
+公開 RW2 から作った 2560×1707 の signed 作業コピー相当（色は Apple のものではない。大きさと中身だけ実写）を、Studio の Node の wasm（1 本のスレッド）で、niho-11・Final 1280 で 6 回ずつ別 process で測った中央値です（ms）。全条件の RGBA が一致しました。
+
+| 段 | 今 | 保った Developer | 解析を先に作った後 |
+|---|---|---|---|
+| 開き直す（デコード） | 127 | 0 | 0 |
+| 開き直した後の最初の Final（同じ設定） | 868 | 675 | 665 |
+| 露光 +0.3 | 719 | 731 | 736 |
+| 最初のプリセット（bluesky2） | 3559 | 3546 | 2215 |
+| colorful（CNR 25） | 4243 | 4215 | 2468（CNR 25 も先に作った場合） |
+| 先に作る解析（空き時間・途中で止められない） | – | – | CNR 0: 1341 / CNR 25: 1787 |
+
+Wasm linear memory の高水位は、1 枚の Session で 260〜334MB、CNR 25 の解析も先に作ると 386MB です。30 枚を順に開く（各 open・最初・露光・プリセット）と、保たない場合 316MB、直前の 1 枚を保つと 552MB で、どちらも数枚目から増えません。Air 8GB の実 UI での受入は #129 の手順で別に測ります。
+
+Final の局所の段（`pipeline.rs` の `local_pass`）は、cube Q を通した 750px の統計から決まる `gain_scale`・`shift` が同じときだけ使い回します。色やトーンだけを変えても統計が変われば、局所の輝度の計算（`local_luminance`）の結果も変わるので、その計算は画素を変えずには省けません。省けるのは入力の対数輝度の面（色だけの変更では同じ）だけで、手を入れていません。
+
 ## 根拠と検証
 
 - 内部固定記録 `round395-r394-interaction-freeze/freeze.json`: SHA-256 `01f10228a53475083bc4af205bcda5a20eab50d1a64b99fbc5a7eb302e5b2a2e`。

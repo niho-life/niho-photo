@@ -1480,21 +1480,33 @@ impl Session {
             .as_ref()
             .map(|prepared| &prepared.analysis)
             .filter(|analysis| serves(analysis));
-        let ahead = self.niho3_ahead.as_ref().filter(|analysis| serves(analysis));
+        let ahead = self
+            .niho3_ahead
+            .as_ref()
+            .filter(|analysis| serves(analysis));
         let keep = in_master.is_none() && ahead.is_none();
         // A strong reference to the same cells: filling it fills theirs.
-        let cached = in_master
-            .or(ahead)
-            .and_then(|analysis| match analysis.downgrade().upgrade(RawEngine::Niho4) {
+        let cached = in_master.or(ahead).and_then(|analysis| {
+            match analysis.downgrade().upgrade(RawEngine::Niho4) {
                 Some(RawAnalysisCache::Niho4(cache)) => Some(cache),
                 _ => None,
-            });
+            }
+        });
         let analysis = niho4::prepare_analysis(image, meta, settings, cached)
             .map_err(|error| Error::Niho4Prepare(error.to_string()))?;
         if keep {
             self.niho3_ahead = Some(RawAnalysisCache::Niho4(analysis));
         }
         Ok(true)
+    }
+
+    /// Drops the analysis made ahead ([`Session::prepare_analysis`]) or set
+    /// aside by a frame of another noise reduction: for a session kept while
+    /// its photo is not open (#129), which then holds what its own settings'
+    /// frames read and no more. Frames are the same bytes (one that needs it
+    /// makes it again).
+    pub fn release_analysis_ahead(&mut self) {
+        self.niho3_ahead = None;
     }
 
     /// The NIHO 3 analysis this session holds, for a session made from it.

@@ -40,6 +40,7 @@ function heldGlue() {
     readonly surfaces = new Set<string>();
     readonly renders: string[] = [];
     readonly free = vi.fn(() => events.push(`free ${this.name}`));
+    readonly releaseAnalysisAhead = vi.fn();
     constructor(input: Uint8Array, workingMaxDimension: number, metaJson: string | null = null) {
       this.name = input.length === 0 ? `thumbnail of ${workingMaxDimension}` : String.fromCharCode(...input);
       this.width = workingMaxDimension;
@@ -90,14 +91,15 @@ function heldGlue() {
 /** 鍵は bytes をそのまま文字にしたもの（テストでは中身が同じなら同じ鍵）。 */
 const textDigest: DevelopEngineWorkerDeps["digest"] = async (bytes) => `d:${String.fromCharCode(...new Uint8Array(bytes))}`;
 
-function setup(digest: DevelopEngineWorkerDeps["digest"] = textDigest) {
+/** `digest` の null は口を渡さない（今までの Worker）。 */
+function setup(digest: DevelopEngineWorkerDeps["digest"] | null = textDigest) {
   const glue = heldGlue();
   const posted: Posted[] = [];
   const deps: DevelopEngineWorkerDeps = {
     fetch: vi.fn(async () => new Response(JSON.stringify(MANIFEST), { status: 200 })),
     importModule: vi.fn(async () => glue.module),
     post: (message, transfer) => posted.push({ message, transfer }),
-    digest,
+    ...(digest ? { digest } : {}),
   };
   return { handler: createDevelopEngineWorkerHandler(deps), posted, glue };
 }
@@ -165,7 +167,7 @@ describe("Worker が同じ写真を保つ（#129）", () => {
     ]);
   });
 
-  it("使い回す写真は面を外して渡す（新しく開いたのと同じく面を持たずに始まる）。見本の session も保って使う", async () => {
+  it("保つ前に面・見本の session・先に作った別の解析を手放し、使い回すときは面を持たずに始める", async () => {
     const { handler, posted, glue } = setup();
     await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
     await handler(open(2, "A"));
@@ -177,15 +179,17 @@ describe("Worker が同じ写真を保つ（#129）", () => {
     expect(thumbnail?.surfaces.has(SURFACE_ID)).toBe(true);
 
     await handler(open(5, "B"));
-    // 手放すときに面を外す（保っている間も面の PNG を持たない）
     expect(a?.surfaces.size).toBe(0);
-    expect(thumbnail?.surfaces.size).toBe(0);
+    expect(thumbnail?.free).toHaveBeenCalledOnce();
+    expect(a?.releaseAnalysisAhead).toHaveBeenCalledOnce();
+    expect(a?.free).not.toHaveBeenCalled();
     await handler(open(6, "A"));
     await handler({ type: "renderPresetThumbnail", id: 7, settingsJson: '{"contrast":10}', maxDimension: 96 });
 
-    expect(glue.thumbnails).toHaveLength(1);
-    expect(thumbnail?.renders).toEqual(["{}", '{"contrast":10}']);
-    expect(thumbnail?.free).not.toHaveBeenCalled();
+    // 見本の session は使い回した写真から作り直す（面は持たない）
+    expect(glue.thumbnails).toHaveLength(2);
+    expect(glue.thumbnails[1]?.renders).toEqual(['{"contrast":10}']);
+    expect(glue.thumbnails[1]?.surfaces.size).toBe(0);
     expect(posted.at(-1)?.message).toMatchObject({ type: "frame", id: 7 });
   });
 
@@ -201,7 +205,7 @@ describe("Worker が同じ写真を保つ（#129）", () => {
   });
 
   it("digest が無い・null・失敗のときは保たない（今までどおり手放す）", async () => {
-    for (const digest of [undefined, async () => null, async () => Promise.reject(new Error("no subtle"))]) {
+    for (const digest of [null, async () => null, async () => Promise.reject(new Error("no subtle"))]) {
       const { handler, glue } = setup(digest);
       await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
       await handler(open(2, "A"));

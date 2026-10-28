@@ -83,7 +83,10 @@ fn raster() -> Vec<u8> {
 /// The settings an editor goes through: as opened, an exposure step, each
 /// bundled preset on it (colorful changes the color noise reduction), and
 /// Highlights / Shadows / Texture by hand.
-fn steps(base: DevelopSettings, as_shot: Option<niho_develop::LightroomWhite>) -> Vec<DevelopSettings> {
+fn steps(
+    base: DevelopSettings,
+    as_shot: Option<niho_develop::LightroomWhite>,
+) -> Vec<DevelopSettings> {
     let mut exposed = base.clone();
     exposed.exposure = 0.3;
     let mut steps = vec![base.clone(), exposed.clone()];
@@ -116,7 +119,9 @@ fn history(session: &mut Session, steps: &[DevelopSettings]) {
         let mut dragged = settings.clone();
         for tick in 1..=3 {
             dragged.exposure = settings.exposure + 0.1 * f64::from(tick);
-            session.render(&dragged, SIZE, Quality::Interactive).unwrap();
+            session
+                .render(&dragged, SIZE, Quality::Interactive)
+                .unwrap();
         }
     }
     let mut previews = session.thumbnail(32);
@@ -193,6 +198,14 @@ fn an_analysis_made_ahead_leaves_the_frames_as_they_are() {
         let fresh = open().render(&steps[index], SIZE, Quality::Final).unwrap();
         let ahead = session.render(&steps[index], SIZE, Quality::Final).unwrap();
         assert!(ahead.rgba == fresh.rgba, "step {index}");
+    }
+    // A kept photo's session drops the analysis made ahead; a frame that
+    // needs it makes it again.
+    session.release_analysis_ahead();
+    for index in [4, 2] {
+        let fresh = open().render(&steps[index], SIZE, Quality::Final).unwrap();
+        let again = session.render(&steps[index], SIZE, Quality::Final).unwrap();
+        assert!(again.rgba == fresh.rgba, "released step {index}");
     }
 
     let mut raster_base = DevelopSettings::neutral();
