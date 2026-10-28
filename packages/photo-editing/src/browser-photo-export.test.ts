@@ -345,9 +345,14 @@ describe("大きさの「大きく」（niho-photo#134）", () => {
     expect(browserPhotoExportLargeWasmBytes(light, { width: 4096, height: 2731 })).toBeGreaterThanOrEqual(213 * mib);
     expect(browserPhotoExportLargeWasmBytes(heavy, { width: 4096, height: 2731 })).toBeGreaterThanOrEqual(1284 * mib);
     expect(BROWSER_PHOTO_EXPORT_LARGE_MOBILE_MAX_BYTES).toBe(512 * mib);
-    // 寸法が分からなければ上限の大きさで見積もる
+    // 寸法が分からなければ、長辺の上限の正方形（縦横比が分からない最大の画）で見積もる
     expect(isBrowserPhotoExportLargeWithinMobileMemory(light, null, false)).toBe(true);
     expect(isBrowserPhotoExportLargeWithinMobileMemory({ ...light, v: 5, masks: [mask("a", 0.1)] }, null, false)).toBe(true);
+    // 4096×4096 の JPEG にマスク 2 枚: 寸法が分かれば収まらず、分からなくても収まる側に見積もらない
+    const twoMasks = { ...light, v: 5, masks: [mask("a", 0.1), mask("b", 0.2)] };
+    expect(isBrowserPhotoExportLargeWithinMobileMemory(twoMasks, { width: 4096, height: 4096 }, false)).toBe(false);
+    expect(isBrowserPhotoExportLargeWithinMobileMemory(twoMasks, null, false)).toBe(false);
+    expect(isBrowserPhotoExportLargeWithinMobileMemory(twoMasks, { width: 4096, height: 2731 }, false)).toBe(true);
     expect(isBrowserPhotoExportLargeWithinMobileMemory(heavy, null, false)).toBe(false);
     expect(isBrowserPhotoExportLargeWithinMobileMemory(heavy, null, true)).toBe(false);
     expect(isBrowserPhotoExportLargeWithinMobileMemory(light, null, true)).toBe(true);

@@ -128,8 +128,8 @@ export function browserPhotoExportLargeWasmBytes(settings: unknown, size: { widt
 
 /**
  * スマホで「大きく」を出すか（wasm のメモリの見積もりが {@link BROWSER_PHOTO_EXPORT_LARGE_MOBILE_MAX_BYTES} に収まるか）。`size` は
- * 書き出す画の寸法（1 枚で開いた写真は今の切り抜き後）。分からなければ上限の大きさ（JPEG / PNG は 4096×3072、作業コピーで直す写真は
- * 2560×1920）で見積もる。
+ * 書き出す画の寸法（1 枚で開いた写真は今の切り抜き後）。分からなければ、長辺の上限で縦横とも同じ正方形（JPEG / PNG は 4096×4096、
+ * 作業コピーで直す写真は 2560×2560）で見積もる（縦横比が分からないので、長辺だけを抑えた最大の画。正方形に近い写真を下回らない）。
  */
 export function isBrowserPhotoExportLargeWithinMobileMemory(
   settings: unknown,
@@ -137,7 +137,7 @@ export function isBrowserPhotoExportLargeWithinMobileMemory(
   workTarget: boolean,
 ): boolean {
   const longEdge = workTarget ? BROWSER_PHOTO_WORKING_COPY_LONG_EDGE : BROWSER_PHOTO_EXPORT_LARGE_LONG_EDGE;
-  const output = size ?? { width: longEdge, height: (longEdge * 3) / 4 };
+  const output = size ?? { width: longEdge, height: longEdge };
   return browserPhotoExportLargeWasmBytes(settings, output) <= BROWSER_PHOTO_EXPORT_LARGE_MOBILE_MAX_BYTES;
 }
 
