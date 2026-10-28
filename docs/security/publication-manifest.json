@@ -445,7 +445,7 @@
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
         "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。"
       ],
-      "outputSha256": "28ca51a004e7be894230f6a9e88834af9622597f601d14aa50b8859e9795b244"
+      "outputSha256": "2e2a607bbe89a173fcd472b68ea0469acff78ee8a59916c777c9e22405338032"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -5902,7 +5902,7 @@
         "path": "packages/develop-engine/crates/niho-develop-wasm/src/lib.rs",
         "sha256": "bb2c416ce23b4e3ca3208f32736f22254ed82276b24fd7f49f1a022e4eb85fbd"
       },
-      "outputSha256": "f1a0b6664a9e8b89e2aa52d576373dccc297ca6d086dda9e9f1c1ffd90037d40",
+      "outputSha256": "e57c3ba0a1619011ace5c974abd04c209a92330d55877f6c41f9df59e690ef0a",
       "modifications": [
         "Issue #30 Oklch色ミキサーとengine 10/11対応を反映",
         "部分補正（マスク）#65: validateSettingsのマスク読み取り回帰テストを追加",
@@ -6382,7 +6382,7 @@
         "path": "packages/develop-engine/crates/niho-develop/src/lib.rs",
         "sha256": "1591d49effaa779c8e23ad6877508ccf336565eec8336d5b4e6faa3b5d3846b0"
       },
-      "outputSha256": "72280e94a65954996f660d86c9943943a0eb21b335849f174a1f1a265351b71f",
+      "outputSha256": "82ff24cd682b25897b7aea78a14bf39e7726453abb5f255d3c06f9b40759e929",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
@@ -11459,13 +11459,13 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/session_reuse.rs",
-      "sha256": "d18f1f82c6bbd66aa840f078ddbbe725ce47705f19d7d22800ccb00386745a65",
-      "origin": "Issue #129の公開仕様と合成画像だけから新規作成した、保った Session と先に作った H/S の解析で描く Final が新しい Session と同じ byte になる Rust 回帰（native と wasm）。実写真・非公開コード・私有参照出力を含まない。"
+      "sha256": "cf5fccfdfe1562bd400f5b17042df938993e1119c3e724dad8b82b6523371e60",
+      "origin": "Issue #129の公開仕様と合成画像だけから新規作成した、保った Session と先に作った H/S の解析で描く Final が新しい Session と同じ byte になる Rust 回帰（native と wasm）。実写真・非公開コード・私有参照出力を含まない。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-held.test.ts",
-      "sha256": "72c5045e86f510e5af4d7b6cfa83c1e6967afef8068d2963afcccedcbb94f550",
-      "origin": "Issue #129の公開仕様だけから新規作成した、Worker が同じ写真の Developer を開き方と入力の SHA-256 の鍵で保って使い回す・古いほうから手放す・面を外す回帰（偽の glue）。実写真・非公開コード・私有参照出力を含まない。"
+      "sha256": "a9193d3487e47694e2b4d941038fc3600ca39935686548dcf25a9bcd9a421aea",
+      "origin": "Issue #129の公開仕様だけから新規作成した、Worker が同じ写真の Developer を開き方と入力の SHA-256 の鍵で保って使い回す・古いほうから手放す・面を外す回帰（偽の glue）。実写真・非公開コード・私有参照出力を含まない。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-analysis.test.ts",

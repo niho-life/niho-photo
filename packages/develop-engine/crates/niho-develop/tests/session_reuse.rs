@@ -199,6 +199,14 @@ fn an_analysis_made_ahead_leaves_the_frames_as_they_are() {
         let ahead = session.render(&steps[index], SIZE, Quality::Final).unwrap();
         assert!(ahead.rgba == fresh.rgba, "step {index}");
     }
+    // A kept photo's session drops the analysis made ahead; a frame that
+    // needs it makes it again.
+    session.release_analysis_ahead();
+    for index in [4, 2] {
+        let fresh = open().render(&steps[index], SIZE, Quality::Final).unwrap();
+        let again = session.render(&steps[index], SIZE, Quality::Final).unwrap();
+        assert!(again.rgba == fresh.rgba, "released step {index}");
+    }
 
     let mut raster_base = DevelopSettings::neutral();
     raster_base.engine = ENGINE_NIHO_14.into();

@@ -1500,6 +1500,15 @@ impl Session {
         Ok(true)
     }
 
+    /// Drops the analysis made ahead ([`Session::prepare_analysis`]) or set
+    /// aside by a frame of another noise reduction: for a session kept while
+    /// its photo is not open (#129), which then holds what its own settings'
+    /// frames read and no more. Frames are the same bytes (one that needs it
+    /// makes it again).
+    pub fn release_analysis_ahead(&mut self) {
+        self.niho3_ahead = None;
+    }
+
     /// The NIHO 3 analysis this session holds, for a session made from it.
     fn niho3_analysis(&self) -> Option<RawAnalysisSeed> {
         match &self.niho3 {

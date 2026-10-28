@@ -535,6 +535,13 @@ impl Developer {
         self.session.prepare_analysis(&settings).map_err(js_error)
     }
 
+    /// Drops the analysis made ahead for other settings (a kept photo's
+    /// Developer, #129). Frames are the same bytes.
+    #[wasm_bindgen(js_name = releaseAnalysisAhead)]
+    pub fn release_analysis_ahead(&mut self) {
+        self.session.release_analysis_ahead();
+    }
+
     /// One local mask's plane for the editor's overlay: `{ width, height,
     /// data }` where `data` is a `Uint8Array` of `width * height` values
     /// (`round(weight / 65536 * 255)`, row-major, the mask's `invert`
