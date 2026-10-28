@@ -68,6 +68,9 @@ struct Case {
     /// A hole (center, radius in full-size pixels) whose texture is
     /// compared with the ring around it.
     hole: Option<(f64, f64, f64)>,
+    /// A full-size point on a branch's edge and the normal toward the sky:
+    /// the profile printed across it.
+    profile: Option<([f64; 2], [f64; 2])>,
 }
 
 // MARK: - Synthetic photos
@@ -119,6 +122,15 @@ fn branch_distance(w: f64, h: f64, x: f64, y: f64) -> f64 {
         .fold(f64::INFINITY, f64::min)
 }
 
+/// The edge of branch 4 nearest the frame's center (the sky side) and its
+/// normal.
+fn branch_edge(w: f64, h: f64) -> ([f64; 2], [f64; 2]) {
+    let (s, c) = (0.37 * 4.0 + 0.2f64).sin_cos();
+    let offset = ((4.0 * 0.137) % 0.8 - 0.4) * w;
+    let reach = offset + 0.002 * w;
+    ([w / 2.0 + reach * c, h / 2.0 + reach * s], [c, s])
+}
+
 fn segment_distance(p: [f64; 2], a: [f64; 2], b: [f64; 2]) -> f64 {
     let (dx, dy) = (b[0] - a[0], b[1] - a[1]);
     let t = (((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / (dx * dx + dy * dy)).clamp(0.0, 1.0);
@@ -156,6 +168,7 @@ fn make_case(name: &str, w: f64, h: f64) -> Case {
         surface: None,
         edge: None,
         hole: None,
+        profile: Some(branch_edge(w, h)),
     };
     match name {
         "fringe" => plain(
@@ -232,6 +245,7 @@ fn make_case(name: &str, w: f64, h: f64) -> Case {
                 surface: Some((id, png)),
                 edge: Some((fcy, fcx + fr, 12.0 * k)),
                 hole: None,
+                profile: None,
             }
         }
         "heal" => {
@@ -277,6 +291,7 @@ fn make_case(name: &str, w: f64, h: f64) -> Case {
                 surface: None,
                 edge: None,
                 hole: Some((cx, cy, reach)),
+                profile: None,
             }
         }
         "sharpen" => plain(
@@ -477,18 +492,60 @@ fn texture(f: &Frame, full_w: f64, (cx, cy, r): (f64, f64, f64)) -> Value {
     json!({"inside": round3(inside * 1000.0), "ring": round3(ring * 1000.0), "ratio": round3(inside / ring)})
 }
 
+fn sample(f: &Frame, x: f64, y: f64) -> [f64; 3] {
+    let (x, y) = (x - 0.5, y - 0.5);
+    let (x0, y0) = (x.floor(), y.floor());
+    let (tx, ty) = (x - x0, y - y0);
+    let at = |dx: f64, dy: f64, c: usize| {
+        let xi = ((x0 + dx) as usize).min(f.w - 1);
+        let yi = ((y0 + dy) as usize).min(f.h - 1);
+        f.lin[(yi * f.w + xi) * 3 + c] as f64
+    };
+    [0, 1, 2].map(|c| {
+        (1.0 - ty) * ((1.0 - tx) * at(0.0, 0.0, c) + tx * at(1.0, 0.0, c))
+            + ty * ((1.0 - tx) * at(0.0, 1.0, c) + tx * at(1.0, 1.0, c))
+    })
+}
+
+/// Linear luma (x 1000) and chroma across the edge, every screen pixel
+/// from 6 inside to 10 outside.
+fn profile(f: &Frame, full_w: f64, screen_w: f64, (p, n): ([f64; 2], [f64; 2])) -> Value {
+    let k = f.w as f64 / full_w;
+    let step = full_w / screen_w;
+    let points: Vec<Value> = (-6..=10)
+        .map(|t| {
+            let d = t as f64 * step;
+            let rgb = sample(f, (p[0] + d * n[0]) * k, (p[1] + d * n[1]) * k);
+            let l = lab(&rgb.map(|v| v as f32));
+            let y = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
+            json!([round3(y * 1000.0), round3(l[1].hypot(l[2]))])
+        })
+        .collect();
+    Value::Array(points)
+}
+
 fn ms(t: Instant) -> f64 {
     (t.elapsed().as_secs_f64() * 1000.0).round()
 }
 
-fn render(png: &[u8], working: usize, case: &Case, settings: &DevelopSettings) -> (Rendered, f64) {
+fn render(
+    png: &[u8],
+    working: usize,
+    case: &Case,
+    settings: &DevelopSettings,
+) -> (Rendered, f64, Value) {
     let mut session = Session::open_raster(png, working, Filter::Lanczos3).unwrap();
     if let Some((id, surface)) = &case.surface {
         session.set_mask_surface(id, surface).unwrap();
     }
     let t = Instant::now();
     let r = session.render(settings, 0, Quality::Final).unwrap();
-    (r, ms(t))
+    let t = ms(t);
+    let chromatic = session.lens_stats().chromatic.map_or(
+        Value::Null,
+        |c| json!({"red": c.red, "blue": c.blue, "edges": c.edges}),
+    );
+    (r, t, chromatic)
 }
 
 fn run(name: &str, long: usize, full_only: bool, neutral_only: bool) {
@@ -499,7 +556,7 @@ fn run(name: &str, long: usize, full_only: bool, neutral_only: bool) {
     let neutral = base_settings(&json!({}));
     if full_only {
         let s = if neutral_only { &neutral } else { &effect };
-        let (full, t) = render(&png, 0, &case, s);
+        let (full, t, _) = render(&png, 0, &case, s);
         println!(
             "{}",
             json!({"case": name, "long": long, "neutral": neutral_only, "full": [full.width, full.height], "ms": t})
@@ -511,8 +568,8 @@ fn run(name: &str, long: usize, full_only: bool, neutral_only: bool) {
         if key == "neutral" && name == "neutral" {
             continue;
         }
-        let (screen, ts) = render(&png, SCREEN, &case, settings);
-        let (full, tf) = render(&png, 0, &case, settings);
+        let (screen, ts, cs) = render(&png, SCREEN, &case, settings);
+        let (full, tf, cf) = render(&png, 0, &case, settings);
         let screen_f = linear(&screen);
         let full_f = linear(&full);
         let reduced = reduce(&full_f, screen.width, screen.height);
@@ -526,6 +583,16 @@ fn run(name: &str, long: usize, full_only: bool, neutral_only: bool) {
             .collect();
         let mut m = compare(&screen_f, &reduced, &roi);
         m["ms"] = json!({"screen": ts, "export": tf});
+        if !cs.is_null() || !cf.is_null() {
+            m["chromaticEstimate"] = json!({"screen": cs, "export": cf});
+        }
+        if let Some(edge) = case.profile {
+            let sw = screen.width as f64;
+            m["profile"] = json!({
+                "screen": profile(&screen_f, w as f64, sw, edge),
+                "exportReduced": profile(&reduced, w as f64, sw, edge),
+            });
+        }
         if let Some(edge) = case.edge {
             m["edgeWidth"] = json!({
                 "screen": edge_width(&screen_f, w as f64, edge),
