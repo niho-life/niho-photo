@@ -275,7 +275,7 @@
         "publication"
       ],
       "if": "needs.plan.outputs.has-native == 'true'",
-      "runs-on": "macos-14",
+      "runs-on": "macos-26",
       "timeout-minutes": 30,
       "strategy": {
         "fail-fast": false,
