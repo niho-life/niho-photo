@@ -109,10 +109,19 @@ def main():
 
     # warmは各launch内で正規入力まで開き、一覧へ戻って同じsessionを再表示する。
     result = launch(args.iteration)
+    # プリセット更新の内訳（押してから変わった画が出るまでの区間。許可した名前の有限な時間だけ）
+    preset_stages = {"presetResolve", "presetRenderQueue", "presetWorkerWait", "presetRender", "presetThumbnailBlocked",
+                     "presetThumbnailSession", "presetDeveloperRebuild", "presetThumbnail"}
+    breakdown = result.get("presetBreakdownMs")
+    preset_times = {stage: elapsed for stage, elapsed in (breakdown.items() if isinstance(breakdown, dict) else [])
+                    if stage in preset_stages and type(elapsed) in [int, float] and math.isfinite(elapsed) and elapsed >= 0}
     print(json.dumps({"stagesMs": {
+        **preset_times,
         **result["nativeStagesMs"],
         "editable": result["timeToEditableMs"], "inputAccepted": result["inputAcceptedMs"],
         "renderUpdated": result["exposurePaintMs"], "presetRenderUpdated": result["presetPaintMs"],
+        **({"presetFinalRenderUpdated": result["presetFinalPaintMs"]}
+           if type(result.get("presetFinalPaintMs")) in [int, float] and math.isfinite(result["presetFinalPaintMs"]) and result["presetFinalPaintMs"] >= 0 else {}),
         **({"proxyReady": result["proxyReadyMs"]} if result.get("proxyReadyMs") is not None else {}),
         **({"canonicalReady": result["canonicalReadyMs"]} if result.get("canonicalReadyMs") is not None else {}),
     }, "settingsRetained": result["settingsRetained"], "presetRetained": result["presetRetained"]}))

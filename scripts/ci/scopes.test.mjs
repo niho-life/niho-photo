@@ -16,6 +16,8 @@ test("文書変更でもpublicationはworkflow側で常時実行、package実行
   assert.deepEqual(selected(["packages/niho-cloud-contract/src/v1.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/develop-engine/core.rs"]), ["camera", "desktop-photo", "develop-engine"]);
   assert.equal(selectScopes(["packages/develop-engine/core.rs"], all).find((s) => s.scope === "develop-engine").swift, true);
+  // 筆の照合の fixture は TS と cutout の Swift 試験の両方が読む
+  assert.equal(selectScopes(["packages/photo-editing/src/fixtures/cutout-brush-parity.json"], all).find((s) => s.scope === "develop-engine").selected, true);
   assert.deepEqual(selected(["apps/camera/src-tauri/main.rs"]), ["camera"]);
   assert.deepEqual(selected(["packages/desktop-account/login.ts"]), ["camera", "desktop-photo", "desktop-account"]);
   for (const name of [".github/workflows/public-ci.yml", "scripts/ci/scopes.mjs", "package-lock.json", "docs/security/publication-manifest.json"]) assert.equal(selected([name]).length, 5);
