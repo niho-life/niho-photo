@@ -24,6 +24,7 @@ import {
 import {
   BROWSER_PHOTO_EXPORT_BATCH_LARGE_CHOICE,
   isBrowserPhotoCutoutFullSizeAvailable,
+  isBrowserPhotoExportLargeWithinMobileMemory,
   browserPhotoExportJpegRoute,
   resolveBrowserPhotoBatchExportChoices,
   resolveBrowserPhotoExportChoices,
@@ -206,7 +207,7 @@ import {
 } from "./use-browser-photo-effects";
 import { photoEditingMaskExportBlocked, useBrowserPhotoMasks, useBrowserPhotoMasksSupport } from "./use-browser-photo-masks";
 import { useBrowserPhotoExportAndDelete } from "./use-browser-photo-export-delete";
-import { useBrowserPhotoExportLargeLongEdge } from "./use-browser-photo-export-large";
+import { useBrowserPhotoExportLargeSize } from "./use-browser-photo-export-large";
 import { useBrowserPhotoFlagKeys } from "./use-browser-photo-flag-keys";
 import { useBrowserPhotoFolders } from "./use-browser-photo-folders";
 import { useBrowserPhotoHealKeys } from "./use-browser-photo-heal";
@@ -1503,7 +1504,13 @@ export function BrowserPhotoEditingWorkbench(props: {
               : "書き出せない写真が含まれています",
           route: batchJpegEnabled ? "engine" : null,
           sizeSelectable: batchSizeSelectable,
-          ...(batchSizeSelectable ? { large: BROWSER_PHOTO_EXPORT_BATCH_LARGE_CHOICE } : {}),
+          // スマホの複数枚は、どの写真も wasm のメモリに収まる見込みのときだけ「大きく」を出す
+          ...(batchSizeSelectable &&
+          selectedItems.every((item) =>
+            isBrowserPhotoExportLargeWithinMobileMemory(item.photo.developSettings ?? {}, null, isDevelopWorkTarget(item.photo)),
+          )
+            ? { large: BROWSER_PHOTO_EXPORT_BATCH_LARGE_CHOICE }
+            : {}),
           // 一部だけに付くとき「撮影日時を付けます」と全枚数へ読める文を出さない。
           captureExif: batchResolvedChoices.every(({ choices }) => choices.jpeg.captureExif),
         },
@@ -1553,10 +1560,10 @@ export function BrowserPhotoEditingWorkbench(props: {
     selectedItem && viewMode === "loupe" && opened?.key === selectedItem.key
       ? open.settingsRef.current
       : selectedItem?.photo.developSettings ?? {};
-  const nativeExportBlockers = photoEditingNativeExportBlockers(selectedExportSettings);
+  const nativeExportBlockers = photoEditingNativeExportBlockers(selectedExportSettings, capabilities.nativeExportRenderer);
   const nativeFullSizeUnsupported = nativeExportBlockers.length > 0;
-  // 「大きく」（niho-photo#134）で書き出す長辺（1 枚で wasm で開いた写真の今の切り抜き。書き出すのシートを開いている間だけ読む）
-  const exportLargeLongEdge = useBrowserPhotoExportLargeLongEdge({
+  // 「大きく」（niho-photo#134）で書き出す画の寸法（1 枚で wasm で開いた写真の今の切り抜き。書き出すのシートを開いている間だけ読む）
+  const exportLargeSize = useBrowserPhotoExportLargeSize({
     mountedRef,
     engineRef: develop.engineRef,
     developSessionRef: develop.developSessionRef,
@@ -1565,11 +1572,20 @@ export function BrowserPhotoEditingWorkbench(props: {
     settingsRef: open.settingsRef,
     active: exportSheetOpen || mobileExportSheetOpen,
   });
+  const exportLargeOutput = selectedItem && wasmPhotoKey === selectedItem.key ? exportLargeSize : null;
   const exportChoices = selectedItem
     ? resolveBrowserPhotoExportChoices({
         photo: selectedItem.photo,
         loupe: viewMode === "loupe",
-        largeLongEdge: wasmPhotoKey === selectedItem.key ? exportLargeLongEdge : null,
+        largeLongEdge: exportLargeOutput ? Math.max(exportLargeOutput.width, exportLargeOutput.height) : null,
+        // スマホは wasm のメモリに収まる見込みの写真だけ（PC の幅は出す）
+        large:
+          wide ||
+          isBrowserPhotoExportLargeWithinMobileMemory(
+            selectedExportSettings,
+            exportLargeOutput,
+            isDevelopWorkTarget(selectedItem.photo),
+          ),
         editing: loupeEditing ? (loupeOpened?.mode === "wasm" ? "wasm" : "canvas") : null,
         locked: loupeOpened?.lockedReason != null,
         wide: editingAllowed,
@@ -1577,7 +1593,7 @@ export function BrowserPhotoEditingWorkbench(props: {
         // 原寸（K2-3a 移行元設計）は、原寸の書き出しに対応した NIHO Desktop の口があるときだけ（PC のシートに出す）
         desktopFullSize: capabilities.nativeExport || capabilities.nativeExportUpdateRequired,
         nativeFullSizeUnsupported,
-        nativeFullSizeUnsupportedText: photoEditingNativeExportUnsupportedText(nativeExportBlockers),
+        nativeFullSizeUnsupportedText: photoEditingNativeExportUnsupportedText(nativeExportBlockers, capabilities.place),
         // HEIC / HEIF・TIFF の原寸は、描ける口（NIHO camera）だけ
         desktopFullSizeRaster: capabilities.nativeExportRaster === true,
         // 背景除去（C4 移行元設計）: PNG を足し、原寸は camera の口があるときだけ
