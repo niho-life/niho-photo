@@ -39,8 +39,8 @@ function analysisGlue(options: { prepareAnalysis?: boolean } = {}) {
       this.index = developers.length;
       developers.push(this);
     }
-    static openWorkingCopy() {
-      return new FakeDeveloper();
+    static openWorkingCopy(this: new () => FakeDeveloper) {
+      return new this();
     }
     render() {
       return { width: 1, height: 1, rgba: new Uint8ClampedArray([1, 2, 3, 255]) };

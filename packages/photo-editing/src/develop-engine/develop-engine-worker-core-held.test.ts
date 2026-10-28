@@ -90,14 +90,15 @@ function heldGlue() {
 /** 鍵は bytes をそのまま文字にしたもの（テストでは中身が同じなら同じ鍵）。 */
 const textDigest: DevelopEngineWorkerDeps["digest"] = async (bytes) => `d:${String.fromCharCode(...new Uint8Array(bytes))}`;
 
-function setup(digest: DevelopEngineWorkerDeps["digest"] = textDigest) {
+/** `digest` の null は口を渡さない（今までの Worker）。 */
+function setup(digest: DevelopEngineWorkerDeps["digest"] | null = textDigest) {
   const glue = heldGlue();
   const posted: Posted[] = [];
   const deps: DevelopEngineWorkerDeps = {
     fetch: vi.fn(async () => new Response(JSON.stringify(MANIFEST), { status: 200 })),
     importModule: vi.fn(async () => glue.module),
     post: (message, transfer) => posted.push({ message, transfer }),
-    digest,
+    ...(digest ? { digest } : {}),
   };
   return { handler: createDevelopEngineWorkerHandler(deps), posted, glue };
 }
@@ -201,7 +202,7 @@ describe("Worker が同じ写真を保つ（#129）", () => {
   });
 
   it("digest が無い・null・失敗のときは保たない（今までどおり手放す）", async () => {
-    for (const digest of [undefined, async () => null, async () => Promise.reject(new Error("no subtle"))]) {
+    for (const digest of [null, async () => null, async () => Promise.reject(new Error("no subtle"))]) {
       const { handler, glue } = setup(digest);
       await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
       await handler(open(2, "A"));
