@@ -2584,9 +2584,7 @@ impl PhotoDevelop {
   /// 同梱の niho-develop-render が描ける設定（{@link RenderCapabilities}）。起動時の確かめが終わって使えて、renderer が
   /// `capabilities` に答えたときだけ（待たない）。
   pub fn render_capabilities_cached(&self) -> Option<RenderCapabilities> {
-    if self.cache.is_none() {
-      return None;
-    }
+    self.cache.as_ref()?;
     let state = match self.probe.try_lock() {
       Ok(state) => state,
       Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),

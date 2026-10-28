@@ -628,36 +628,14 @@ fn render_capabilities_decide_which_settings_reach_the_full_size_render() {
     .contains(&"niho-develop-render capabilities".to_string()));
 
   // 答える renderer: 読める設定は描き、読めない `v`・engine・輝度は作業コピーを作る前に断る
-  let cases: [(&str, &[u32], &[&str], &Value, bool); 5] = [
-    (
-      "all",
-      &[1, 2, 3, 4, 5, 6, 7, 8, 9],
-      &["colorGradingLuminance"],
-      &lens,
-      true,
-    ),
-    (
-      "no-v9",
-      &[1, 2, 3, 4, 5, 6, 7, 8],
-      &["colorGradingLuminance"],
-      &lens,
-      false,
-    ),
-    (
-      "engine",
-      &[1, 2, 3, 4, 5, 6, 7, 8, 9],
-      &["colorGradingLuminance"],
-      &new_engine,
-      false,
-    ),
-    ("luminance", &[1, 2, 3, 4, 5, 6, 7, 8, 9], &[], &luminance, false),
-    (
-      "luminance-drawn",
-      &[1, 2, 3, 4, 5, 6, 7, 8, 9],
-      &["colorGradingLuminance"],
-      &luminance,
-      true,
-    ),
+  const ALL: &[u32] = &[1, 2, 3, 4, 5, 6, 7, 8, 9];
+  const LUMINANCE: &[&str] = &["colorGradingLuminance"];
+  let cases = [
+    ("all", ALL, LUMINANCE, &lens, true),
+    ("no-v9", &ALL[..8], LUMINANCE, &lens, false),
+    ("engine", ALL, LUMINANCE, &new_engine, false),
+    ("luminance", ALL, &[] as &[&str], &luminance, false),
+    ("luminance-drawn", ALL, LUMINANCE, &luminance, true),
   ];
   for (name, versions, features, settings, draws) in cases {
     let harness = SidecarHarness::new(&format!("render-capabilities-{name}"));

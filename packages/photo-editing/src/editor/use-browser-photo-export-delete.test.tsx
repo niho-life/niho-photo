@@ -278,8 +278,8 @@ describe("useBrowserPhotoExportAndDelete canonical guard integration", () => {
   });
 
   it("描ける設定を答える描画には、遠近・修復・レンズ・輝度を原寸で渡す", async () => {
-    capabilitiesForTest = {
-      ...CAPABILITIES,
+    // hook は描いたときの capabilities の object を持つので、差し替えずに書き足す
+    Object.assign(capabilitiesForTest, {
       nativeExport: true,
       nativeExportRenderer: {
         settingsVersions: [1, 2, 3, 4, 5, 6, 7, 8, 9],
@@ -288,7 +288,7 @@ describe("useBrowserPhotoExportAndDelete canonical guard integration", () => {
         maskKinds: ["linear", "radial", "brush", "subject", "sky"],
         maxPixels: 40_000_000,
       },
-    };
+    });
     settingsRefForTest.current = {
       ...neutralDevelopSettings("raw-apple.d1.p1.e1"),
       geometry: { perspective: { vertical: -20 } },

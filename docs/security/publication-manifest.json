@@ -4631,7 +4631,7 @@
         "path": "packages/desktop-photo/src/develop.rs",
         "sha256": "7f13c1e41e82bf4bc91bef5e4a8b61f092ab0b986a6a95c5559c2246bb74d864"
       },
-      "outputSha256": "3d42ba07f71e2043da4dd88a90305f0f927235d41183ad557742ef2a98a89551",
+      "outputSha256": "58f63821edf69fb3592d3532e8fb5d996875f7186b19b8a70b2bd24fbf526b60",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #5の共有入力能力レジストリ、段階別検証、公開回帰契約に合わせて更新。",
@@ -4656,7 +4656,7 @@
         "path": "packages/desktop-photo/src/develop_local_raster_tests.rs",
         "sha256": "b45869e304ecb1bfa8cc4c3aea903fd7771f60c1b140f6f3c7be2f9f2b929bc2"
       },
-      "outputSha256": "32de4c2f0779c0792bf46d4fe06fad9fe99cb6a44db318a1184e4e5984a22e13",
+      "outputSha256": "fdf44257f601f75586df3ff3fe0bf865b498432507c772f7ea187874e5b90904",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #5の共有入力能力レジストリ、段階別検証、公開回帰契約に合わせて更新。",
@@ -10220,8 +10220,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-export-delete.test.tsx",
-      "sha256": "0dbcbc61192c0a1d286abfb19aca5557627c4d96b6924689e029c98d1cf14301",
-      "origin": "Issue #13のため独立作成。actual export hookと公開fixtureだけで、補正書き出しのcanonical待機とRAW original copyの非待機を検証。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 書出しhost境界のmockを実際の保存関数型に限定。\n変更理由: プリセット確定待機と重複書き出しおよびRAW原本非待機を実経路で検証する\n変更理由: 原寸native書き出しの輝度互換性ガードと色相ホイール操作を修正。\n変更理由: PR #80 のカラーグレーディングを最新HSL UIと統合。\n変更理由: PR #102を更新済み#101へ積み直し、原寸native書き出し直前に最新保存設定を再判定する。\n変更理由: 最新保存済み補正によるnative書き出し拒否を回帰テストで固定する。\n変更理由: niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。"
+      "sha256": "d28cd6a298bf9ad6bd514b7e5c01c3a99dbfc2692eddc0ca3ee8cf91bf40969e",
+      "origin": "Issue #13のため独立作成。actual export hookと公開fixtureだけで、補正書き出しのcanonical待機とRAW original copyの非待機を検証。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 書出しhost境界のmockを実際の保存関数型に限定。\n変更理由: プリセット確定待機と重複書き出しおよびRAW原本非待機を実経路で検証する\n変更理由: 原寸native書き出しの輝度互換性ガードと色相ホイール操作を修正。\n変更理由: PR #80 のカラーグレーディングを最新HSL UIと統合。\n変更理由: PR #102を更新済み#101へ積み直し、原寸native書き出し直前に最新保存設定を再判定する。\n変更理由: 最新保存済み補正によるnative書き出し拒否を回帰テストで固定する。\n変更理由: niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。\n変更理由: niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。"
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-progressive-open.test.tsx",
