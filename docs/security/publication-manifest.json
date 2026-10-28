@@ -11468,6 +11468,26 @@
       "path": "packages/photo-editing/src/editor/use-browser-photo-export-large.ts",
       "sha256": "106993e4b0b8f8dffdad2cb549a64e81f7615f2f83eb59795a6b7e150bcb444d",
       "origin": "公開repoで新規作成（niho-photo#134）。書き出しの「大きく」の長辺を、開いている写真の今の切り抜きから wasm の geometryOutputSize で読む hook。外部のコード・実写真・非公開の情報を含まない。"
+    },
+    {
+      "path": "AGENTS.md",
+      "sha256": "c2769156b40cf4b98dbdd6bc9ab83255fef71ad0fc464b4d70295ef819643b52",
+      "origin": "niho-photo#125 のため新規作成。AI セッション向けの作業ルール（固定の座席 niho-photo-1〜8・root は main 専用・共通の検証と公開 manifest の決まり）。外部の文章・コードを含まない。"
+    },
+    {
+      "path": "CLAUDE.md",
+      "sha256": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+      "origin": "niho-photo#125 のため新規作成。Claude Code が AGENTS.md を読むための 1 行の参照。"
+    },
+    {
+      "path": "scripts/seat.mjs",
+      "sha256": "9f0885d522c68785d3aec7f84f85f6331491fe284a982f9be38adbb47f79ddb6",
+      "origin": "niho-photo#125 のため新規作成。固定の座席（root の clone の隣の worktree）の空きの確認・topic branch の作成・解放を行う開発用の道具。外部コードを含まない。"
+    },
+    {
+      "path": "scripts/ci/seat.test.mjs",
+      "sha256": "0fef4fbcd56bc10a1f870dbb5fd016a3e4a4416ebfdc47e8697652402ef3f20c",
+      "origin": "niho-photo#125 のため新規作成。scripts/seat.mjs の座席番号・topic・空き・解放の判定の単体テスト。"
     }
   ],
   "excludedSources": [
