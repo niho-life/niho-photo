@@ -18,8 +18,9 @@ use serde_json::Value;
 use std::fmt;
 use std::io::Cursor;
 
-/// Match the supported direct-photo pixel bound used by the browser renderer.
-const MAX_DECODE_IMAGE_PIXELS: u64 = 40_000_000;
+/// Match the supported direct-photo pixel bound used by the browser renderer
+/// (the native renderer reports it: `niho-develop-render capabilities`).
+pub const MAX_DECODE_IMAGE_PIXELS: u64 = 40_000_000;
 const MAX_DECODE_ALLOCATION_BYTES: u64 = 512 * 1024 * 1024;
 
 /// Working-copy encoding (spec: 16-bit PNG, gamma 1.8, ceiling 2.0).

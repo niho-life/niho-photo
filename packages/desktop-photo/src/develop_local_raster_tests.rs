@@ -550,6 +550,153 @@ fn local_masks_are_exported_only_by_a_render_sidecar_that_draws_them() {
   }
 }
 
+/// `niho-develop-render capabilities` の 1 行（0.26.0 と同じ形）。`versions` は読める `v`。
+fn render_capabilities_line(versions: &[u32], features: &[&str]) -> String {
+  json!({
+    "tool": "niho-develop-render",
+    "version": "0.26.0",
+    "settingsVersions": versions,
+    "engines": ["niho-1", "niho-2", "niho-10", "niho-14"],
+    "features": features,
+    "maskKinds": ["linear", "radial", "brush", "subject", "sky"],
+    "maxMasks": 8,
+    "maxPixels": 40_000_000,
+  })
+  .to_string()
+}
+
+#[test]
+fn render_capabilities_are_read_only_from_their_own_shape() {
+  let line = render_capabilities_line(&[1, 2, 3, 4, 5, 6, 7, 8, 9], &["colorGradingLuminance"]);
+  let capabilities = RenderCapabilities::parse(&format!("{line}\n")).unwrap();
+  assert_eq!(capabilities.settings_versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert_eq!(capabilities.engines, vec!["niho-1", "niho-2", "niho-10", "niho-14"]);
+  assert_eq!(capabilities.features, vec!["colorGradingLuminance"]);
+  assert_eq!(capabilities.max_pixels, 40_000_000);
+  assert_eq!(
+    capabilities.to_json(),
+    json!({
+      "settingsVersions": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+      "engines": ["niho-1", "niho-2", "niho-10", "niho-14"],
+      "features": ["colorGradingLuminance"],
+      "maskKinds": ["linear", "radial", "brush", "subject", "sky"],
+      "maxPixels": 40_000_000,
+    })
+  );
+  let base: Value = serde_json::from_str(&line).unwrap();
+  let broken = |key: &str, value: Value| {
+    let mut broken = base.clone();
+    broken[key] = value;
+    RenderCapabilities::parse(&broken.to_string())
+  };
+  assert!(RenderCapabilities::parse("").is_none());
+  assert!(RenderCapabilities::parse(r#"{"error":"invalid_arguments","message":"x"}"#).is_none());
+  assert!(broken("tool", json!("apple-raw-linear")).is_none());
+  assert!(broken("settingsVersions", json!([])).is_none());
+  assert!(broken("settingsVersions", json!([1, "2"])).is_none());
+  assert!(broken("settingsVersions", json!([0])).is_none());
+  assert!(broken("engines", json!([])).is_none());
+  assert!(broken("engines", json!(["niho-1", 2])).is_none());
+  assert!(broken("features", json!("colorGradingLuminance")).is_none());
+  assert!(broken("maskKinds", Value::Null).is_none());
+  assert!(broken("maxPixels", json!(0)).is_none());
+  assert!(broken("maxPixels", json!(-1)).is_none());
+  assert!(broken("engines", json!(vec!["niho-1"; 65])).is_none());
+}
+
+#[test]
+fn render_capabilities_decide_which_settings_reach_the_full_size_render() {
+  let lens = json!({
+    "v": 9, "engine": "niho-14", "look": "niho-standard-1", "base": null,
+    "lens": { "vignetting": -10 },
+    "colorGrading": { "midtone": { "luminance": 12 } }
+  });
+  let new_engine = json!({ "v": 1, "engine": "niho-15", "look": "niho-standard-1", "base": null });
+  let luminance = json!({
+    "v": 1, "engine": "niho-14", "look": "niho-standard-1", "base": null,
+    "colorGrading": { "global": { "luminance": -5 } }
+  });
+
+  // 0.16.0 相当（答えない）: 描ける設定は分からない。遮断は画面の側（ここでは渡したものをそのまま描かせる）
+  let old = SidecarHarness::new("render-capabilities-old");
+  old.mark("render-version", "0.16.0");
+  let develop = camera_develop(&old);
+  assert!(develop.is_available());
+  assert_eq!(develop.render_capabilities_cached(), None);
+  assert!(old
+    .lines("calls.txt")
+    .contains(&"niho-develop-render capabilities".to_string()));
+
+  // 答える renderer: 読める設定は描き、読めない `v`・engine・輝度は作業コピーを作る前に断る
+  let cases: [(&str, &[u32], &[&str], &Value, bool); 5] = [
+    (
+      "all",
+      &[1, 2, 3, 4, 5, 6, 7, 8, 9],
+      &["colorGradingLuminance"],
+      &lens,
+      true,
+    ),
+    (
+      "no-v9",
+      &[1, 2, 3, 4, 5, 6, 7, 8],
+      &["colorGradingLuminance"],
+      &lens,
+      false,
+    ),
+    (
+      "engine",
+      &[1, 2, 3, 4, 5, 6, 7, 8, 9],
+      &["colorGradingLuminance"],
+      &new_engine,
+      false,
+    ),
+    ("luminance", &[1, 2, 3, 4, 5, 6, 7, 8, 9], &[], &luminance, false),
+    (
+      "luminance-drawn",
+      &[1, 2, 3, 4, 5, 6, 7, 8, 9],
+      &["colorGradingLuminance"],
+      &luminance,
+      true,
+    ),
+  ];
+  for (name, versions, features, settings, draws) in cases {
+    let harness = SidecarHarness::new(&format!("render-capabilities-{name}"));
+    harness.mark("render-version", "0.26.0");
+    harness.mark("render-capabilities", &render_capabilities_line(versions, features));
+    let develop = camera_develop(&harness);
+    let jpeg = photo_file(&harness, "IMG_0002.jpg", b"jpeg bytes");
+    let photos = FakePhotos::new(&[("p1", &jpeg)]);
+    let destination = harness.dir.join("out").join("IMG_0002.jpg");
+    fs::create_dir_all(destination.parent().unwrap()).unwrap();
+    let result = develop.export(&photos, "p1", settings, &destination, Overwrite::Never);
+    assert_eq!(
+      develop
+        .render_capabilities_cached()
+        .map(|capabilities| capabilities.settings_versions),
+      Some(versions.to_vec()),
+      "{name}"
+    );
+    let rendered = harness
+      .work_calls()
+      .iter()
+      .any(|call| call.starts_with("niho-develop-render render "));
+    if draws {
+      result.unwrap();
+      assert!(rendered, "{name}");
+      let sent: Value =
+        serde_json::from_slice(&fs::read(harness.sidecars.join("last-settings.json")).unwrap()).unwrap();
+      for key in ["v", "engine", "lens", "colorGrading"] {
+        assert_eq!(sent[key], settings[key], "{name}: {key} reaches the sidecar as saved");
+      }
+    } else {
+      let error = result.unwrap_err();
+      assert_eq!(error.code, develop_code::UNSUPPORTED_SETTINGS, "{name}");
+      assert!(!rendered, "{name}");
+      assert!(!destination.exists(), "{name}");
+    }
+  }
+}
+
 #[test]
 fn surface_masks_hand_only_their_drawn_surfaces_to_the_render_sidecar() {
   use crate::mask_surfaces::mask_surface_id;
