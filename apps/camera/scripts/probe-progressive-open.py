@@ -116,6 +116,8 @@ def main():
         **result["nativeStagesMs"],
         "editable": result["timeToEditableMs"], "inputAccepted": result["inputAcceptedMs"],
         "renderUpdated": result["exposurePaintMs"], "presetRenderUpdated": result["presetPaintMs"],
+        **({"presetFinalRenderUpdated": result["presetFinalPaintMs"]}
+           if type(result.get("presetFinalPaintMs")) in [int, float] and math.isfinite(result["presetFinalPaintMs"]) and result["presetFinalPaintMs"] >= 0 else {}),
         **({"proxyReady": result["proxyReadyMs"]} if result.get("proxyReadyMs") is not None else {}),
         **({"canonicalReady": result["canonicalReadyMs"]} if result.get("canonicalReadyMs") is not None else {}),
     }, "settingsRetained": result["settingsRetained"], "presetRetained": result["presetRetained"]}))

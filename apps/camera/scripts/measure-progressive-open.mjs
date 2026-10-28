@@ -22,6 +22,8 @@ const ALLOWED_STAGES = new Set([
   "inputAccepted",
   "renderUpdated",
   "presetRenderUpdated",
+  // プリセットを押してから丁寧な画に差し替わるまで（先に粗い画を出す #127）
+  "presetFinalRenderUpdated",
   // プリセット更新の内訳（#126）
   "presetResolve",
   "presetRenderQueue",
