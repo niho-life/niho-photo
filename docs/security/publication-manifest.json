@@ -11450,6 +11450,66 @@
       "path": "packages/photo-editing/src/editor/use-photo-editing-coarse-pointer.ts",
       "sha256": "15195b274e3b9769e538ae264304a116c3eb7cc8d605fa071586825ecfcd69ce",
       "origin": "Issue #93の公開仕様 docs/local-adjustments.md だけから新規作成した、主なポインタが指か（pointer: coarse）を読むReactフック。外部画像・非公開コード・個体metadataを含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-eval/README.md",
+      "sha256": "31da00549926e23b9b717c9f9cc45b54d4143674151763bb5f82de3030e4e825",
+      "origin": "Issue #128のため新規作成した検証用の道具（製品に入れない）。道具の使い方と、写真・正解の面を公開しない決まり。owner の写真・正解の面・第三者のモデルの重みを含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-eval/pool.py",
+      "sha256": "99054ca08b39915bb602f742b382c19234a42b9079fc4f433a79f6f7aa217bfc",
+      "origin": "Issue #128のため新規作成した検証用の道具（製品に入れない）。非公開の写真の一覧（番号つきのシート）を作る。owner の写真・正解の面・第三者のモデルの重みを含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-eval/rank.py",
+      "sha256": "9b3c4b0b7e8f0247f3cb0cd941ea533b10acdd002c0a68364d63af3e5043c98a",
+      "origin": "Issue #128のため新規作成した検証用の道具（製品に入れない）。大きいライブラリを場面の種類ごとに絞る（CLIP。選ぶ手伝いだけ）。owner の写真・正解の面・第三者のモデルの重みを含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-eval/prepare.py",
+      "sha256": "b21db08b7233ddf94a6849c55711f3adc910eabe2d170aa49f8dd82888bf322e",
+      "origin": "Issue #128のため新規作成した検証用の道具（製品に入れない）。評価の入力（長辺1024・metadataなし）と露出のEVを作る。owner の写真・正解の面・第三者のモデルの重みを含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-eval/sky_a.py",
+      "sha256": "bc70a5bbf7ec0a6cdcc468ad7af450fac0ffd8aa3c882f0ef7b9266de5552ea4",
+      "origin": "Issue #128のため新規作成した検証用の道具（製品に入れない）。案A（学習した重みを使わない空の推定）の試作。owner の写真・正解の面・第三者のモデルの重みを含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-eval/sky_a.rs",
+      "sha256": "8aa030b6bcb4c3b1cdf07aca2e1f163e678f69a5170b3c06bcda7e4018422f27",
+      "origin": "Issue #128のため新規作成した検証用の道具（製品に入れない）。案AのRust移植（native・wasmで時間を測る。依存なしの1ファイル）。owner の写真・正解の面・第三者のモデルの重みを含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-eval/bench_a.py",
+      "sha256": "c974a3d3c37fd36db3bd2ef7eb5b40f6c4bf9d968837605331ff01081aa704b8",
+      "origin": "Issue #128のため新規作成した検証用の道具（製品に入れない）。案AのRust版をnative・wasmで測り、Python版と突き合わせる。owner の写真・正解の面・第三者のモデルの重みを含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-eval/bench_a.mjs",
+      "sha256": "10337ec66d1e3a6b14b2e9f4ec4c82243aae701f8c7fbca5894f9f1e90cee268",
+      "origin": "Issue #128のため新規作成した検証用の道具（製品に入れない）。案Aのwasm版をNodeで測る。owner の写真・正解の面・第三者のモデルの重みを含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-eval/run_b.py",
+      "sha256": "071d7be5b9e0d806ceeeaebd0a4d437794f8dea1f2d5420101e8de270487a45f",
+      "origin": "Issue #128のため新規作成した検証用の道具（製品に入れない）。案B（COCO panopticの学習済みモデル）の空の確率を出す。重みは実行する機械のキャッシュだけ。owner の写真・正解の面・第三者のモデルの重みを含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-eval/refine.py",
+      "sha256": "9f4931e9cb9f07bce647a8fa242a6e67a20eb17c41d9834e4435f671040421aa",
+      "origin": "Issue #128のため新規作成した検証用の道具（製品に入れない）。案Bの面をguided filterで整える変種。owner の写真・正解の面・第三者のモデルの重みを含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-eval/annotate.py",
+      "sha256": "eff1ad1efcf7f2e2318982cfb7b2b4e6e6c16bbc59badee647b9adae1287210a",
+      "origin": "Issue #128のため新規作成した検証用の道具（製品に入れない）。正解の面を出発点の面・手の多角形・色の判定で作り、見直しのシートを出す。owner の写真・正解の面・第三者のモデルの重みを含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-eval/evaluate.py",
+      "sha256": "3ba87fc230e16b01502a6c52633bc24b04bd09213a12c1dec4fc8cac169e77ef",
+      "origin": "Issue #128のため新規作成した検証用の道具（製品に入れない）。IoU・境目のF値を場面の種類ごとに集計する。owner の写真・正解の面・第三者のモデルの重みを含まない。"
     }
   ],
   "excludedSources": [
