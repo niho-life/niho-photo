@@ -70,6 +70,7 @@ function fakeEngine(options: { source?: { width: number; height: number }; frame
     applyPreset: vi.fn(async () => ({ name: "", settings: neutralDevelopSettings(), converted: true, unsupported: [] })),
     settingsToXmp: vi.fn(async () => ({ xmp: "<x:xmpmeta/>", notWritten: [] })),
     renderPresetThumbnail: vi.fn(async () => null),
+    yieldToEdit: vi.fn(),
     supportsPresetAmount: vi.fn(async () => false),
     supportsSettingsToXmp: vi.fn(async () => false),
     supportsPresetThumbnails: vi.fn(async () => false),

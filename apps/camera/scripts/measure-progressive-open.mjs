@@ -22,6 +22,15 @@ const ALLOWED_STAGES = new Set([
   "inputAccepted",
   "renderUpdated",
   "presetRenderUpdated",
+  // プリセット更新の内訳（#126）
+  "presetResolve",
+  "presetRenderQueue",
+  "presetWorkerWait",
+  "presetRender",
+  "presetThumbnailBlocked",
+  "presetThumbnailSession",
+  "presetDeveloperRebuild",
+  "presetThumbnail",
   "editable",
 ]);
 

@@ -13,7 +13,7 @@ describe("progressive measurement publication boundary", () => {
       "--case", `fixture=${privateName}`, "--probe", process.execPath,
       "--probe-arg", "-e", "--probe-arg", `process.stdout.write(JSON.stringify({
         input: "${privateName}", sha256: "${privateHash}",
-        stagesMs: { editable: 123, presetRenderUpdated: 80, serialNumber: 42, encode: -1, decode: null }
+        stagesMs: { editable: 123, presetRenderUpdated: 80, presetThumbnailBlocked: 40, presetRender: 30, serialNumber: 42, encode: -1, decode: null }
       }))`, "--runs", "1",
     ], { encoding: "utf8" });
     expect(output).not.toContain(privateName);
@@ -22,9 +22,8 @@ describe("progressive measurement publication boundary", () => {
     expect(output).not.toContain('"encode"');
     expect(output).not.toContain('"decode"');
     const rows = JSON.parse(output).measurements;
-    expect(rows.filter((row) => row.stagesMs).map((row) => row.stagesMs)).toEqual([
-      { editable: 123, presetRenderUpdated: 80 }, { editable: 123, presetRenderUpdated: 80 },
-    ]);
+    const allowed = { editable: 123, presetRenderUpdated: 80, presetThumbnailBlocked: 40, presetRender: 30 };
+    expect(rows.filter((row) => row.stagesMs).map((row) => row.stagesMs)).toEqual([allowed, allowed]);
     expect(rows.filter((row) => row.summary).map((row) => [row.condition, row.runs, row.osFileCache])).toEqual([
       ["cold", 1, "retained"], ["warm", 1, "retained"],
     ]);

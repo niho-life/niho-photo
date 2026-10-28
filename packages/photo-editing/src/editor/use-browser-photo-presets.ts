@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 
-import type { DevelopEngine, DevelopPresetResult } from "../develop-engine/develop-engine-client";
+import {
+  photoDevelopDiagnosticsEnabled,
+  type DevelopEngine,
+  type DevelopPresetResult,
+} from "../develop-engine/develop-engine-client";
 import type { DevelopSize } from "../develop-engine/develop-geometry";
 import type { PresetMasksPlacement } from "../develop-engine/develop-preset-masks";
 import {
@@ -69,6 +73,7 @@ type PresetPreview = {
  *   いる途中の結果も捨てる（世代番号）
  * - 行にマウスを載せた・キーボードのフォーカスが来たプリセットは、当てた結果を写真に仮に見せる（`previewSettings`。面の描画が
  *   それを描く）。ドラッグ・「補正前」・当てている途中・押せない間は仮の表示をやめる
+ * - 押した・乗せたときは engine の `yieldToEdit` で次の見本を出させない（当てた結果・仮の表示の描画を見本の後ろで待たせない。#126）
  * - 適用量（0〜150%。選ばれている間だけ。`applyPreset` のある wasm）: 動かしている間は覚えている土台に当て直した結果を仮に見せ
  *   （`previewSettings`・`previewInteractive` で速い描き方。札は出さない）、離したら確定する（取り消しの 1 単位。覚えている結果と
  *   適用量を入れ替え、選ばれた表示は続く）。0% は当てる直前の補正と同じ絵のまま選ばれた表示で、そこで「なし」を押すと覚えている
@@ -254,12 +259,14 @@ export function useBrowserPhotoPresets(params: {
     clearHoverTimer();
     hoveredRef.current = preset;
     previewSequenceRef.current += 1;
+    // 乗せたら次の見本を出さない（仮の表示の描画を見本の後ろで待たせない。#126）
+    if (preset) engineRef.current?.yieldToEdit();
     hoverTimerRef.current = setTimeout(() => {
       hoverTimerRef.current = null;
       if (preset) void showPreviewRef.current(preset);
       else setPreview(null);
     }, BROWSER_PRESET_PREVIEW_DELAY_MS);
-  }, []);
+  }, [engineRef]);
 
   /** 適用量の途中の値・仮の表示を捨てる（動かしている途中・確定を待っている結果も使わない）。 */
   const resetAmount = () => {
@@ -389,9 +396,18 @@ export function useBrowserPhotoPresets(params: {
       sameDevelopSettings(settingsRef.current, current);
     setApplyingPresetKey(preset.key);
     setApplyError(null);
+    // 押したら次の見本を出さない（当てた結果の描画を見本の後ろで待たせない。#126）
+    engineRef.current?.yieldToEdit();
+    const resolveStartedAt = photoDevelopDiagnosticsEnabled() ? performance.now() : null;
     const invalidText = photoEditingPresetInvalidText();
     try {
       const result = await resolvePreset(preset, base);
+      if (resolveStartedAt !== null) {
+        console.info("[photo-develop-ui-perf]", {
+          stage: "presetResolved",
+          durationMs: Math.max(0, performance.now() - resolveStartedAt),
+        });
+      }
       const placement = await masksPlacement(result);
       if (!isCurrent()) return;
       // 当てた結果に段 2 で扱えない項目がある（変換できない）ときは当てない（黙って落とさない）
