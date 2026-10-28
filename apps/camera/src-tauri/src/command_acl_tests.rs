@@ -223,14 +223,18 @@ fn app_permissions_only_allow_registered_commands() {
 #[test]
 fn bundled_ui_cannot_reach_the_network() {
   // 決まりごと 4（オフラインで完結・wasm を niho.life から取らない）を画面の側でも閉じる: 本番の CSP の connect-src は
-  // 同梱の画面（'self'）と IPC だけ。remote の URL を足すと画面から外へ通信できてしまう。唯一の例外の自動更新（C5 #18393）は
-  // Rust の側（updater.rs・tauri-plugin-updater）が通信し、画面は通信しない。
+  // 同梱の画面（'self'）と IPC と現像の URI scheme `niho-develop:`（同梱の sidecar へ渡すだけ。develop_engine_scheme.rs）だけ。
+  // remote の URL を足すと画面から外へ通信できてしまう。唯一の例外の自動更新（C5 #18393）は Rust の側（updater.rs・
+  // tauri-plugin-updater）が通信し、画面は通信しない。
   let config: serde_json::Value =
     serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json を解釈できない");
   let csp = &config["app"]["security"]["csp"];
   assert_eq!(
     csp["connect-src"],
-    serde_json::json!("'self' ipc: http://ipc.localhost"),
+    serde_json::json!(format!(
+      "'self' ipc: http://ipc.localhost {}:",
+      crate::develop_engine_scheme::SCHEME
+    )),
     "本番の CSP の connect-src に外の通信先を足さない"
   );
   assert_eq!(csp["default-src"], serde_json::json!("'self'"));
@@ -244,7 +248,10 @@ fn bundled_ui_cannot_reach_the_network() {
   let dev_csp = &config["app"]["security"]["devCsp"];
   assert_eq!(
     dev_csp["connect-src"],
-    serde_json::json!("'self' ipc: http://ipc.localhost ws://localhost:1430"),
+    serde_json::json!(format!(
+      "'self' ipc: http://ipc.localhost ws://localhost:1430 {}:",
+      crate::develop_engine_scheme::SCHEME
+    )),
     "開発用の CSP の connect-src に外の通信先を足さない"
   );
 }
