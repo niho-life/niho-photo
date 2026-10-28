@@ -14,6 +14,13 @@ export const BROWSER_PHOTO_MAX_JPEG_ORIGINAL_BYTES = 64 * 1024 * 1024;
 export const BROWSER_PHOTO_MAX_DECODE_PIXELS = 40_000_000;
 export const BROWSER_PHOTO_PREVIEW_LONG_EDGE = 1280;
 export const BROWSER_PHOTO_EXPORT_LONG_EDGE = 2048;
+/**
+ * 書き出しの大きさ「大きく」の長辺の上限（niho-photo#134）。JPEG / PNG のオリジナルは長辺 4096px に収めて読む（wasm の一発の描画の
+ * `decodeCap`）ので、その大きさまで。作業コピー（RAW など）は作業コピーの長辺（2560px）まで（段 2 は拡大しない）。
+ */
+export const BROWSER_PHOTO_EXPORT_LARGE_LONG_EDGE = 4096;
+/** 作業コピー（RAW・HEIC / HEIF・TIFF・大きな PNG）の長辺（「大きく」の上限。ワーカーの作業コピーと同じ）。 */
+export const BROWSER_PHOTO_WORKING_COPY_LONG_EDGE = 2560;
 export const BROWSER_PHOTO_JPEG_QUALITY = 0.9;
 const HEADER_BYTES = 1024 * 1024;
 

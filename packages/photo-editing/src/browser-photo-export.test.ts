@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 
 import {
+  BROWSER_PHOTO_EXPORT_BATCH_LARGE_CHOICE,
   BROWSER_PHOTO_EXPORT_SIZE_OPTIONS,
   browserPhotoBatchExportLine,
   browserPhotoExportChoice,
@@ -50,6 +51,9 @@ function choices(overrides: Partial<Omit<ExportInput, "photo">> & { photo?: Expo
     nativeFullSizeUnsupportedText: overrides.nativeFullSizeUnsupportedText,
     ...(overrides.desktopFullSizeRaster ? { desktopFullSizeRaster: overrides.desktopFullSizeRaster } : {}),
     ...(overrides.cutout ? { cutout: overrides.cutout } : {}),
+    // 「大きく」（niho-photo#134）は専用の describe で確かめる（ほかの期待は今の 2 枚のまま）
+    large: overrides.large ?? false,
+    ...(overrides.largeLongEdge !== undefined ? { largeLongEdge: overrides.largeLongEdge } : {}),
   });
 }
 
@@ -273,6 +277,53 @@ describe("書き出しの大きさ（F7b #17127）", () => {
     expect(browserPhotoExportLongEdge("width1080", { width: 683, height: 2048 })).toBe(2048);
     // 小さい写真でも比で決める（拡大はしない。段 2 は縮めるだけ）
     expect(browserPhotoExportLongEdge("width1080", { width: 800, height: 1000 })).toBe(1350);
+  });
+});
+
+describe("大きさの「大きく」（niho-photo#134）", () => {
+  it("長辺は 4096（元・作業コピーの大きさで頭打ち）", () => {
+    expect(browserPhotoExportLongEdge("large", { width: 2048, height: 1365 })).toBe(4096);
+    expect(browserPhotoExportLongEdge("large", { width: 683, height: 2048 })).toBe(4096);
+  });
+
+  it("段 2 で描く JPEG に足す。副文は書き出す長辺、分からなければ上限（JPEG / PNG は 4,096px、作業コピーは 2,560px）", () => {
+    expect(choices({ large: true }).jpeg.large).toEqual({ enabled: true, detail: "長辺 4,096px まで" });
+    expect(choices({ large: true, photo: { ...RAW, workStatus: "ready" } }).jpeg.large).toEqual({
+      enabled: true,
+      detail: "長辺 2,560px まで",
+    });
+    expect(choices({ large: true, loupe: true, editing: "wasm", largeLongEdge: 3024 }).jpeg.large).toEqual({
+      enabled: true,
+      detail: "長辺 3,024px",
+    });
+    // 省略 = 出す
+    expect(
+      resolveBrowserPhotoExportChoices({ photo: photo(), loupe: false, editing: null, locked: false, wide: true, engineUsable: true })
+        .jpeg.large,
+    ).toEqual({ enabled: true, detail: "長辺 4,096px まで" });
+  });
+
+  it("canvas・記事用の画像・背景除去・出さない写真（スマホのメモリ）には足さない", () => {
+    expect(choices({ large: true, editing: "canvas" }).jpeg.large).toBeUndefined();
+    expect(choices({ large: true, engineUsable: false, photo: photo({ hasOriginal: false }) }).jpeg.large).toBeUndefined();
+    expect(
+      choices({ large: true, loupe: true, editing: "wasm", cutout: { transparent: true, fullSize: false } }).jpeg.large,
+    ).toBeUndefined();
+    expect(choices({ large: false }).jpeg.large).toBeUndefined();
+  });
+
+  it("覚えた「大きく」は、出している写真ではそのまま、出さない写真では長辺 2048px", () => {
+    expect(effectiveBrowserPhotoExportSize(choices({ large: true }), "large")).toBe("large");
+    expect(effectiveBrowserPhotoExportSize(choices({ large: false }), "large")).toBe("long2048");
+    expect(effectiveBrowserPhotoExportSize(choices({ large: true, editing: "canvas" }), "large")).toBe("long2048");
+    expect(effectiveBrowserPhotoExportSizeOption(choices({ large: true, desktopFullSize: true }), "large")).toBe("large");
+  });
+
+  it("複数枚の ZIP の JPEG にも足す（上限を並べる）", () => {
+    const result = resolveBrowserPhotoBatchExportChoices({ engineUsable: true, zipSaveAvailable: true });
+    expect(result.jpeg.large).toEqual({ enabled: true, detail: "長辺 4,096px まで（RAW は 2,560px）" });
+    expect(result.jpeg.large).toBe(BROWSER_PHOTO_EXPORT_BATCH_LARGE_CHOICE);
+    expect(resolveBrowserPhotoBatchExportChoices({ engineUsable: false, zipSaveAvailable: true }).jpeg.large).toBeUndefined();
   });
 });
 
