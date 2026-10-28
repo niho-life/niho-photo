@@ -3637,7 +3637,7 @@
         "path": "apps/camera/README.md",
         "sha256": "d0e1f198e83893a73cd3d84122debf76ad9755e00a5fc5e1b69c242daec8d4eb"
       },
-      "outputSha256": "fd781967dc6ab617f510021953f44b4c14a5bf82ba4c6c241894bd7a957b38b5",
+      "outputSha256": "9a7bcb898ae9db9b6504dd11996aa09ce5fecec73730eb945ab5f02e3d79fcf6",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "フォルダと個別写真の利用方法、公開契約、および許可するネイティブコマンドを明記",
@@ -3645,7 +3645,8 @@
         "Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。",
         "Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。",
         "Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。",
-        "公式candidateのSDK専用asset providerと署名前の実bytes検証を文書化する"
+        "公式candidateのSDK専用asset providerと署名前の実bytes検証を文書化する",
+        "niho-photo#152: Mac アプリの現像を native の sidecar（niho-develop-render serve）で描く口（niho-develop://・native の glue・E2E）を足す。"
       ]
     },
     {
@@ -11468,6 +11469,31 @@
       "path": "packages/photo-editing/src/editor/use-browser-photo-export-large.ts",
       "sha256": "106993e4b0b8f8dffdad2cb549a64e81f7615f2f83eb59795a6b7e150bcb444d",
       "origin": "公開repoで新規作成（niho-photo#134）。書き出しの「大きく」の長辺を、開いている写真の今の切り抜きから wasm の geometryOutputSize で読む hook。外部のコード・実写真・非公開の情報を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/develop-engine/develop-engine-native-glue.ts",
+      "sha256": "d53ea11618650774f3b1cdf2f35a83af3dd60edd6d8b4c97e3d02dec5cb813ba",
+      "origin": "公開repoで新規作成（niho-photo#152）。Mac アプリの現像の Worker が読む native の glue。wasm-bindgen の glue と同じ形の口を、同期の XHR（niho-develop://）で sidecar の niho-develop-render serve へ包む。外部のコード・実写真・非公開の情報を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/develop-engine/develop-engine-native-glue.test.ts",
+      "sha256": "9b84833d08016489af9b1e9230c5980fc1c31beaa542b157b46b215961aa5e63",
+      "origin": "公開repoで新規作成（niho-photo#152）。native の glue の本文の形・hello の版の確かめ・Developer の handle・失敗の分け方・Worker の中身との組み合わせ・wasm の export との口の一致の試験。合成の値だけを使う。"
+    },
+    {
+      "path": "apps/camera/scripts/e2e/native-develop.sh",
+      "sha256": "80808c043cd238850a4a55a81e5b454cbc3daca59f2bb70184ef9664af1dde87",
+      "origin": "公開repoで新規作成（niho-photo#152）。Mac Studio で e2e の Mac アプリと release の sidecar を作り、native と wasm の画素と時間・RSS の高水位を比べる E2E の手順。合成の写真だけを使う。"
+    },
+    {
+      "path": "apps/camera/scripts/e2e/native-develop.js",
+      "sha256": "a6f02610f6476d3d3ba8fba37c52b35d9c9c4ddf82612dbbdc7fd4d818f82458",
+      "origin": "公開repoで新規作成（niho-photo#152）。E2E の画面の script（probe の Worker を起こして結果を報告する）。"
+    },
+    {
+      "path": "apps/camera/scripts/e2e/native-develop-worker.js",
+      "sha256": "1fd7136f798a0951355bea4dd996c019b58e8cdac17c25dc22b890d9e9c692db",
+      "origin": "公開repoで新規作成（niho-photo#152）。E2E の Worker。合成の写真を native の sidecar（同期の XHR）と同梱の wasm で描き、画素の一致と時間を測る。"
     }
   ],
   "excludedSources": [
