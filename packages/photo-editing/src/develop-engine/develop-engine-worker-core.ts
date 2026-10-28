@@ -232,7 +232,19 @@ export type DevelopEngineWorkerDeps = {
 };
 
 export type DevelopEnginePerfRecord = {
-  stage: "manifestFetch" | "glueImport" | "wasmInit" | "open" | "openWorkingCopy" | "renderFinal" | "renderInteractive" | "presetThumbnail" | "autoSettings";
+  stage:
+    | "manifestFetch"
+    | "glueImport"
+    | "wasmInit"
+    | "open"
+    | "openWorkingCopy"
+    | "renderFinal"
+    | "renderInteractive"
+    | "presetThumbnail"
+    /** 見本用の別の session を作った（初回と、親の engine / CNR 設定が変わった後。`presetThumbnail` の中の内訳） */
+    | "thumbnailSession"
+    | "presetSettings"
+    | "autoSettings";
   durationMs: number;
   wasmMemoryBytes: number | null;
   status: "ok" | "error";
@@ -1160,7 +1172,7 @@ case "setMaskSurface": {
         case "presetSettings": {
           const apply = requireGlue().presetSettings;
           if (!apply) throw new Error("develop engine cannot apply presets");
-          const resultJson = apply(message.xmp, message.baseSettingsJson);
+          const resultJson = measure("presetSettings", () => apply(message.xmp, message.baseSettingsJson));
           if (typeof resultJson !== "string") throw new Error("develop engine returned no preset settings");
           deps.post({ type: "preset", id, resultJson });
           return;
@@ -1238,7 +1250,10 @@ case "setMaskSurface": {
             if (!requireGlue().presetThumbnails) throw new Error("develop engine cannot render preset thumbnails");
             const opened = developer;
             if (!opened || typeof opened.thumbnail !== "function") throw new Error("no photo is open");
-            if (!thumbnailSession) thumbnailSession = opened.thumbnail(PRESET_THUMBNAIL_SESSION_MAX_DIMENSION);
+            if (!thumbnailSession) {
+              const makeThumbnail = opened.thumbnail.bind(opened);
+              thumbnailSession = measure("thumbnailSession", () => makeThumbnail(PRESET_THUMBNAIL_SESSION_MAX_DIMENSION));
+            }
             // 見本の session は面を持たずに始まる: 開いている写真に渡した面をそろえる（面のマスクも見本に描く）
             syncThumbnailSurfaces(thumbnailSession);
             const frame = readFrame(thumbnailSession.render(message.settingsJson, message.maxDimension, false));
