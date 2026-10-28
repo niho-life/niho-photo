@@ -2,7 +2,10 @@ import { describe, expect, it } from "vitest";
 
 import {
   BROWSER_PHOTO_EXPORT_BATCH_LARGE_CHOICE,
+  BROWSER_PHOTO_EXPORT_LARGE_MOBILE_MAX_BYTES,
   BROWSER_PHOTO_EXPORT_SIZE_OPTIONS,
+  browserPhotoExportLargeWasmBytes,
+  isBrowserPhotoExportLargeWithinMobileMemory,
   browserPhotoBatchExportLine,
   browserPhotoExportChoice,
   browserPhotoExportJpegFileName,
@@ -317,6 +320,44 @@ describe("大きさの「大きく」（niho-photo#134）", () => {
     expect(effectiveBrowserPhotoExportSize(choices({ large: false }), "large")).toBe("long2048");
     expect(effectiveBrowserPhotoExportSize(choices({ large: true, editing: "canvas" }), "large")).toBe("long2048");
     expect(effectiveBrowserPhotoExportSizeOption(choices({ large: true, desktopFullSize: true }), "large")).toBe("large");
+  });
+
+  it("スマホは wasm のメモリの見積もりが上限に収まる写真だけ（見積もりは Studio の実測を下回らない）", () => {
+    const mask = (id: string, y: number) => ({
+      id,
+      kind: "linear",
+      zero: { x: 0.5, y },
+      full: { x: 0.5, y: y + 0.3 },
+      adjust: { exposure: -0.5 },
+    });
+    const light = { v: 1, engine: "niho-14", exposure: 0.2, contrast: 10 };
+    const heavy = {
+      ...light,
+      v: 9,
+      masks: [mask("a", 0.1), mask("b", 0.2), mask("c", 0.3)],
+      heal: [{ id: "h", mode: "remove", radius: 0.02, feather: 0.5, points: [[0.5, 0.5]] }],
+      lens: { distortion: 8, vignetting: -20, removeChromaticAberration: true },
+      geometry: { perspective: { vertical: -15 } },
+      detail: { sharpening: { amount: 40, radius: 1, detail: 25, masking: 0 }, luminanceNoiseReduction: 20, colorNoiseReduction: 25 },
+    };
+    const mib = 1024 * 1024;
+    // 24MP の JPEG を長辺 4096（4096×2731）で描いた実測: 補正が軽いと 213MB、全部使うと 1,284MB
+    expect(browserPhotoExportLargeWasmBytes(light, { width: 4096, height: 2731 })).toBeGreaterThanOrEqual(213 * mib);
+    expect(browserPhotoExportLargeWasmBytes(heavy, { width: 4096, height: 2731 })).toBeGreaterThanOrEqual(1284 * mib);
+    expect(BROWSER_PHOTO_EXPORT_LARGE_MOBILE_MAX_BYTES).toBe(512 * mib);
+    // 寸法が分からなければ、長辺の上限の正方形（縦横比が分からない最大の画）で見積もる
+    expect(isBrowserPhotoExportLargeWithinMobileMemory(light, null, false)).toBe(true);
+    expect(isBrowserPhotoExportLargeWithinMobileMemory({ ...light, v: 5, masks: [mask("a", 0.1)] }, null, false)).toBe(true);
+    // 4096×4096 の JPEG にマスク 2 枚: 寸法が分かれば収まらず、分からなくても収まる側に見積もらない
+    const twoMasks = { ...light, v: 5, masks: [mask("a", 0.1), mask("b", 0.2)] };
+    expect(isBrowserPhotoExportLargeWithinMobileMemory(twoMasks, { width: 4096, height: 4096 }, false)).toBe(false);
+    expect(isBrowserPhotoExportLargeWithinMobileMemory(twoMasks, null, false)).toBe(false);
+    expect(isBrowserPhotoExportLargeWithinMobileMemory(twoMasks, { width: 4096, height: 2731 }, false)).toBe(true);
+    expect(isBrowserPhotoExportLargeWithinMobileMemory(heavy, null, false)).toBe(false);
+    expect(isBrowserPhotoExportLargeWithinMobileMemory(heavy, null, true)).toBe(false);
+    expect(isBrowserPhotoExportLargeWithinMobileMemory(light, null, true)).toBe(true);
+    // 切り抜いて小さくなった写真は、補正が重くても出す
+    expect(isBrowserPhotoExportLargeWithinMobileMemory(heavy, { width: 2000, height: 1333 }, false)).toBe(true);
   });
 
   it("複数枚の ZIP の JPEG にも足す（上限を並べる）", () => {
