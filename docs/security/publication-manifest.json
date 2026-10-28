@@ -10014,8 +10014,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-cloud-share-sheet.test.tsx",
-      "sha256": "18e45d2459610c1979faa2ffdfa25da952c85d3d5b3c85fbac9f4b1b4bd1069a",
-      "origin": "Issue #8 の共有UIを合成resourceとmockで検証する独立新規component test。\n変更理由: 後続ページの共有リンク操作をcomponent testで検証。\n変更理由: 画面を閉じて再表示した後も同一idempotencyキーを使うcomponent testを追加。"
+      "sha256": "5243922f185aaea7138529d0fa1a53481c4e050835f999f3e814a4b4f8c21eb7",
+      "origin": "Issue #8 の共有UIを合成resourceとmockで検証する独立新規component test。\n変更理由: 後続ページの共有リンク操作をcomponent testで検証。\n変更理由: 画面を閉じて再表示した後も同一idempotencyキーを使うcomponent testを追加。\n変更理由: 有効な共有リンクの期限を固定日（2026-10-27）から遠い未来にし、日付が過ぎて落ちないようにする。"
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-cloud-share-sheet.tsx",
