@@ -671,8 +671,8 @@ export function useBrowserPhotoExportAndDelete(params: {
           if (rendered) {
             blob = new Blob([rendered.bytes], { type: "image/jpeg" });
             if (!rendered.reachedWidth) narrowWidth = rendered.width;
-          } else if (renderSize === "width1080") {
-            // 記事用の画像は長辺 2048px のままなので、選択した幅 1080px を満たせない経路へ黙って切り替えない。
+          } else if (renderSize === "width1080" || renderSize === "large") {
+            // 記事用の画像は長辺 2048px のままなので、選択した幅 1080px・「大きく」を満たせない経路へ黙って切り替えない。
             throw new Error(PHOTO_EDITING_EXPORT_ENGINE_UNAVAILABLE_TEXT);
           } else if (!target.photo.hasOriginal && target.photo.hasWebImage !== false) {
             // 元の写真の無い行（「記事の画像」）は、記事用の画像がその画像そのものなので落とす（長辺 2048px・EXIF 無し）。写真は

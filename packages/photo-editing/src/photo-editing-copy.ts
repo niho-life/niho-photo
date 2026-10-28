@@ -327,6 +327,21 @@ export const PHOTO_EDITING_MOBILE_PRESETS_RELOAD_LABEL = "もう一度読み込�
 export const PHOTO_EDITING_EXPORT_LABEL = "書き出す";
 /** シートの大きさの群の見出し（長辺 2048px / 幅 1080px。F7b 移行元設計）。 */
 export const PHOTO_EDITING_EXPORT_SIZE_LABEL = "大きさ";
+/** 大きさの「大きく」（niho-photo#134。長辺 2048px より大きく、元の大きさまで）。 */
+export const PHOTO_EDITING_EXPORT_LARGE_LABEL = "大きく";
+/**
+ * 「大きく」の副文。書き出す長辺が分かれば「長辺 4,096px」、分からなければ上限（JPEG / PNG は 4,096px、作業コピーで直す写真は
+ * 2,560px）を「まで」で出す。複数枚（上限が写真で違う）は両方。
+ */
+export function photoEditingExportLargeDetail(
+  size: { longEdge: number } | { upTo: number } | { upTo: number; workingCopyUpTo: number },
+): string {
+  if ("longEdge" in size) return `長辺 ${formatPhotoEditingPixels(size.longEdge)}px`;
+  if ("workingCopyUpTo" in size) {
+    return `長辺 ${formatPhotoEditingPixels(size.upTo)}px まで（RAW は ${formatPhotoEditingPixels(size.workingCopyUpTo)}px）`;
+  }
+  return `長辺 ${formatPhotoEditingPixels(size.upTo)}px まで`;
+}
 /** シートの形式の群の見出し。 */
 export const PHOTO_EDITING_EXPORT_FORMAT_LABEL = "形式";
 export const PHOTO_EDITING_EXPORT_JPEG_LABEL = "JPEG";
