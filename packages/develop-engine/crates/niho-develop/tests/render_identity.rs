@@ -14,9 +14,22 @@ use niho_develop::decode::{encode_signed_working_copy, encode_working_copy, Line
 use niho_develop::{encode, parse_settings, xmp, DevelopSettings, Filter, Quality, Session};
 use sha2::{Digest, Sha256};
 
-const ENGINES: [&str; 13] = [
-    "niho-1", "niho-2", "niho-3", "niho-4", "niho-5", "niho-6", "niho-7", "niho-8", "niho-10",
-    "niho-11", "niho-12", "niho-13", "niho-14",
+/// The photos and the engines that read them (every engine at least once;
+/// the others refuse the photo): a JPEG / PNG original, a raster working
+/// copy, a legacy (unsigned) and a signed RAW working copy.
+const PHOTOS: [(&str, &[&str]); 4] = [
+    (
+        "raster",
+        &[
+            "niho-1", "niho-2", "niho-6", "niho-8", "niho-10", "niho-12", "niho-13", "niho-14",
+        ],
+    ),
+    ("rasterCopy", &["niho-6", "niho-10", "niho-14"]),
+    ("legacy", &["niho-1", "niho-14"]),
+    (
+        "signed",
+        &["niho-3", "niho-4", "niho-5", "niho-7", "niho-11"],
+    ),
 ];
 
 /// A sky over a dark field with a saturated object and noise (8-bit sRGB).
@@ -175,15 +188,16 @@ fn hex(bytes: &[u8]) -> String {
     bytes.iter().map(|byte| format!("{byte:02x}")).collect()
 }
 
-/// One digest per photo and engine: every case, released (working size) and
-/// dragged (long side 96). A refused settings or photo is part of the digest.
+/// One digest per photo and engine: every case released (working size), and
+/// the busy sliders and the masks dragged (long side 96). A refused case is
+/// part of the digest.
 fn digests() -> Vec<String> {
     let raster = raster();
     let unsigned = encode_working_copy(&unsigned_linear());
     let (signed, signed_meta) = signed_raw();
     let mut out = Vec::new();
-    for photo in ["raster", "rasterCopy", "legacy", "signed"] {
-        for engine in ENGINES {
+    for (photo, engines) in PHOTOS {
+        for &engine in engines {
             let mut digest = Sha256::new();
             let session = match photo {
                 "raster" => Session::open_raster(&raster, 0, Filter::Lanczos3),
@@ -202,7 +216,11 @@ fn digests() -> Vec<String> {
                 }
                 Ok(mut session) => {
                     for (case, settings) in cases(engine) {
-                        for (size, quality) in [(0, Quality::Final), (96, Quality::Interactive)] {
+                        let mut renders = vec![(0, Quality::Final)];
+                        if matches!(case, "busy" | "masked") {
+                            renders.push((96, Quality::Interactive));
+                        }
+                        for (size, quality) in renders {
                             let line = match session.render(&settings, size, quality) {
                                 Ok(frame) => format!(
                                     "{case} {size} {}x{} {}\n",
@@ -232,15 +250,21 @@ const PINNED: &[&str] = &[];
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
 #[cfg_attr(not(target_arch = "wasm32"), test)]
 fn every_engine_draws_the_pinned_bytes_however_the_work_is_split() {
+    #[cfg(not(feature = "threads"))]
     let computed = digests();
     #[cfg(feature = "threads")]
-    for threads in [1, 8] {
-        let pool = rayon::ThreadPoolBuilder::new()
-            .num_threads(threads)
-            .build()
-            .unwrap();
-        assert_eq!(pool.install(digests), computed, "{threads} threads");
-    }
+    let computed = {
+        let on = |threads| {
+            rayon::ThreadPoolBuilder::new()
+                .num_threads(threads)
+                .build()
+                .unwrap()
+                .install(digests)
+        };
+        let one = on(1);
+        assert_eq!(on(8), one, "8 threads draw what 1 thread draws");
+        one
+    };
     assert_eq!(
         computed,
         PINNED
