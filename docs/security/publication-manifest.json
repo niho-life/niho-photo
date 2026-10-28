@@ -5149,7 +5149,7 @@
         "path": "packages/develop-engine/NIHO4.md",
         "sha256": "63afc71b12a489399c921895cec4b6aa7b8b404b1e6ad30366a60ab55c240fd8"
       },
-      "outputSha256": "197056fdedb70258f623c7d915433b2e58723582d9f97d9c0bd32f9d94440b9d",
+      "outputSha256": "19c591691a905c4c36c41428ade096d3d54f58d90b61369102c6856c0d2d9ff4",
       "modifications": [
         "公開SSOT向けに内部絶対path・private repository URL・行末を正規化。",
         "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。"
