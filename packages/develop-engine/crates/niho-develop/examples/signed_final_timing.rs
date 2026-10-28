@@ -18,7 +18,8 @@ fn main() {
         .map_or(0, |i| args[i + 1].parse().unwrap());
     let t = Instant::now();
     let mut session = Session::open_working_copy(&png, &meta, Filter::Lanczos3).unwrap();
-    let step = |label: &str, t: Instant| println!("{label}\t{:.0}", t.elapsed().as_secs_f64() * 1e3);
+    let step =
+        |label: &str, t: Instant| println!("{label}\t{:.0}", t.elapsed().as_secs_f64() * 1e3);
     step("open", t);
     let mut base = DevelopSettings::neutral();
     base.engine = ENGINE_NIHO_11.into();

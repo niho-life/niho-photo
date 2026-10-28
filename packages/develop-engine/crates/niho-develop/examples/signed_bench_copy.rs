@@ -15,8 +15,7 @@ fn main() {
         .unwrap_or_else(|| "cal-panasonic-dc-s5-apple-v4".into());
     let bytes = std::fs::read(&png).unwrap();
     let image = decode_working_copy(&bytes, 0, Filter::Lanczos3).unwrap();
-    let source: serde_json::Value =
-        serde_json::from_slice(&std::fs::read(&meta).unwrap()).unwrap();
+    let source: serde_json::Value = serde_json::from_slice(&std::fs::read(&meta).unwrap()).unwrap();
     let (signed, encoding) = encode_signed_working_copy(&image).unwrap();
     let as_shot = source
         .get("asShotWhite")
@@ -34,5 +33,10 @@ fn main() {
     });
     std::fs::write(&out_png, signed).unwrap();
     std::fs::write(&out_meta, out.to_string()).unwrap();
-    println!("{}x{} ceiling {}", image.width, image.height, encoding.ceiling());
+    println!(
+        "{}x{} ceiling {}",
+        image.width,
+        image.height,
+        encoding.ceiling()
+    );
 }
