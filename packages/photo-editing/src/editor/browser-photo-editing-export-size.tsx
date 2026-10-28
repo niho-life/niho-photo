@@ -9,6 +9,7 @@ import {
 } from "../browser-photo-export";
 import {
   PHOTO_EDITING_EXPORT_FULL_SIZE_LABEL,
+  PHOTO_EDITING_EXPORT_LARGE_LABEL,
   PHOTO_EDITING_EXPORT_SIZE_LABEL,
 } from "../photo-editing-copy";
 import { cn } from "niho-ui/cn";
@@ -21,12 +22,17 @@ import { cn } from "niho-ui/cn";
  * `fullSize`（原寸の書き出しに対応した NIHO Desktop の PC のシートだけ。K2-3a 移行元設計）があれば、2 枚の下に同じ書式の「原寸」の
  * カードを幅いっぱいに足す（副文は「この Mac に保存」、押せない写真では理由）。`fullSizeOnly`（複数枚のフォルダへの書き出し。
  * K2-3b）は 2 枚を出さず「原寸」のカードだけにする（ZIP でしか書き出せない大きさを、理由の無い薄いカードで見せない）。
+ *
+ * `large`（「大きく」。niho-photo#134。段 2 の wasm で描く JPEG で、スマホで wasm のメモリに収まる写真だけ）があれば、2 枚の下に
+ * 同じ書式のカードを幅いっぱいに足す（副文は書き出す長辺「長辺 4,096px」か上限「長辺 2,560px まで」）。「原寸」はその下。
  */
 export function BrowserPhotoExportSizeCards(props: {
   size: BrowserPhotoExportSizeOption;
   disabled: boolean;
   /** 書き出している間（形式のカードと同じく、薄くせずに押せなくする） */
   busy?: boolean;
+  /** 大きさの「大きく」（無ければカードを出さない） */
+  large?: BrowserPhotoExportChoice;
   /** 大きさの「原寸」（無ければカードを出さない） */
   fullSize?: BrowserPhotoExportChoice;
   /** 大きさが「原寸」だけ（長辺 2048px・幅 1080px のカードを出さない） */
@@ -39,6 +45,17 @@ export function BrowserPhotoExportSizeCards(props: {
     props.fullSizeOnly && props.fullSize ? [] : BROWSER_PHOTO_EXPORT_SIZE_OPTIONS;
   const cards: { size: BrowserPhotoExportSizeOption; label: string; detail: string; enabled: boolean; wide?: boolean }[] = [
     ...standardOptions.map((option) => ({ ...option, enabled: true })),
+    ...(props.large && standardOptions.length > 0
+      ? [
+          {
+            size: "large" as const,
+            label: PHOTO_EDITING_EXPORT_LARGE_LABEL,
+            detail: props.large.detail,
+            enabled: props.large.enabled,
+            wide: true,
+          },
+        ]
+      : []),
     ...(props.fullSize
       ? [
           {
