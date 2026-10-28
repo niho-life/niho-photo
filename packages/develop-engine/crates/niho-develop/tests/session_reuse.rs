@@ -83,7 +83,10 @@ fn raster() -> Vec<u8> {
 /// The settings an editor goes through: as opened, an exposure step, each
 /// bundled preset on it (colorful changes the color noise reduction), and
 /// Highlights / Shadows / Texture by hand.
-fn steps(base: DevelopSettings, as_shot: Option<niho_develop::LightroomWhite>) -> Vec<DevelopSettings> {
+fn steps(
+    base: DevelopSettings,
+    as_shot: Option<niho_develop::LightroomWhite>,
+) -> Vec<DevelopSettings> {
     let mut exposed = base.clone();
     exposed.exposure = 0.3;
     let mut steps = vec![base.clone(), exposed.clone()];
@@ -116,7 +119,9 @@ fn history(session: &mut Session, steps: &[DevelopSettings]) {
         let mut dragged = settings.clone();
         for tick in 1..=3 {
             dragged.exposure = settings.exposure + 0.1 * f64::from(tick);
-            session.render(&dragged, SIZE, Quality::Interactive).unwrap();
+            session
+                .render(&dragged, SIZE, Quality::Interactive)
+                .unwrap();
         }
     }
     let mut previews = session.thumbnail(32);

@@ -1480,15 +1480,18 @@ impl Session {
             .as_ref()
             .map(|prepared| &prepared.analysis)
             .filter(|analysis| serves(analysis));
-        let ahead = self.niho3_ahead.as_ref().filter(|analysis| serves(analysis));
+        let ahead = self
+            .niho3_ahead
+            .as_ref()
+            .filter(|analysis| serves(analysis));
         let keep = in_master.is_none() && ahead.is_none();
         // A strong reference to the same cells: filling it fills theirs.
-        let cached = in_master
-            .or(ahead)
-            .and_then(|analysis| match analysis.downgrade().upgrade(RawEngine::Niho4) {
+        let cached = in_master.or(ahead).and_then(|analysis| {
+            match analysis.downgrade().upgrade(RawEngine::Niho4) {
                 Some(RawAnalysisCache::Niho4(cache)) => Some(cache),
                 _ => None,
-            });
+            }
+        });
         let analysis = niho4::prepare_analysis(image, meta, settings, cached)
             .map_err(|error| Error::Niho4Prepare(error.to_string()))?;
         if keep {
