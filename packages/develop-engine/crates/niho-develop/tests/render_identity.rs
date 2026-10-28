@@ -1,6 +1,7 @@
 //! The frame does not depend on how the work is split (#148). Every engine
-//! renders a synthetic raster photo and a synthetic signed RAW working copy
-//! with representative settings (exposure, the busy global sliders, color
+//! renders the synthetic photos it reads (a JPEG / PNG original, a raster
+//! working copy, a legacy and a signed RAW working copy), with its look and
+//! representative settings (exposure, the busy global sliders, color
 //! noise reduction, the bundled presets, masks under a crop), released and
 //! dragged; the SHA-256 of each frame's RGBA goes into one digest per photo
 //! and engine. The digests are pinned and must be the same natively, natively
@@ -9,7 +10,7 @@
 //! A pixel change (a new engine) updates the pins; a split that changes a
 //! single byte fails here.
 
-use niho_develop::decode::{encode_signed_working_copy, LinearImage};
+use niho_develop::decode::{encode_signed_working_copy, encode_working_copy, LinearImage};
 use niho_develop::{encode, parse_settings, xmp, DevelopSettings, Filter, Quality, Session};
 use sha2::{Digest, Sha256};
 
@@ -46,7 +47,7 @@ fn raster() -> Vec<u8> {
 }
 
 /// Linear ProPhoto with clipped highlights, a saturated patch and shadows.
-fn signed_raw() -> (Vec<u8>, String) {
+fn linear() -> LinearImage {
     let (width, height) = (160usize, 120usize);
     let mut data = Vec::with_capacity(width * height * 3);
     for y in 0..height {
@@ -69,12 +70,16 @@ fn signed_raw() -> (Vec<u8>, String) {
             data.extend_from_slice(&pixel);
         }
     }
-    let (png, encoding) = encode_signed_working_copy(&LinearImage {
+    LinearImage {
         width,
         height,
         data,
-    })
-    .unwrap();
+    }
+}
+
+/// [`linear`] as a signed RAW working copy and its metadata.
+fn signed_raw() -> (Vec<u8>, String) {
+    let (png, encoding) = encode_signed_working_copy(&linear()).unwrap();
     let meta = format!(
         r#"{{"kind":"raw","baselineEV":-0.25,"asShotWhite":{{"x":0.3127,"y":0.329,"temperature":5500,"tint":0}},"asShotWhiteAdobe":null,"whiteBalanceTable":null,"dcpSha256":"apple-ciraw8/linear-prophoto-d50/cal-panasonic-dc-s5-apple-v4","lookTableIncluded":false,"encoding":{{"kind":"signed-gamma18-v1","ceiling":{}}}}}"#,
         encoding.ceiling()
@@ -82,7 +87,32 @@ fn signed_raw() -> (Vec<u8>, String) {
     (png, meta)
 }
 
-const MASKED: &str = r#"{"v":5,"engine":"ENGINE","look":"niho-standard-1","base":null,"shadows":25,"vibrance":10,
+/// [`linear`] clipped to `0..=1` (the unsigned working copies).
+fn unsigned_linear() -> LinearImage {
+    let mut image = linear();
+    for value in &mut image.data {
+        *value = value.clamp(0.0, 1.0);
+    }
+    image
+}
+
+const LEGACY_RAW_META: &str = r#"{"kind":"raw","baselineEV":0,"asShotWhite":{"x":0.3457,"y":0.3585},"dcpSha256":"fixture","lookTableIncluded":true}"#;
+const RASTER_META: &str = r#"{"kind":"raster","iccSha256":"sRGB"}"#;
+
+/// The look an engine requires (`engineLookMismatch`): the RAW engines have
+/// their own; the others take the neutral settings' look or niho-standard-1.
+fn look(engine: &str) -> &'static str {
+    match engine {
+        "niho-1" | "niho-2" => "niho-interim-1",
+        "niho-3" => "niho-standard-2",
+        "niho-4" => "niho-standard-3",
+        "niho-5" => "niho-standard-4",
+        "niho-7" | "niho-11" => "niho-standard-5",
+        _ => "niho-standard-1",
+    }
+}
+
+const MASKED: &str = r#"{"v":5,"engine":"ENGINE","look":"LOOK","base":null,"shadows":25,"vibrance":10,
 "geometry":{"rotate":90,"angle":3.5,"crop":{"left":0.05,"top":0.08,"right":0.93,"bottom":0.95}},
 "masks":[
  {"id":"sky","kind":"linear","zero":{"x":0.5,"y":0.45},"full":{"x":0.52,"y":0.1},"adjust":{"exposure":-0.9,"highlights":-40,"saturation":15}},
@@ -92,6 +122,7 @@ const MASKED: &str = r#"{"v":5,"engine":"ENGINE","look":"niho-standard-1","base"
 fn cases(engine: &str) -> Vec<(&'static str, DevelopSettings)> {
     let mut base = DevelopSettings::neutral();
     base.engine = engine.into();
+    base.look = look(engine).into();
     let mut exposure = base.clone();
     exposure.exposure = 0.3;
     let mut busy = base;
@@ -119,10 +150,15 @@ fn cases(engine: &str) -> Vec<(&'static str, DevelopSettings)> {
         if let Ok(result) = xmp::preset_settings(preset.xmp, Some(&busy)) {
             let mut settings = result.settings;
             settings.engine = engine.into();
+            settings.look = look(engine).into();
             cases.push((preset.id, settings));
         }
     }
-    if let Ok(masked) = parse_settings(&MASKED.replace("ENGINE", engine)) {
+    if let Ok(masked) = parse_settings(
+        &MASKED
+            .replace("ENGINE", engine)
+            .replace("LOOK", look(engine)),
+    ) {
         cases.push(("masked", masked));
     }
     cases
@@ -143,14 +179,21 @@ fn hex(bytes: &[u8]) -> String {
 /// dragged (long side 96). A refused settings or photo is part of the digest.
 fn digests() -> Vec<String> {
     let raster = raster();
-    let (signed, meta) = signed_raw();
+    let unsigned = encode_working_copy(&unsigned_linear());
+    let (signed, signed_meta) = signed_raw();
     let mut out = Vec::new();
-    for photo in ["raster", "signed"] {
+    for photo in ["raster", "rasterCopy", "legacy", "signed"] {
         for engine in ENGINES {
             let mut digest = Sha256::new();
             let session = match photo {
                 "raster" => Session::open_raster(&raster, 0, Filter::Lanczos3),
-                _ => Session::open_working_copy(&signed, &meta, Filter::Lanczos3),
+                "rasterCopy" => {
+                    Session::open_working_copy(&unsigned, RASTER_META, Filter::Lanczos3)
+                }
+                "legacy" => {
+                    Session::open_working_copy(&unsigned, LEGACY_RAW_META, Filter::Lanczos3)
+                }
+                _ => Session::open_working_copy(&signed, &signed_meta, Filter::Lanczos3),
             };
             match session {
                 Err(error) => {
