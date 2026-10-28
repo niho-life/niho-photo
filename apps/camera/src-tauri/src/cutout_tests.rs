@@ -467,7 +467,11 @@ fn surface_writes_the_png_and_returns_it_with_the_line_without_duration() {
   assert!(summary.get("durationMs").is_none());
   assert_eq!(
     fixture.read("calls.txt").trim(),
-    format!("surface --input {} --output {} --kind subject", input.display(), output.display())
+    format!(
+      "surface --input {} --output {} --kind subject",
+      input.display(),
+      output.display()
+    )
   );
   assert_eq!(fixture.read("cwd.txt").trim(), "/");
 }

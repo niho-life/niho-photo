@@ -286,6 +286,8 @@ describe("capabilities", () => {
       exportFolder: true,
       // マスクの面（ブラシ）の置き場はアプリのコマンド（M4 #68）
       maskSurfaces: true,
+      // 被写体のマスクの面は同梱の niho-camera-cutout が答えたときだけ（niho-photo#135。空はまだ作れない）
+      maskDetection: { subject: true, sky: false },
       cutout: true,
       multiSelect: true,
       info: true,

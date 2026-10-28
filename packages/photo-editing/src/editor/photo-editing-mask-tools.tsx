@@ -1,7 +1,20 @@
 "use client";
 
 import { Fragment, useId } from "react";
-import { CircleDot, Cloud, Copy, Eye, EyeOff, FlipVertical2, Paintbrush, Rows3, Trash2, User, type LucideIcon } from "lucide-react";
+import {
+  CircleDot,
+  Cloud,
+  Copy,
+  Eye,
+  EyeOff,
+  FlipVertical2,
+  Loader2,
+  Paintbrush,
+  Rows3,
+  Trash2,
+  User,
+  type LucideIcon,
+} from "lucide-react";
 
 import type { DevelopMask, DevelopMaskAdjustKey } from "../develop-engine/develop-masks";
 import { formatAdjustmentValue, formatSignedInteger } from "../photo-editing-adjustments";
@@ -9,8 +22,12 @@ import {
   PHOTO_EDITING_MASK_ADD_BRUSH_LABEL,
   PHOTO_EDITING_MASK_ADD_LINEAR_LABEL,
   PHOTO_EDITING_MASK_ADD_RADIAL_LABEL,
+  PHOTO_EDITING_MASK_ADD_SKY_LABEL,
+  PHOTO_EDITING_MASK_ADD_SUBJECT_LABEL,
   PHOTO_EDITING_MASK_ADD_TITLE,
   PHOTO_EDITING_MASK_DETECTED_TEXT,
+  PHOTO_EDITING_MASK_DETECTING_TEXTS,
+  PHOTO_EDITING_MASK_DETECT_CANCEL_LABEL,
   PHOTO_EDITING_MASK_SURFACE_RETRY_LABEL,
   PHOTO_EDITING_MASK_FEATHER_LABEL,
   PHOTO_EDITING_MASK_HINT_TEXT,
@@ -68,6 +85,8 @@ export const PHOTO_EDITING_MASK_ADD_LABELS: Readonly<Record<PhotoEditingMaskAddK
   linear: PHOTO_EDITING_MASK_ADD_LINEAR_LABEL,
   radial: PHOTO_EDITING_MASK_ADD_RADIAL_LABEL,
   brush: PHOTO_EDITING_MASK_ADD_BRUSH_LABEL,
+  subject: PHOTO_EDITING_MASK_ADD_SUBJECT_LABEL,
+  sky: PHOTO_EDITING_MASK_ADD_SKY_LABEL,
 };
 
 /** 右パネルのマスクの面の値（{@link BrowserPhotoMaskTool} から必要な分だけ。テストで直接渡せる形）。 */
@@ -94,7 +113,17 @@ export type PhotoEditingMaskToolsProps = Pick<
     Pick<
       BrowserPhotoMaskTool,
       // 局所のカラーミキサー（niho-photo#93。渡したときだけ節を出す）
-      "brush" | "addingBrush" | "notice" | "canRetrySurfaces" | "retrySurfaces" | "changeHsl" | "resetHsl" | "grayscale"
+      | "brush"
+      | "addingBrush"
+      | "notice"
+      | "canRetrySurfaces"
+      | "retrySurfaces"
+      | "changeHsl"
+      | "resetHsl"
+      | "grayscale"
+      // 写真から範囲を探している間（niho-photo#135。渡したときだけ 1 行と取り消しを出す）
+      | "detecting"
+      | "cancelDetect"
     >
   > & {
     disabled: boolean;
@@ -173,6 +202,25 @@ export function PhotoEditingMaskTools(props: PhotoEditingMaskToolsProps) {
           <p id={reasonId} className={NOTE_CLASS_NAME}>
             {props.addBlockedReason}
           </p>
+        ) : null}
+        {props.detecting ? (
+          <div
+            role="status"
+            data-testid="photo-mask-detecting"
+            className="flex items-center gap-2 rounded-lg bg-niho-pale/60 px-2.5 py-2"
+          >
+            <Loader2 className="h-4 w-4 shrink-0 animate-spin text-niho-text-sub motion-reduce:animate-none" aria-hidden />
+            <p className={cn(NOTE_CLASS_NAME, "min-w-0 flex-1")}>{PHOTO_EDITING_MASK_DETECTING_TEXTS[props.detecting]}</p>
+            {props.cancelDetect ? (
+              <button
+                type="button"
+                onClick={props.cancelDetect}
+                className={cn("shrink-0 text-xs font-bold text-niho-accent-ink underline-offset-2 hover:underline", FOCUS_RING_CLASS_NAME)}
+              >
+                {PHOTO_EDITING_MASK_DETECT_CANCEL_LABEL}
+              </button>
+            ) : null}
+          </div>
         ) : null}
         {props.notice ? (
           <div role="status" data-testid="photo-mask-notice" className="space-y-1 rounded-lg bg-niho-pale/60 px-2.5 py-2">

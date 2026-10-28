@@ -15,12 +15,24 @@ fn the_request_names_an_open_photo_a_known_kind_and_small_settings() {
   assert!(validate_request(&request("subject", settings.clone())).is_ok());
   assert!(validate_request(&request("sky", settings.clone())).is_ok());
   for kind in ["person", "", "Subject"] {
-    assert_eq!(validate_request(&request(kind, settings.clone())).unwrap_err().code, "invalidRequest");
+    assert_eq!(
+      validate_request(&request(kind, settings.clone())).unwrap_err().code,
+      "invalidRequest"
+    );
   }
-  assert_eq!(validate_request(&request("subject", json!(null))).unwrap_err().code, "invalidRequest");
-  assert_eq!(validate_request(&request("subject", json!([1]))).unwrap_err().code, "invalidRequest");
+  assert_eq!(
+    validate_request(&request("subject", json!(null))).unwrap_err().code,
+    "invalidRequest"
+  );
+  assert_eq!(
+    validate_request(&request("subject", json!([1]))).unwrap_err().code,
+    "invalidRequest"
+  );
   let large = json!({ "engine": "niho-14", "note": "x".repeat(MAX_SETTINGS_BYTES) });
-  assert_eq!(validate_request(&request("subject", large)).unwrap_err().code, "invalidRequest");
+  assert_eq!(
+    validate_request(&request("subject", large)).unwrap_err().code,
+    "invalidRequest"
+  );
   let mut bad_operation = request("subject", settings.clone());
   bad_operation.operation_id = "../x".to_string();
   assert_eq!(validate_request(&bad_operation).unwrap_err().code, "invalidRequest");
@@ -58,7 +70,9 @@ fn the_working_image_is_drawn_with_the_formula_and_base_only() {
     json!({ "v": 1, "engine": "niho-2", "base": "b" })
   );
   assert_eq!(
-    working_image_settings(&json!({ "look": "niho-standard-1" }), "b").unwrap_err().code,
+    working_image_settings(&json!({ "look": "niho-standard-1" }), "b")
+      .unwrap_err()
+      .code,
     "invalidRequest"
   );
 }

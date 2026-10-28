@@ -203,7 +203,12 @@ import {
   useBrowserPhotoEffectsSupport,
   useBrowserPhotoLensSupport,
 } from "./use-browser-photo-effects";
-import { photoEditingMaskExportBlocked, useBrowserPhotoMasks, useBrowserPhotoMasksSupport } from "./use-browser-photo-masks";
+import {
+  photoEditingMaskDetectKinds,
+  photoEditingMaskExportBlocked,
+  useBrowserPhotoMasks,
+  useBrowserPhotoMasksSupport,
+} from "./use-browser-photo-masks";
 import { useBrowserPhotoExportAndDelete } from "./use-browser-photo-export-delete";
 import { useBrowserPhotoFlagKeys } from "./use-browser-photo-flag-keys";
 import { useBrowserPhotoFolders } from "./use-browser-photo-folders";
@@ -879,6 +884,11 @@ export function BrowserPhotoEditingWorkbench(props: {
       capabilities.maskSurfaces === true && library.saveMaskSurface
         ? (photoId: string, png: Uint8Array) => library.saveMaskSurface!(photoId, png)
         : null,
+    // 被写体・空（niho-photo#135）は面を写真から作れる出どころの、作れる種類だけ
+    detectMaskSurface: library.detectMaskSurface
+      ? (photoId, kind, detectOptions) => library.detectMaskSurface!(photoId, kind, detectOptions)
+      : null,
+    detectKinds: photoEditingMaskDetectKinds(capabilities),
     surfaceIssue: open.maskSurfaceIssue,
     onRetrySurfaces: open.retryMaskSurfaces,
   });

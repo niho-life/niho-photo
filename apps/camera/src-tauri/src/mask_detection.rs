@@ -1,4 +1,4 @@
-//! 部分補正の被写体のマスクの面を、この Mac で作る（niho-photo#135。docs/local-adjustments.md「面の受け渡し」「検出」）。
+//! 部分補正の被写体のマスクの面を、この Mac で作る（niho-photo#135。docs/local-adjustments.md「面の検出」）。
 //!
 //! `camera_mask_surface_detect`（`{ photoId, kind, operationId, developSettings }` → `{ id, width, height }`）は、開いた写真の
 //! **作業画像**（マスクの座標の基準）に同梱の `niho-camera-cutout surface` を当て、できた面を写真の `MaskSurfaceStore` へ保存する。
@@ -14,7 +14,9 @@
 //! - 失敗の code: sidecar の語（`no_subjects`＝被写体が無い・`unsupported_kind`＝まだ作れない種類（`sky`）・`engine_failed` など）、
 //!   `aborted`（取り消した）、現像の code（RAW の作業コピー）、面の置き場の code（`maskSurfaceQuota` など）、`invalidRequest`。
 
-use crate::cutout_commands::{check_operation_id, cutout, page_failure, require_available, verified_photo, CUTOUT_FAILED_MESSAGE};
+use crate::cutout_commands::{
+  check_operation_id, cutout, page_failure, require_available, verified_photo, CUTOUT_FAILED_MESSAGE,
+};
 use crate::develop::{bundled_sidecar_paths, develop, stored_source_context};
 use crate::error::{invalid_request, parse_request, run_blocking, CameraError};
 use crate::photos::{check_photo_id, photos};
@@ -186,7 +188,11 @@ pub async fn camera_mask_surface_detect(app: tauri::AppHandle, request: Option<V
     };
     let key = detection_key(&photo.digest.key, &request.kind, &working_image);
     if let Some(surface) = detections.get(&key) {
-      let id = surface.get("id").and_then(Value::as_str).unwrap_or_default().to_string();
+      let id = surface
+        .get("id")
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string();
       if photos.missing_mask_surfaces(&request.photo_id, &[id])?.is_empty() {
         return Ok(surface);
       }
