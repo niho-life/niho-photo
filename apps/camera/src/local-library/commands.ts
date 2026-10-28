@@ -99,9 +99,16 @@ export type DevelopSource =
 
 /**
  * 現像が使えるか（`fullSizeRaster` は HEIC / HEIF・TIFF も原寸で書き出せる、`masks` は部分補正のある設定を原寸で書き出せる。
- * どちらも古い native は返さない）。
+ * どちらも古い native は返さない）。`renderer` は同梱の niho-develop-render が描ける設定（`niho-develop-render capabilities`。答えない
+ * 古い renderer と古い native は null か無い。形は `readPhotoLibraryNativeRenderer` で確かめる）。
  */
-export type DevelopStatus = { available: boolean; raster: boolean; fullSizeRaster?: boolean; masks?: boolean };
+export type DevelopStatus = {
+  available: boolean;
+  raster: boolean;
+  fullSizeRaster?: boolean;
+  masks?: boolean;
+  renderer?: unknown;
+};
 
 /** 背景除去の sidecar が camera の lock の版で使えるか。 */
 export type CutoutStatus = { available: boolean };

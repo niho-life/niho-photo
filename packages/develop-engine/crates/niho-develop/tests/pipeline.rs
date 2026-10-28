@@ -490,6 +490,49 @@ fn raster_decoders_reject_oversized_jpeg_and_png_from_headers() {
     assert!(error.to_string().contains("40000000 pixels"), "{error}");
 }
 
+/// The native full-size export opens sources up to 100 MP (niho-photo#132);
+/// every caller that does not choose (the browser's wasm) stays at 40 MP. A
+/// 61 MP header passes the native check (its decode then fails only because
+/// the pixels are not there); 100 MP + 1 does not.
+#[test]
+fn native_decode_limits_open_sources_above_the_browser_bound() {
+    use niho_develop::decode::DecodeLimits;
+    let png = oversized_png_header(9_504, 6_336);
+    let browser = decode::decode_raster(&png, 0, Filter::Lanczos3).unwrap_err();
+    assert!(browser.to_string().contains("40000000 pixels"), "{browser}");
+    let native = decode::decode_raster_with_limits(&png, 0, Filter::Lanczos3, DecodeLimits::NATIVE)
+        .unwrap_err();
+    assert!(!native.to_string().contains("decode limit"), "{native}");
+    let native =
+        decode::decode_working_copy_with_limits(&png, 0, Filter::Lanczos3, DecodeLimits::NATIVE)
+            .unwrap_err();
+    assert!(!native.to_string().contains("decode limit"), "{native}");
+    let browser = decode::decode_working_copy(&png, 0, Filter::Lanczos3).unwrap_err();
+    assert!(browser.to_string().contains("40000000 pixels"), "{browser}");
+
+    let too_large = oversized_png_header(10_000, 10_001);
+    let error =
+        decode::decode_raster_with_limits(&too_large, 0, Filter::Lanczos3, DecodeLimits::NATIVE)
+            .unwrap_err();
+    assert!(error.to_string().contains("100000000 pixels"), "{error}");
+    let error = decode::decode_working_copy_with_limits(
+        &too_large,
+        0,
+        Filter::Lanczos3,
+        DecodeLimits::NATIVE,
+    )
+    .unwrap_err();
+    assert!(error.to_string().contains("100000000 pixels"), "{error}");
+    assert_eq!(
+        DecodeLimits::BROWSER.max_pixels,
+        decode::MAX_DECODE_IMAGE_PIXELS
+    );
+    assert_eq!(
+        DecodeLimits::NATIVE.max_pixels,
+        decode::MAX_NATIVE_DECODE_IMAGE_PIXELS
+    );
+}
+
 #[test]
 fn working_copy_decoder_rejects_oversized_png_from_header() {
     let png = oversized_png_header(8_000, 5_001);

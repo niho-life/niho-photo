@@ -371,6 +371,20 @@ export const PHOTO_EDITING_EXPORT_FULL_SIZE_NATIVE_BLOCKER_LABELS = {
   perspective: "遠近",
   heal: "修復",
   lens: "レンズ補正",
+  settings: "新しい補正",
+} as const;
+/**
+ * 原寸の native renderer が描けない補正の案内に足す行き先（描画を新しくするアプリ）。カードの副文は「〇〇を更新すると書き出せます」、
+ * 実行時の失敗の 1 行は「〇〇を更新すると、原寸で書き出せます。」。`local` は NIHO photo（この Mac）、`cloud` は NIHO Desktop
+ * （NIHOapp の更新案内 `PHOTO_EDITING_EXPORT_FULL_SIZE_UPDATE_TEXT` と同じ文）。
+ */
+export const PHOTO_EDITING_EXPORT_FULL_SIZE_NATIVE_UPDATE_HINTS = {
+  local: "NIHO photo を更新すると書き出せます",
+  cloud: "NIHO Desktop を更新すると書き出せます",
+} as const;
+export const PHOTO_EDITING_EXPORT_FULL_SIZE_NATIVE_UPDATE_TEXTS = {
+  local: "この Mac の NIHO photo を更新すると、原寸で書き出せます。",
+  cloud: "NIHO Desktop を更新すると、原寸で書き出せます。",
 } as const;
 /**
  * 原寸の書き出しが形式（HEIC / TIFF）を断ったときの失敗の 1 行（複数枚をフォルダへ書き出すとき、Desktop へ落とす前に同じ文で
@@ -380,7 +394,7 @@ export const PHOTO_EDITING_EXPORT_FULL_SIZE_UNSUPPORTED_SOURCE_FAILED_TEXT = "HE
 /** 原寸の書き出しが失敗し、Desktop の理由を画面に出せないとき（英語の文など）。 */
 export const PHOTO_EDITING_EXPORT_FULL_SIZE_FAILED_TEXT = "原寸の JPEG を書き出せませんでした。もう一度お試しください。";
 /** 保存した土台を復元できない旧 Desktop では、オリジナルを落とす前に既存の状態欄へ出す。 */
-export const PHOTO_EDITING_EXPORT_FULL_SIZE_UPDATE_TEXT = "NIHO Desktop を更新すると、原寸で書き出せます。";
+export const PHOTO_EDITING_EXPORT_FULL_SIZE_UPDATE_TEXT = PHOTO_EDITING_EXPORT_FULL_SIZE_NATIVE_UPDATE_TEXTS.cloud;
 /**
  * 複数枚の「フォルダへ原寸で書き出す」（NIHO Desktop だけ。K2-3b 移行元設計）: 主ボタン（ネイティブのフォルダの選択を出す）と、
  * 形式の下の 1 行（ZIP のシートの「選んだ N 枚を ZIP にまとめます。」と同じ形に、原寸の 1 枚あたりの時間の目安を添える）。

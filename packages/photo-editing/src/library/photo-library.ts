@@ -281,6 +281,23 @@ export type PhotoLibraryMaskDetectionResult =
   | { kind: "detected"; id: string; width: number; height: number }
   | { kind: "notFound" };
 
+/**
+ * 原寸の書き出しの描画（Mac の `niho-develop-render`）が描ける設定（`niho-develop-render capabilities`。niho-photo#131）。原寸へ
+ * 渡せる設定は、描画の版ではなくこれで決める（`photo-editing-native-export.ts`）。
+ */
+export type PhotoLibraryNativeRenderer = {
+  /** 読める `developSettings.v` */
+  settingsVersions: readonly number[];
+  /** 描ける `developSettings.engine` */
+  engines: readonly string[];
+  /** `v` を上げずに足した描画（`colorGradingLuminance`: 中間調・全体の輝度）。古い描画は黙って描かない */
+  features: readonly string[];
+  /** 描けるマスクの種類（`brush`・`subject`・`sky` は面） */
+  maskKinds: readonly string[];
+  /** 読める元（オリジナル・作業コピー）の最大の画素数 */
+  maxPixels: number;
+};
+
 /** 編集面が道具と文言を出し分ける、できること。 */
 export type PhotoLibraryCapabilities = {
   place: PhotoLibraryPlace;
@@ -305,6 +322,11 @@ export type PhotoLibraryCapabilities = {
    * 描けない。画面の扱いは M3 #67）
    */
   nativeExportMasks?: boolean;
+  /**
+   * 原寸の書き出しの描画が描ける設定（NIHO camera の同梱の niho-develop-render が答えたとき。省略 = 答えない古い描画〔0.16.0
+   * など〕= 遠近・修復・レンズ補正・中間調 / 全体の輝度は原寸へ渡さない）
+   */
+  nativeExportRenderer?: PhotoLibraryNativeRenderer;
   /**
    * マスクの面（ブラシ）を写真に保存できる（{@link PhotoLibrary.saveMaskSurface}。省略 = 保存できない = 画面はブラシを出さない。
    * 面を読むだけなら {@link PhotoLibrary.loadMaskSurface} の有無で決まる）

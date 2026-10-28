@@ -28,6 +28,7 @@ import {
   type DevelopSettings,
 } from "niho-photo-editing/develop-engine/develop-settings";
 import { readPhotoLibraryDevelopVersions } from "niho-photo-editing/editor/browser-photo-editing-versions-model";
+import { readPhotoLibraryNativeRenderer } from "niho-photo-editing/photo-editing-native-export";
 import { readJpegPixelSize, readPngPixelSize } from "niho-photo-editing/image-bytes-metadata";
 import type {
   PhotoLibrary,
@@ -117,9 +118,11 @@ export const LOCAL_CLOSED_CAPABILITIES: PhotoLibraryCapabilities = Object.freeze
 
 /** 現像（同梱の sidecar）が使えるかでの、この Mac のできること。 */
 export function localCapabilities(
-  status: Pick<DevelopStatus, "available" | "fullSizeRaster" | "masks">,
+  status: Pick<DevelopStatus, "available" | "fullSizeRaster" | "masks" | "renderer">,
   cutoutAvailable = false,
 ): PhotoLibraryCapabilities {
+  // 原寸へ渡せる設定は、同梱の niho-develop-render が答えた描ける設定で決める（答えない古い renderer は省略 = 今の遮断のまま。#131）
+  const renderer = status.available ? readPhotoLibraryNativeRenderer(status.renderer) : undefined;
   return {
     ...LOCAL_CLOSED_CAPABILITIES,
     rawWorkingCopy: status.available,
@@ -128,6 +131,7 @@ export function localCapabilities(
     nativeExportRaster: status.available && status.fullSizeRaster === true,
     // 部分補正（`masks`）のある設定は、同梱の niho-develop-render が描ける版のときだけ原寸で書き出す（古い native は返さない = 描けない）
     nativeExportMasks: status.available && status.masks === true,
+    ...(renderer ? { nativeExportRenderer: renderer } : {}),
     exportFolder: status.available,
     // マスクの面の置き場はアプリ自身のコマンド（同梱の sidecar に依らない）
     maskSurfaces: true,
