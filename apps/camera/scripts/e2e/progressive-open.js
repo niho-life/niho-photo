@@ -132,6 +132,8 @@
       grid.click();
       await waitFor(() => grid.getAttribute("aria-pressed") === "true" && findTile());
       await delay(100);
+      // 一覧で間を置いてから戻る条件（#129。静かな間に H/S の解析を先に作る。既定 0 は今までと同じ）
+      if (Number.isInteger(config.idleMs) && config.idleMs > 0) await delay(config.idleMs);
       tile = await waitFor(findTile);
       events.length = 0;
       perf.length = 0;

@@ -19,7 +19,11 @@ parser.add_argument("--input", required=True)
 parser.add_argument("--cache", required=True)
 parser.add_argument("--condition", choices=["cold", "warm"], required=True)
 parser.add_argument("--iteration", type=int, required=True)
+# warmで一覧に戻ってから同じ写真を再表示するまでの間（ms。既定0は今までと同じ。#129）
+parser.add_argument("--idle-ms", type=int, default=0)
 args = parser.parse_args()
+if not 0 <= args.idle_ms <= 30000:
+    parser.error("--idle-ms must be 0..30000")
 
 
 def remove_owned(path):
@@ -53,7 +57,7 @@ def main():
         if args.condition == "cold":
             remove_owned(native_cache)
         config = {"label": "sample", "fileName": source.name, "addPhotos": True,
-                  "mode": args.condition, "iteration": iteration}
+                  "mode": args.condition, "iteration": iteration, "idleMs": args.idle_ms}
         script = work / "probe.js"
         script.write_text(template.replace("__BENCH_CONFIG__", json.dumps(config)))
         report = work / "report.json"

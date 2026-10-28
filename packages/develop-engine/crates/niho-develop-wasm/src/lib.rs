@@ -11,7 +11,9 @@
 //! `rasterDecodeSize` gives the working size a Developer needs for the
 //! crop, `geometryOutputSize` the frame's size without rendering.
 //! `developer.autoSettings(settingsJson)` is "自動" (the six Light sliders
-//! and Vibrance for this photo).
+//! and Vibrance for this photo). `developer.prepareAnalysis(settingsJson)`
+//! makes ahead, while idle, the response analysis a preset's first frame
+//! would wait for (#129).
 //! Local masks (`masks`, v 5) render through the same `render` calls;
 //! `capabilities()` says which kinds this build draws and
 //! `developer.maskPlane(settingsJson, maskId, maxDimension)` gives one
@@ -519,6 +521,25 @@ impl Developer {
             .render(&settings, max_dimension as usize, quality)
             .map_err(js_error)?;
         frame_object(&frame)
+    }
+
+    /// Makes ahead, while the editor is idle, the response analysis frames of
+    /// these settings read once they use Highlights or Shadows (signed RAW:
+    /// the noise reduction source, the response coefficients and the
+    /// highlight maps; #129), so the first such frame does not wait for it.
+    /// Draws nothing and leaves the frames' bytes as they are. `false`:
+    /// nothing to make ahead for this photo and engine.
+    #[wasm_bindgen(js_name = prepareAnalysis)]
+    pub fn prepare_analysis(&mut self, settings_json: &str) -> Result<bool, JsError> {
+        let settings = niho_develop::parse_settings(settings_json).map_err(js_error)?;
+        self.session.prepare_analysis(&settings).map_err(js_error)
+    }
+
+    /// Drops the analysis made ahead for other settings (a kept photo's
+    /// Developer, #129). Frames are the same bytes.
+    #[wasm_bindgen(js_name = releaseAnalysisAhead)]
+    pub fn release_analysis_ahead(&mut self) {
+        self.session.release_analysis_ahead();
     }
 
     /// One local mask's plane for the editor's overlay: `{ width, height,

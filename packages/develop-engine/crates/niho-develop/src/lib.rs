@@ -879,6 +879,12 @@ pub struct Session {
     /// response coefficients, used while that session holds them by a
     /// preparation of the same CNR amount instead of computing them again.
     niho3_seed: Option<RawAnalysisSeed>,
+    /// A NIHO 3 analysis besides the prepared master's: made ahead of the
+    /// frames ([`Session::prepare_analysis`], #129) or set aside when a frame
+    /// took that one (another color noise reduction amount, as
+    /// `niho-colorful`'s). The next preparation whose settings it serves uses
+    /// it instead of making it again. One.
+    niho3_ahead: Option<RawAnalysisCache>,
     /// The `niho-6` analysis of the whole photo, shared with the sessions
     /// made from this one (preset previews, auto): the first that needs it
     /// computes it from [`Session::niho6_source`].
@@ -999,6 +1005,7 @@ impl Session {
             niho3: None,
             parked_niho3: None,
             niho3_seed: None,
+            niho3_ahead: None,
             healed: None,
             heal_plans: Arc::default(),
             lens,
@@ -1478,6 +1485,58 @@ impl Session {
         .map_err(Error::Niho6Prepare)
     }
 
+    /// Makes ahead the response analysis the frames of `settings` read once
+    /// they use Highlights or Shadows (#129: the editor calls it while idle),
+    /// so the first such frame, a preset's, does not wait for it: for a
+    /// signed RAW `niho-4` / `-5` / `-7` / `-11`, the color noise reduction
+    /// source, the response coefficients and the NIHO 7 highlight maps. The
+    /// frames are the same bytes as without it. Kept in the prepared master's
+    /// analysis when that serves these settings' noise reduction, else as the
+    /// one analysis made ahead. `Ok(false)`: nothing to make ahead (other
+    /// inputs and engines).
+    pub fn prepare_analysis(&mut self, settings: &DevelopSettings) -> Result<bool, Error> {
+        if self.niho3_mode(settings)? != Some(RawEngine::Niho4) {
+            return Ok(false);
+        }
+        let SessionSource::WorkingCopy { image, meta } = self.source.as_ref() else {
+            return Ok(false);
+        };
+        let serves =
+            |cache: &RawAnalysisCache| cache.serves(RawEngine::Niho4, image, meta, settings);
+        let in_master = self
+            .niho3
+            .as_ref()
+            .map(|prepared| &prepared.analysis)
+            .filter(|analysis| serves(analysis));
+        let ahead = self
+            .niho3_ahead
+            .as_ref()
+            .filter(|analysis| serves(analysis));
+        let keep = in_master.is_none() && ahead.is_none();
+        // A strong reference to the same cells: filling it fills theirs.
+        let cached = in_master.or(ahead).and_then(|analysis| {
+            match analysis.downgrade().upgrade(RawEngine::Niho4) {
+                Some(RawAnalysisCache::Niho4(cache)) => Some(cache),
+                _ => None,
+            }
+        });
+        let analysis = niho4::prepare_analysis(image, meta, settings, cached)
+            .map_err(|error| Error::Niho4Prepare(error.to_string()))?;
+        if keep {
+            self.niho3_ahead = Some(RawAnalysisCache::Niho4(analysis));
+        }
+        Ok(true)
+    }
+
+    /// Drops the analysis made ahead ([`Session::prepare_analysis`]) or set
+    /// aside by a frame of another noise reduction: for a session kept while
+    /// its photo is not open (#129), which then holds what its own settings'
+    /// frames read and no more. Frames are the same bytes (one that needs it
+    /// makes it again).
+    pub fn release_analysis_ahead(&mut self) {
+        self.niho3_ahead = None;
+    }
+
     /// The NIHO 3 analysis this session holds, for a session made from it.
     fn niho3_analysis(&self) -> Option<RawAnalysisSeed> {
         match &self.niho3 {
@@ -1682,12 +1741,24 @@ impl Session {
             };
             let cached_analysis = match current {
                 Some(current) if current.serves(engine, image, meta, settings) => Some(current),
-                current => self
-                    .niho3_seed
-                    .as_ref()
-                    .and_then(|seed| seed.upgrade(engine))
-                    .filter(|seed| seed.serves(engine, image, meta, settings))
-                    .or(current),
+                current => match self
+                    .niho3_ahead
+                    .take_if(|ahead| ahead.serves(engine, image, meta, settings))
+                {
+                    // The one it replaces is set aside in turn, so going back
+                    // (a preset of another noise reduction) does not make it
+                    // again: two analyses at most.
+                    Some(ahead) => {
+                        self.niho3_ahead = current;
+                        Some(ahead)
+                    }
+                    None => self
+                        .niho3_seed
+                        .as_ref()
+                        .and_then(|seed| seed.upgrade(engine))
+                        .filter(|seed| seed.serves(engine, image, meta, settings))
+                        .or(current),
+                },
             };
             match (parked, cached_analysis) {
                 (Some(parked), Some(analysis)) => {
