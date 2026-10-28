@@ -65,6 +65,8 @@ fn image(bytes: Vec<u8>) -> Response<Vec<u8>> {
     .header(header::CONTENT_TYPE, content_type)
     // 中身は同じ ID・同じ大きさなら変わらない間はキャッシュにある（native もキャッシュする）
     .header(header::CACHE_CONTROL, "private, max-age=300")
+    // 画面（tauri://localhost）は COEP: require-corp なので、別 origin のこの scheme は CORP を返さないと読めない（#148）
+    .header("cross-origin-resource-policy", "cross-origin")
     .body(bytes)
     .unwrap_or_else(|_| not_found())
 }
