@@ -90,6 +90,18 @@ async function run() {
   }
   const exposed = { ...base, exposure: base.exposure + 0.3 };
   const presetJson = JSON.stringify(presetSettings(pkg, first, exposed, asShot));
+  if (how === "prepared" || how === "preparedAll") {
+    // The worker's idle prefetch: the photo's analysis, then colorful's (another CNR).
+    [frame, ms] = timed(() => developer.prepareAnalysis(JSON.stringify(base)));
+    record("prepareAnalysis", ms);
+    if (how === "preparedAll") {
+      const colorful = presets.find((p) => p.id === "niho-colorful");
+      const json = JSON.stringify(presetSettings(pkg, colorful, base, asShot));
+      [frame, ms] = timed(() => developer.prepareAnalysis(json));
+      record("prepareAnalysisCnr25", ms);
+    }
+    frame = undefined;
+  }
   if (how === "thumb") {
     [frame, ms] = timed(() => {
       const thumbnail = developer.thumbnail(256);

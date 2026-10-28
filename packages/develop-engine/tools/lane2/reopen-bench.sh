@@ -19,7 +19,7 @@ cargo +1.98.1 build -q --release --locked --config .cargo/config.toml \
 wasm-bindgen --target web --out-dir "$W/$NAME" target/wasm32-unknown-unknown/release/niho_develop_wasm.wasm
 ls -la "$W/$NAME" "$W/signed.png"
 node tools/reopen-wasm-bench.mjs paired --pkg "$W/$NAME" --png "$W/signed.png" --meta "$W/signed.json" \
-  --trials "$TRIALS" --out "$W/$NAME-reopen.json"
+  --trials "$TRIALS" --modes "${MODES:-fresh,retained,thumb}" --out "$W/$NAME-reopen.json"
 for r in 0 1 2; do
   node tools/reopen-wasm-bench.mjs walk --pkg "$W/$NAME" --png "$W/signed.png" --meta "$W/signed.json" --retain "$r" --photos 30
   echo
