@@ -470,8 +470,9 @@ fn heal_into(
 }
 
 /// Heals an image in place (a one-shot render's decoded original, which
-/// is its own reference).
-pub(crate) fn heal_in_place(marks: &[HealMark], image: &mut LinearImage) {
+/// is its own reference). Public for the full-size time and memory tests
+/// (`tests/heal_full_size.rs`, #133).
+pub fn heal_in_place(marks: &[HealMark], image: &mut LinearImage) {
     if marks.is_empty() {
         return;
     }
