@@ -267,6 +267,8 @@ export function BrowserPhotoEditingMobileEditor(props: {
   onSharePending: () => Promise<BrowserPhotoExportResult>;
   /** シートを閉じた（待っていた写真を捨てる） */
   onExportSheetClosed: () => void;
+  /** 書き出すのシートを開いた（閉じたら {@link onExportSheetClosed}。「大きく」の長辺を読む間。niho-photo#134） */
+  onExportSheetOpened?: () => void;
 }) {
   const idPrefix = useId();
   // 層を出す先（host の shell）。最初の描画から出す: 1 枚の canvas が面の描画の effect と同じ commit で付いていないと、
@@ -425,11 +427,14 @@ export function BrowserPhotoEditingMobileEditor(props: {
 
   // シートを閉じた・層を閉じたら、共有シートを待っていた写真を捨てる
   const onExportSheetClosedRef = useRef(props.onExportSheetClosed);
+  const onExportSheetOpenedRef = useRef(props.onExportSheetOpened);
   useEffect(() => {
     onExportSheetClosedRef.current = props.onExportSheetClosed;
+    onExportSheetOpenedRef.current = props.onExportSheetOpened;
   });
   useEffect(() => {
     if (!sheetOpen) return;
+    onExportSheetOpenedRef.current?.();
     return () => onExportSheetClosedRef.current();
   }, [sheetOpen]);
 

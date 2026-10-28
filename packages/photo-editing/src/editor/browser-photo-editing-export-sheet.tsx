@@ -136,6 +136,7 @@ export function BrowserPhotoExportSheet(props: {
       <BrowserPhotoExportSizeCards
         size={size}
         disabled={sizeDisabled}
+        large={choices.jpeg.large}
         fullSize={choices.jpeg.fullSize}
         fullSizeOnly={fullSizeOnly}
         onChange={setStoredSize}
