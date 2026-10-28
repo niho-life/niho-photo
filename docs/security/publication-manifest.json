@@ -223,7 +223,7 @@
         "path": "packages/photo-editing/src/browser-photo-export.test.ts",
         "sha256": "60c3cd32192302e933a8941375069b4a4625309e054716b8417fbe6752cf87b5"
       },
-      "outputSha256": "011f97a0b9d86d83e1a1ff5e90cd847d4cc2ca7b4baa59f2500166ba9ebda9c8",
+      "outputSha256": "dfda33c6f3463850a4b7863c6c7652e54073ce0818748bb278f0c52fc30abe2d",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -249,7 +249,7 @@
         "path": "packages/photo-editing/src/browser-photo-export.ts",
         "sha256": "866f98dfe091c3ac0eec072666e6be07b7df11c85687a22b5c11ebb4941bf4d5"
       },
-      "outputSha256": "7e99b528a05ab51e204ac88f12de60b8ab7781f05ad9a47693ca00f09689df81",
+      "outputSha256": "43b0d1654925bd02b5069675e9a83e4c0a2935e255e4aeab1e747216486e5ddc",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -1372,7 +1372,7 @@
         "部分補正（マスク）#93: マスクの道具をスマホの全画面の編集の層でも出し（写真の上の操作・段・マスクだけの初期化）を渡した",
         "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
       ],
-      "outputSha256": "c5d6a0976835cb3f36b3a4414a7b44c30a409ef6eb506a5e01b4f8337e597760"
+      "outputSha256": "5f1411c76997e365437fd8275b9bbeac960f8bd3e472db084b3bd9ec67ef2636"
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-adjustment-controls-effects.test.tsx",
@@ -11466,8 +11466,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-export-large.ts",
-      "sha256": "106993e4b0b8f8dffdad2cb549a64e81f7615f2f83eb59795a6b7e150bcb444d",
-      "origin": "公開repoで新規作成（niho-photo#134）。書き出しの「大きく」の長辺を、開いている写真の今の切り抜きから wasm の geometryOutputSize で読む hook。外部のコード・実写真・非公開の情報を含まない。"
+      "sha256": "9b9b613de49134a936105aa92165527ca086edfe66bf3dafe9219112cce3d763",
+      "origin": "公開repoで新規作成（niho-photo#134）。書き出しの「大きく」の長辺を、開いている写真の今の切り抜きから wasm の geometryOutputSize で読む hook。外部のコード・実写真・非公開の情報を含まない。\n変更理由: niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。"
     }
   ],
   "excludedSources": [
