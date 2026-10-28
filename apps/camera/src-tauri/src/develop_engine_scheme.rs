@@ -209,7 +209,10 @@ mod tests {
     let preflight = preflight();
     assert_eq!(preflight.status(), StatusCode::NO_CONTENT);
     assert_eq!(preflight.headers()[header::ACCESS_CONTROL_ALLOW_METHODS], "POST");
-    assert_eq!(preflight.headers()[header::ACCESS_CONTROL_ALLOW_HEADERS], "Content-Type");
+    assert_eq!(
+      preflight.headers()[header::ACCESS_CONTROL_ALLOW_HEADERS],
+      "Content-Type"
+    );
     assert_eq!(preflight.headers()[header::ACCESS_CONTROL_MAX_AGE], "600");
     let gone = unavailable(NOT_BUNDLED);
     assert_eq!(gone.status(), StatusCode::SERVICE_UNAVAILABLE);

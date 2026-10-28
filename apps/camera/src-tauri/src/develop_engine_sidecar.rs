@@ -116,7 +116,9 @@ pub type Clock = Arc<dyn Fn() -> Instant + Send + Sync>;
 
 /// `[A-Za-z.]{1,64}`（URL の path と stdin の封に入れてよい method の名前）。
 pub fn is_method_name(name: &str) -> bool {
-  !name.is_empty() && name.len() <= MAX_METHOD_BYTES && name.bytes().all(|byte| byte.is_ascii_alphabetic() || byte == b'.')
+  !name.is_empty()
+    && name.len() <= MAX_METHOD_BYTES
+    && name.bytes().all(|byte| byte.is_ascii_alphabetic() || byte == b'.')
 }
 
 /// stdin の 1 要求: `u32 LE id · u32 LE M · M bytes method · u32 LE B · B bytes 本文`。
@@ -184,7 +186,13 @@ pub struct Hello {
 
 /// `hello` の応答の本文を読む（`{"ok":true,"result":{...}}`。protocol が 1 でない・形が違う → 使えない）。
 pub fn parse_hello(body: &[u8]) -> Result<Hello, Unavailable> {
-  let length = u32::from_le_bytes(body.get(..4).ok_or(HELLO_INVALID)?.try_into().map_err(|_| HELLO_INVALID)?);
+  let length = u32::from_le_bytes(
+    body
+      .get(..4)
+      .ok_or(HELLO_INVALID)?
+      .try_into()
+      .map_err(|_| HELLO_INVALID)?,
+  );
   let header = 4usize
     .checked_add(length as usize)
     .and_then(|end| body.get(4..end))
@@ -461,7 +469,11 @@ impl Engine {
       }
     };
     let state = lock(&self.state);
-    if !state.current.as_ref().is_some_and(|current| Arc::ptr_eq(current, &session)) {
+    if !state
+      .current
+      .as_ref()
+      .is_some_and(|current| Arc::ptr_eq(current, &session))
+    {
       // `hello` を待つ間に止めた
       return Err(STOPPED);
     }
@@ -545,8 +557,7 @@ fn spawn_bundled(log: LogFn) -> Result<Connection, Unavailable> {
         SPAWN_FAILED
       }
     })?;
-  let (Some(stdin), Some(stdout), Some(stderr)) = (child.stdin.take(), child.stdout.take(), child.stderr.take())
-  else {
+  let (Some(stdin), Some(stdout), Some(stderr)) = (child.stdin.take(), child.stdout.take(), child.stderr.take()) else {
     child.terminate();
     return Err(SPAWN_FAILED);
   };
@@ -858,7 +869,11 @@ mod tests {
     assert_eq!(answered(&fake, "Developer.render", b"x"), b"Developer.render:x");
     assert_eq!(fake.engine.call("exportTiff", b"x"), Err(CallError::UnknownMethod));
     let hello = answered(&fake, HELLO, &hello_request_body());
-    assert_eq!(parse_hello(&hello).unwrap().engine, "niho-14", "画面の glue の hello も通す");
+    assert_eq!(
+      parse_hello(&hello).unwrap().engine,
+      "niho-14",
+      "画面の glue の hello も通す"
+    );
     assert_eq!(fake.spawns(), 1);
     assert_eq!(
       *lock(&seen),
@@ -936,10 +951,7 @@ mod tests {
     std::thread::scope(|scope| {
       let waiting = scope.spawn(|| fake.engine.call("slow", b"x"));
       while seen.recv().unwrap() != "slow" {}
-      assert_eq!(
-        fake.engine.call("crash", b"x"),
-        Err(CallError::Unavailable(EXITED))
-      );
+      assert_eq!(fake.engine.call("crash", b"x"), Err(CallError::Unavailable(EXITED)));
       assert_eq!(
         waiting.join().unwrap(),
         Err(CallError::Unavailable(EXITED)),
@@ -965,7 +977,11 @@ mod tests {
     // 最初の起動は数えない
     assert_eq!(fake.engine.call("crash", b""), Err(CallError::Unavailable(EXITED)));
     for restart in 1..=3 {
-      assert_eq!(fake.engine.call("crash", b""), Err(CallError::Unavailable(EXITED)), "{restart}");
+      assert_eq!(
+        fake.engine.call("crash", b""),
+        Err(CallError::Unavailable(EXITED)),
+        "{restart}"
+      );
     }
     assert_eq!(fake.spawns(), 4);
     for _ in 0..2 {
