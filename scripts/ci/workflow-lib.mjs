@@ -63,7 +63,8 @@ export function workflowFailures(workflow) {
   for (const job of Object.values(workflow.jobs ?? {})) {
     if (!["ubuntu-24.04", "macos-26"].includes(job["runs-on"])) fail("GitHub-hosted runnerのみ");
     if (job.environment || job.permissions || job.uses || job.container || job.services) fail("jobへの権限/環境/再利用workflow追加は禁止");
-    const timeoutLimit = job === candidate ? 90 : 30;
+    // native（Client）は macos-26 で develop-engine が 16〜24 分かかり、試験が増えると 30 分を超える（#153 の後）
+    const timeoutLimit = job === candidate ? 90 : job === workflow.jobs?.native ? 45 : 30;
     if (!Number.isInteger(job["timeout-minutes"]) || job["timeout-minutes"] > timeoutLimit) fail(`${timeoutLimit}分以内のtimeoutが必要`);
     let checkout = false;
     for (const step of job.steps ?? []) {
