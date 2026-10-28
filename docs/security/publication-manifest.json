@@ -5872,7 +5872,7 @@
         "path": "packages/develop-engine/crates/niho-develop-render/tests/cli.rs",
         "sha256": "8ddf42804ccd8202fb8834bc499d2d03a331eb0ff96e020421a776f2286ef9bd"
       },
-      "outputSha256": "cd2a1e74a4ed98497e2e9fc9132dd929eca7c4a2cf2e1d16747dc7e9d5278c11",
+      "outputSha256": "371a62d1b869fcfc7f3106b74ff11022f2f33804ce4c8c3021a6efa2aad3d951",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "新engine受入と未知版拒否の境界を更新し、既存wasm CIで候補のFinal/Interactive固定画素を検証する。",

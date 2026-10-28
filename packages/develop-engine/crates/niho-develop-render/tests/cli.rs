@@ -1369,6 +1369,8 @@ fn full_size_peak_memory() {
                     s(&working_copy),
                     "--meta",
                     s(&meta),
+                    "--base-version",
+                    WC_BASE,
                     "--max-dimension",
                     "0",
                     "--out",
@@ -1393,9 +1395,11 @@ fn full_size_peak_memory() {
                 mib("maximum resident set size"),
                 summary["totalMs"]
             );
-            if !output.status.success() {
-                println!("  {}", String::from_utf8_lossy(&output.stdout).trim());
-            }
+            assert!(
+                output.status.success(),
+                "{name}: {}",
+                String::from_utf8_lossy(&output.stdout).trim()
+            );
             let _ = fs::remove_file(&out);
         }
     }
