@@ -21,7 +21,11 @@
 //! `developer.render` like any other setting; the Developer keeps their plans
 //! across frames. The lens corrections (`developSettings.lens`, v 9) do too;
 //! the Developer estimates the photo's chromatic aberration once.
-//! Everything runs single threaded (no SharedArrayBuffer, spec "段 2").
+//! The default build runs single threaded (no SharedArrayBuffer, spec "段 2").
+//! The `threads` build (#151, a cross-origin isolated page only) adds
+//! `initThreadPool(n)`: call it once after `init`, and the heavy stages split
+//! their rows and pixels on rayon's Web Workers. The bytes are the single
+//! thread's.
 
 use js_sys::{Object, Reflect, Uint8ClampedArray};
 use niho_develop::upright::UprightMode;
@@ -30,6 +34,11 @@ use niho_develop::{
     Session, WorkingCopyMeta,
 };
 use wasm_bindgen::prelude::*;
+
+/// `initThreadPool(n)` (`threads` build only): starts rayon's pool of `n`
+/// Web Workers on the shared memory. The Worker calls it once after `init`.
+#[cfg(all(feature = "threads", target_arch = "wasm32"))]
+pub use wasm_bindgen_rayon::init_thread_pool;
 
 fn js_error(e: impl std::fmt::Display) -> JsError {
     JsError::new(&e.to_string())
