@@ -121,5 +121,5 @@ Issue #45。段 2（wasm の `niho-develop`）に、手動の歪み・周辺光�
 - Lightroom の実測による校正は未実施（歪み・周辺光量の大きさと向き、フリンジの色相の目盛り・量は NIHO のモデル）。`LensManualDistortionAmount` の正が Lightroom で樽型を直す向きかも未確認。
 - 歪み・色収差の再標本化は 2560px の原寸で数百 ms かかる（角度・遠近と同じ）。歪みのスライダーのドラッグ中は 1 コマごとに窓を作り直す。
 - 部分補正（マスク）の位置はレンズの歪みを追わない。Upright の推定は歪みを直す前の枠の線で行う。
-- Mac のネイティブ書き出しは同梱の `niho-develop-render`（`apps/camera/develop-sidecars.lock.json` の版。現在 0.16.0）で描く。sidecar を 0.23.0 以上に上げるまで、画を変えるレンズ補正のある設定（v9）はネイティブ書き出しで `unsupported_settings` として断られる（レンズ補正を落とした画は出ない）。
+- Mac のネイティブ書き出しは同梱の `niho-develop-render`（`apps/camera/develop-sidecars.lock.json` の版。main は 0.26.0、配布中の Mac アプリは 0.16.0）で描く。画を変えるレンズ補正のある設定（v9）を原寸へ渡すのは、renderer が `niho-develop-render capabilities` に答えて v9 を読めると言うときだけ（#131）。答えない古い renderer では原寸のカードを押せず、更新の案内を出す（レンズ補正を落とした画は出ない）。
 - スマホの全画面編集層には節を出さない。

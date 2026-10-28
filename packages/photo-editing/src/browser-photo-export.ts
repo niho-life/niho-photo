@@ -421,7 +421,7 @@ export function resolveBrowserPhotoExportChoices(input: {
   desktopFullSize?: boolean;
   /** 原寸の書き出しで HEIC / HEIF・TIFF も描ける（`capabilities.nativeExportRaster`。NIHO camera。省略 = 描けない） */
   desktopFullSizeRaster?: boolean;
-  /** 現在の補正に native renderer が描けない補正〔中間調・全体の輝度・遠近・修復・レンズ補正〕がある（省略時は保存済み設定から判定） */
+  /** 現在の補正に native renderer が描けない補正（`photoEditingNativeExportBlockers`）がある（省略時は保存済み設定から、答えない古い描画として判定） */
   nativeFullSizeUnsupported?: boolean;
   /** 上の理由の 1 行（原寸のカードの副文。省略時は保存済み設定から作る） */
   nativeFullSizeUnsupportedText?: string;

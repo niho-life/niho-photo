@@ -550,6 +550,296 @@ fn local_masks_are_exported_only_by_a_render_sidecar_that_draws_them() {
   }
 }
 
+/// `niho-develop-render capabilities` の 1 行（0.26.0 と同じ形）。`versions` は読める `v`。
+fn render_capabilities_line(versions: &[u32], features: &[&str]) -> String {
+  json!({
+    "tool": "niho-develop-render",
+    "version": "0.26.0",
+    "settingsVersions": versions,
+    "engines": ["niho-1", "niho-2", "niho-10", "niho-14"],
+    "features": features,
+    "maskKinds": ["linear", "radial", "brush", "subject", "sky"],
+    "maxMasks": 8,
+    "maxPixels": 40_000_000,
+  })
+  .to_string()
+}
+
+#[test]
+fn render_capabilities_are_read_only_from_their_own_shape() {
+  let line = render_capabilities_line(&[1, 2, 3, 4, 5, 6, 7, 8, 9], &["colorGradingLuminance"]);
+  let capabilities = RenderCapabilities::parse(&format!("{line}\n")).unwrap();
+  assert_eq!(capabilities.settings_versions, vec![1, 2, 3, 4, 5, 6, 7, 8, 9]);
+  assert_eq!(capabilities.engines, vec!["niho-1", "niho-2", "niho-10", "niho-14"]);
+  assert_eq!(capabilities.features, vec!["colorGradingLuminance"]);
+  assert_eq!(capabilities.max_pixels, 40_000_000);
+  assert_eq!(
+    capabilities.to_json(),
+    json!({
+      "settingsVersions": [1, 2, 3, 4, 5, 6, 7, 8, 9],
+      "engines": ["niho-1", "niho-2", "niho-10", "niho-14"],
+      "features": ["colorGradingLuminance"],
+      "maskKinds": ["linear", "radial", "brush", "subject", "sky"],
+      "maxPixels": 40_000_000,
+    })
+  );
+  let base: Value = serde_json::from_str(&line).unwrap();
+  let broken = |key: &str, value: Value| {
+    let mut broken = base.clone();
+    broken[key] = value;
+    RenderCapabilities::parse(&broken.to_string())
+  };
+  assert!(RenderCapabilities::parse("").is_none());
+  assert!(RenderCapabilities::parse(r#"{"error":"invalid_arguments","message":"x"}"#).is_none());
+  assert!(broken("tool", json!("apple-raw-linear")).is_none());
+  assert!(broken("settingsVersions", json!([])).is_none());
+  assert!(broken("settingsVersions", json!([1, "2"])).is_none());
+  assert!(broken("settingsVersions", json!([0])).is_none());
+  assert!(broken("engines", json!([])).is_none());
+  assert!(broken("engines", json!(["niho-1", 2])).is_none());
+  assert!(broken("features", json!("colorGradingLuminance")).is_none());
+  assert!(broken("maskKinds", Value::Null).is_none());
+  assert!(broken("maxPixels", json!(0)).is_none());
+  assert!(broken("maxPixels", json!(-1)).is_none());
+  assert!(broken("engines", json!(vec!["niho-1"; 65])).is_none());
+}
+
+#[test]
+fn render_capabilities_decide_which_settings_reach_the_full_size_render() {
+  let lens = json!({
+    "v": 9, "engine": "niho-14", "look": "niho-standard-1", "base": null,
+    "lens": { "vignetting": -10 },
+    "colorGrading": { "midtone": { "luminance": 12 } }
+  });
+  let new_engine = json!({ "v": 1, "engine": "niho-15", "look": "niho-standard-1", "base": null });
+  let luminance = json!({
+    "v": 1, "engine": "niho-14", "look": "niho-standard-1", "base": null,
+    "colorGrading": { "global": { "luminance": -5 } }
+  });
+
+  // 0.16.0 相当（答えない）: 描ける設定は分からない。遮断は画面の側（ここでは渡したものをそのまま描かせる）
+  let old = SidecarHarness::new("render-capabilities-old");
+  old.mark("render-version", "0.16.0");
+  let develop = camera_develop(&old);
+  assert!(develop.is_available());
+  assert_eq!(develop.render_capabilities_cached(), None);
+  assert!(old
+    .lines("calls.txt")
+    .contains(&"niho-develop-render capabilities".to_string()));
+
+  // 答える renderer: 読める設定は描き、読めない `v`・engine・輝度は作業コピーを作る前に断る
+  const ALL: &[u32] = &[1, 2, 3, 4, 5, 6, 7, 8, 9];
+  const LUMINANCE: &[&str] = &["colorGradingLuminance"];
+  let cases = [
+    ("all", ALL, LUMINANCE, &lens, true),
+    ("no-v9", &ALL[..8], LUMINANCE, &lens, false),
+    ("engine", ALL, LUMINANCE, &new_engine, false),
+    ("luminance", ALL, &[] as &[&str], &luminance, false),
+    ("luminance-drawn", ALL, LUMINANCE, &luminance, true),
+  ];
+  for (name, versions, features, settings, draws) in cases {
+    let harness = SidecarHarness::new(&format!("render-capabilities-{name}"));
+    harness.mark("render-version", "0.26.0");
+    harness.mark("render-capabilities", &render_capabilities_line(versions, features));
+    let develop = camera_develop(&harness);
+    let jpeg = photo_file(&harness, "IMG_0002.jpg", b"jpeg bytes");
+    let photos = FakePhotos::new(&[("p1", &jpeg)]);
+    let destination = harness.dir.join("out").join("IMG_0002.jpg");
+    fs::create_dir_all(destination.parent().unwrap()).unwrap();
+    let result = develop.export(&photos, "p1", settings, &destination, Overwrite::Never);
+    assert_eq!(
+      develop
+        .render_capabilities_cached()
+        .map(|capabilities| capabilities.settings_versions),
+      Some(versions.to_vec()),
+      "{name}"
+    );
+    let rendered = harness
+      .work_calls()
+      .iter()
+      .any(|call| call.starts_with("niho-develop-render render "));
+    if draws {
+      result.unwrap();
+      assert!(rendered, "{name}");
+      let sent: Value =
+        serde_json::from_slice(&fs::read(harness.sidecars.join("last-settings.json")).unwrap()).unwrap();
+      for key in ["v", "engine", "lens", "colorGrading"] {
+        assert_eq!(sent[key], settings[key], "{name}: {key} reaches the sidecar as saved");
+      }
+    } else {
+      let error = result.unwrap_err();
+      assert_eq!(error.code, develop_code::UNSUPPORTED_SETTINGS, "{name}");
+      assert!(!rendered, "{name}");
+      assert!(!destination.exists(), "{name}");
+    }
+  }
+}
+
+/// 補正を全部使う設定（原寸の大きさの見積もりは、補正の有無と数だけを見る）。
+fn every_correction() -> Value {
+  json!({
+    "v": 9, "masks": [{"id": "a"}, {"id": "b"}, {"id": "c"}], "detail": {"sharpening": {"amount": 40}},
+    "geometry": {"perspective": {"vertical": -10}}, "heal": [{"id": "h"}], "lens": {"distortion": 5}
+  })
+}
+
+#[test]
+fn full_size_peak_grows_with_the_pixels_and_the_corrections() {
+  let plain = json!({ "v": 1, "exposure": 0.3 });
+  let all = every_correction();
+  for input in [ExportInput::Raw, ExportInput::Raster, ExportInput::RasterFullSize] {
+    let small = full_size_peak_bytes(24_000_000, input, &plain);
+    let large = full_size_peak_bytes(48_000_000, input, &plain);
+    assert!(small > 0);
+    assert!(
+      large.abs_diff(2 * small) <= 1,
+      "{input:?}: the estimate is proportional to the pixels"
+    );
+    assert!(full_size_peak_bytes(24_000_000, input, &all) > small, "{input:?}");
+  }
+  // JPEG / PNG は元を原寸にする段（apple-raw-linear）を通らない
+  assert!(
+    full_size_peak_bytes(24_000_000, ExportInput::Raster, &plain)
+      <= full_size_peak_bytes(24_000_000, ExportInput::Raw, &plain)
+  );
+  // マスクは 8 枚まで数える
+  let many = json!({ "masks": vec![json!({}); 12] });
+  let eight = json!({ "masks": vec![json!({}); 8] });
+  assert_eq!(
+    full_size_peak_bytes(10_000_000, ExportInput::Raster, &many),
+    full_size_peak_bytes(10_000_000, ExportInput::Raster, &eight)
+  );
+}
+
+/// 見積もりは Studio の実測（renderer の段・61MP 9566×6377 の合成の作業コピー・peak memory footprint）を下回らない。
+#[test]
+fn full_size_peak_is_at_least_the_measured_render() {
+  let pixels = 9566 * 6377;
+  let mib = 1_u64 << 20;
+  for (settings, measured_mib) in [
+    (json!({}), 2348),
+    (json!({ "masks": [{}, {}, {}] }), 4482),
+    (json!({ "detail": { "sharpening": { "amount": 40 } } }), 4347),
+    (json!({ "geometry": { "perspective": { "vertical": -15 } } }), 3482),
+    (json!({ "heal": [{}] }), 3091),
+    (json!({ "lens": { "distortion": 8 } }), 3523),
+    (every_correction(), 10547),
+  ] {
+    let estimate = full_size_peak_bytes(pixels, ExportInput::Raster, &settings);
+    assert!(
+      estimate >= measured_mib * mib,
+      "{settings}: {estimate} < {measured_mib} MiB"
+    );
+  }
+}
+
+#[test]
+fn full_size_is_refused_beyond_the_renderer_bound_or_the_memory() {
+  let gib = 1_u64 << 30;
+  let plain = json!({ "v": 1 });
+  let all = every_correction();
+  // 61MP（9504×6336）: 1 億画素まで読む renderer と大きなメモリなら書き出す
+  assert_eq!(
+    full_size_too_large(9504, 6336, ExportInput::Raw, &plain, 100_000_000, Some(64 * gib)),
+    None
+  );
+  // 4,000 万画素までの古い renderer は断り、収まる長辺を出す
+  let old = full_size_too_large(
+    9504,
+    6336,
+    ExportInput::Raw,
+    &plain,
+    LEGACY_RENDER_MAX_PIXELS,
+    Some(64 * gib),
+  )
+  .unwrap();
+  let expected = (9504.0 * (40_000_000.0_f64 / (9504.0 * 6336.0)).sqrt()).floor() as u64;
+  assert_eq!(old.max_long_edge, expected);
+  assert!(old.max_long_edge * (old.max_long_edge * 6336 / 9504) <= LEGACY_RENDER_MAX_PIXELS);
+  // メモリの小さい Mac（8 GiB）で補正を全部使う 61MP は断り、出した長辺は見積もりがメモリに収まる
+  let air = full_size_too_large(9504, 6336, ExportInput::Raw, &all, 100_000_000, Some(8 * gib)).unwrap();
+  assert!(air.max_long_edge < 9504);
+  let long = air.max_long_edge as f64;
+  let pixels = (long * long * 6336.0 / 9504.0) as u64;
+  assert!(
+    full_size_peak_bytes(pixels, ExportInput::Raw, &all) as f64 <= 8.0 * gib as f64 * FULL_SIZE_MEMORY_SHARE * 1.001
+  );
+  // メモリが分からなければ画素数だけで決める・24MP は 8 GiB でも書き出す
+  assert_eq!(
+    full_size_too_large(9504, 6336, ExportInput::Raw, &all, 100_000_000, None),
+    None
+  );
+  assert_eq!(
+    full_size_too_large(6000, 4000, ExportInput::Raw, &all, 100_000_000, Some(8 * gib)),
+    None
+  );
+  // 寸法の無い写真は断らない
+  assert_eq!(full_size_too_large(0, 4000, ExportInput::Raw, &all, 1, Some(1)), None);
+  assert_eq!(
+    FullSizeTooLarge { max_long_edge: 7745 }.message(),
+    "この写真は原寸では大きすぎます（長辺 7,745 px まで）。"
+  );
+  assert_eq!(
+    FullSizeTooLarge { max_long_edge: 512 }.message(),
+    "この写真は原寸では大きすぎます（長辺 512 px まで）。"
+  );
+}
+
+#[test]
+fn full_size_too_large_reads_the_photo_size_and_the_bundled_renderer() {
+  let settings = json!({ "v": 1, "engine": "niho-14", "exposure": 0.2 });
+  // 1 億画素を超える JPEG（12000×9000）は、答える renderer（1 億画素まで）でも断る（メモリによらない）
+  for (name, size, capabilities, refused) in [
+    ("old-24mp", "6000 4000", false, false),
+    ("old-61mp", "9504 6336", false, true),
+    ("new-108mp", "12000 9000", true, true),
+  ] {
+    let harness = SidecarHarness::new(&format!("full-size-{name}"));
+    harness.mark("render-version", "0.26.0");
+    if capabilities {
+      let line = render_capabilities_line(&[1, 2, 3, 4, 5, 6, 7, 8, 9], &["colorGradingLuminance"]);
+      let mut value: Value = serde_json::from_str(&line).unwrap();
+      value["maxPixels"] = json!(100_000_000);
+      harness.mark("render-capabilities", &value.to_string());
+    }
+    harness.mark("image-size", size);
+    let develop = camera_develop(&harness);
+    let jpeg = photo_file(&harness, "IMG_0002.jpg", b"jpeg bytes");
+    let photos = FakePhotos::new(&[("p1", &jpeg)]);
+    let too_large = develop.full_size_too_large(&photos, "p1", &settings);
+    assert_eq!(too_large.is_some(), refused, "{name}: {too_large:?}");
+    if let Some(too_large) = too_large {
+      let (width, height): (f64, f64) = {
+        let mut parts = size.split(' ').map(|part| part.parse::<f64>().unwrap());
+        (parts.next().unwrap(), parts.next().unwrap())
+      };
+      let bound = if capabilities {
+        100_000_000.0
+      } else {
+        LEGACY_RENDER_MAX_PIXELS as f64
+      };
+      assert!(
+        too_large.max_long_edge as f64 <= width.max(height) * (bound / (width * height)).sqrt(),
+        "{name}"
+      );
+    }
+    assert!(
+      !harness
+        .work_calls()
+        .iter()
+        .any(|call| call.starts_with("niho-develop-render render ")),
+      "{name}: the check renders nothing"
+    );
+  }
+  // 開いていない写真は断らない（書き出しの中で今までどおり失敗を返す）
+  let harness = SidecarHarness::new("full-size-not-open");
+  let develop = camera_develop(&harness);
+  assert_eq!(
+    develop.full_size_too_large(&FakePhotos::new(&[]), "p1", &settings),
+    None
+  );
+}
+
 #[test]
 fn surface_masks_hand_only_their_drawn_surfaces_to_the_render_sidecar() {
   use crate::mask_surfaces::mask_surface_id;
