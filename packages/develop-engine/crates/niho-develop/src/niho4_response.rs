@@ -184,14 +184,24 @@ pub fn coefficient_maps(
     let mut highlight_alpha = Vec::with_capacity(pixels);
     let mut shadow_a = Vec::with_capacity(pixels);
     let mut shadow_b = Vec::with_capacity(pixels);
-    for feature in &features {
+    let infer = |feature: &[f32; FEATURE_COUNT]| {
         let [ha, hb, alpha] = highlight_model.infer_with_fixed(feature, &highlight_fixed);
         let [sa, sb, _] = shadow_model.infer_with_fixed(feature, &shadow_fixed);
-        highlight_a.push(ha as f32);
-        highlight_b.push(hb as f32);
-        highlight_alpha.push(alpha as f32);
-        shadow_a.push(sa as f32);
-        shadow_b.push(sb as f32);
+        [ha as f32, hb as f32, alpha as f32, sa as f32, sb as f32]
+    };
+    #[cfg(feature = "threads")]
+    let inferred: Vec<[f32; 5]> = {
+        use rayon::prelude::*;
+        features.par_iter().map(infer).collect()
+    };
+    #[cfg(not(feature = "threads"))]
+    let inferred: Vec<[f32; 5]> = features.iter().map(infer).collect();
+    for [ha, hb, alpha, sa, sb] in inferred {
+        highlight_a.push(ha);
+        highlight_b.push(hb);
+        highlight_alpha.push(alpha);
+        shadow_a.push(sa);
+        shadow_b.push(sb);
     }
     Ok(CoefficientMaps {
         camera,

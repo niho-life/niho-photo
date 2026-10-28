@@ -23,6 +23,11 @@ jpeg-decoder.workspace = true
 # niho-camera-profile uses). Neither adds a crate to Cargo.lock.
 png = "0.18"
 sha2 = "0.10"
+# Research only (#130): data-parallel loops (each pixel computed as before).
+rayon = { version = "1", optional = true }
+
+[features]
+threads = ["dep:rayon"]
 
 [dev-dependencies]
 wasm-bindgen-test = "=0.3.79"

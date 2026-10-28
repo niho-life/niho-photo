@@ -33,6 +33,10 @@ use niho_develop::{
 };
 use wasm_bindgen::prelude::*;
 
+// Research only (#130): `initThreadPool(n)` starts the rayon pool on Web Workers.
+#[cfg(feature = "threads")]
+pub use wasm_bindgen_rayon::init_thread_pool;
+
 fn js_error(e: impl std::fmt::Display) -> JsError {
     JsError::new(&e.to_string())
 }

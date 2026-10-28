@@ -15,3 +15,8 @@ niho-develop = { path = "../niho-develop" }
 wasm-bindgen.workspace = true
 js-sys.workspace = true
 serde_json.workspace = true
+# Research only (#130): wasm threads (rayon on Web Workers, shared memory).
+wasm-bindgen-rayon = { version = "1", optional = true }
+
+[features]
+threads = ["dep:wasm-bindgen-rayon", "niho-develop/threads"]
