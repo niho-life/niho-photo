@@ -364,6 +364,16 @@
         },
         {
           "run": "swift test --package-path packages/develop-engine/tools/apple-raw-linear"
+        },
+        {
+          "run": "swift test --package-path packages/develop-engine/tools/niho-camera-cutout"
+        },
+        {
+          "name": "niho-camera-cutout の Vision E2E（合成画像）",
+          "env": {
+            "NIHO_CUTOUT_E2E": "1"
+          },
+          "run": "swift test --package-path packages/develop-engine/tools/niho-camera-cutout --filter VisionEndToEndTests"
         }
       ]
     },
