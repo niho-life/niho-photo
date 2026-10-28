@@ -6,7 +6,10 @@ import {
   BROWSER_PHOTO_EXPORT_LONG_EDGE,
   BROWSER_PHOTO_WORKING_COPY_LONG_EDGE,
 } from "./browser-photo-source";
-import { isEditableDevelopSettings } from "./develop-engine/develop-settings";
+import { hasDevelopHeal } from "./develop-engine/develop-heal";
+import { hasActiveDevelopLens } from "./develop-engine/develop-lens";
+import { isActiveDevelopMask, readDevelopMasks } from "./develop-engine/develop-masks";
+import { hasDevelopGeometry, isEditableDevelopSettings } from "./develop-engine/develop-settings";
 import { isDevelopWorkTarget, type DevelopWorkTargetPhoto } from "./develop-engine/develop-work-target";
 import { workExportWaitingText } from "./develop-engine/develop-work-wait";
 import {
@@ -91,6 +94,51 @@ export function browserPhotoExportChoice(
   format: BrowserPhotoExportFormat,
 ): BrowserPhotoExportChoice | null {
   return format === "png" ? (choices.png ?? null) : choices[format];
+}
+
+/**
+ * スマホで「大きく」を出す、書き出しの wasm のメモリの見積もりの上限（bytes。niho-photo#134）。今の長辺 2048px で補正を全部使った
+ * ときの実測（Studio・Node・24MP の JPEG で 348MB）のおよそ 1.5 倍。編集中の写真の分（同じ実測で約 175MB）はこの外。
+ */
+export const BROWSER_PHOTO_EXPORT_LARGE_MOBILE_MAX_BYTES = 512 * 1024 * 1024;
+/**
+ * 「大きく」の書き出しの wasm のメモリの、書き出す画の 1 画素あたりの bytes。補正の無い描画と、補正ごとの足し（Studio・Node の実測:
+ * 24MP の JPEG を長辺 4096〔4096×2731〕で描いて、露光量・コントラストだけで 213MB、マスク 3 枚・修復・レンズ・遠近・ディテールで
+ * 1,284MB。補正ごとの割り振りは Mac の原寸の実測〔niho-photo#132〕の比。どちらの実測も下回らない）。
+ */
+const LARGE_WASM_BYTES_PER_PIXEL = 21;
+const LARGE_WASM_MASK_BYTES_PER_PIXEL = 10;
+const LARGE_WASM_DETAIL_BYTES_PER_PIXEL = 30;
+const LARGE_WASM_GEOMETRY_BYTES_PER_PIXEL = 15;
+const LARGE_WASM_HEAL_BYTES_PER_PIXEL = 11;
+const LARGE_WASM_LENS_BYTES_PER_PIXEL = 15;
+
+/** 「大きく」の書き出しの wasm のメモリの見積もり（bytes）。`size` は書き出す画の寸法。マスクは画を変えるものを 8 枚まで数える。 */
+export function browserPhotoExportLargeWasmBytes(settings: unknown, size: { width: number; height: number }): number {
+  const masks = Math.min(8, readDevelopMasks(settings).filter(isActiveDevelopMask).length);
+  const detail =
+    typeof settings === "object" && settings !== null && (settings as { detail?: unknown }).detail != null;
+  let perPixel = LARGE_WASM_BYTES_PER_PIXEL + LARGE_WASM_MASK_BYTES_PER_PIXEL * masks;
+  if (detail) perPixel += LARGE_WASM_DETAIL_BYTES_PER_PIXEL;
+  if (hasDevelopGeometry(settings)) perPixel += LARGE_WASM_GEOMETRY_BYTES_PER_PIXEL;
+  if (hasDevelopHeal(settings)) perPixel += LARGE_WASM_HEAL_BYTES_PER_PIXEL;
+  if (hasActiveDevelopLens(settings)) perPixel += LARGE_WASM_LENS_BYTES_PER_PIXEL;
+  return perPixel * Math.max(0, size.width) * Math.max(0, size.height);
+}
+
+/**
+ * スマホで「大きく」を出すか（wasm のメモリの見積もりが {@link BROWSER_PHOTO_EXPORT_LARGE_MOBILE_MAX_BYTES} に収まるか）。`size` は
+ * 書き出す画の寸法（1 枚で開いた写真は今の切り抜き後）。分からなければ、長辺の上限で縦横とも同じ正方形（JPEG / PNG は 4096×4096、
+ * 作業コピーで直す写真は 2560×2560）で見積もる（縦横比が分からないので、長辺だけを抑えた最大の画。正方形に近い写真を下回らない）。
+ */
+export function isBrowserPhotoExportLargeWithinMobileMemory(
+  settings: unknown,
+  size: { width: number; height: number } | null,
+  workTarget: boolean,
+): boolean {
+  const longEdge = workTarget ? BROWSER_PHOTO_WORKING_COPY_LONG_EDGE : BROWSER_PHOTO_EXPORT_LARGE_LONG_EDGE;
+  const output = size ?? { width: longEdge, height: longEdge };
+  return browserPhotoExportLargeWasmBytes(settings, output) <= BROWSER_PHOTO_EXPORT_LARGE_MOBILE_MAX_BYTES;
 }
 
 /** 複数枚の「大きく」のカード（長辺は写真ごとに違うので、JPEG / PNG と RAW の上限を並べる）。 */
