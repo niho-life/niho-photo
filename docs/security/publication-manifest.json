@@ -2078,9 +2078,10 @@
         "PR #97を最新の#96エンジンと遠近表示の契約へ積み直し。",
         "PR #99を#91マージ後のmainへ積み直し、遠近補正後のブラシ半径を局所ヤコビアンで写す。",
         "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
-        "ドラッグ中の描画の順序管理の修正に伴う変更。"
+        "ドラッグ中の描画の順序管理の修正に伴う変更。",
+        "プリセットを押した・乗せたときは先に粗い画を出してから丁寧な画に差し替え、乗せた丁寧な画を押したときに使い回す（#127）"
       ],
-      "outputSha256": "323955e92f94a1a7e62be3edb48316f48ea2c816c7103ed443c84ea1406cec76"
+      "outputSha256": "0061d7557be095807bfea8d5a0fb8e13d5625c232e2853ba3f58ea0e0024a409"
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-preset-support.ts",
@@ -2104,14 +2105,16 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-presets.ts",
         "sha256": "26a858ef3b1649f0f10d0bf47887871119ccd7dea542edc1b896cc0a86e07089"
       },
-      "outputSha256": "09805f2daeec69f91b834f4ed10bd574ad324e05cd374c1605c09104bfde404c",
+      "outputSha256": "74a1ec5af908338c868abaae04dec31b2d91e59409cb9aeaac2ab2bad2516e80",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #13の段階表示、provisional draft、canonical handoffと書き出し境界を実装。",
         "進行中のpreset・量・hover全体の完了を待てるようにしてhandoffによる入力破棄を防ぐ。",
         "部分補正（マスク）#69: マスクを持つプリセットは作業画像の大きさを読み、写真の座標へ写して当てる",
-        "押した・乗せたときに次の見本を出させず、当てるまでの時間を診断に出す（#126）"
+        "押した・乗せたときに次の見本を出させず、当てるまでの時間を診断に出す（#126）",
+        "押して当てた結果の key を面の描画へ渡し、乗せた仮の表示の丁寧な画までの待ちを定める（#127）",
+        "押した結果の key を確定した編集内容から取り、テストのプリセットを結果ごとに分ける（#127）"
       ]
     },
     {
@@ -10203,28 +10206,28 @@
     },
     {
       "path": "apps/camera/scripts/e2e/progressive-open.js",
-      "sha256": "ae61179464ed977abde74d68a4428d563a2327bb74df833206df8d4a9735f54f",
-      "origin": "Issue #13のため独立作成した実UI検証probe。専用e2e bundleだけを操作し、実画像・元の名前・path・画像hashを公開出力しない。\n変更理由: 画像情報を含まないE2E待機段階traceを追加。\n変更理由: 画面未描画の失敗をpreset変化なしへ誤分類しない。\n変更理由: 通常の正規入力fallbackも実paintで完了と判定し、遅い測定値を除外しない。\n変更理由: warmを同一アプリ内の正規表示から一覧へ戻る再表示として計測しnativeの区間開始を渡す\n変更理由: 正規入力の遅い初回プリセット描画も3秒で除外せず30秒まで実測時間として保持する\n変更理由: 新しい右パネルでも補正とプリセットの面を実際に切り替え、入力可能時刻と値と選択の保持を検証する\n変更理由: プリセット更新の内訳（#126）: 押してから画が出るまでの区間を実UIで記録する"
+      "sha256": "55a7e11f38bc44e53a9a36ea85c3098a2ece1b0528a908fe193ad5ea9915f1c7",
+      "origin": "Issue #13のため独立作成した実UI検証probe。専用e2e bundleだけを操作し、実画像・元の名前・path・画像hashを公開出力しない。\n変更理由: 画像情報を含まないE2E待機段階traceを追加。\n変更理由: 画面未描画の失敗をpreset変化なしへ誤分類しない。\n変更理由: 通常の正規入力fallbackも実paintで完了と判定し、遅い測定値を除外しない。\n変更理由: warmを同一アプリ内の正規表示から一覧へ戻る再表示として計測しnativeの区間開始を渡す\n変更理由: 正規入力の遅い初回プリセット描画も3秒で除外せず30秒まで実測時間として保持する\n変更理由: 新しい右パネルでも補正とプリセットの面を実際に切り替え、入力可能時刻と値と選択の保持を検証する\n変更理由: プリセット更新の内訳（#126）: 押してから画が出るまでの区間を実UIで記録する\n変更理由: プリセットを押してから丁寧な画に差し替わるまで（#127）を記録する"
     },
     {
       "path": "apps/camera/scripts/measure-progressive-open.mjs",
-      "sha256": "952402374f42cf4b9406c776ef464f51e6f3f6dfcbe100b9f029cd2ec916d7f8",
-      "origin": "Issue #13のため独立作成。外から渡した実RAW pathを出力せず、case label、cold/warm条件、許可した区間時間だけを集計する公開ハーネス。実画像・原本名・個人path・画像由来hashを出力しない。\n変更理由: 計測失敗時は非公開のprobe診断を保持して再現調査可能にする。\n変更理由: 実paintの連続計測中だけmacOSのdisplay idle sleepを抑止し終了時に解除。\n変更理由: native cache storeの実時間を集計対象へ追加。\n変更理由: プリセット更新の内訳（#126）の区間を集計対象へ追加"
+      "sha256": "50f8a18bc79c7e15572cb98e172328b718b0f2b9a7101b98c61c55b70ac93a6a",
+      "origin": "Issue #13のため独立作成。外から渡した実RAW pathを出力せず、case label、cold/warm条件、許可した区間時間だけを集計する公開ハーネス。実画像・原本名・個人path・画像由来hashを出力しない。\n変更理由: 計測失敗時は非公開のprobe診断を保持して再現調査可能にする。\n変更理由: 実paintの連続計測中だけmacOSのdisplay idle sleepを抑止し終了時に解除。\n変更理由: native cache storeの実時間を集計対象へ追加。\n変更理由: プリセット更新の内訳（#126）の区間を集計対象へ追加\n変更理由: 丁寧な画に差し替わるまで（#127）の区間を集計対象へ追加"
     },
     {
       "path": "apps/camera/scripts/measure-progressive-open.test.mjs",
-      "sha256": "ee503d04c5fe0dd85031d934a01495858abe4fd8542deb84e34108d267fa8032",
-      "origin": "Issue #13の計測ハーネスの公開出力を合成probeで検査。画像名・hash・未許可項目を集計へ転送しないことを確認。実RAWの性能受入には使わない。\n変更理由: CLI probe testのscript参照をViteのURL書換えから独立化。\n変更理由: プリセット更新の内訳（#126）の区間が集計へ渡ることを検査"
+      "sha256": "fa0c493a3b8ab8b8bdf384fd5d0732c6086d059d4f17b61653fa6f180eb85f3e",
+      "origin": "Issue #13の計測ハーネスの公開出力を合成probeで検査。画像名・hash・未許可項目を集計へ転送しないことを確認。実RAWの性能受入には使わない。\n変更理由: CLI probe testのscript参照をViteのURL書換えから独立化。\n変更理由: プリセット更新の内訳（#126）の区間が集計へ渡ることを検査\n変更理由: 丁寧な画に差し替わるまで（#127）の区間が集計へ渡ることを検査"
     },
     {
       "path": "apps/camera/scripts/probe-progressive-open.py",
-      "sha256": "bd2b5032436cb3c7676bf1af974e3772169dd89b5bd371e22218856b6bfb995c",
-      "origin": "Issue #13のため独立作成した実UI検証probe。専用e2e bundleだけを操作し、実画像・元の名前・path・画像hashを公開出力しない。\n変更理由: UIの待機段階だけを非公開traceへ残す。\n変更理由: 専用native logから許可した区間の有限な時間だけをprobe集計へ渡す。\n変更理由: probeごとに試験窓の表示と短いuser-active assertionを保持。\n変更理由: warmのアプリ再起動primeを除き同一session再表示のT0以後のnative時間だけを集計する\n変更理由: プリセット更新の内訳（#126）の許可した区間の有限な時間だけを集計へ渡す"
+      "sha256": "70736e73366235668184c883638ad4f4583e30d1928f2f11acb738e5ed62fbae",
+      "origin": "Issue #13のため独立作成した実UI検証probe。専用e2e bundleだけを操作し、実画像・元の名前・path・画像hashを公開出力しない。\n変更理由: UIの待機段階だけを非公開traceへ残す。\n変更理由: 専用native logから許可した区間の有限な時間だけをprobe集計へ渡す。\n変更理由: probeごとに試験窓の表示と短いuser-active assertionを保持。\n変更理由: warmのアプリ再起動primeを除き同一session再表示のT0以後のnative時間だけを集計する\n変更理由: プリセット更新の内訳（#126）の許可した区間の有限な時間だけを集計へ渡す\n変更理由: 丁寧な画に差し替わるまで（#127）の有限な時間だけを集計へ渡す"
     },
     {
       "path": "docs/features/progressive-raw-open.md",
-      "sha256": "eeaba45e2a8a0a8fc93b223a16794e284a0a9d6b893ef061aee55f4a47cd6ed2",
-      "origin": "Issue #13のため公開SSOT上で独立作成。段階RAW openの契約と合成入力による統合検証。利用者画像・原本名・非公開ソース・認証情報を含まない。\n変更理由: 長時間実UI計測のdisplay awake条件と自動解除を明記。\n変更理由: fallbackの遅い回も性能集計へ含める条件を明記。\n変更理由: 未解決のpreset操作を確定してからengineを替える契約を明記。\n変更理由: 無人の専用Macでforeground計測を行う条件を明記。\n変更理由: 検証したhook名と入力指標および書き出し前のプリセット確定契約を明記する\n変更理由: 同一アプリ内でのwarm再表示と計測外primeを区別して再現条件を記録する\n変更理由: プリセット更新の内訳（#126）の区間の読み方を追記"
+      "sha256": "dbaad2c036fa6639e9d3d46d0b3237609668c790238aa8be7af21882845c23dd",
+      "origin": "Issue #13のため公開SSOT上で独立作成。段階RAW openの契約と合成入力による統合検証。利用者画像・原本名・非公開ソース・認証情報を含まない。\n変更理由: 長時間実UI計測のdisplay awake条件と自動解除を明記。\n変更理由: fallbackの遅い回も性能集計へ含める条件を明記。\n変更理由: 未解決のpreset操作を確定してからengineを替える契約を明記。\n変更理由: 無人の専用Macでforeground計測を行う条件を明記。\n変更理由: 検証したhook名と入力指標および書き出し前のプリセット確定契約を明記する\n変更理由: 同一アプリ内でのwarm再表示と計測外primeを区別して再現条件を記録する\n変更理由: プリセット更新の内訳（#126）の区間の読み方を追記\n変更理由: 先に粗い画を出すプリセット更新の読み方（#127）を追記"
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-export-delete.test.tsx",
@@ -10233,8 +10236,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-progressive-open.test.tsx",
-      "origin": "Issue #13のため独立作成。actual React hooksと合成library/engine/frameだけで、provisional編集、canonical handoff、history、retry、abort、旧frame遮断を検証。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 公開signed RAW契約に合う合成metadataで実hookの正規切替を検証。\n変更理由: preview取得失敗でも正規入力の実hookで補正を続けられる回帰を追加。\n変更理由: fallback後の補正を実際にflushし通常保存のbaseと値まで検証。\n変更理由: preset適用・量drag・量commitを未解決のままhandoffに重ねるfailure injectionを追加。\n変更理由: 非同期プリセットfixtureにも実契約のversionとengineを含め型検査する\n変更理由: 同一内容draftの再表示から正規base確定後の既存saverまで実hookで回帰検証する\n変更理由: draft復元テストでも一覧復帰の成功値を明示確認しact補助のvoid型契約に合わせる\n変更理由: Expect current niho-11 default in handoff tests\n変更理由: niho-photo#36 描いた画をヒストグラムへ渡すことを検証。\n変更理由: niho-photo#41 比較の間の補正前の描画（描き直さない・ヒストグラムへ渡さない・canonical差し替え）を検証。\n変更理由: niho-photo#41 の比較UIを #72 のヒストグラム・Jキー契約と併存するようmainへ積み直した。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: niho-photo#46 で engine の mock に supportsPerspective を足した。\n変更理由: PR #97積み直し後の現行develop engine能力stubに更新。\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: ドラッグ中の描画の順序管理の修正に伴う変更。\n変更理由: テスト用の engine に yieldToEdit を足す（#126）",
-      "sha256": "7abe4c60d0028f968d479850b5ea763936dbb72457774a5fc9469299b77fb5c2"
+      "origin": "Issue #13のため独立作成。actual React hooksと合成library/engine/frameだけで、provisional編集、canonical handoff、history、retry、abort、旧frame遮断を検証。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 公開signed RAW契約に合う合成metadataで実hookの正規切替を検証。\n変更理由: preview取得失敗でも正規入力の実hookで補正を続けられる回帰を追加。\n変更理由: fallback後の補正を実際にflushし通常保存のbaseと値まで検証。\n変更理由: preset適用・量drag・量commitを未解決のままhandoffに重ねるfailure injectionを追加。\n変更理由: 非同期プリセットfixtureにも実契約のversionとengineを含め型検査する\n変更理由: 同一内容draftの再表示から正規base確定後の既存saverまで実hookで回帰検証する\n変更理由: draft復元テストでも一覧復帰の成功値を明示確認しact補助のvoid型契約に合わせる\n変更理由: Expect current niho-11 default in handoff tests\n変更理由: niho-photo#36 描いた画をヒストグラムへ渡すことを検証。\n変更理由: niho-photo#41 比較の間の補正前の描画（描き直さない・ヒストグラムへ渡さない・canonical差し替え）を検証。\n変更理由: niho-photo#41 の比較UIを #72 のヒストグラム・Jキー契約と併存するようmainへ積み直した。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: niho-photo#46 で engine の mock に supportsPerspective を足した。\n変更理由: PR #97積み直し後の現行develop engine能力stubに更新。\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: ドラッグ中の描画の順序管理の修正に伴う変更。\n変更理由: テスト用の engine に yieldToEdit を足す（#126）\n変更理由: 粗い画を先に出す順番と、乗せてから押したときに描き直さないことを検査（#127）\n変更理由: 押した結果の key を確定した編集内容から取り、テストのプリセットを結果ごとに分ける（#127）",
+      "sha256": "9782ba857d60ac98cef68441fc3aa8b5862c7148159488c48a316a2d880578b8"
     },
     {
       "path": ".github/workflows/public-ci.yml",
