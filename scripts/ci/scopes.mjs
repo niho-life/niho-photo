@@ -8,7 +8,8 @@ export const scopes = {
   camera: { paths: ["apps/camera/", "packages/desktop-account/", "packages/desktop-photo/", "packages/photo-editing/", "packages/ui/", "packages/develop-engine/"], root: "apps/camera", runner: "macos-14", kind: "npm", workspaces: ["apps/camera"], native: true },
   "desktop-photo": { paths: ["packages/desktop-photo/", "packages/desktop-account/", "packages/photo-editing/", "packages/ui/", "packages/develop-engine/"], root: "packages/desktop-photo", runner: "macos-14", kind: "native" },
   "desktop-account": { paths: ["packages/desktop-account/", "packages/ui/"], root: "packages/desktop-account", runner: "macos-14", kind: "hybrid", workspaces: ["packages/desktop-account/ts"] },
-  "develop-engine": { paths: ["packages/develop-engine/"], root: "packages/develop-engine", runner: "macos-14", kind: "native", swift: true },
+  // cutout-brush-parity.json は niho-camera-cutout の Swift 試験も読む（TS の筆との照合）
+  "develop-engine": { paths: ["packages/develop-engine/", "packages/photo-editing/src/fixtures/cutout-brush-parity.json"], root: "packages/develop-engine", runner: "macos-14", kind: "native", swift: true },
 };
 
 const photoSdkPrefixes = ["packages/photo-editing/", "packages/ui/", "packages/niho-cloud-contract/", "packages/develop-engine/", "packages/desktop-photo/", "sdk/", "scripts/sdk/"];
