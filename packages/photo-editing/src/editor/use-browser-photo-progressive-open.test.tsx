@@ -178,6 +178,7 @@ function createEngine(options: EngineOptions): DevelopEngine {
     })),
     settingsToXmp: vi.fn(async () => ({ name: "test", xmp: "<xmp />" })),
     renderPresetThumbnail: vi.fn(async () => frame(options.marker)),
+    yieldToEdit: vi.fn(),
     supportsPresetAmount: vi.fn(async () => true),
     supportsSettingsToXmp: vi.fn(async () => true),
     supportsPresetThumbnails: vi.fn(async () => true),

@@ -1,6 +1,12 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-import { DevelopEngineError, createDevelopEngine, photoDevelopDiagnosticsEnabled, type CreateDevelopEngineOptions } from "./develop-engine-client";
+import {
+  DEVELOP_PREVIEW_QUIET_MS,
+  DevelopEngineError,
+  createDevelopEngine,
+  photoDevelopDiagnosticsEnabled,
+  type CreateDevelopEngineOptions,
+} from "./develop-engine-client";
 import type {
   DevelopEngineWorkerFeatures,
   DevelopEngineWorkerRequest,
@@ -48,7 +54,10 @@ async function flushPromises() {
 }
 
 async function readyEngine(
-  options: Pick<CreateDevelopEngineOptions, "encodeFrameJpeg"> & { geometry?: boolean; features?: DevelopEngineWorkerFeatures } = {},
+  options: Pick<CreateDevelopEngineOptions, "encodeFrameJpeg" | "previewQuietMs" | "diagnostics"> & {
+    geometry?: boolean;
+    features?: DevelopEngineWorkerFeatures;
+  } = {},
 ) {
   const { geometry, features, ...engineOptions } = options;
   const worker = new FakeWorker();
@@ -59,7 +68,7 @@ async function readyEngine(
   });
   const ready = engine.ready();
   const init = worker.lastRequest("init");
-  expect(init).toEqual({ type: "init", id: init.id, manifestUrl: MANIFEST_URL });
+  expect(init).toEqual({ type: "init", id: init.id, manifestUrl: MANIFEST_URL, ...(engineOptions.diagnostics ? { diagnostics: true } : {}) });
   worker.respond(
     geometry
       ? { type: "ready", id: init.id, version: "0.5.0", geometry: true, ...features }
@@ -196,6 +205,7 @@ describe("createDevelopEngine", () => {
   });
 
   it("render の優先度: Worker が空いたら 編集（drag / final）＞ preview ＞ background の順に出し、出している描画は横取りしない（#17118）", async () => {
+    vi.useFakeTimers();
     const { worker, engine } = await readyEngine();
     const inFlight = engine.render({ step: 0 }, { maxDimension: 1280, interactive: false, priority: "background" });
     const background = engine.render({ step: 1 }, { maxDimension: 512, interactive: false, priority: "background" });
@@ -217,6 +227,11 @@ describe("createDevelopEngine", () => {
     worker.respond(frameResponse(second.id, 13));
     expect((await edit)?.rgba[0]).toBe(13);
     await flushPromises();
+    // 編集の描画が終わってから静かな時間（#126）がたつまで preview は出さない
+    expect(worker.requests("render")).toHaveLength(2);
+    vi.advanceTimersByTime(DEVELOP_PREVIEW_QUIET_MS - 1);
+    expect(worker.requests("render")).toHaveLength(2);
+    vi.advanceTimersByTime(1);
     const third = worker.lastRequest("render");
     expect(third).toMatchObject({ settingsJson: '{"step":2}', maxDimension: 512 });
 
@@ -550,7 +565,10 @@ describe("createDevelopEngine", () => {
   });
 
   it("ディテールの送り方（Issue #32・owner 判断 2026-10-21）: 作業コピーは drag 中だけ NR を計算し直さず、確定描画・見本・色取得・書き出しは今の値", async () => {
-    const { worker, engine } = await readyEngine({ features: { detail: true, colorPoints: true, presetThumbnails: true } });
+    const { worker, engine } = await readyEngine({
+      features: { detail: true, colorPoints: true, presetThumbnails: true },
+      previewQuietMs: 0,
+    });
     const sentRender = () => (worker.lastRequest("render") as { settingsJson: string }).settingsJson;
     const finishRender = async () => {
       worker.respond(frameResponse(worker.lastRequest("render").id, 1));
@@ -1012,6 +1030,7 @@ describe("createDevelopEngine", () => {
   });
 
   it("renderPresetThumbnail は preview の枠: 出している描画を待ち、編集の描画を先に出してから見本を丁寧に描く", async () => {
+    vi.useFakeTimers();
     const { worker, engine } = await readyEngine({ features: { presetThumbnails: true } });
     const inFlight = engine.render({ step: 0 }, { maxDimension: 1280, interactive: false });
     const thumbnail = engine.renderPresetThumbnail({ contrast: 12 }, 96);
@@ -1028,6 +1047,9 @@ describe("createDevelopEngine", () => {
     worker.respond(frameResponse(editRequest.id, 11));
     expect((await edit)?.rgba[0]).toBe(11);
     await flushPromises();
+    // 編集の描画が終わってから静かな時間がたってから見本
+    expect(worker.requests("renderPresetThumbnail")).toHaveLength(0);
+    vi.advanceTimersByTime(DEVELOP_PREVIEW_QUIET_MS);
 
     const request = worker.lastRequest("renderPresetThumbnail");
     expect(request).toEqual({ type: "renderPresetThumbnail", id: request.id, settingsJson: '{"contrast":12}', maxDimension: 96 });
@@ -1061,6 +1083,97 @@ describe("createDevelopEngine", () => {
     worker.respond(frameResponse(pendingId, 2));
     await flushPromises();
     expect(worker.requests("renderPresetThumbnail")).toHaveLength(2);
+  });
+
+  it("見本は編集の描画が無い間だけ: 押した・乗せた（yieldToEdit）後と編集の描画の後は、静かな時間がたってから出す（#126）", async () => {
+    vi.useFakeTimers();
+    const { worker, engine } = await readyEngine({ features: { presetThumbnails: true } });
+    // 何も編集していなければ見本はすぐ出す
+    const first = engine.renderPresetThumbnail({ step: 0 }, 96);
+    const firstId = worker.lastRequest("renderPresetThumbnail").id;
+    worker.respond(frameResponse(firstId, 1));
+    expect((await first)?.rgba[0]).toBe(1);
+
+    // プリセットを押した: Worker が空いていても次の見本は持ったまま
+    engine.yieldToEdit();
+    const held = engine.renderPresetThumbnail({ step: 1 }, 96);
+    expect(worker.requests("renderPresetThumbnail")).toHaveLength(1);
+    // 押した結果の描画はすぐ出す（見本の後ろで待たない）
+    const applied = engine.render({ step: 2 }, { maxDimension: 1280, interactive: false });
+    const appliedRequest = worker.lastRequest("render");
+    expect(appliedRequest).toMatchObject({ settingsJson: '{"step":2}', interactive: false });
+    // 描いている間に静かな時間が過ぎても、編集の描画が終わるまで見本は出さない
+    vi.advanceTimersByTime(DEVELOP_PREVIEW_QUIET_MS * 2);
+    expect(worker.requests("renderPresetThumbnail")).toHaveLength(1);
+    worker.respond(frameResponse(appliedRequest.id, 2));
+    expect((await applied)?.rgba[0]).toBe(2);
+    await flushPromises();
+    expect(worker.requests("renderPresetThumbnail")).toHaveLength(1);
+
+    // 静かな時間の途中で次の編集が来たら、終わってから数え直す
+    vi.advanceTimersByTime(DEVELOP_PREVIEW_QUIET_MS - 1);
+    const drag = engine.render({ step: 3 }, { maxDimension: 640, interactive: true });
+    const dragRequest = worker.lastRequest("render");
+    worker.respond(frameResponse(dragRequest.id, 3));
+    expect((await drag)?.rgba[0]).toBe(3);
+    vi.advanceTimersByTime(DEVELOP_PREVIEW_QUIET_MS - 1);
+    expect(worker.requests("renderPresetThumbnail")).toHaveLength(1);
+    vi.advanceTimersByTime(1);
+    const heldRequest = worker.lastRequest("renderPresetThumbnail");
+    expect(heldRequest).toMatchObject({ settingsJson: '{"step":1}' });
+    worker.respond(frameResponse(heldRequest.id, 4));
+    expect((await held)?.rgba[0]).toBe(4);
+
+    // 待っている見本は、写真を開き直すと null で終える（出さない）
+    engine.yieldToEdit();
+    const dropped = engine.renderPresetThumbnail({ step: 5 }, 96);
+    void engine.open(new ArrayBuffer(4), 1280).catch(() => undefined);
+    expect(await dropped).toBeNull();
+    vi.advanceTimersByTime(DEVELOP_PREVIEW_QUIET_MS);
+    expect(worker.requests("renderPresetThumbnail")).toHaveLength(2);
+    engine.dispose();
+  });
+
+  it("previewQuietMs が 0 なら見本を待たせない（今までの順番）", async () => {
+    const { worker, engine } = await readyEngine({ features: { presetThumbnails: true }, previewQuietMs: 0 });
+    const edit = engine.render({ step: 0 }, { maxDimension: 1280, interactive: false });
+    const thumbnail = engine.renderPresetThumbnail({ step: 1 }, 96);
+    worker.respond(frameResponse(worker.lastRequest("render").id, 1));
+    expect((await edit)?.rgba[0]).toBe(1);
+    await flushPromises();
+    engine.yieldToEdit();
+    const request = worker.lastRequest("renderPresetThumbnail");
+    worker.respond(frameResponse(request.id, 2));
+    expect((await thumbnail)?.rgba[0]).toBe(2);
+  });
+
+  it("診断の間だけ、描画ごとに枠での待ちと Worker との往復を出す（設定は出さない）", async () => {
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    try {
+      const { worker, engine } = await readyEngine({ features: { presetThumbnails: true }, diagnostics: true, previewQuietMs: 0 });
+      const final = engine.render({ secret: "do-not-log" }, { maxDimension: 1280, interactive: false });
+      const thumbnail = engine.renderPresetThumbnail({ secret: "do-not-log" }, 96);
+      worker.respond(frameResponse(worker.lastRequest("render").id, 1));
+      await final;
+      await flushPromises();
+      worker.respond({ type: "error", id: worker.lastRequest("renderPresetThumbnail").id, message: "no photo is open" });
+      await expect(thumbnail).rejects.toThrow("no photo is open");
+
+      const records = info.mock.calls.filter(([tag]) => tag === "[photo-develop-perf]").map(([, record]) => record as Record<string, unknown>);
+      expect(records).toEqual([
+        { stage: "renderRequest", priority: "final", queuedMs: expect.any(Number), roundTripMs: expect.any(Number), status: "ok" },
+        { stage: "presetThumbnailRequest", priority: "preview", queuedMs: expect.any(Number), roundTripMs: expect.any(Number), status: "error" },
+      ]);
+      expect(JSON.stringify(records)).not.toContain("do-not-log");
+
+      const { worker: quietWorker, engine: quiet } = await readyEngine({ diagnostics: false });
+      const plain = quiet.render({}, { maxDimension: 1280, interactive: false });
+      quietWorker.respond(frameResponse(quietWorker.lastRequest("render").id, 1));
+      await plain;
+      expect(info.mock.calls.filter(([tag]) => tag === "[photo-develop-perf]")).toHaveLength(2);
+    } finally {
+      info.mockRestore();
+    }
   });
 
   it("「自動」の口（F4a #17123）は ready の応答で分かる。無い wasm・使えない engine では false（throw しない。要求も送らない）", async () => {
