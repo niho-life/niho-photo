@@ -1,0 +1,10 @@
+<!doctype html>
+<meta charset="utf-8">
+<title>lane2 browser bench</title>
+<script type="module">
+  const params = new URL(location.href).searchParams;
+  const worker = new Worker(`./worker.js?${params}`, { type: "module" });
+  const send = (result) => fetch("/result", { method: "POST", body: JSON.stringify(result) });
+  worker.onmessage = (event) => send(event.data);
+  worker.onerror = (event) => send({ error: String(event.message) });
+</script>
