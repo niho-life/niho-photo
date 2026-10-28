@@ -4003,7 +4003,7 @@
         "path": "apps/camera/src-tauri/src/develop.rs",
         "sha256": "e8031f4461b78fd3a74d9011ace89081814e737868a33ee4e39f7b98e39bacb8"
       },
-      "outputSha256": "29e7e235b376e2565750dbe1706ba20ea342f7abf9201314b651ebc8a2a5b127",
+      "outputSha256": "09c3ccd101243ffbea6865c83a0b4edd950c5157c6b23233c3ade23fc5a7d2bc",
       "modifications": [
         "書き出しcommand境界の引数設計を明記し、Clippyの引数数lintを局所的に許容する。",
         "全open photoの原本をexport destinationから保護",
@@ -4011,7 +4011,8 @@
         "部分補正（マスク）#66: 現像の状態に masks（部分補正の原寸書き出しの可否）を足す",
         "PR #81 のマスク描画を最新mainの変更と統合。",
         "PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。",
-        "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。"
+        "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
+        "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。"
       ]
     },
     {
@@ -4653,7 +4654,7 @@
         "path": "packages/desktop-photo/src/develop.rs",
         "sha256": "7f13c1e41e82bf4bc91bef5e4a8b61f092ab0b986a6a95c5559c2246bb74d864"
       },
-      "outputSha256": "58f63821edf69fb3592d3532e8fb5d996875f7186b19b8a70b2bd24fbf526b60",
+      "outputSha256": "2dc1368ccf2c99d395b2cf5d4ce8ef46f18f04fe89a01abb48e53db2fc2cdea4",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #5の共有入力能力レジストリ、段階別検証、公開回帰契約に合わせて更新。",
@@ -4667,7 +4668,8 @@
         "PR #81 のマスク描画を最新mainの変更と統合。",
         "PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。",
         "部分補正（マスク）#68: 描かれるマスクの面を置き場から読み --mask-surface で sidecar へ渡し、無ければ書き出す前に断る",
-        "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。"
+        "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
+        "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。"
       ]
     },
     {
@@ -4678,7 +4680,7 @@
         "path": "packages/desktop-photo/src/develop_local_raster_tests.rs",
         "sha256": "b45869e304ecb1bfa8cc4c3aea903fd7771f60c1b140f6f3c7be2f9f2b929bc2"
       },
-      "outputSha256": "fdf44257f601f75586df3ff3fe0bf865b498432507c772f7ea187874e5b90904",
+      "outputSha256": "8a9cbbd593db29b205541874f99166ddec93090c93d9d2e6bd3cdbc4387b6515",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #5の共有入力能力レジストリ、段階別検証、公開回帰契約に合わせて更新。",
@@ -4690,7 +4692,8 @@
         "PR #81 のマスク描画を最新mainの変更と統合。",
         "PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。",
         "部分補正（マスク）#68: 面のマスクの書き出しの引数と、面が無いときの失敗の回帰を足す",
-        "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。"
+        "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
+        "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。"
       ]
     },
     {
@@ -4896,13 +4899,14 @@
         "path": "packages/desktop-photo/src/test_support/develop.rs",
         "sha256": "f6bfc8f0f3df3162a91ca2053512f7167b71265f272230ce63304f6e2a0f74f0"
       },
-      "outputSha256": "eef6d082a4351acdd4cc174982a5695f9d0c56f93fb85ad329c97b9fb7bfa0fb",
+      "outputSha256": "dcff7bd3c2d6829688e56b70a185fce18fa11ffc22d901669388c71872184ad4",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "private絶対path guardに合わせ、合成テスト用のpathを予約済み/test-data配下へ正規化。実装の挙動は変更しない。",
         "公開現像workspace向けにLibRaw由来値と参照を除去。独立測定DCP・合成テスト・metadata正規化・公開契約と書式へ調整。",
         "部分補正（マスク）#68: 偽の niho-develop-render が --mask-surface の面を写す",
-        "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。"
+        "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
+        "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。"
       ]
     },
     {
@@ -5848,7 +5852,7 @@
         "path": "packages/develop-engine/crates/niho-develop-render/src/lib.rs",
         "sha256": "a9ac3a784a2eb9250747dc2eaabc10c958c1a10d71c7ca16ffdd0d96b40456bc"
       },
-      "outputSha256": "7b5e9094d6b5a898b523999bafbe6b5e06c056799b353a90bd089d3dd19514c4",
+      "outputSha256": "b69ac3fb63269925aa504e1edbbf716c0515f417e2cc2385296d55b8da955b0f",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
@@ -5867,7 +5871,8 @@
         "PR #88 main rebase and perspective integration with develop engine 0.22.0",
         "niho-photo#46 の遠近 v7 を既存の設定版（v1〜v6）と併せて読めるように統合。",
         "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
-        "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。"
+        "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
+        "niho-photo#132: 原寸の書き出しの native の読み込みの上限を 1 億画素に広げる（ブラウザの wasm は 4000 万画素のまま）。"
       ]
     },
     {
@@ -5889,7 +5894,7 @@
         "path": "packages/develop-engine/crates/niho-develop-render/tests/cli.rs",
         "sha256": "8ddf42804ccd8202fb8834bc499d2d03a331eb0ff96e020421a776f2286ef9bd"
       },
-      "outputSha256": "0d2508a993a4736a6802ea69c93c252c1aa5cf0aeac28c5937759cdf41c3e57b",
+      "outputSha256": "371a62d1b869fcfc7f3106b74ff11022f2f33804ce4c8c3021a6efa2aad3d951",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "新engine受入と未知版拒否の境界を更新し、既存wasm CIで候補のFinal/Interactive固定画素を検証する。",
@@ -5913,7 +5918,9 @@
         "部分補正（マスク）#68: 面のマスクの描画がcrateと同じ画素になり、面の失敗の code が決まる回帰を足す",
         "PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。",
         "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
-        "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。"
+        "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
+        "niho-photo#132: 原寸の書き出しの native の読み込みの上限を 1 億画素に広げる（ブラウザの wasm は 4000 万画素のまま）。",
+        "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。"
       ]
     },
     {
@@ -6299,9 +6306,10 @@
         "path": "packages/develop-engine/crates/niho-develop/src/decode.rs",
         "sha256": "bd6cb5a3298dfd14fa1d4bc4b3a8849a2a17d8ee2e7da909492566bfa5a727b7"
       },
-      "outputSha256": "cb7c1eecfef51907c91eb41f96922abd826406ca2d324a177172ed8a8f380923",
+      "outputSha256": "a6321e7b1a3e179d9410fe01643e94ae27401ff81cf44cc338355cd16715c3c3",
       "modifications": [
-        "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。"
+        "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
+        "niho-photo#132: 原寸の書き出しの native の読み込みの上限を 1 億画素に広げる（ブラウザの wasm は 4000 万画素のまま）。"
       ]
     },
     {
@@ -6416,7 +6424,7 @@
         "path": "packages/develop-engine/crates/niho-develop/src/lib.rs",
         "sha256": "1591d49effaa779c8e23ad6877508ccf336565eec8336d5b4e6faa3b5d3846b0"
       },
-      "outputSha256": "5c7c888fe3aacf94ddc8c8b53cc9f0ebf3def24a477a97f42327c15d6adab711",
+      "outputSha256": "d9ef733b72fd001c83cbb054bcb5aea144a48233bf438949f865c788d1edce58",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
@@ -6450,7 +6458,8 @@
         "niho-photo#44 前半で heal モジュールを宣言し、Session が修復した元の画から描く組み込み（直した写しの保持・計画の共有・単発の描画の修復）を足した。",
         "PR #96統合でcrate 0.24・v8対応",
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
-        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ"
+        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
+        "niho-photo#132: 原寸の書き出しの native の読み込みの上限を 1 億画素に広げる（ブラウザの wasm は 4000 万画素のまま）。"
       ]
     },
     {
@@ -7346,12 +7355,13 @@
         "path": "packages/develop-engine/crates/niho-develop/tests/pipeline.rs",
         "sha256": "73d670edab0357b8cf1c07c0008e0790ae5a63da61192130e2a925c39d41da92"
       },
-      "outputSha256": "f0d8a8c16583a671d3d3c22aa62a309fb23f760f81bfa7b0180e1ec916a47d79",
+      "outputSha256": "ec9f9a91b1ccea4087292c947d4ea252186d8ae7761cda3d73dfc02061debe2c",
       "modifications": [
         "metadata除去済みorientation fixtureのAPP1位置にテストを合わせる。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
         "新しい色相保持エンジンと新旧バイナリの能力境界・数値回帰を整合。",
-        "未知engine fixtureを将来予約と衝突しないniho99へ変更"
+        "未知engine fixtureを将来予約と衝突しないniho99へ変更",
+        "niho-photo#132: 原寸の書き出しの native の読み込みの上限を 1 億画素に広げる（ブラウザの wasm は 4000 万画素のまま）。"
       ]
     },
     {

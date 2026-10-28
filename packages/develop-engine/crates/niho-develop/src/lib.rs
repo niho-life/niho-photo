@@ -941,7 +941,24 @@ impl Session {
         working_max_dimension: usize,
         filter: Filter,
     ) -> Result<Self, Error> {
-        let raster = decode::decode_raster(input, working_max_dimension, filter)?;
+        Self::open_raster_with_limits(
+            input,
+            working_max_dimension,
+            filter,
+            decode::DecodeLimits::BROWSER,
+        )
+    }
+
+    /// [`Session::open_raster`] with the source bound `limits` (the native
+    /// full-size export opens up to [`decode::DecodeLimits::NATIVE`]).
+    pub fn open_raster_with_limits(
+        input: &[u8],
+        working_max_dimension: usize,
+        filter: Filter,
+        limits: decode::DecodeLimits,
+    ) -> Result<Self, Error> {
+        let raster =
+            decode::decode_raster_with_limits(input, working_max_dimension, filter, limits)?;
         Ok(Self::with_source(SessionSource::Raster(raster), filter))
     }
 
@@ -990,8 +1007,19 @@ impl Session {
 
     /// Opens a working copy (16-bit PNG) with its metadata JSON.
     pub fn open_working_copy(png: &[u8], meta_json: &str, filter: Filter) -> Result<Self, Error> {
+        Self::open_working_copy_with_limits(png, meta_json, filter, decode::DecodeLimits::BROWSER)
+    }
+
+    /// [`Session::open_working_copy`] with the source bound `limits`.
+    pub fn open_working_copy_with_limits(
+        png: &[u8],
+        meta_json: &str,
+        filter: Filter,
+        limits: decode::DecodeLimits,
+    ) -> Result<Self, Error> {
         let meta = WorkingCopyMeta::from_json(meta_json)?;
-        let image = decode::decode_working_copy_with_meta(png, &meta, 0, filter)?;
+        let image =
+            decode::decode_working_copy_with_meta_and_limits(png, &meta, 0, filter, limits)?;
         Ok(Self::with_source(
             SessionSource::WorkingCopy { image, meta },
             filter,

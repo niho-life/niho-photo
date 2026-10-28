@@ -294,9 +294,17 @@ impl SidecarHarness {
           .ok()
           .and_then(|value| value.trim().parse().ok())
           .unwrap_or(1);
+        // `image-size`（「幅 高さ」）で寸法を変えられる（原寸の大きさの判定。niho-photo#132）
+        let size: Option<(u64, u64)> = fs::read_to_string(metadata_dir.join("image-size"))
+          .ok()
+          .and_then(|value| {
+            let mut parts = value.split_whitespace().map(|part| part.parse().ok());
+            Some((parts.next()??, parts.next()??))
+          });
+        let (width, height) = size.unwrap_or((6000, 4000));
         Ok(RasterInfo {
-          width: 6000,
-          height: 4000,
+          width,
+          height,
           orientation,
         })
       })),
