@@ -10423,8 +10423,8 @@
     },
     {
       "path": "docs/detail-processing.md",
-      "sha256": "17cda6f6e9a60d440ca8144b494db5f01573dc77cbdc7e36c7adcfc4cef7b74c",
-      "origin": "Issue #32でNIHOが独立作成したdetail処理・保存契約・合成検証または設計文書。実写真・第三者コードは含まない。\n変更理由: owner判断2026-10-21: RAWでも群を出し、作業コピーのdrag中の送り方と1280px確定描画の実測を記録する\n変更理由: Issue #32 detail uses v6 because Issue #31 masks already owns v5; synchronize the Rust and TypeScript contract, probe, tests, and documentation.\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: #32 の Lightroom 校正（round 32）の方法・写し方・誤差表・残る差と性能の再計測を記録\n変更理由: rebase 後（detail v6）の build で JPEG の確定描画の時間を再計測して追記\n変更理由: niho-photo#86: スマホの道具の帯の末尾にディテールを置き、項目はよく使う 3 つを先・シャープの応用の 3 つを後ろへ"
+      "sha256": "03a405a1806f5f3c324bae7ab5f47f14092d1f8cfe4f38de8a7a7d4a62bc24d1",
+      "origin": "Issue #32でNIHOが独立作成したdetail処理・保存契約・合成検証または設計文書。実写真・第三者コードは含まない。\n変更理由: owner判断2026-10-21: RAWでも群を出し、作業コピーのdrag中の送り方と1280px確定描画の実測を記録する\n変更理由: Issue #32 detail uses v6 because Issue #31 masks already owns v5; synchronize the Rust and TypeScript contract, probe, tests, and documentation.\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: #32 の Lightroom 校正（round 32）の方法・写し方・誤差表・残る差と性能の再計測を記録\n変更理由: rebase 後（detail v6）の build で JPEG の確定描画の時間を再計測して追記\n変更理由: niho-photo#86: スマホの道具の帯の末尾にディテールを置き、項目はよく使う 3 つを先・シャープの応用の 3 つを後ろへ\n変更理由: #133: 原寸の書き出しと画面のシャープ・ノイズ軽減の差の計測を記す。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/detail.rs",
@@ -11018,13 +11018,13 @@
     },
     {
       "path": "docs/heal.md",
-      "origin": "niho-photo#44 前半のため新規作成。修復（なぞって周囲から埋める）の保存形（developSettings v8 の heal）・描く位置・埋め方（PatchMatch・周期・写す・色合わせ）・キャッシュ・公開面・合成画像での確認・制限の説明。\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #97の修復画面説明を最新エンジンと遠近対応に合わせて更新。",
-      "sha256": "f0b25330311dc06ba3226c9eee60f680c66b332dd3fc120d88accd5e3eea1b08"
+      "origin": "niho-photo#44 前半のため新規作成。修復（なぞって周囲から埋める）の保存形（developSettings v8 の heal）・描く位置・埋め方（PatchMatch・周期・写す・色合わせ）・キャッシュ・公開面・合成画像での確認・制限の説明。\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #97の修復画面説明を最新エンジンと遠近対応に合わせて更新。\n変更理由: #133: 原寸（24MP・61MP）の修復の時間とメモリ、画面との差を記す。",
+      "sha256": "893bbd4e8b121b5c7f797122e8afa1e9e358e214b3acdbd277706792695781db"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/heal.rs",
-      "sha256": "811b4b3610143c32f0099e32b52894adc8bd01c8aa9a7d82e675c0466d47af45",
-      "origin": "niho-photo#44 前半のため新規作成。developSettings.heal の印の読み書きと検証、印の計画のキャッシュと鍵、Session が元の画を印で直す組み込みと、その単体 test。外部ライブラリを使わず、合成の値だけで検証。"
+      "sha256": "b0e608482c6e11bcfde873bfb893daa6a3eccdf6a8f4679db2bd4fde9425e246",
+      "origin": "niho-photo#44 前半のため新規作成。developSettings.heal の印の読み書きと検証、印の計画のキャッシュと鍵、Session が元の画を印で直す組み込みと、その単体 test。外部ライブラリを使わず、合成の値だけで検証。\n変更理由: #133: 原寸の時間とメモリの試験のため heal_in_place を公開する。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/heal/shape.rs",
@@ -11268,8 +11268,8 @@
     },
     {
       "path": "docs/lens-adjustments.md",
-      "sha256": "4830a541d946e4d44e6a13a095eac6edade9ef223137344521b7a6c5b4246902",
-      "origin": "niho-photo#45 のため新規作成。レンズ補正（手動の歪み・周辺光量、色収差・フリンジの除去。設定 v9）の仕様・式・検証結果の文書（合成画像の結果だけを記載）。"
+      "sha256": "a64ac4b38b0eeb47ca158a43742550b994665866d64b35e72c5cf307fe0b7587",
+      "origin": "niho-photo#45 のため新規作成。レンズ補正（手動の歪み・周辺光量、色収差・フリンジの除去。設定 v9）の仕様・式・検証結果の文書（合成画像の結果だけを記載）。\n変更理由: #133: フリンジの半径と色収差の解析画を原寸でも画面と同じにした式と、原寸の計測結果を記す。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/lens.rs",
@@ -11278,13 +11278,13 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/lens/chromatic.rs",
-      "sha256": "1cf2393c13a90ef29172dd7423ce24d4bc0dcd255dc29a3b4e5e0cec6b80535b",
-      "origin": "niho-photo#45 のため新規作成。写真の縁から横方向の色収差（赤・青の倍率）を推定する独自の決定論的な処理。"
+      "sha256": "31b40d74990118863f703658ea5433389f3d2b354966b25ca56c25f3f7c66fd0",
+      "origin": "niho-photo#45 のため新規作成。写真の縁から横方向の色収差（赤・青の倍率）を推定する独自の決定論的な処理。\n変更理由: #133: 長辺 2560 を超える写真の解析画を Lanczos 3 で長辺 2560 へ縮め、原寸の書き出しでも画面と同じ推定にする。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/lens/fringe.rs",
-      "sha256": "7c5970fe7ff266c7497ce7d116d06a4a8ea710f911bea61f61c247930b1fc0fe",
-      "origin": "niho-photo#45 のため新規作成。強い縁の近くの紫・緑のフリンジを中立に寄せる独自の処理。"
+      "sha256": "794db08f3bc530fd6a7e6860100fcd63674a38d4b4656c3e6117808a61dfdf11",
+      "origin": "niho-photo#45 のため新規作成。強い縁の近くの紫・緑のフリンジを中立に寄せる独自の処理。\n変更理由: #133: フリンジの半径の上限 6 を外し、原寸でも写真の上で画面と同じ範囲に届かせる（長辺 3327 以下は不変）。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/xmp/lens.rs",
@@ -11450,6 +11450,21 @@
       "path": "packages/photo-editing/src/editor/use-photo-editing-coarse-pointer.ts",
       "sha256": "15195b274e3b9769e538ae264304a116c3eb7cc8d605fa071586825ecfcd69ce",
       "origin": "Issue #93の公開仕様 docs/local-adjustments.md だけから新規作成した、主なポインタが指か（pointer: coarse）を読むReactフック。外部画像・非公開コード・個体metadataを含まない。"
+    },
+    {
+      "path": "packages/develop-engine/crates/niho-develop/examples/export_fidelity.rs",
+      "sha256": "6964abcbbddf538e60c99c16a9e467c71b07977ab72c0482e56f6ec81d1e5507",
+      "origin": "Issue #133 のため新規作成。数式で作る合成の写真（枝・空・芝・電線・ブラシの面）で、原寸を画面の大きさへ縮めた画と画面の画の差（ΔE00）を測る計測。実写真・非公開コード・私有参照出力を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/crates/niho-develop/tests/heal_full_size.rs",
+      "sha256": "bfb8702723b7e9688210705b10b072c859ef8f297663f40c5d4fcb2e8d914700",
+      "origin": "Issue #133 のため新規作成。数式で作る合成の芝で、24MP・61MP の修復の時間とヒープを測る ignored test。実写真を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/crates/niho-develop/tests/screen_size_pixels.rs",
+      "sha256": "4b18031a73b524d0ab2e8e2d63d80503a7f1f168b403ffe9065d73cefffa5798",
+      "origin": "Issue #133 のため新規作成。数式で作る合成の写真で、長辺 2560 以下の描画の画素が #133 の前後で変わらないことを固定する test。実写真を含まない。"
     }
   ],
   "excludedSources": [
