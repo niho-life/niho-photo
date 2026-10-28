@@ -245,7 +245,26 @@ fn digests() -> Vec<String> {
 }
 
 /// `photo engine sha256` (see [`digests`]).
-const PINNED: &[&str] = &[];
+const PINNED: &[&str] = &[
+    "raster niho-1 ed86929f1ec0297c41e1fffd514f5ba8560b535061282a7faa3875c947eb16f0",
+    "raster niho-2 99273e1ff9f7ab778b363c02c9249e1f9b9410af3080e4ef773652f17a75bde1",
+    "raster niho-6 4747046b03493a0a688856c09487dd7894d07e6a51f58911f50173d0817a4c33",
+    "raster niho-8 39e1db52b96a5c35af466a51ef0d29812bc60ffbebeaa211ce02ef098aab63e8",
+    "raster niho-10 9c9f7afa688dbec8de630872128c7949789e4ab9144f6ae32ec9fd70a6375dcb",
+    "raster niho-12 090ec6ad3d6f2c5d01f597eeac974cb9cd50beef414427f26b3c31f273b5ce14",
+    "raster niho-13 f5b72730689d93693236848f1d6db5c84392f407fd62400364429dd4915c4402",
+    "raster niho-14 dbc5d1a741f30ef65d684fbf295e1eed647e2becdce8bb9f85b8f82f043cfdba",
+    "rasterCopy niho-6 369e394b9d52b03ee832fc4e39a25a4d034ebea7072bd12a9b6387a0351bae34",
+    "rasterCopy niho-10 1da0092745206d5a65e094d6bd9c832e7d4797764eb1c862212c72412b2a24ae",
+    "rasterCopy niho-14 140bf674d3e553748aa06269d631335d203b68018dec2dc5ea32f4520f7e6c07",
+    "legacy niho-1 cee06b461880f215a8cbe082cc1f96902b47faf1c4823ccb05ca849998c53ee5",
+    "legacy niho-14 c61834a1a42e511d2aaccb9ea3f6c99e8ab8533e608784c540b38a66d14751bb",
+    "signed niho-3 674b87e311cbf977f6890f3ca743d52e114e8895eeb0056de996abcb57c9c2c3",
+    "signed niho-4 0e616562b12660cd6dcb86d891ec74304a632df3453744d10de346604c90edbd",
+    "signed niho-5 f5b22af03b0771a56e25e63f52adfb7abf4ccb31c291ebe7dbe89909abde3608",
+    "signed niho-7 31d753dd9b609050345c1e73e728651f3d03740487d75abf6366fac1a9b6c54e",
+    "signed niho-11 9d4c0a7f17cc583fc62935e48f64f731e16c21fd8f2938cb629e29a243687739",
+];
 
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
 #[cfg_attr(not(target_arch = "wasm32"), test)]
