@@ -1,0 +1,6 @@
+<!doctype html><meta charset="utf-8"><title>transport</title>
+<script>
+const worker = new Worker("/worker.js");
+worker.onmessage = (event) => window.webkit.messageHandlers.probe.postMessage(JSON.stringify(event.data));
+worker.onerror = (event) => window.webkit.messageHandlers.probe.postMessage(JSON.stringify({ error: event.message || "worker error" }));
+</script>
