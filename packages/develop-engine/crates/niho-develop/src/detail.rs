@@ -29,7 +29,6 @@
 //!   pixel-level chroma noise). Signed RAW keeps the R209 contract.
 
 use crate::color::{PP_LUMA_F32, REC709_LUMA_F32};
-use crate::resize::{resample_rows, Filter};
 use crate::settings::{DetailSettings, SharpeningSettings};
 use std::fmt;
 
@@ -423,30 +422,23 @@ pub fn sharpen_linear_srgb(
     let blurred = gaussian_mean(&luma, width, height, sigma * scale);
     let gain = sharpening_gain(settings, sigma) as f32;
     let mask = (settings.masking > 0.0).then(|| edge_mask(&luma, width, height, scale, settings));
-    let raw_delta = |index: usize| {
-        let mut delta = gain * (luma[index] - blurred[index]);
+    for (index, pixel) in rgb.chunks_exact_mut(3).enumerate() {
+        let level = luma[index];
+        let mut delta = gain * (level - blurred[index]);
         if let Some(mask) = &mask {
             delta *= mask[index];
         }
-        delta
-    };
-    // Larger than the screen (a full-size export), the halos are also held
-    // to what the limits keep of them as the screen sees them (#133): the
-    // dark limit grows with the square of the level, so limiting each pixel
-    // of a sharper edge and then reducing it darkened dark halos far more
-    // than the screen does. Each pixel keeps the smaller of its own limited
-    // halo and that share (its own limit still keeps dark pixels off black).
-    let screen_gain = (whole_long_edge > SCREEN_LONG_EDGE).then(|| {
-        let deltas: Vec<f32> = (0..luma.len()).map(raw_delta).collect();
-        screen_halo_gain(&luma, &deltas, width, height, whole_long_edge)
-    });
-    for (index, pixel) in rgb.chunks_exact_mut(3).enumerate() {
-        let level = luma[index];
-        let delta = raw_delta(index);
-        let own = limit_halo(delta, level);
-        let delta = match &screen_gain {
-            Some(gain) if (delta * gain[index]).abs() < own.abs() => delta * gain[index],
-            _ => own,
+        let delta = if delta >= 0.0 {
+            soft_limit(delta, calibration::LIGHT_HALO)
+        } else {
+            let square = level.max(0.0) * level.max(0.0);
+            let slope = calibration::DARK_HALO_SLOPE * square;
+            let limit = slope * calibration::DARK_HALO_MAX / (slope + calibration::DARK_HALO_MAX);
+            if limit > 0.0 {
+                -soft_limit(-delta, limit)
+            } else {
+                0.0
+            }
         };
         // Scale RGB to the new luma so chroma ratios stay (as Lightroom: the
         // chroma of colored noise grows with the luma it carries). Near
@@ -470,78 +462,6 @@ pub fn sharpen_linear_srgb(
         return Err(DetailError::NonFiniteOutput(index));
     }
     Ok(())
-}
-
-/// The long edge of the screen's frames (the working size): sharpening
-/// larger than this follows its halos at this size.
-const SCREEN_LONG_EDGE: usize = 2560;
-
-/// Soft-limits a halo `delta` at `level`: light halos to a fixed linear
-/// step, dark halos also in proportion to the square of the level.
-#[inline]
-fn limit_halo(delta: f32, level: f32) -> f32 {
-    if delta >= 0.0 {
-        soft_limit(delta, calibration::LIGHT_HALO)
-    } else {
-        let square = level.max(0.0) * level.max(0.0);
-        let slope = calibration::DARK_HALO_SLOPE * square;
-        let limit = slope * calibration::DARK_HALO_MAX / (slope + calibration::DARK_HALO_MAX);
-        if limit > 0.0 {
-            -soft_limit(-delta, limit)
-        } else {
-            0.0
-        }
-    }
-}
-
-/// The share of each pixel's halo the limits keep, as the screen sees it:
-/// the level and the unlimited halo reduced to the screen's size (Lanczos
-/// 3, the reduction of the screen's working image), limited there, and the
-/// kept share (`0..=1`) enlarged back bilinearly. Detail finer than the
-/// screen's pixels keeps its full-size gain.
-fn screen_halo_gain(
-    luma: &[f32],
-    deltas: &[f32],
-    width: usize,
-    height: usize,
-    whole_long_edge: usize,
-) -> Vec<f32> {
-    let k = SCREEN_LONG_EDGE as f64 / whole_long_edge as f64;
-    let rw = (libm::round(width as f64 * k) as usize).max(1);
-    let rh = (libm::round(height as f64 * k) as usize).max(1);
-    let reduced = resample_rows(width, height, rw, rh, Filter::Lanczos3, |y, row| {
-        for (x, out) in row.chunks_exact_mut(3).enumerate() {
-            out[0] = luma[y * width + x];
-            out[1] = deltas[y * width + x];
-            out[2] = 0.0;
-        }
-    });
-    let kept: Vec<f32> = reduced
-        .chunks_exact(3)
-        .map(|p| {
-            if p[1].abs() < 1e-6 {
-                1.0
-            } else {
-                (limit_halo(p[1], p[0]) / p[1]).clamp(0.0, 1.0)
-            }
-        })
-        .collect();
-    let axis = |i: usize, n: usize, m: usize| {
-        let t = ((i as f32 + 0.5) * m as f32 / n as f32 - 0.5).clamp(0.0, (m - 1) as f32);
-        let i0 = t as usize;
-        (i0, (i0 + 1).min(m - 1), t - i0 as f32)
-    };
-    let mut gain = Vec::with_capacity(width * height);
-    for y in 0..height {
-        let (y0, y1, ty) = axis(y, height, rh);
-        for x in 0..width {
-            let (x0, x1, tx) = axis(x, width, rw);
-            let top = kept[y0 * rw + x0] + tx * (kept[y0 * rw + x1] - kept[y0 * rw + x0]);
-            let bottom = kept[y1 * rw + x0] + tx * (kept[y1 * rw + x1] - kept[y1 * rw + x0]);
-            gain.push(top + ty * (bottom - top));
-        }
-    }
-    gain
 }
 
 /// Gaussian sigma of the sharpening blur at the reference scale.
