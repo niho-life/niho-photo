@@ -31,6 +31,17 @@
       worker.postMessage(message);
     });
   const probeUrl = new URL("/coi-probe-worker.js", location.href).href;
+  // 画面の文書と Worker の script の応答に COOP / COEP が付いているか（Tauri の app.security.headers が届いているか）
+  for (const [key, url] of [["documentHeaders", location.href], ["workerScriptHeaders", probeUrl]]) {
+    try {
+      const response = await fetch(url, { cache: "no-store" });
+      result[key] = Object.fromEntries(
+        ["cross-origin-opener-policy", "cross-origin-embedder-policy", "content-type"].map((name) => [name, response.headers.get(name)]),
+      );
+    } catch (error) {
+      result[key] = { error: describe(error) };
+    }
+  }
   try {
     const worker = new Worker(probeUrl, { type: "module" });
     result.urlWorker = await ask(worker, { role: "probe", nestedUrl: probeUrl }, () => true);

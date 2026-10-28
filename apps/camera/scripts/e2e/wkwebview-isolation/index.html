@@ -1,0 +1,25 @@
+<!doctype html><meta charset="utf-8"><title>probe</title>
+<script>
+(async () => {
+  const out = { href: location.href, protocol: location.protocol, crossOriginIsolated: self.crossOriginIsolated,
+    sharedArrayBuffer: typeof SharedArrayBuffer, isSecureContext: self.isSecureContext,
+    reloaded: sessionStorage.getItem("reloaded") === "1" };
+  try {
+    const response = await fetch(location.href, { cache: "no-store" });
+    out.coop = response.headers.get("cross-origin-opener-policy");
+    out.coep = response.headers.get("cross-origin-embedder-policy");
+  } catch (error) { out.fetchError = String(error); }
+  out.worker = await new Promise((resolve) => {
+    try {
+      const worker = new Worker("/worker.js");
+      worker.onmessage = (event) => resolve(event.data);
+      worker.onerror = (event) => resolve({ error: event.message || "worker error" });
+      setTimeout(() => resolve({ error: "timeout" }), 5000);
+    } catch (error) { resolve({ error: String(error) }); }
+  });
+  const last = out.reloaded;
+  if (!last) sessionStorage.setItem("reloaded", "1");
+  window.webkit.messageHandlers.probe.postMessage(JSON.stringify({ ...out, last }));
+  if (!last) location.reload();
+})();
+</script>

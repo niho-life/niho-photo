@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 # Research only (#148 の 0): COOP / COEP を足した Mac アプリ（e2e feature・専用 identifier・ad-hoc 署名）を作り、
-# 画面と Worker の crossOriginIsolated を見る。比べるために、headers を外した build も同じ script で見る。
+# 画面と Worker の crossOriginIsolated を見る（COI_BASELINE=1 で headers を外した build も見る）。続けて素の WKWebView で、
+# 独自の scheme と http://127.0.0.1 の読み込みを比べる（wkwebview-isolation.swift）。
 # usage: apps/camera/scripts/e2e/cross-origin-isolation.sh <work dir>
 set -euo pipefail
 cd "$(dirname "$0")/../../../.."
@@ -47,5 +48,15 @@ build_and_run() {
 }
 
 build_and_run with-headers '{"Cross-Origin-Opener-Policy":"same-origin","Cross-Origin-Embedder-Policy":"require-corp"}'
-build_and_run without-headers 'null'
+[ "${COI_BASELINE:-0}" = 1 ] && build_and_run without-headers 'null'
+
+# Tauri を介さない素の WKWebView: 独自の scheme と http://127.0.0.1 の比べ
+E2E=apps/camera/scripts/e2e
+swiftc -O "$E2E/wkwebview-isolation.swift" -o "$W/wkwebview-isolation"
+node "$E2E/wkwebview-isolation/server.mjs" 18149 &
+SERVER=$!
+sleep 1
+echo "== bare WKWebView"
+"$W/wkwebview-isolation" "$E2E/wkwebview-isolation" 18149 || true
+kill "$SERVER" 2>/dev/null || true
 sw_vers
