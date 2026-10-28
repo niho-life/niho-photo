@@ -26,7 +26,9 @@
 //!   pixels at 6000 px);
 //! - `sharpen` / `sharpen-edges` / `sharpen-texture`: the branches over a
 //!   fine texture / over a flat sky / the texture alone, Amount 80, Radius
-//!   1, Detail 25.
+//!   1, Detail 25;
+//! - `noise`: the branches over a sky with pixel noise (luma and color),
+//!   luminance noise reduction 40, color 25.
 //!
 //! `--sharpen-options` compares the ways the export could sharpen
 //! ([`sharpen_options`]).
@@ -46,7 +48,7 @@ use serde_json::{json, Value};
 use std::time::Instant;
 
 const SCREEN: usize = 2560;
-const CASES: [&str; 11] = [
+const CASES: [&str; 12] = [
     "fringe",
     "chromatic",
     "chromatic-weak",
@@ -57,6 +59,7 @@ const CASES: [&str; 11] = [
     "sharpen",
     "sharpen-edges",
     "sharpen-texture",
+    "noise",
     "neutral",
 ];
 
@@ -330,6 +333,18 @@ fn make_case(name: &str, w: f64, h: f64) -> Case {
                 json!({"detail": {"sharpening": {"amount": 80, "radius": 1, "detail": 25, "masking": 0}, "luminanceNoiseReduction": 0, "colorNoiseReduction": 0}}),
             )
         }
+        "noise" => plain(
+            Box::new(move |x, y| {
+                let e = branch_distance(w, h, x, y) - half;
+                let dark = coverage(e);
+                let n = lattice(x as i64, y as i64, 11) - 0.5;
+                let c = lattice(x as i64, y as i64, 12) - 0.5;
+                let level = sky(h, y) * (1.0 + 0.12 * n);
+                let rgb = [level * (1.0 + 0.1 * c), level, level * (1.0 - 0.1 * c)];
+                (rgb.map(|v| (1.0 - dark) * v + dark * 0.03), true)
+            }),
+            json!({"detail": {"sharpening": {"amount": 0, "radius": 1, "detail": 25, "masking": 0}, "luminanceNoiseReduction": 40, "colorNoiseReduction": 25}}),
+        ),
         // Every effect at once, for the floor of a busy photo.
         "neutral" => plain(
             Box::new(move |x, y| {
