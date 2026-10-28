@@ -739,7 +739,7 @@ fn crispness(f: &Frame) -> f64 {
     let mut sum = 0.0f64;
     for y in 0..f.h {
         for x in 0..f.w - 1 {
-            sum += (luma(f, x + 1, y).sqrt() - luma(f, x, y).sqrt()).abs();
+            sum += (luma(f, x + 1, y).max(0.0).sqrt() - luma(f, x, y).max(0.0).sqrt()).abs();
         }
     }
     round3(sum / ((f.w - 1) * f.h) as f64 * 1000.0)

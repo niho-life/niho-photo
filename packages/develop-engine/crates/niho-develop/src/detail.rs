@@ -430,10 +430,12 @@ pub fn sharpen_linear_srgb(
         }
         delta
     };
-    // Larger than the screen (a full-size export), the halo limits act on
-    // the halos as the screen sees them (#133): they are not linear in the
-    // level, so limiting each pixel of a sharper edge and then reducing it
-    // darkens dark halos far more than the screen does.
+    // Larger than the screen (a full-size export), the halos are also held
+    // to what the limits keep of them as the screen sees them (#133): the
+    // dark limit grows with the square of the level, so limiting each pixel
+    // of a sharper edge and then reducing it darkened dark halos far more
+    // than the screen does. Each pixel keeps the smaller of its own limited
+    // halo and that share (its own limit still keeps dark pixels off black).
     let screen_gain = (whole_long_edge > SCREEN_LONG_EDGE).then(|| {
         let deltas: Vec<f32> = (0..luma.len()).map(raw_delta).collect();
         screen_halo_gain(&luma, &deltas, width, height, whole_long_edge)
@@ -441,9 +443,10 @@ pub fn sharpen_linear_srgb(
     for (index, pixel) in rgb.chunks_exact_mut(3).enumerate() {
         let level = luma[index];
         let delta = raw_delta(index);
+        let own = limit_halo(delta, level);
         let delta = match &screen_gain {
-            Some(gain) => delta * gain[index],
-            None => limit_halo(delta, level),
+            Some(gain) if (delta * gain[index]).abs() < own.abs() => delta * gain[index],
+            _ => own,
         };
         // Scale RGB to the new luma so chroma ratios stay (as Lightroom: the
         // chroma of colored noise grows with the luma it carries). Near
