@@ -20,8 +20,8 @@ commands.allow = ["camera_develop_status", "camera_develop_source", "camera_deve
 
 [[permission]]
 identifier = "allow-camera-cutout"
-description = "Allows only the bundled NIHO photo UI to use the verified open photo ID for the bundled niho-camera-cutout sidecar: probe it, load/save that photo's SHA-256-bound recipe, detect/cancel, read only masks belonging to that photo, and export through the native save dialog. No path is accepted or returned."
-commands.allow = ["camera_cutout_status", "camera_cutout_load_recipe", "camera_cutout_save_recipe", "camera_cutout_detect", "camera_cutout_cancel", "camera_cutout_read_mask", "camera_cutout_export"]
+description = "Allows only the bundled NIHO photo UI to use the verified open photo ID for the bundled niho-camera-cutout sidecar: probe it, load/save that photo's SHA-256-bound recipe, detect/cancel, read only masks belonging to that photo, export through the native save dialog, and detect the subject mask surface of that photo's working image (a RAW working copy is drawn to sRGB with the bundled niho-develop-render first) into its mask surface store. No path is accepted or returned."
+commands.allow = ["camera_cutout_status", "camera_cutout_load_recipe", "camera_cutout_save_recipe", "camera_cutout_detect", "camera_cutout_cancel", "camera_cutout_read_mask", "camera_cutout_export", "camera_mask_surface_detect"]
 
 [[permission]]
 identifier = "allow-camera-presets"

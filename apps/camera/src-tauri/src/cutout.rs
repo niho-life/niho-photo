@@ -16,6 +16,8 @@
 //!   （推論の直後で、まだ保存していないマスクは消さない）。
 //! - 失敗は sidecar の `error`（`no_subjects` など）をそのまま [`PageError`] の `code` にする（編集面がその語彙で 1 行を選ぶ）。
 //!   sidecar が答えない・時間切れは `engine_failed`。
+//! - 部分補正の被写体のマスクの面（niho-photo#135）: `surface` で作業画像から面の PNG を作る（[`PhotoCutout::surface_cancellable`]。
+//!   置き場は `mask_detection.rs` が写真の `MaskSurfaceStore` へ入れる）。
 
 use niho_desktop_photo::common::{lock, random_hex, PageError};
 use niho_desktop_photo::develop::{parse_version_line, run_sidecar, ToolRun};
@@ -45,7 +47,7 @@ const SWEEP_INTERVAL: Duration = Duration::from_secs(24 * 60 * 60);
 const CANCEL_POLL_INTERVAL: Duration = Duration::from_millis(5);
 
 /// sidecar の失敗の語彙（README の表）のうち、編集面へ渡すもの。ほかは `internal_error`。
-pub const CUTOUT_ERROR_CODES: [&str; 16] = [
+pub const CUTOUT_ERROR_CODES: [&str; 17] = [
   "invalid_arguments",
   "unsupported_output",
   "invalid_strokes",
@@ -62,6 +64,7 @@ pub const CUTOUT_ERROR_CODES: [&str; 16] = [
   "source_overwrite",
   "encode_failed",
   "write_failed",
+  "unsupported_kind",
 ];
 
 #[derive(Debug, Clone)]
@@ -376,6 +379,54 @@ impl PhotoCutout {
       return Err(page_error("corrupt_mask"));
     }
     Ok(bytes)
+  }
+
+  /// `surface`: 作業画像（`input`）の全部の被写体を 1 枚の面の PNG にして `output`（まだ無いファイル）に書き、`surface` の 1 行
+  /// （`durationMs` を除く）と書いた PNG を返す。PNG の SHA-256 が答えの `surfaceSHA256` と違えば `internal_error`。
+  pub fn surface_cancellable(
+    &self,
+    input: &Path,
+    kind: &str,
+    output: &Path,
+    cancelled: &AtomicBool,
+  ) -> Result<(Value, Vec<u8>), PageError> {
+    let args = vec![
+      OsString::from("surface"),
+      OsString::from("--input"),
+      input.as_os_str().to_os_string(),
+      OsString::from("--output"),
+      output.as_os_str().to_os_string(),
+      OsString::from("--kind"),
+      OsString::from(kind),
+    ];
+    let timeouts = &self.config.timeouts;
+    let run = run_sidecar_cancellable(
+      &self.config.sidecar,
+      &args,
+      timeouts.detect,
+      timeouts.kill_grace,
+      &self.running,
+      cancelled,
+    );
+    if !run.succeeded() {
+      return Err(page_error(
+        &run.tool_error().unwrap_or_else(|| "engine_failed".to_string()),
+      ));
+    }
+    let last = run
+      .stdout
+      .lines()
+      .map(str::trim)
+      .rfind(|line| !line.is_empty())
+      .unwrap_or("");
+    let mut summary: Value = serde_json::from_str(last).map_err(|_| page_error("internal_error"))?;
+    let object = summary.as_object_mut().ok_or_else(|| page_error("internal_error"))?;
+    object.remove("durationMs");
+    let written = fs::read(output).map_err(|_| page_error("internal_error"))?;
+    if summary.get("surfaceSHA256").and_then(Value::as_str) != Some(sha256_hex(&written).as_str()) {
+      return Err(page_error("internal_error"));
+    }
+    Ok((summary, written))
   }
 
   /// `compose`: 現像した画像にマスク・ブラシ・背景を当てて書き出し、`compose` の 1 行を返す。ブラシの JSON は一時ファイルに書いて渡す。

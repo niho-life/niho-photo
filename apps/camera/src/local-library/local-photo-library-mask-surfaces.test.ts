@@ -10,7 +10,7 @@ import { LOCAL_CLOSED_CAPABILITIES, createLocalPhotoLibrary, localCapabilities }
 
 const SURFACE_ID = "a".repeat(64);
 
-function fakeNative(options: { contents?: string[]; missing?: boolean } = {}) {
+function fakeNative(options: { contents?: string[]; missing?: boolean; detect?: "hang" | "none" | "fail" } = {}) {
   const calls: Array<{ command: string; args: unknown; options?: unknown }> = [];
   const contents = [...(options.contents ?? ["c".repeat(64)])];
   let opened = 0;
@@ -42,6 +42,14 @@ function fakeNative(options: { contents?: string[]; missing?: boolean } = {}) {
         if (photoId === "native-1" && released) throw { code: "notFound", message: "写真が見つかりません。" };
         return { id: SURFACE_ID, width: 4, height: 3 } as T;
       }
+      case "camera_mask_surface_detect": {
+        if (options.detect === "hang") return new Promise<T>(() => undefined);
+        if (options.detect === "none") throw { code: "no_subjects", message: "被写体が見つかりませんでした。" };
+        if (options.detect === "fail") throw { code: "engine_failed", message: "背景除去を使えませんでした。" };
+        return { id: SURFACE_ID, width: 1024, height: 683 } as T;
+      }
+      case "camera_cutout_cancel":
+        return {} as T;
       case "camera_mask_surface_load":
         if (options.missing) throw { code: "maskSurfaceMissing", message: "面が見つかりません。" };
         if (request?.photoId === "native-1" && released) throw { code: "notFound", message: "写真が見つかりません。" };
@@ -86,6 +94,56 @@ describe("この Mac のマスクの面", () => {
     await replaced.library.loadMaskSurface!("e-1", SURFACE_ID);
     replaced.release();
     await expect(replaced.library.loadMaskSurface!("e-1", SURFACE_ID)).rejects.toMatchObject({ code: "notFound" });
+  });
+
+  it("被写体の面を開いた native の photoId で作らせ、作業画像を描く補正と操作の ID を渡す（niho-photo#135）", async () => {
+    const { library, calls } = fakeNative();
+    const developSettings = { v: 1, engine: "niho-14", base: null };
+    await expect(library.detectMaskSurface!("e-1", "subject", { developSettings })).resolves.toEqual({
+      kind: "detected",
+      id: SURFACE_ID,
+      width: 1024,
+      height: 683,
+    });
+    const detect = calls.find((call) => call.command === "camera_mask_surface_detect")!;
+    const request = (detect.args as { request: { photoId: string; kind: string; operationId: string; developSettings: object } }).request;
+    expect(request).toMatchObject({ photoId: "native-1", kind: "subject", developSettings });
+    expect(request.operationId).toMatch(/^mask-[A-Za-z0-9-]+$/u);
+  });
+
+  it("被写体が無ければ notFound、ほかの失敗は投げる", async () => {
+    await expect(fakeNative({ detect: "none" }).library.detectMaskSurface!("e-1", "subject", { developSettings: {} })).resolves.toEqual({
+      kind: "notFound",
+    });
+    await expect(fakeNative({ detect: "fail" }).library.detectMaskSurface!("e-1", "subject", { developSettings: {} })).rejects.toMatchObject({
+      code: "engine_failed",
+    });
+  });
+
+  it("止めたらすぐ AbortError で reject し、native の同じ操作を取り消す", async () => {
+    const { library, calls } = fakeNative({ detect: "hang" });
+    const controller = new AbortController();
+    const pending = library.detectMaskSurface!("e-1", "subject", { developSettings: {}, signal: controller.signal });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    controller.abort();
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    const detect = calls.find((call) => call.command === "camera_mask_surface_detect")!;
+    const cancel = calls.find((call) => call.command === "camera_cutout_cancel")!;
+    expect((cancel.args as { request: { operationId: string } }).request.operationId).toBe(
+      (detect.args as { request: { operationId: string } }).request.operationId,
+    );
+    // 止めてあれば native を呼ばない
+    const before = calls.length;
+    await expect(
+      library.detectMaskSurface!("e-1", "subject", { developSettings: {}, signal: AbortSignal.abort() }),
+    ).rejects.toMatchObject({ name: "AbortError" });
+    expect(calls).toHaveLength(before);
+  });
+
+  it("被写体の面は同梱の niho-camera-cutout が使えるときだけ作れる（空はまだ作れない）", () => {
+    expect(LOCAL_CLOSED_CAPABILITIES.maskDetection).toEqual({ subject: false, sky: false });
+    expect(localCapabilities({ available: true }, true).maskDetection).toEqual({ subject: true, sky: false });
+    expect(localCapabilities({ available: true }, false).maskDetection).toEqual({ subject: false, sky: false });
   });
 
   it("面を保存できることを能力で知らせる（同梱の sidecar に依らない。読めるまでは閉じた値）", () => {

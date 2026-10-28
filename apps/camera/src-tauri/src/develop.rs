@@ -339,7 +339,7 @@ fn check_suggested_name(name: &Option<String>) -> Result<(), CameraError> {
 }
 
 /// 保存済みの context は画面から来た値を信用せず、現在の ContentSHA の保存ストアを読み直す。
-fn stored_source_context(photos: &CameraPhotos, photo_id: &str) -> Option<DevelopSourceContext> {
+pub(crate) fn stored_source_context(photos: &CameraPhotos, photo_id: &str) -> Option<DevelopSourceContext> {
   let photo = photos.get(photo_id)?;
   let saved = photos.saved(&photo.digest.key)?;
   Some(DevelopSourceContext {

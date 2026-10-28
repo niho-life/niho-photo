@@ -100,6 +100,7 @@ export const LOCAL_CLOSED_CAPABILITIES: PhotoLibraryCapabilities = Object.freeze
   nativeExportRaster: false,
   nativeExportMasks: false,
   maskSurfaces: false,
+  maskDetection: Object.freeze({ subject: false, sky: false }),
   cutout: false,
   favorites: false,
   albums: false,
@@ -134,6 +135,8 @@ export function localCapabilities(
     exportFolder: status.available,
     // マスクの面の置き場はアプリ自身のコマンド（同梱の sidecar に依らない）
     maskSurfaces: true,
+    // 被写体のマスクの面は同梱の niho-camera-cutout（lock の版で `surface` を持つ。macOS 13 では起動しない）で作る。空はまだ作れない
+    maskDetection: { subject: cutoutAvailable, sky: false },
     cutout: cutoutAvailable,
     multiSelect: true,
     // 写真の情報は native が ImageIO で読む（同梱の sidecar に依らない）
@@ -304,6 +307,18 @@ function isCode(error: unknown, ...codes: string[]): error is CameraCommandError
 
 function throwIfAborted(signal: AbortSignal | undefined): void {
   if (signal?.aborted) throw signal.reason ?? new DOMException("Aborted", "AbortError");
+}
+
+function abortReason(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException("Aborted", "AbortError");
+}
+
+let maskDetectionSequence = 0;
+/** native の取り消しの口（`camera_cutout_cancel`）に渡す操作の ID（英数字と `-` だけ）。 */
+function maskDetectionOperationId(): string {
+  maskDetectionSequence += 1;
+  const random = globalThis.crypto?.randomUUID?.().replaceAll("-", "") ?? `${Date.now()}-${maskDetectionSequence}`;
+  return `mask-${random}`;
 }
 
 /** 作業コピーの大きさ（RAW は sidecar の `outputSize`、ラスタの作業コピーは中身の寸法）。 */
@@ -1011,6 +1026,36 @@ export function createLocalPhotoLibrary(commands: CameraCommands, options: Local
     // 置くので、補正を保存する前でも保存できる。中身が置き換わった写真へ古い操作をやり直さない（withStableHandle）
     async saveMaskSurface(photoId, png) {
       return withStableHandle(photoId, (handle) => commands.saveMaskSurface(handle.nativeId, png));
+    },
+
+    // 被写体のマスクの面（niho-photo#135）。native が作業画像に同梱の niho-camera-cutout を当て、上と同じ面の置き場へ保存する。
+    // 止めたらすぐ reject し、native の sidecar もプロセスグループごと止める（背景除去と同じ取り消しの口）
+    detectMaskSurface(photoId, kind, detectOptions) {
+      const { signal, developSettings } = detectOptions;
+      if (signal?.aborted) return Promise.reject(abortReason(signal));
+      const operationId = maskDetectionOperationId();
+      return new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (run: () => void) => {
+          if (settled) return;
+          settled = true;
+          signal?.removeEventListener("abort", onAbort);
+          run();
+        };
+        const onAbort = () => {
+          void commands.cutoutCancel(operationId).catch(() => undefined);
+          finish(() => reject(abortReason(signal!)));
+        };
+        signal?.addEventListener("abort", onAbort, { once: true });
+        void withStableHandle(photoId, (handle) => {
+          if (signal?.aborted) throw abortReason(signal);
+          return commands.detectMaskSurface(handle.nativeId, kind, operationId, developSettings);
+        }).then(
+          (surface) => finish(() => resolve({ kind: "detected", id: surface.id, width: surface.width, height: surface.height })),
+          (error: unknown) =>
+            finish(() => (isCode(error, "no_subjects") ? resolve({ kind: "notFound" }) : reject(error))),
+        );
+      });
     },
 
     async loadMaskSurface(photoId, surfaceId) {

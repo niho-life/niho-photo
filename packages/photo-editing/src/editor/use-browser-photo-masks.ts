@@ -18,8 +18,11 @@ import {
   type DevelopMaskHslBand,
 } from "../develop-engine/develop-masks";
 import type { DevelopSettings } from "../develop-engine/develop-settings";
+import type { PhotoLibraryMaskDetectionKind, PhotoLibraryMaskDetectionResult } from "../library/photo-library";
 import {
   PHOTO_EDITING_MASK_BRUSH_ADD_FAILED_TEXT,
+  PHOTO_EDITING_MASK_DETECT_FAILED_TEXTS,
+  PHOTO_EDITING_MASK_DETECT_NOT_FOUND_TEXTS,
   PHOTO_EDITING_MASK_EXPORT_UNSUPPORTED_TEXT,
   photoEditingMaskLabel,
   photoEditingMaskLimitText,
@@ -58,8 +61,34 @@ import type { PhotoEditingSettingsUpdate, PhotoEditingSliderPhase } from "./phot
 import { readCropSource } from "./use-browser-photo-crop";
 import { useBrowserPhotoMaskBrush } from "./use-browser-photo-mask-brush";
 
-/** 画面で足せる種類（線形・円形と、面を保存できる写真の出どころのブラシ。M4 #68）。 */
-export type PhotoEditingMaskAddKind = PhotoEditingMaskShapeKind | "brush";
+/** 写真から作る種類（被写体・空。写真の出どころの `detectMaskSurface`。niho-photo#135）。 */
+export type PhotoEditingMaskDetectKind = PhotoLibraryMaskDetectionKind;
+
+/**
+ * 画面で足せる種類（線形・円形と、面を保存できる写真の出どころのブラシ〔M4 #68〕、面を写真から作れる出どころの被写体・空
+ * 〔niho-photo#135〕）。
+ */
+export type PhotoEditingMaskAddKind = PhotoEditingMaskShapeKind | "brush" | PhotoEditingMaskDetectKind;
+
+/** 写真から面を作る口（写真の出どころの `detectMaskSurface` を開いている写真に結んだもの）。 */
+export type PhotoEditingMaskDetectSurface = (
+  photoId: string,
+  kind: PhotoEditingMaskDetectKind,
+  options: { developSettings: object; signal: AbortSignal },
+) => Promise<PhotoLibraryMaskDetectionResult>;
+
+const PHOTO_EDITING_MASK_DETECT_KINDS: readonly PhotoEditingMaskDetectKind[] = ["subject", "sky"];
+
+function isDetectKind(kind: PhotoEditingMaskAddKind): kind is PhotoEditingMaskDetectKind {
+  return (PHOTO_EDITING_MASK_DETECT_KINDS as readonly string[]).includes(kind);
+}
+
+/** 写真の出どころが面を作れる種類（`capabilities.maskDetection` の true の種類。省略 = 無し）。 */
+export function photoEditingMaskDetectKinds(capabilities: {
+  maskDetection?: Partial<Record<PhotoEditingMaskDetectKind, boolean>>;
+}): PhotoEditingMaskDetectKind[] {
+  return PHOTO_EDITING_MASK_DETECT_KINDS.filter((kind) => capabilities.maskDetection?.[kind] === true);
+}
 
 /** 写真の描画が面を読めなかったマスク（`useBrowserPhotoOpen` が描画の失敗から知らせる）。 */
 export type PhotoEditingMaskSurfaceIssue = { photoKey: string; maskIds: string[] };
@@ -116,12 +145,20 @@ export function photoEditingMaskExportBlocked(capabilities: {
 
 /**
  * 足せる種類（wasm が描ける種類のうち、画面で作れるもの）。ブラシは面を受け渡せる wasm（`surfaces`）で、写真の出どころが面を保存
- * できる（`canSaveSurfaces`）ときだけ。
+ * できる（`canSaveSurfaces`）ときだけ。被写体・空は面を受け渡せる wasm で、写真の出どころがその種類の面を作れる（`detectKinds`）
+ * ときだけ。
  */
-function addKinds(support: DevelopMaskCapabilities | null, canSaveSurfaces: boolean): PhotoEditingMaskAddKind[] {
+function addKinds(
+  support: DevelopMaskCapabilities | null,
+  canSaveSurfaces: boolean,
+  detectKinds: readonly PhotoEditingMaskDetectKind[],
+): PhotoEditingMaskAddKind[] {
   if (!support) return [];
   const kinds: PhotoEditingMaskAddKind[] = PHOTO_EDITING_MASK_SHAPE_KINDS.filter((kind) => support.kinds.includes(kind));
   if (canSaveSurfaces && support.surfaces === true && support.kinds.includes("brush")) kinds.push("brush");
+  if (support.surfaces === true) {
+    kinds.push(...PHOTO_EDITING_MASK_DETECT_KINDS.filter((kind) => detectKinds.includes(kind) && support.kinds.includes(kind)));
+  }
   return kinds;
 }
 
@@ -161,6 +198,12 @@ export function useBrowserPhotoMasks(params: {
    * 出さない）。写真は開いている session の `photoId`
    */
   saveMaskSurface?: ((photoId: string, png: Uint8Array) => Promise<{ id: string }>) | null;
+  /**
+   * 被写体・空の面を写真から作る口（写真の出どころの `detectMaskSurface`。`capabilities.maskDetection` で作れる種類を `detectKinds`
+   * に渡す。無ければ「被写体」「空」を出さない）。写真は開いている session の `photoId`
+   */
+  detectMaskSurface?: PhotoEditingMaskDetectSurface | null;
+  detectKinds?: readonly PhotoEditingMaskDetectKind[];
   /** 写真の描画が面を読めなかったマスク（無ければ null） */
   surfaceIssue?: PhotoEditingMaskSurfaceIssue | null;
   /** 面を読み直して描き直す */
@@ -174,7 +217,8 @@ export function useBrowserPhotoMasks(params: {
     params;
   const random = params.random ?? Math.random;
   const saveMaskSurface = params.saveMaskSurface ?? null;
-  const kinds = addKinds(support, saveMaskSurface !== null);
+  const detectMaskSurface = params.detectMaskSurface ?? null;
+  const kinds = addKinds(support, saveMaskSurface !== null, detectMaskSurface ? (params.detectKinds ?? []) : []);
   const available = wide && photoKey !== null && kinds.length > 0;
   const [active, setActive] = useState(false);
   const [source, setSource] = useState<{ key: string; size: DevelopSize } | null>(null);
@@ -184,12 +228,25 @@ export function useBrowserPhotoMasks(params: {
   /** 写真の上のつまみを動かしている間（範囲を重ねて見せる） */
   const [shapeDragging, setShapeDragging] = useState(false);
   const generationRef = useRef(0);
+  /** 写真から範囲を探している種類（探している間はほかの追加も止める。取り消せる） */
+  const [detecting, setDetecting] = useState<PhotoEditingMaskDetectKind | null>(null);
+  const detectControllerRef = useRef<AbortController | null>(null);
+
+  /** 写真から範囲を探しているのをやめる（native の検出も止める）。 */
+  const cancelDetect = useCallback(() => {
+    detectControllerRef.current?.abort();
+    detectControllerRef.current = null;
+    setDetecting(null);
+  }, []);
 
   const leave = useCallback(() => {
     generationRef.current += 1;
+    cancelDetect();
     setActive(false);
     setShapeDragging(false);
-  }, []);
+  }, [cancelDetect]);
+  // 画面を閉じたら探しているのをやめる
+  useEffect(() => cancelDetect, [cancelDetect]);
 
   // 写真を替えた・出す条件を満たさなくなった・ほかの道具に移ったら「補正」に戻す（選択も捨てる）
   useEffect(() => {
@@ -242,7 +299,7 @@ export function useBrowserPhotoMasks(params: {
     setAddingBrush(false);
     setAddNotice(null);
   }, [photoKey]);
-  const canAdd = active && !params.disabled && addBlockedReason === null && frameValid && !addingBrush;
+  const canAdd = active && !params.disabled && addBlockedReason === null && frameValid && !addingBrush && detecting === null;
   /** 面を写真に保存する口（開いている session の写真に結ぶ） */
   const saveSurface = useMemo(
     () =>
@@ -332,10 +389,64 @@ export function useBrowserPhotoMasks(params: {
     );
   };
 
+  /**
+   * 被写体・空のマスクを足す: 写真の出どころが作業画像からその範囲の面を作って写真に保存し（数秒。取り消せる）、
+   * `{ kind, surface }` を 1 単位で足して選ぶ。範囲が無ければ理由の 1 行。写真を替えた・道具を離れた・取り消したら足さない。
+   */
+  const addDetected = (kind: PhotoEditingMaskDetectKind) => {
+    const session = developSessionRef.current;
+    if (!session || !detectMaskSurface) return;
+    const generation = generationRef.current;
+    const controller = new AbortController();
+    detectControllerRef.current?.abort();
+    detectControllerRef.current = controller;
+    setDetecting(kind);
+    setAddNotice(null);
+    const settle = (run: () => void) => {
+      if (detectControllerRef.current !== controller) return;
+      detectControllerRef.current = null;
+      if (!mountedRef.current) return;
+      setDetecting(null);
+      if (generation !== generationRef.current) return;
+      run();
+    };
+    void Promise.resolve()
+      .then(() => detectMaskSurface(session.photoId, kind, { developSettings: settingsRef.current, signal: controller.signal }))
+      .then(
+        (result) =>
+          settle(() => {
+            if (result.kind === "notFound") {
+              setAddNotice(PHOTO_EDITING_MASK_DETECT_NOT_FOUND_TEXTS[kind]);
+              return;
+            }
+            const id = createPhotoEditingMaskId(readDevelopMasks(settingsRef.current), random);
+            let added = false;
+            changeMasks((current) => {
+              if (current.length >= max) return current;
+              added = true;
+              return addPhotoEditingMask(current, {
+                id,
+                kind,
+                enabled: true,
+                invert: false,
+                surface: { id: result.id, width: result.width, height: result.height },
+                adjust: {},
+              });
+            }, "commit");
+            if (added) setSelectedId(id);
+          }),
+        () => settle(() => setAddNotice(PHOTO_EDITING_MASK_DETECT_FAILED_TEXTS[kind])),
+      );
+  };
+
   const add = (kind: PhotoEditingMaskAddKind) => {
     if (!canAdd || !kinds.includes(kind) || !frame) return;
     if (kind === "brush") {
       addBrush();
+      return;
+    }
+    if (isDetectKind(kind)) {
+      addDetected(kind);
       return;
     }
     const id = createPhotoEditingMaskId(readDevelopMasks(settingsRef.current), random);
@@ -525,6 +636,9 @@ export function useBrowserPhotoMasks(params: {
     /** ブラシ（塗る状態。M4 #68） */
     brush,
     addingBrush,
+    /** 写真から範囲を探している種類（無ければ null）と、やめる口（niho-photo#135） */
+    detecting,
+    cancelDetect,
     notice,
     /** 理由の 1 行が面を読めないこと（読み直せる）か */
     canRetrySurfaces: addNotice === null && (brush.status === "unreadable" || surfaceNotice !== null),
