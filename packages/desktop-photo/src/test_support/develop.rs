@@ -140,6 +140,7 @@ cmd="$1"; shift
 env | sort > "$d/env-niho-develop-render.txt"
 case "$cmd" in
   version) if [ -f "$d/render-version" ]; then v=$(cat "$d/render-version"); else v=0.11.0; fi; echo "niho-develop-render $v (niho-develop $v, engine niho-3)" ;;
+  capabilities) if [ -f "$d/render-capabilities" ]; then cat "$d/render-capabilities"; else echo '{"error":"invalid_arguments","message":"x"}'; exit 1; fi ;;
   render)
     out=""; settings=""; wc=""
     while [ $# -gt 0 ]; do
@@ -335,12 +336,16 @@ impl SidecarHarness {
       .collect()
   }
 
-  /// probe（version・registry・version）を除いた呼び出し
+  /// probe（version・registry・version・capabilities）を除いた呼び出し
   pub fn work_calls(&self) -> Vec<String> {
     self
       .lines("calls.txt")
       .into_iter()
-      .filter(|line| !line.ends_with(" version") && !line.starts_with("apple-raw-linear registry"))
+      .filter(|line| {
+        !line.ends_with(" version")
+          && !line.ends_with(" capabilities")
+          && !line.starts_with("apple-raw-linear registry")
+      })
       .collect()
   }
 

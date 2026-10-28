@@ -452,9 +452,9 @@ export function useBrowserPhotoExportAndDelete(params: {
         }
       }
     }
-    const nativeBlockers = photoEditingNativeExportBlockers(developSettings);
+    const nativeBlockers = photoEditingNativeExportBlockers(developSettings, params.capabilities.nativeExportRenderer);
     if (nativeBlockers.length > 0) {
-      throw new Error(photoEditingNativeExportUnsupportedFailedText(nativeBlockers));
+      throw new Error(photoEditingNativeExportUnsupportedFailedText(nativeBlockers, params.capabilities.place));
     }
     const sourceFileName = latest.fileName || target.photo.fileName;
     const suggestedFileName = browserPhotoExportJpegFileName(sourceFileName);
@@ -604,10 +604,13 @@ export function useBrowserPhotoExportAndDelete(params: {
     const cutoutFullSize = cutout?.exportFullSize;
     if (rendersImage && (jpegRoute === "native") !== (options.size === "full")) return "skipped";
     if (rendersImage && jpegRoute === "native") {
-      // 原寸の native renderer が描けない補正（中間調・全体の輝度・遠近・修復・レンズ補正）は渡さない（sidecar を上げるまで）
-      const nativeBlockers = photoEditingNativeExportBlockers(settingsRef.current);
+      // 原寸の native renderer が描けない補正（答えない古い描画では中間調・全体の輝度・遠近・修復・レンズ補正）は渡さない
+      const nativeBlockers = photoEditingNativeExportBlockers(settingsRef.current, params.capabilities.nativeExportRenderer);
       if (nativeBlockers.length > 0) {
-        setStatus({ kind: "error", text: photoEditingNativeExportUnsupportedFailedText(nativeBlockers) });
+        setStatus({
+          kind: "error",
+          text: photoEditingNativeExportUnsupportedFailedText(nativeBlockers, params.capabilities.place),
+        });
         return "failed";
       }
     }

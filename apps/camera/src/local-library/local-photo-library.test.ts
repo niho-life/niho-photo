@@ -58,7 +58,7 @@ const ROOT: LibraryFolder = {
 type SourceWithoutToken = DevelopSource extends infer S ? (S extends DevelopSource ? Omit<S, "token"> : never) : never;
 
 type FakeOptions = {
-  status?: Array<{ available: boolean; raster: boolean; fullSizeRaster?: boolean; masks?: boolean }>;
+  status?: Array<{ available: boolean; raster: boolean; fullSizeRaster?: boolean; masks?: boolean; renderer?: unknown }>;
   cutout?: boolean | CameraCommandError;
   /** entryId → open ごとに返す中身の SHA-256（写真の置き換えのテスト用） */
   hashes?: Record<string, string[]>;
@@ -323,6 +323,30 @@ describe("capabilities", () => {
     await expect(
       fakeNative({ status: [{ available: false, raster: false, masks: true }], cutout: false }).library.capabilities(),
     ).resolves.toMatchObject({ nativeExport: false, nativeExportMasks: false });
+  });
+
+  it("hands the bundled renderer's capabilities to the editor only when it answers them", async () => {
+    const renderer = {
+      settingsVersions: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+      engines: ["niho-1", "niho-2", "niho-14"],
+      features: ["colorGradingLuminance"],
+      maskKinds: ["linear", "radial", "brush", "subject", "sky"],
+      maxPixels: 40_000_000,
+    };
+    const answered = await fakeNative({
+      status: [{ available: true, raster: true, fullSizeRaster: true, masks: true, renderer }],
+    }).library.capabilities();
+    expect(answered.nativeExportRenderer).toEqual(renderer);
+    // 答えない古い renderer（0.16.0）・古い native（`renderer` が無い）・形の違う値は省略（今の遮断のまま）
+    for (const status of [
+      { available: true, raster: true, renderer: null },
+      { available: true, raster: true },
+      { available: true, raster: true, renderer: { ...renderer, settingsVersions: "9" } },
+      { available: false, raster: false, renderer },
+    ]) {
+      const capabilities = await fakeNative({ status: [status], cutout: false }).library.capabilities();
+      expect(capabilities).not.toHaveProperty("nativeExportRenderer");
+    }
   });
 
   it("enables cutout only after its camera-only sidecar probe succeeds", async () => {

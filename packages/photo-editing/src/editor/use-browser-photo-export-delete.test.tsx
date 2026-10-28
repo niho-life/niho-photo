@@ -253,18 +253,18 @@ describe("useBrowserPhotoExportAndDelete canonical guard integration", () => {
     expect(nativeExport).not.toHaveBeenCalled();
     expect(statusForTest).toHaveBeenCalledWith({
       kind: "error",
-      text: "中間調・全体の輝度を使っている写真は、原寸で書き出せません。",
+      text: "中間調・全体の輝度を使っている写真は、原寸で書き出せません。この Mac の NIHO photo を更新すると、原寸で書き出せます。",
     });
   });
 
   it.each([
-    ["遠近", { geometry: { perspective: { vertical: -20 } } }, "遠近を使っている写真は、原寸で書き出せません。"],
+    ["遠近", { geometry: { perspective: { vertical: -20 } } }, "遠近を使っている写真は、原寸で書き出せません。この Mac の NIHO photo を更新すると、原寸で書き出せます。"],
     [
       "修復",
       { heal: [{ id: "a", mode: "remove", radius: 0.02, feather: 0.5, points: [[0.5, 0.5]] }] },
-      "修復を使っている写真は、原寸で書き出せません。",
+      "修復を使っている写真は、原寸で書き出せません。この Mac の NIHO photo を更新すると、原寸で書き出せます。",
     ],
-    ["レンズ補正", { lens: { distortion: 10 } }, "レンズ補正を使っている写真は、原寸で書き出せません。"],
+    ["レンズ補正", { lens: { distortion: 10 } }, "レンズ補正を使っている写真は、原寸で書き出せません。この Mac の NIHO photo を更新すると、原寸で書き出せます。"],
   ])("%s を原寸 native renderer に渡さない", async (_name, extra, text) => {
     capabilitiesForTest = { ...CAPABILITIES, nativeExport: true };
     settingsRefForTest.current = { ...neutralDevelopSettings("raw-apple.d1.p1.e1"), ...extra };
@@ -275,6 +275,33 @@ describe("useBrowserPhotoExportAndDelete canonical guard integration", () => {
     expect(result).toBe("failed");
     expect(nativeExport).not.toHaveBeenCalled();
     expect(statusForTest).toHaveBeenCalledWith({ kind: "error", text });
+  });
+
+  it("描ける設定を答える描画には、遠近・修復・レンズ・輝度を原寸で渡す", async () => {
+    // hook は描いたときの capabilities の object を持つので、差し替えずに書き足す
+    Object.assign(capabilitiesForTest, {
+      nativeExport: true,
+      nativeExportRenderer: {
+        settingsVersions: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+        engines: ["niho-1", "niho-2", "niho-3", "niho-4", "niho-14"],
+        features: ["colorGradingLuminance"],
+        maskKinds: ["linear", "radial", "brush", "subject", "sky"],
+        maxPixels: 40_000_000,
+      },
+    });
+    settingsRefForTest.current = {
+      ...neutralDevelopSettings("raw-apple.d1.p1.e1"),
+      geometry: { perspective: { vertical: -20 } },
+      heal: [{ id: "a", mode: "remove", radius: 0.02, feather: 0.5, points: [[0.5, 0.5]] }],
+      lens: { distortion: 10 },
+      colorGrading: { global: { luminance: 20 } },
+    };
+    openedRefForTest.current = canonicalOpened();
+    await act(async () => {
+      await runExport("jpeg", { size: "full", jpegRoute: "native" });
+    });
+    expect(statusForTest).not.toHaveBeenCalledWith(expect.objectContaining({ text: expect.stringContaining("原寸で書き出せません") }));
+    expect(nativeExport).toHaveBeenCalledTimes(1);
   });
 
   it("原寸native exportは一覧の古い補正ではなくopenOriginalの最新補正を判定する", async () => {
@@ -304,7 +331,7 @@ describe("useBrowserPhotoExportAndDelete canonical guard integration", () => {
     expect(result).toBe("failed");
     expect(openOriginal).toHaveBeenCalledTimes(1);
     expect(nativeExport).not.toHaveBeenCalled();
-    expect(statusForTest).toHaveBeenCalledWith({ kind: "error", text: "遠近を使っている写真は、原寸で書き出せません。" });
+    expect(statusForTest).toHaveBeenCalledWith({ kind: "error", text: "遠近を使っている写真は、原寸で書き出せません。この Mac の NIHO photo を更新すると、原寸で書き出せます。" });
   });
 
   it("受け付けたプリセットを確定してから編集をロックし、同時の重複exportを抑える", async () => {

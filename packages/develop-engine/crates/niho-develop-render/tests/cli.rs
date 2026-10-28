@@ -1134,6 +1134,63 @@ fn version_and_help() {
     let help = run(&["--help"]);
     assert_eq!(help.code, 0);
     assert!(help.stdout.contains("Exit codes"));
+    assert!(help.stdout.contains("niho-develop-render capabilities"));
+}
+
+#[test]
+fn capabilities_name_what_this_build_renders() {
+    let run_capabilities = run(&["capabilities"]);
+    assert_eq!(run_capabilities.code, 0);
+    let capabilities = run_capabilities.json();
+    assert_eq!(capabilities["tool"], "niho-develop-render");
+    assert_eq!(capabilities["version"], niho_develop::CRATE_VERSION);
+    assert_eq!(
+        capabilities["settingsVersions"],
+        serde_json::json!([1, 2, 3, 4, 5, 6, 7, 8, 9])
+    );
+    let engines: Vec<&str> = capabilities["engines"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|e| e.as_str().unwrap())
+        .collect();
+    assert_eq!(engines.first(), Some(&"niho-1"));
+    assert_eq!(engines.last(), Some(&niho_develop::ENGINE_VERSION));
+    assert!(!engines.contains(&"niho-9"));
+    for engine in &engines {
+        // Every named engine is read by the settings loader.
+        let look = if matches!(*engine, "niho-1") {
+            "niho-interim-1"
+        } else if matches!(*engine, "niho-3") {
+            "niho-standard-2"
+        } else if matches!(*engine, "niho-4") {
+            "niho-standard-3"
+        } else if matches!(*engine, "niho-5") {
+            "niho-standard-4"
+        } else if matches!(*engine, "niho-7" | "niho-11") {
+            "niho-standard-5"
+        } else {
+            "niho-standard-1"
+        };
+        niho_develop_render::load_settings(&format!(
+            r#"{{"v":1,"engine":"{engine}","look":"{look}"}}"#
+        ))
+        .unwrap_or_else(|e| panic!("{engine}: {}", e.message));
+    }
+    assert_eq!(
+        capabilities["features"],
+        serde_json::json!(["colorGradingLuminance"])
+    );
+    assert_eq!(
+        capabilities["maskKinds"],
+        serde_json::json!(["linear", "radial", "brush", "subject", "sky"])
+    );
+    assert_eq!(capabilities["maxMasks"], 8);
+    assert_eq!(capabilities["maxPixels"], 40_000_000);
+
+    let extra = run(&["capabilities", "--json"]);
+    assert_eq!(extra.code, 1);
+    assert_eq!(extra.json()["error"], "invalid_arguments");
 }
 
 #[test]

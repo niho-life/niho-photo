@@ -1553,7 +1553,7 @@ export function BrowserPhotoEditingWorkbench(props: {
     selectedItem && viewMode === "loupe" && opened?.key === selectedItem.key
       ? open.settingsRef.current
       : selectedItem?.photo.developSettings ?? {};
-  const nativeExportBlockers = photoEditingNativeExportBlockers(selectedExportSettings);
+  const nativeExportBlockers = photoEditingNativeExportBlockers(selectedExportSettings, capabilities.nativeExportRenderer);
   const nativeFullSizeUnsupported = nativeExportBlockers.length > 0;
   // 「大きく」（niho-photo#134）で書き出す長辺（1 枚で wasm で開いた写真の今の切り抜き。書き出すのシートを開いている間だけ読む）
   const exportLargeLongEdge = useBrowserPhotoExportLargeLongEdge({
@@ -1577,7 +1577,7 @@ export function BrowserPhotoEditingWorkbench(props: {
         // 原寸（K2-3a 移行元設計）は、原寸の書き出しに対応した NIHO Desktop の口があるときだけ（PC のシートに出す）
         desktopFullSize: capabilities.nativeExport || capabilities.nativeExportUpdateRequired,
         nativeFullSizeUnsupported,
-        nativeFullSizeUnsupportedText: photoEditingNativeExportUnsupportedText(nativeExportBlockers),
+        nativeFullSizeUnsupportedText: photoEditingNativeExportUnsupportedText(nativeExportBlockers, capabilities.place),
         // HEIC / HEIF・TIFF の原寸は、描ける口（NIHO camera）だけ
         desktopFullSizeRaster: capabilities.nativeExportRaster === true,
         // 背景除去（C4 移行元設計）: PNG を足し、原寸は camera の口があるときだけ

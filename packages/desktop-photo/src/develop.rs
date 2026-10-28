@@ -88,6 +88,121 @@ const NIHO11_MIN_RENDER_VERSION: &str = "0.18.0";
 /// 描ける niho-develop-render の最小の版。これより古い sidecar へは `masks` のある設定を渡さない（`v: 5` を読めないか、マスクを
 /// 描かない）。0.19.0 は線形・円形（#66）と面の口（#68）を同じ版で出す（どちらも公開前）ので、版の境は 1 つ。
 pub const MASKS_MIN_RENDER_VERSION: &str = "0.19.0";
+/// 同梱の niho-develop-render が描ける設定（`niho-develop-render capabilities` の 1 行。niho-photo#131）。原寸の書き出しへ渡せる
+/// 設定は、版ではなくこれで決める。この口の無い古い renderer（0.16.0 など）は無い（None）扱いで、画面は遠近・修復・レンズ補正・
+/// 中間調 / 全体の輝度を原寸へ渡さない（`packages/photo-editing/src/photo-editing-native-export.ts`）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderCapabilities {
+  /// 読める `developSettings.v`
+  pub settings_versions: Vec<u32>,
+  /// 描ける `developSettings.engine`
+  pub engines: Vec<String>,
+  /// `v` を上げずに足した描画（`colorGradingLuminance`: 中間調・全体の輝度）。古い renderer は黙って描かない
+  pub features: Vec<String>,
+  /// 描けるマスクの種類（`brush`・`subject`・`sky` は面を `--mask-surface` で受け取る）
+  pub mask_kinds: Vec<String>,
+  /// 読める元（オリジナル・作業コピー）の最大の画素数
+  pub max_pixels: u64,
+}
+
+/// {@link RenderCapabilities} の一覧の長さ・名前の長さの上限（壊れた出力を覚えない）。
+const RENDER_CAPABILITY_MAX_ITEMS: usize = 64;
+const RENDER_CAPABILITY_MAX_NAME: usize = 64;
+/// 中間調・全体の輝度（{@link RenderCapabilities::features}）。
+const RENDER_FEATURE_COLOR_GRADING_LUMINANCE: &str = "colorGradingLuminance";
+
+impl RenderCapabilities {
+  /// `niho-develop-render capabilities` の stdout を読む。形が違えば None（描ける設定が分からない = 古い renderer と同じ扱い）。
+  pub fn parse(stdout: &str) -> Option<Self> {
+    let value: Value = serde_json::from_str(stdout.trim()).ok()?;
+    if value.get("tool").and_then(Value::as_str) != Some(DEVELOP_RENDER_NAME) {
+      return None;
+    }
+    let names = |key: &str| -> Option<Vec<String>> {
+      let items = value.get(key)?.as_array()?;
+      if items.len() > RENDER_CAPABILITY_MAX_ITEMS {
+        return None;
+      }
+      items
+        .iter()
+        .map(|item| {
+          item
+            .as_str()
+            .filter(|name| !name.is_empty() && name.len() <= RENDER_CAPABILITY_MAX_NAME)
+            .map(str::to_string)
+        })
+        .collect()
+    };
+    let versions = value.get("settingsVersions")?.as_array()?;
+    if versions.is_empty() || versions.len() > RENDER_CAPABILITY_MAX_ITEMS {
+      return None;
+    }
+    let settings_versions = versions
+      .iter()
+      .map(|item| item.as_u64().and_then(|v| u32::try_from(v).ok()).filter(|v| *v > 0))
+      .collect::<Option<Vec<u32>>>()?;
+    let engines = names("engines").filter(|engines| !engines.is_empty())?;
+    let max_pixels = value.get("maxPixels")?.as_u64().filter(|pixels| *pixels > 0)?;
+    Some(Self {
+      settings_versions,
+      engines,
+      features: names("features")?,
+      mask_kinds: names("maskKinds")?,
+      max_pixels,
+    })
+  }
+
+  /// 画面へ渡す形（`camera_develop_status` の `renderer`。`PhotoLibraryCapabilities.nativeExportRenderer`）。
+  pub fn to_json(&self) -> Value {
+    json!({
+      "settingsVersions": self.settings_versions,
+      "engines": self.engines,
+      "features": self.features,
+      "maskKinds": self.mask_kinds,
+      "maxPixels": self.max_pixels,
+    })
+  }
+
+  /// この設定を描けないときの理由（ログ用）。`v`・`engine` が読めない版か、`v` を上げずに足した描画（中間調・全体の輝度）を
+  /// 描けない。`v`・`engine` の無い設定はここでは見ない（renderer が `unsupported_settings` で断る）。
+  pub fn unsupported_reason(&self, develop_settings: &Value) -> Option<String> {
+    if let Some(v) = develop_settings.get("v").and_then(Value::as_f64) {
+      if !self.settings_versions.iter().any(|readable| f64::from(*readable) == v) {
+        return Some(format!(
+          "developSettings v {v} is not readable by the bundled niho-develop-render"
+        ));
+      }
+    }
+    if let Some(engine) = develop_settings.get("engine").and_then(Value::as_str) {
+      if !self.engines.iter().any(|known| known == engine) {
+        return Some(format!(
+          "engine {engine} is not rendered by the bundled niho-develop-render"
+        ));
+      }
+    }
+    if uses_color_grading_luminance(develop_settings)
+      && !self
+        .features
+        .iter()
+        .any(|feature| feature == RENDER_FEATURE_COLOR_GRADING_LUMINANCE)
+    {
+      return Some("the bundled niho-develop-render does not draw the midtone / global luminance".into());
+    }
+    None
+  }
+}
+
+/// 中間調・全体の輝度（`colorGrading.midtone.luminance`・`colorGrading.global.luminance`）が 0 でない（数でない値も、描けない
+/// 設定として true）。
+fn uses_color_grading_luminance(develop_settings: &Value) -> bool {
+  ["midtone", "global"].iter().any(|zone| {
+    develop_settings
+      .get("colorGrading")
+      .and_then(|grading| grading.get(zone))
+      .and_then(|band| band.get("luminance"))
+      .is_some_and(|luminance| luminance.as_f64() != Some(0.0))
+  })
+}
 pub(crate) const SIGNED_REGISTRY_SNAPSHOT: &[u8] = include_bytes!("../calibration/apple-signed-registry.json");
 
 #[derive(Clone, Copy)]
@@ -1668,6 +1783,8 @@ pub struct Sidecars {
   pub signed_registry_sha256: Option<String>,
   pub apple_raw_linear_version: String,
   pub develop_render_version: String,
+  /// 同梱の niho-develop-render が描ける設定（答えない古い renderer は None）
+  pub develop_render_capabilities: Option<RenderCapabilities>,
   /// RAW の作業コピーの作り方（apple-raw-linear の版と校正の中身）。変われば作業コピーを作り直す
   pub raw_recipe: String,
   pub signed_raw_recipe: Option<String>,
@@ -1849,6 +1966,18 @@ pub fn probe_sidecars(
     .then(|| parse_version_line(DEVELOP_RENDER_NAME, &render.stdout))
     .flatten()
     .ok_or_else(|| format!("niho-develop-render version failed: {}", render.summary()))?;
+  // 描ける設定（niho-photo#131）。この口の無い古い renderer は invalid_arguments で答えるので、失敗にせず None にする
+  let capabilities = run_sidecar(
+    &paths.develop_render,
+    &os_args([OsStr::new("capabilities")]),
+    timeout,
+    grace,
+    running,
+  );
+  let develop_render_capabilities = capabilities
+    .succeeded()
+    .then(|| RenderCapabilities::parse(&capabilities.stdout))
+    .flatten();
   let registry_sha256 = std::fs::read(&registry)
     .map(|bytes| sha256_hex(&bytes))
     .map_err(|err| format!("calibration registry: {}", err.kind()))?;
@@ -1871,6 +2000,7 @@ pub fn probe_sidecars(
     signed_registry_sha256,
     apple_raw_linear_version,
     develop_render_version,
+    develop_render_capabilities,
     signed_raw_recipe,
   })
 }
@@ -2385,6 +2515,7 @@ impl PhotoDevelop {
           json!({
             "appleRawLinear": sidecars.apple_raw_linear_version,
             "developRender": sidecars.develop_render_version,
+            "developRenderCapabilities": sidecars.develop_render_capabilities.is_some(),
             "attempt": state.attempts,
             "elapsedMs": started.elapsed().as_millis() as u64,
           }),
@@ -2448,6 +2579,21 @@ impl PhotoDevelop {
       Err(std::sync::TryLockError::WouldBlock) => return false,
     };
     state.ready.as_ref().is_some_and(|sidecars| sidecars.supports_masks())
+  }
+
+  /// 同梱の niho-develop-render が描ける設定（{@link RenderCapabilities}）。起動時の確かめが終わって使えて、renderer が
+  /// `capabilities` に答えたときだけ（待たない）。
+  pub fn render_capabilities_cached(&self) -> Option<RenderCapabilities> {
+    self.cache.as_ref()?;
+    let state = match self.probe.try_lock() {
+      Ok(state) => state,
+      Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+      Err(std::sync::TryLockError::WouldBlock) => return None,
+    };
+    state
+      .ready
+      .as_ref()
+      .and_then(|sidecars| sidecars.develop_render_capabilities.clone())
   }
 
   /// 原寸ラスタ書き出しで必要な `raster --long-edge full` を持つ sidecar が使えるときだけ true（待たない）。
@@ -3722,6 +3868,18 @@ impl PhotoDevelop {
           "local masks need niho-develop-render {MASKS_MIN_RENDER_VERSION} (bundled {})",
           sidecars.develop_render_version
         ),
+      ));
+    }
+    // 描ける設定の分かる renderer には、読めない `v`・engine・描かない輝度を渡さない（原寸の作業コピーを作る前に断る。niho-photo#131）
+    if let Some(reason) = sidecars
+      .develop_render_capabilities
+      .as_ref()
+      .and_then(|capabilities| capabilities.unsupported_reason(develop_settings))
+    {
+      return Err(DevelopError::new(
+        develop_code::UNSUPPORTED_SETTINGS,
+        UNSUPPORTED_SETTINGS_MESSAGE,
+        reason,
       ));
     }
     let cache = self.cache()?;
