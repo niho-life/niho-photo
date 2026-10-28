@@ -143,7 +143,11 @@ async function walk() {
   const memory = [];
   let current = null;
   for (let i = 0; i < photos; i++) {
-    if (current) kept.push(current);
+    if (current) {
+      // As the worker parks a photo (#129): drop the analysis made ahead for other settings.
+      current.releaseAnalysisAhead?.();
+      kept.push(current);
+    }
     // Free what goes over the limit before decoding the next photo.
     while (kept.length > retain) kept.shift().free();
     current = pkg.Developer.openWorkingCopy(png, meta);

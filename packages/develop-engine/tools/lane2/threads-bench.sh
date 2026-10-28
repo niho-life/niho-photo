@@ -33,3 +33,6 @@ for threads in 4 8; do
   echo "== Chrome wasm threads $threads"
   tools/lane2/browser/run.sh "$W" pkg-mt "$threads" "$TRIALS"
 done
+echo "== memory walk (retain 1, prepare 1, parked photos release the analysis made ahead)"
+node tools/reopen-wasm-bench.mjs walk --pkg "$W/pkg-st" --png "$W/signed.png" --meta "$W/signed.json" --retain 1 --photos 30 --prepare 1
+echo
