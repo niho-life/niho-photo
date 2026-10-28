@@ -56,7 +56,11 @@ export {
  *   さらに新しい要求が来たら古い「次」は null で終える（ドラッグ中に古い画を積まない）
  * - `render` の優先度（`priority`。省略時は `interactive` で drag / final）: drag と final は編集の「次」の 1 枠を分け合い、
  *   preview・background はそれぞれ別の 1 枠を持つ。Worker が空いたら 編集 ＞ preview ＞ background の順に出す（出している
- *   描画は横取りしない。移行元設計。使い分けは F2）
+ *   描画は横取りしない。移行元設計。使い分けは F2）。preview・background は編集が静かな間だけ出す: 編集の描画が終わってから
+ *   {@link DEVELOP_PREVIEW_QUIET_MS} の間と、`yieldToEdit`（プリセットを押した・乗せた）から同じ時間は持ったまま待つ（見本 1 枚は
+ *   Worker を数百 ms 占め、出した描画は横取りできないので、編集の描画を見本の後ろで待たせない。#126）
+ * - 診断（`?photoDevelopPerf=1`）の間は、描画 1 つごとに枠での待ちと Worker との往復を `[photo-develop-perf]` に出す
+ *   （{@link DevelopEngineRenderPerfRecord}。Worker の中の区間は Worker が出す）
  * - `exportJpeg`（記事用の画像・書き出し）と `convertEditSettings`（Photo Bench の補正の変換）は捨てずに順に処理する
  * - 作業コピー（RAW など、移行元設計）は `openWorkingCopy` で開いて持ち、`exportWorkingCopyJpeg` で持っている写真を変えずに JPEG に
  *   する（Worker の中で JPEG にできなければ、返ってきた画素をメインスレッドの canvas で JPEG にする）
@@ -124,6 +128,25 @@ export type DevelopRenderOptions = {
   interactive: boolean;
   /** 省略時は `interactive ? "drag" : "final"` */
   priority?: DevelopRenderPriority;
+};
+
+/**
+ * 編集の描画（drag / final）が終わってから・`yieldToEdit` から、preview・background の枠（プリセットの見本・補正前の画など）を
+ * 出すまでの静かな時間（#126。押した・乗せた・離した直後の次の操作を、見本 1 枚の後ろで待たせない）。
+ */
+export const DEVELOP_PREVIEW_QUIET_MS = 400;
+
+/**
+ * 診断（`?photoDevelopPerf=1`）だけで出す、メインスレッドから見た描画 1 つの待ち（`[photo-develop-perf]`。設定・画素は入れない）。
+ * `queuedMs` は描画の枠で Worker へ出すのを待った時間、`roundTripMs` は Worker へ出してから応答が届くまで（Worker の列の待ちと
+ * 処理。処理だけの時間は Worker の `renderFinal` などの記録）。`dropped` は写真が変わって捨てた結果。
+ */
+export type DevelopEngineRenderPerfRecord = {
+  stage: "renderRequest" | "presetThumbnailRequest";
+  priority: DevelopRenderPriority;
+  queuedMs: number;
+  roundTripMs: number;
+  status: "ok" | "error" | "dropped";
 };
 
 export type DevelopAutoSettingsWarm = {
@@ -197,6 +220,11 @@ export type DevelopEngine = {
    * 待ち（編集の描画を先に出す）、同じ枠の新しい要求・写真を開き直す・閉じると null。wasm に無ければ reject
    */
   renderPresetThumbnail: (settings: object, maxDimension: number) => Promise<DevelopFrame | null>;
+  /**
+   * 編集の操作が始まった（プリセットを押した・乗せた）。preview・background の枠の描画（見本など）を、{@link DEVELOP_PREVIEW_QUIET_MS}
+   * の間と、その間に来た編集の描画が終わってからさらに同じ時間は出さない（出している描画は止めない）
+   */
+  yieldToEdit: () => void;
   /** `applyPreset` を使える wasm か（初回に wasm を起こす。使えなければ false。throw しない） */
   supportsPresetAmount: () => Promise<boolean>;
   /** `settingsToXmp` を使える wasm か（初回に wasm を起こす。使えなければ false。throw しない） */
@@ -334,6 +362,8 @@ export type CreateDevelopEngineOptions = {
   encodeFrameJpeg?: (frame: DevelopFrame, quality: number) => Promise<Uint8Array<ArrayBuffer>>;
   /** 開いている写真の面（ブラシ・被写体・空）の PNG の読み口（写真の出どころの `loadMaskSurface`。省略 = 読めない） */
   maskSurfaces?: DevelopMaskSurfaceSource | null;
+  /** preview・background を出すまでの静かな時間（省略は {@link DEVELOP_PREVIEW_QUIET_MS}。0 で待たない。テストで差し替える） */
+  previewQuietMs?: number;
 };
 
 export function photoDevelopDiagnosticsEnabled(location: { pathname: string; search: string } | null =
@@ -390,11 +420,14 @@ type RenderRequest = {
   interactive: boolean;
   /** 描くのに要る面（待っている間は手放さない） */
   needs: DevelopMaskSurfaceNeed[];
+  priority: DevelopRenderPriority;
+  /** 枠に入れた時刻（診断の間だけ。ほかは null） */
+  requestedAt: number | null;
   resolve: (frame: DevelopFrame | null) => void;
   reject: (error: unknown) => void;
 };
 
-type InFlightRender = RenderRequest & { id: number; stale: boolean };
+type InFlightRender = RenderRequest & { id: number; stale: boolean; sentAt: number | null };
 
 /** マスクの面の要求（同時に 1 つまで出し、「次」は 1 つだけ持つ）。 */
 type MaskPlaneRequest = {
@@ -498,6 +531,11 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
   const pending = new Map<number, Pending>();
   let inFlightRender: InFlightRender | null = null;
   const queuedRenders: Record<RenderSlot, RenderRequest | null> = { edit: null, preview: null, background: null };
+  // 編集が静かになるまでの待ち（`DEVELOP_PREVIEW_QUIET_MS`。動いている間は preview・background を出さない。#126）
+  const previewQuietMs = options.previewQuietMs ?? DEVELOP_PREVIEW_QUIET_MS;
+  let editQuietTimer: ReturnType<typeof setTimeout> | null = null;
+  const diagnosticsEnabled = () => options.diagnostics ?? photoDevelopDiagnosticsEnabled();
+  const perfNow = (): number | null => (diagnosticsEnabled() ? performance.now() : null);
   let exportsInFlight = 0;
   let terminateWhenIdle = false;
   // 幾何の口が wasm に揃っている（`ready` の応答で分かる）
@@ -693,6 +731,8 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
     exportsInFlight = 0;
     if (inFlightRender && !inFlightRender.stale) inFlightRender.resolve(null);
     inFlightRender = null;
+    if (editQuietTimer !== null) clearTimeout(editQuietTimer);
+    editQuietTimer = null;
     dropQueuedRenders();
     dropMaskPlanes();
     dropSurfaceWaits();
@@ -737,7 +777,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
 
   const sendRender = (request: RenderRequest) => {
     const id = nextId++;
-    const entry: InFlightRender = { ...request, id, stale: false };
+    const entry: InFlightRender = { ...request, id, stale: false, sentAt: request.requestedAt === null ? null : performance.now() };
     inFlightRender = entry;
     try {
       post(
@@ -757,16 +797,49 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
     }
   };
 
-  /** 出していた描画が終わったら、持っていた「次」を 編集 ＞ preview ＞ background の順に 1 つ出す。 */
-  const finishRender = () => {
-    inFlightRender = null;
+  /** 編集の描画が終わった・編集の操作が始まった: ここから静かな時間を数え直す（終わったら持っている preview・background を出す）。 */
+  const restartEditQuiet = () => {
+    if (previewQuietMs <= 0) return;
+    if (editQuietTimer !== null) clearTimeout(editQuietTimer);
+    editQuietTimer = setTimeout(() => {
+      editQuietTimer = null;
+      if (inFlightRender === null) sendNextRender();
+    }, previewQuietMs);
+  };
+
+  /** preview・background を出してよいか（編集の「次」が無く、静かな時間がたっている）。 */
+  const editQuiet = () => editQuietTimer === null && queuedRenders.edit === null;
+
+  /** Worker が空いたら、持っている「次」を 編集 ＞ preview ＞ background の順に 1 つ出す（preview・background は編集が静かなときだけ）。 */
+  const sendNextRender = () => {
     for (const slot of RENDER_SLOT_ORDER) {
       const next = queuedRenders[slot];
       if (!next) continue;
+      if (slot !== "edit" && !editQuiet()) return;
       queuedRenders[slot] = null;
       sendRender(next);
       if (inFlightRender) return;
     }
+  };
+
+  /** 出していた描画が終わった（編集の描画なら静かな時間を数え直してから、次を出す）。 */
+  const finishRender = (finished: InFlightRender) => {
+    inFlightRender = null;
+    if (renderSlotOf(finished.priority) === "edit") restartEditQuiet();
+    sendNextRender();
+  };
+
+  /** 診断の間だけ、描画 1 つの枠での待ちと Worker との往復を出す（設定・画素は出さない）。 */
+  const logRenderPerf = (entry: InFlightRender, status: DevelopEngineRenderPerfRecord["status"]) => {
+    if (entry.requestedAt === null || entry.sentAt === null) return;
+    const record: DevelopEngineRenderPerfRecord = {
+      stage: entry.kind === "thumbnail" ? "presetThumbnailRequest" : "renderRequest",
+      priority: entry.priority,
+      queuedMs: Math.max(0, entry.sentAt - entry.requestedAt),
+      roundTripMs: Math.max(0, performance.now() - entry.sentAt),
+      status,
+    };
+    console.info("[photo-develop-perf]", record);
   };
 
   /** 持っている写真が変わる（open / close）。出している描画の結果は捨て、「次」は null で終える。 */
@@ -784,7 +857,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
 
   const onResponse = (response: DevelopEngineWorkerResponse) => {
     if (response.type === "perf") {
-      if (options.diagnostics ?? photoDevelopDiagnosticsEnabled()) {
+      if (diagnosticsEnabled()) {
         console.info("[photo-develop-perf]", response.record);
       }
       return;
@@ -816,6 +889,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
     }
     if (inFlightRender && response.id === inFlightRender.id) {
       const entry = inFlightRender;
+      logRenderPerf(entry, entry.stale ? "dropped" : response.type === "frame" ? "ok" : response.type === "error" ? "error" : "dropped");
       if (!entry.stale) {
         if (response.type === "frame") {
           entry.resolve({ width: response.width, height: response.height, rgba: new Uint8ClampedArray(response.rgba) });
@@ -825,7 +899,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
           entry.resolve(null);
         }
       }
-      finishRender();
+      finishRender(entry);
       return;
     }
     if (inFlightMaskPlane && response.id === inFlightMaskPlane.id) {
@@ -947,7 +1021,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
     const id = nextId++;
     initId = id;
     try {
-      const diagnostics = options.diagnostics ?? photoDevelopDiagnosticsEnabled();
+      const diagnostics = diagnosticsEnabled();
       post({ type: "init", id, manifestUrl, ...(diagnostics ? { diagnostics: true } : {}) });
     } catch {
       terminate("unavailable");
@@ -967,18 +1041,19 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
    * null で終える）。
    */
   const enqueueRender = (
-    request: Omit<RenderRequest, "resolve" | "reject">,
+    request: Omit<RenderRequest, "priority" | "requestedAt" | "resolve" | "reject">,
     priority: DevelopRenderPriority,
   ): Promise<DevelopFrame | null> => {
     if (status !== "ready" || terminateWhenIdle) return Promise.reject(unavailableError());
     return new Promise<DevelopFrame | null>((resolve, reject) => {
-      const next: RenderRequest = { ...request, resolve, reject };
-      if (inFlightRender === null) {
+      const next: RenderRequest = { ...request, priority, requestedAt: perfNow(), resolve, reject };
+      const slot = renderSlotOf(priority);
+      // 編集は Worker が空いていればすぐ出す。preview・background は編集が静かなときだけ（待つ間は「次」として持つ）
+      if (inFlightRender === null && (slot === "edit" || editQuiet())) {
         sendRender(next);
         return;
       }
       // 同じ枠の古い「次」は null で終える（ほかの枠の「次」は残す）
-      const slot = renderSlotOf(priority);
       queuedRenders[slot]?.resolve(null);
       queuedRenders[slot] = next;
     });
@@ -1204,6 +1279,10 @@ async setMaskSurface(surfaceId, png) {
       return afterSurfaces("preview", needs, () =>
         enqueueRender({ kind: "thumbnail", settingsJson, maxDimension, interactive: false, needs }, "preview"),
       );
+    },
+
+    yieldToEdit() {
+      restartEditQuiet();
     },
 
     async supportsPresetAmount() {
