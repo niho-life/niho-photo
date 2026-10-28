@@ -43,12 +43,17 @@ use std::time::Instant;
 
 use image::codecs::png::PngEncoder;
 use image::{ExtendedColorType, ImageEncoder};
+use niho_develop::decode::DecodeLimits;
 use niho_develop::local_mask::MaskKind;
 use niho_develop::settings::{KNOWN_ENGINES, MAX_LOCAL_MASKS, READABLE_SETTINGS_VERSIONS};
 use niho_develop::{DecodeError, DevelopSettings, Filter, Quality, Session};
 use serde_json::{json, Value};
 
 pub const TOOL_NAME: &str = "niho-develop-render";
+
+/// The sources this CLI opens: the native full-size export's bound (100 MP;
+/// the browser's wasm stays at 40 MP. niho-photo#132).
+pub const LIMITS: DecodeLimits = DecodeLimits::NATIVE;
 
 /// Stable error codes (stdout `error`) and their exit codes.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -220,7 +225,7 @@ pub const FEATURES: [&str; 1] = ["colorGradingLuminance"];
 /// What this build renders (`capabilities`, one JSON line): the settings
 /// versions (`v`) and engines it reads, [`FEATURES`], the mask kinds (`brush`,
 /// `subject` and `sky` draw from `--mask-surface`) and their number, and the
-/// most pixels of a source (original or working copy) it decodes.
+/// most pixels of a source (original or working copy) it decodes ([`LIMITS`]).
 pub fn capabilities() -> Value {
     json!({
         "tool": TOOL_NAME,
@@ -230,7 +235,7 @@ pub fn capabilities() -> Value {
         "features": FEATURES,
         "maskKinds": MaskKind::ALL.map(MaskKind::as_str),
         "maxMasks": MAX_LOCAL_MASKS,
-        "maxPixels": niho_develop::decode::MAX_DECODE_IMAGE_PIXELS,
+        "maxPixels": LIMITS.max_pixels,
     })
 }
 
@@ -718,7 +723,12 @@ pub fn render(args: &RenderArgs) -> Result<Value, CliError> {
                     )
                 })?;
             let bytes = read_bytes(png, "working copy")?;
-            let session = Session::open_working_copy(&bytes, &meta_text, Filter::Lanczos3)?;
+            let session = Session::open_working_copy_with_limits(
+                &bytes,
+                &meta_text,
+                Filter::Lanczos3,
+                LIMITS,
+            )?;
             (session, "workingCopy", Some(base), args.max_dimension)
         }
         Source::Raster { path } => {
@@ -732,10 +742,16 @@ pub fn render(args: &RenderArgs) -> Result<Value, CliError> {
                     args.max_dimension,
                     0,
                 )?;
-                let session = Session::open_raster(&bytes, long_edge, Filter::Lanczos3)?;
+                let session =
+                    Session::open_raster_with_limits(&bytes, long_edge, Filter::Lanczos3, LIMITS)?;
                 (session, "raster", None, args.max_dimension)
             } else {
-                let session = Session::open_raster(&bytes, args.max_dimension, Filter::Lanczos3)?;
+                let session = Session::open_raster_with_limits(
+                    &bytes,
+                    args.max_dimension,
+                    Filter::Lanczos3,
+                    LIMITS,
+                )?;
                 (session, "raster", None, 0)
             }
         }

@@ -1186,11 +1186,216 @@ fn capabilities_name_what_this_build_renders() {
         serde_json::json!(["linear", "radial", "brush", "subject", "sky"])
     );
     assert_eq!(capabilities["maxMasks"], 8);
-    assert_eq!(capabilities["maxPixels"], 40_000_000);
+    assert_eq!(capabilities["maxPixels"], 100_000_000);
 
     let extra = run(&["capabilities", "--json"]);
     assert_eq!(extra.code, 1);
     assert_eq!(extra.json()["error"], "invalid_arguments");
+}
+
+/// A JPEG above the browser's 40 MP (41 MP) renders through the CLI (the
+/// native full-size export's bound, 100 MP; niho-photo#132), while a
+/// Session opened with the default bound refuses it from the header. The
+/// render is reduced (`--max-dimension 512`: the IDCT scaled by 1/8) to stay
+/// small in CI; the full size is measured by [`full_size_peak_memory`].
+#[test]
+fn an_original_above_the_browser_bound_renders_natively() {
+    let dir = TempDir::new("large");
+    let (width, height) = (8_200u32, 5_000u32);
+    let mut rgb = vec![0u8; (width * height * 3) as usize];
+    for (i, pixel) in rgb.chunks_exact_mut(3).enumerate() {
+        let (x, y) = (i as u32 % width, i as u32 / width);
+        pixel.copy_from_slice(&[(x * 255 / width) as u8, (y * 255 / height) as u8, 128]);
+    }
+    let mut jpeg = Vec::new();
+    image::codecs::jpeg::JpegEncoder::new_with_quality(&mut jpeg, 85)
+        .encode(&rgb, width, height, image::ExtendedColorType::Rgb8)
+        .unwrap();
+    drop(rgb);
+    let browser = Session::open_raster(&jpeg, 512, Filter::Lanczos3)
+        .err()
+        .unwrap();
+    assert!(browser.to_string().contains("40000000 pixels"), "{browser}");
+
+    let input = dir.write("large.jpg", &jpeg);
+    let settings_path = dir.write("settings.json", settings(None).to_json());
+    let out = dir.path("out.png");
+    let result = run(&[
+        "render",
+        "--settings",
+        s(&settings_path),
+        "--raster",
+        s(&input),
+        "--max-dimension",
+        "512",
+        "--out",
+        s(&out),
+    ]);
+    assert_eq!(result.code, 0, "{}", result.stdout);
+    let (w, h, _) = read_png(&out);
+    assert_eq!(w, 512);
+    assert!((311..=313).contains(&h), "{h}");
+}
+
+/// Settings for [`full_size_peak_memory`]: `settings` on a RAW working copy
+/// with `extra` (and `v`) merged in.
+fn measured_settings(v: u32, extra: Value) -> String {
+    let mut value = settings(Some(WC_BASE)).to_value();
+    value["engine"] = "niho-14".into();
+    value["look"] = "niho-standard-1".into();
+    value["v"] = v.into();
+    for (key, item) in extra.as_object().unwrap() {
+        value[key] = item.clone();
+    }
+    let text = value.to_string();
+    niho_develop_render::load_settings(&text).unwrap();
+    text
+}
+
+/// Peak memory of the full-size render (`--working-copy`, `--max-dimension
+/// 0`) by source size and settings (niho-photo#132). Not in CI (gigabytes):
+/// Studio and the MacBook Air by hand, on macOS (`/usr/bin/time -l`), with a
+/// release build:
+///
+/// ```sh
+/// NIHO_FULL_SIZE_MEGAPIXELS=24,45,61 cargo +1.98.1 test --release --locked \
+///   --manifest-path packages/develop-engine/Cargo.toml -p niho-develop-render \
+///   --test cli -- --ignored --nocapture full_size_peak_memory
+/// ```
+///
+/// One line per source size and settings: the exit code, the peak memory
+/// footprint and the maximum resident set (MiB) and the total time.
+#[test]
+#[ignore = "gigabytes of memory: run by hand (niho-photo#132)"]
+fn full_size_peak_memory() {
+    let megapixels: Vec<f64> = std::env::var("NIHO_FULL_SIZE_MEGAPIXELS")
+        .unwrap_or_else(|_| "24,61".into())
+        .split(',')
+        .map(|item| item.trim().parse().unwrap())
+        .collect();
+    let masks = serde_json::json!([
+        {"id": "a", "kind": "linear", "zero": {"x": 0.5, "y": 0.6}, "full": {"x": 0.5, "y": 0.1},
+         "adjust": {"exposure": -0.8, "highlights": -30}},
+        {"id": "b", "kind": "radial", "center": {"x": 0.45, "y": 0.55}, "radius": {"x": 0.3, "y": 0.25},
+         "angle": 20, "feather": 60, "adjust": {"saturation": -40, "clarity": 25}},
+        {"id": "c", "kind": "linear", "zero": {"x": 0.1, "y": 0.5}, "full": {"x": 0.4, "y": 0.5},
+         "adjust": {"temperature": 10, "texture": 20}}
+    ]);
+    let heal = serde_json::json!([
+        {"id": "h1", "mode": "remove", "radius": 0.02, "feather": 0.5, "points": [[0.5, 0.5], [0.53, 0.52]]},
+        {"id": "h2", "mode": "remove", "radius": 0.03, "feather": 0.5, "points": [[0.2, 0.3]]}
+    ]);
+    let lens =
+        serde_json::json!({"distortion": 8, "vignetting": -20, "removeChromaticAberration": true});
+    let perspective = serde_json::json!({"perspective": {"vertical": -15, "horizontal": 5}});
+    let detail = serde_json::json!({
+        "sharpening": {"amount": 40, "radius": 1, "detail": 25, "masking": 0},
+        "luminanceNoiseReduction": 20, "colorNoiseReduction": 25
+    });
+    let cases = [
+        ("plain", measured_settings(1, serde_json::json!({}))),
+        (
+            "masks3",
+            measured_settings(5, serde_json::json!({"masks": masks})),
+        ),
+        (
+            "detail",
+            measured_settings(6, serde_json::json!({"detail": detail})),
+        ),
+        (
+            "perspective",
+            measured_settings(7, serde_json::json!({"geometry": perspective})),
+        ),
+        (
+            "heal",
+            measured_settings(8, serde_json::json!({"heal": heal})),
+        ),
+        (
+            "lens",
+            measured_settings(9, serde_json::json!({"lens": lens})),
+        ),
+        (
+            "all",
+            measured_settings(
+                9,
+                serde_json::json!({
+                    "masks": masks, "detail": detail, "geometry": perspective, "heal": heal, "lens": lens,
+                    "colorGrading": {"midtone": {"luminance": 15}, "global": {"luminance": -10}}
+                }),
+            ),
+        ),
+    ];
+    let dir = TempDir::new("peak");
+    let meta = dir.write("meta.json", META);
+    for mp in megapixels {
+        let width = (mp * 1.0e6 * 1.5).sqrt().round() as usize;
+        let height = (width as f64 / 1.5).round() as usize;
+        let png = {
+            // A gradient with a fixed pseudo-random texture (as hard to compress as a photo).
+            let mut seed = 0x2545_f491_u32;
+            let mut data = Vec::with_capacity(width * height * 3);
+            for y in 0..height {
+                for x in 0..width {
+                    seed = seed.wrapping_mul(1_103_515_245).wrapping_add(12_345);
+                    let noise = (seed >> 16) as f32 / 65_536.0 * 0.04;
+                    let t = x as f32 / width as f32;
+                    let u = y as f32 / height as f32;
+                    data.extend_from_slice(&[
+                        0.05 + 0.8 * t + noise,
+                        0.1 + 0.5 * u + noise,
+                        0.3 * (1.0 - t) + noise,
+                    ]);
+                }
+            }
+            decode::encode_working_copy(&LinearImage {
+                width,
+                height,
+                data,
+            })
+        };
+        let working_copy = dir.write("working.png", &png);
+        drop(png);
+        for (name, text) in &cases {
+            let settings_path = dir.write("settings.json", text);
+            let out = dir.path("out.png");
+            let output = Command::new("/usr/bin/time")
+                .arg("-l")
+                .arg(BIN)
+                .args([
+                    "render",
+                    "--settings",
+                    s(&settings_path),
+                    "--working-copy",
+                    s(&working_copy),
+                    "--meta",
+                    s(&meta),
+                    "--max-dimension",
+                    "0",
+                    "--out",
+                    s(&out),
+                ])
+                .output()
+                .unwrap();
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            let mib = |label: &str| {
+                stderr
+                    .lines()
+                    .find(|line| line.trim_end().ends_with(label))
+                    .and_then(|line| line.split_whitespace().next())
+                    .and_then(|value| value.parse::<f64>().ok())
+                    .map_or(f64::NAN, |bytes| bytes / 1_048_576.0)
+            };
+            let summary: Value = serde_json::from_slice(&output.stdout).unwrap_or(Value::Null);
+            println!(
+                "{mp}MP {width}x{height} {name}: exit {} footprint {:.0} MiB rss {:.0} MiB total {} ms",
+                output.status.code().unwrap_or(-1),
+                mib("peak memory footprint"),
+                mib("maximum resident set size"),
+                summary["totalMs"]
+            );
+            let _ = fs::remove_file(&out);
+        }
+    }
 }
 
 #[test]
