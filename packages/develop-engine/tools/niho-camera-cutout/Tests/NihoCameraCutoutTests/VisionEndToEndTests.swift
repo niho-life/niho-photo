@@ -10,7 +10,7 @@ import UniformTypeIdentifiers
 /// Runs Apple Vision for real on a synthetic photo (a shaded object on a
 /// plain wall; no personal photo in Git). Opt-in with NIHO_CUTOUT_E2E=1 so a
 /// plain `swift test` never depends on the Mac's foreground model; the CI
-/// (niho-camera-cutout.yml) runs it on GitHub's macOS runner as its own step.
+/// (the Swift job of public-ci.yml) runs it on GitHub's macOS runner as its own step.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["NIHO_CUTOUT_E2E"] == "1"))
 struct VisionEndToEndTests {
     @Test func detectsTheObjectAndExportsATransparentPNG() async throws {

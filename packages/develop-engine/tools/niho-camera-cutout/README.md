@@ -4,7 +4,7 @@ NIHO camera（Epic #18387）の**背景除去**。Apple Vision の端末内推�
 
 - 移植元: Photo Bench（`takuyatakahamaT/photoedit`）c76775b（NIHO camera 0.4.0）の `Sources/NihoCameraCutout`・`Sources/NihoCameraCutoutCLI`・`Tests/NihoCameraCutoutTests`。ライブラリ 5 ファイルと `CutoutComposerTests.swift` は 0.1.0 でバイト単位で同じ（SHA-256 一致）。0.2.0 で `MaskRaster.swift` のブラシの落ちる不具合だけを直した（下の「決めたこと」）。CLI は引数の解析を `Options.swift` に分けてテストできるようにし、`version`・`help` を足しただけで、切り抜きの経路は変えていない。設計の背景（マスクと座標の契約・書き出しの保護・実写真の受入）は Photo Bench の `docs/NIHO_CAMERA_BACKGROUND_REMOVAL.md`。
 - Photo Bench の色・トーンのコード（PhotoCore・LibRaw・Adobe の DCP）は持ち込まない。このツールはそれらに依存しない。
-- **macOS 14 以上・Apple 製ハード**で動く。依存パッケージなし（SwiftPM、Swift 6）。CI は `.github/workflows/niho-camera-cutout.yml`（macOS ランナー・下の「ビルドとテスト」）。
+- **macOS 14 以上・Apple 製ハード**で動く。依存パッケージなし（SwiftPM、Swift 6）。CI は公開 CI（`.github/workflows/public-ci.yml`）の Swift の job（`macos-26`。`packages/develop-engine/` か筆の照合の fixture を変えた PR で動く）が `swift test` と Vision の E2E を回す（下の「ビルドとテスト」）。
 
 ## ビルドとテスト
 
@@ -21,8 +21,8 @@ NIHO_CUTOUT_E2E=1 swift test    # Apple Vision を実際に回す（合成画像
                                 # surface が物体を 255・壁を 0 にした面を --max-side の大きさで書き、既にある出力には書かない）
 ```
 
-- ブラシの照合: 編集面のプレビューは同じブラシを TS で塗る（`packages/photo-editing/src/photo-cutout.ts` の `applyCutoutStrokes`）。`BrushParityTests` は `packages/photo-editing/src/fixtures/cutout-brush-parity.json` が `MaskRaster.applying` の出力であることを、`photo-cutout.test.ts` は TS が同じバイト列を塗ることを確かめる（Swift の `hypot` と JS の `Math.hypot` を含めて一致）。ブラシを意図して変えたら `NIHO_CUTOUT_WRITE_FIXTURE=1 swift test --filter BrushParity` で書き直し、TS も合わせる。
-- `swift test` の合成テストは Vision を呼ばない。E2E は `NIHO_CUTOUT_E2E=1` のときだけ動く（CI でも走らせる）。個人の写真は Git に入れない（E2E の入力はテストの中で描く）。
+- ブラシの照合: 編集面のプレビューは同じブラシを TS で塗る（`packages/photo-editing/src/photo-cutout.ts` の `applyCutoutStrokes`）。2 つが同じ fixture（`packages/photo-editing/src/fixtures/cutout-brush-parity.json`。公開 repo のために新しく作った 5×5 の合成の値で、期待値は手計算）を読み、`BrushParityTests` は `MaskRaster.applying` が、`photo-cutout.test.ts` は TS が、その `expected` のバイト列を塗ることを確かめる（Swift の `hypot` と JS の `Math.hypot` を含めて一致）。ブラシを意図して変えたら fixture の `expected` と両方のテストを一緒に直す。
+- `swift test` の合成テストは Vision を呼ばない。E2E は `NIHO_CUTOUT_E2E=1` のときだけ動く（公開 CI の Swift の job でも走らせる）。個人の写真は Git に入れない（E2E の入力はテストの中で描く）。
 - `.build/`・`.swiftpm/` は `.gitignore`。Mac mini のようにディスクが少ない機では `swift build --scratch-path <外のディスク>/niho-camera-cutout-build` で成果物を外へ置ける。
 
 ## 使い方（CLI の契約）
@@ -113,4 +113,4 @@ node packages/develop-engine/tools/niho-camera-cutout/scripts/sidecar-lock.mjs s
 - 0.2.0（2026-10-15・C4 #18392 の 2 本目）: `detect`・`compose` を足した（上の「機械が読む契約」）。ライブラリと 1 回の形の画素・出力は 0.1.0 と同じ。決めたこと: (1) マスクは中身の SHA-256 を名前にした不変のファイルにし、参照は名前と SHA-256 で持つ（Photo Bench の「マスクは不変ファイル・JSON は参照だけ」と同じ）。(2) `compose` はマスクと画像の縦横比が違えば拒否する。切り抜き・回転の後の画像へ元の枠のマスクを当てる変換は持たない（編集面で背景除去と切り抜き・回転を同時に使わない。`specs/initiatives/niho-camera-app.md` Decisions）。(3) 1 回の形は人向けの出力のまま残す（Photo Bench と同じ使い方ができる）。(4) Photo Bench の `MaskRaster.paint` は、半径より外にある点（写真の外へドラッグした筆）で `minY...maxY` が逆向きの範囲になって落ちた。外の点は塗らずに返すようにした（画像の中の画素は変わらない）。
 - 0.3.0（2026-10-28・niho-photo#135）: `surface` を足した（上の「機械が読む契約」）。`detect`・`compose`・1 回の形の出力は 0.2.0 と同じ。決めたこと: (1) 推論は元の写真ではなく作業画像に当てる（RAW の作業コピーはレンズ補正を焼き込んでいるので、元の写真の面は端がずれる。作業画像を作るのは呼ぶ側）。(2) 面は全部の被写体を 1 枚にする（Lightroom の「被写体を選択」と同じ。被写体ごとの選び分けは背景除去の `detect` だけ）。(3) PNG はこのツールが自分で組む（ImageIO の PNG は色の profile・EXIF の chunk を足しうるので、エンジンと置き場が受ける最小の形にする）。(4) 4096 を超える作業画像は推論の前に縮める（Vision は内部で縮めて推論し、`generateScaledMaskForImage` が入力の寸法へ戻すので、先に縮めても面の質は変わらず、時間とメモリが減る）。
 - 置き場は `packages/develop-engine/tools/`（apple-raw-linear と同じ）。NIHO Desktop には同梱しない（要るなら別 Issue）。
-- CI は Desktop の CI と分けた（`niho-camera-cutout.yml`）。このツールだけを変えた PR で NIHO Desktop の Rust・Windows の job を走らせないため。
+- CI は公開 CI の Swift の job（apple-raw-linear と同じ `macos-26`）。公開 repo へ移したときに専用の workflow は持ち込まず、2026-10-28 までこのツールの試験は CI で走っていなかった（その間に公開版の fixture の形と `BrushParityTests` の読み方が食い違っていた）。

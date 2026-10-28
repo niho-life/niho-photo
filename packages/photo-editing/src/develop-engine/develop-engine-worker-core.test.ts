@@ -293,7 +293,7 @@ describe("createDevelopEngineWorkerHandler", () => {
     expect(posted[0]?.message).toMatchObject({ type: "unavailable", id: 1 });
   });
 
-  it("プリセット見本と自動補正をそれぞれ処理時間として記録する", async () => {
+  it("プリセット見本・見本用の session・プリセットの当てはめと自動補正をそれぞれ処理時間として記録する", async () => {
     const preset = presetGlue();
     const auto = autoGlue();
     const presetLog = vi.fn();
@@ -305,8 +305,19 @@ describe("createDevelopEngineWorkerHandler", () => {
       await handler({ type: "open", id: 2, bytes: new ArrayBuffer(4), workingMaxDimension: 1280 });
     }
     await presetHandler({ type: "renderPresetThumbnail", id: 3, settingsJson: "{}", maxDimension: 96 });
+    await presetHandler({ type: "renderPresetThumbnail", id: 4, settingsJson: "{}", maxDimension: 96 });
+    await presetHandler({ type: "presetSettings", id: 5, xmp: "<x:xmpmeta/>", baseSettingsJson: null });
     await autoHandler({ type: "autoSettings", id: 3, settingsJson: "{}" });
+    // 見本用の session を作るのは初回だけ（見本 1 枚の時間の内訳）。プリセットを当てる時間も別に記録する
+    expect(presetLog.mock.calls.map(([record]) => (record as { stage: string }).stage).slice(-4)).toEqual([
+      "thumbnailSession",
+      "presetThumbnail",
+      "presetThumbnail",
+      "presetSettings",
+    ]);
     expect(presetLog).toHaveBeenCalledWith({ stage: "presetThumbnail", durationMs: 0, wasmMemoryBytes: 65_536, status: "ok" });
+    expect(presetLog).toHaveBeenCalledWith({ stage: "thumbnailSession", durationMs: 0, wasmMemoryBytes: 65_536, status: "ok" });
+    expect(presetLog).toHaveBeenCalledWith({ stage: "presetSettings", durationMs: 0, wasmMemoryBytes: 65_536, status: "ok" });
     expect(autoLog).toHaveBeenCalledWith({ stage: "autoSettings", durationMs: 0, wasmMemoryBytes: 65_536, status: "ok" });
   });
 

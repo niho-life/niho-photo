@@ -2,7 +2,11 @@
 
 import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
 
-import type { DevelopEngine, DevelopPresetResult } from "../develop-engine/develop-engine-client";
+import {
+  photoDevelopDiagnosticsEnabled,
+  type DevelopEngine,
+  type DevelopPresetResult,
+} from "../develop-engine/develop-engine-client";
 import type { DevelopSize } from "../develop-engine/develop-geometry";
 import type { PresetMasksPlacement } from "../develop-engine/develop-preset-masks";
 import {
@@ -19,6 +23,8 @@ import type { PhotoEditingPresetReadResult, PhotoEditingPresetTarget } from "./p
 
 /** 行に載せてから仮の表示を始める・離れてから戻すまでの待ち（行の上を通り過ぎただけでは描かない）。 */
 export const BROWSER_PRESET_PREVIEW_DELAY_MS = 120;
+/** 仮の表示を粗い画で見せてから、止まったままなら丁寧な画に差し替えるまでの待ち（#127）。 */
+export const BROWSER_PRESET_PREVIEW_FINAL_DELAY_MS = 300;
 /** プリセットを当てた結果を覚えておく数（超えたら捨てて作り直す）。 */
 const PRESET_RESULT_CACHE_LIMIT = 48;
 /** 新しく当てたときの適用量（%）と、動かせる範囲。 */
@@ -69,6 +75,9 @@ type PresetPreview = {
  *   いる途中の結果も捨てる（世代番号）
  * - 行にマウスを載せた・キーボードのフォーカスが来たプリセットは、当てた結果を写真に仮に見せる（`previewSettings`。面の描画が
  *   それを描く）。ドラッグ・「補正前」・当てている途中・押せない間は仮の表示をやめる
+ * - 押した・乗せたときは engine の `yieldToEdit` で次の見本を出させない（当てた結果・仮の表示の描画を見本の後ろで待たせない。#126）
+ * - 押して当てた結果は、面の描画が先に粗い画を出してから丁寧な画に差し替える（`coarseFirstKeyRef` に当てた結果の key を 1 回だけ
+ *   置き、面の描画が受け取ったら消す。#127）。乗せた仮の表示も粗い画から始める（面の描画が決める）
  * - 適用量（0〜150%。選ばれている間だけ。`applyPreset` のある wasm）: 動かしている間は覚えている土台に当て直した結果を仮に見せ
  *   （`previewSettings`・`previewInteractive` で速い描き方。札は出さない）、離したら確定する（取り消しの 1 単位。覚えている結果と
  *   適用量を入れ替え、選ばれた表示は続く）。0% は当てる直前の補正と同じ絵のまま選ばれた表示で、そこで「なし」を押すと覚えている
@@ -140,6 +149,8 @@ export function useBrowserPhotoPresets(params: {
   const previewSequenceRef = useRef(0);
   /** `(プリセットの key, 土台の編集内容)` ごとの当てた結果（仮の表示の後に押したら、待たずに当たる） */
   const resultCacheRef = useRef(new Map<string, Promise<DevelopPresetResult>>());
+  /** 押して当てた結果の key（面の描画が先に粗い画を出す。受け取ったら null に戻す。#127） */
+  const coarseFirstKeyRef = useRef<string | null>(null);
 
   // 切替中も利用者が始めた操作は旧engineで確定させる。見本生成はこの待機へ含めない。
   const pendingWorkRef = useRef(new Set<Promise<unknown>>());
@@ -254,12 +265,14 @@ export function useBrowserPhotoPresets(params: {
     clearHoverTimer();
     hoveredRef.current = preset;
     previewSequenceRef.current += 1;
+    // 乗せたら次の見本を出さない（仮の表示の描画を見本の後ろで待たせない。#126）
+    if (preset) engineRef.current?.yieldToEdit();
     hoverTimerRef.current = setTimeout(() => {
       hoverTimerRef.current = null;
       if (preset) void showPreviewRef.current(preset);
       else setPreview(null);
     }, BROWSER_PRESET_PREVIEW_DELAY_MS);
-  }, []);
+  }, [engineRef]);
 
   /** 適用量の途中の値・仮の表示を捨てる（動かしている途中・確定を待っている結果も使わない）。 */
   const resetAmount = () => {
@@ -277,6 +290,7 @@ export function useBrowserPhotoPresets(params: {
     clearHoverTimer();
     hoveredRef.current = null;
     rememberedRef.current = null;
+    coarseFirstKeyRef.current = null;
     setRemembered(null);
     setApplyingPresetKey(null);
     setApplyError(null);
@@ -389,9 +403,18 @@ export function useBrowserPhotoPresets(params: {
       sameDevelopSettings(settingsRef.current, current);
     setApplyingPresetKey(preset.key);
     setApplyError(null);
+    // 押したら次の見本を出さない（当てた結果の描画を見本の後ろで待たせない。#126）
+    engineRef.current?.yieldToEdit();
+    const resolveStartedAt = photoDevelopDiagnosticsEnabled() ? performance.now() : null;
     const invalidText = photoEditingPresetInvalidText();
     try {
       const result = await resolvePreset(preset, base);
+      if (resolveStartedAt !== null) {
+        console.info("[photo-develop-ui-perf]", {
+          stage: "presetResolved",
+          durationMs: Math.max(0, performance.now() - resolveStartedAt),
+        });
+      }
       const placement = await masksPlacement(result);
       if (!isCurrent()) return;
       // 当てた結果に段 2 で扱えない項目がある（変換できない）ときは当てない（黙って落とさない）
@@ -400,7 +423,10 @@ export function useBrowserPhotoPresets(params: {
         return;
       }
       const next = presetDevelopSettings(base, result.settings, placement);
+      const committedFrom = settingsRef.current;
       if (!latestRef.current.commitEdit(next)) return;
+      // 面の描画は確定した編集内容（版を付け直した後）で受け取る。状態の更新はこの後に描かれる（変わらなければ描かない）
+      if (settingsRef.current !== committedFrom) coarseFirstKeyRef.current = developSettingsKey(settingsRef.current);
       const entry: RememberedPreset = {
         photoKey: key,
         presetKey: preset.key,
@@ -612,6 +638,8 @@ export function useBrowserPhotoPresets(params: {
     selectedBase: selected?.base ?? null,
     /** プリセットを土台に 100% で当てた結果（仮の表示・当てる操作と同じ覚えを使う） */
     resolvePreset,
+    /** 押して当てた結果の key（面の描画が 1 回だけ受け取り、先に粗い画を出す。#127） */
+    coarseFirstKeyRef,
   };
 }
 

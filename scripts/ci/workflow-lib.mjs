@@ -61,7 +61,7 @@ export function workflowFailures(workflow) {
   };
   if (receipts.length !== 1 || receipts[0].if !== evidenceCondition || receipts[0].run !== "node scripts/ci/write-artifact-receipt.mjs" || JSON.stringify(receipts[0].env) !== JSON.stringify(receiptEnv) || receipts[0]["continue-on-error"]) fail("Actions artifact ID/digestは検査後にjob summaryへ記録する");
   for (const job of Object.values(workflow.jobs ?? {})) {
-    if (!["ubuntu-24.04", "macos-14", "macos-26"].includes(job["runs-on"])) fail("GitHub-hosted runnerのみ");
+    if (!["ubuntu-24.04", "macos-26"].includes(job["runs-on"])) fail("GitHub-hosted runnerのみ");
     if (job.environment || job.permissions || job.uses || job.container || job.services) fail("jobへの権限/環境/再利用workflow追加は禁止");
     const timeoutLimit = job === candidate ? 90 : 30;
     if (!Number.isInteger(job["timeout-minutes"]) || job["timeout-minutes"] > timeoutLimit) fail(`${timeoutLimit}分以内のtimeoutが必要`);
