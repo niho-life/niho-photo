@@ -132,30 +132,84 @@ pub fn color_digest(lightness: f64, chroma: f64, hue: f64) -> String {
 
 /// The results, in the order above: a SHA-256, a size or a short text.
 pub const EXPECTED: [(&str, &str); 24] = [
-    ("render", ""),
-    ("render.size", ""),
+    (
+        "render",
+        "fea876f2981be2c70d485f736012ebbd1130923e36bd93aff06fef0294b4ac33",
+    ),
+    ("render.size", "83x96"),
     ("render.approximations", ""),
-    ("exportJpeg", ""),
-    ("exportPng", ""),
-    ("withCaptureExif", ""),
+    (
+        "exportJpeg",
+        "0cb6dd7ad3d215bccb793be3178867c32c920acc67a2cea34e1d9d0a398fd880",
+    ),
+    (
+        "exportPng",
+        "da74a4884e28bd49ac935a8c22bbd972fd30a006253bf6c63b741e713557a4d9",
+    ),
+    (
+        "withCaptureExif",
+        "148bb8d7916a4d515739f9502e1251bb7c06274285342d72f8f2980f2b5b2844",
+    ),
     ("imageSize", "160x120"),
     ("Developer.new.size", "160x120"),
-    ("Developer.render.interactive", ""),
-    ("Developer.render.final", ""),
-    ("Developer.render.size", ""),
-    ("Developer.maskPlane", ""),
-    ("Developer.maskPlane.size", ""),
-    ("Developer.sampleColor", ""),
-    ("Developer.autoSettings", ""),
-    ("Developer.estimateUpright", ""),
-    ("Developer.thumbnail.render", ""),
-    ("Developer.asShotWhite", ""),
-    ("Developer.openWorkingCopy.render", ""),
-    ("presetSettings", ""),
-    ("applyPreset", ""),
-    ("settingsToXmp", ""),
-    ("validateSettings", ""),
-    ("convertEditSettings", ""),
+    (
+        "Developer.render.interactive",
+        "ea6399c8f36925d666cd2b336c0e7eef283f47f7ff086c4c4d6845dcf77a5233",
+    ),
+    (
+        "Developer.render.final",
+        "9fd18169bdbc21be1ce1be04ebdd274464fc4f5f014fc41c1440e47c1c845b6c",
+    ),
+    ("Developer.render.size", "83x96"),
+    (
+        "Developer.maskPlane",
+        "ac9d3f095ef2772c3486213244bfdb4d989e7b1fb435b820e046d85a0f574463",
+    ),
+    ("Developer.maskPlane.size", "83x96"),
+    (
+        "Developer.sampleColor",
+        "b2d040b1844e20d51a702fffe935ac96ab1e005a2d992d013123643711c85b76",
+    ),
+    (
+        "Developer.autoSettings",
+        "56c11ef214d99d5252c15feb5d0c7e6ad4dae475d124fdb413acdcc6fff29e2b",
+    ),
+    (
+        "Developer.estimateUpright",
+        "26083c64ba165d86d193435a3cf5dbe4b070bd98354539d3762217bacf084289",
+    ),
+    (
+        "Developer.thumbnail.render",
+        "0af490ee372d3f993faf8c9919faf65d837b1192c1e04dff06f92e85f59bccda",
+    ),
+    (
+        "Developer.asShotWhite",
+        "{\"temperature\":5400.0,\"tint\":4.0}",
+    ),
+    (
+        "Developer.openWorkingCopy.render",
+        "7b9bb061575cb2fee91ec8434814691ad51530d47564e4ec5793c22f811e33c1",
+    ),
+    (
+        "presetSettings",
+        "2e4c667b04c593a92bf697970bb903be42c3781246b949c7f66176b043c9ec63",
+    ),
+    (
+        "applyPreset",
+        "c685fef8af1e6e0b0a68a4bae20b3065751b8173f15ca19573f341f731e9c00c",
+    ),
+    (
+        "settingsToXmp",
+        "3a5c49cde714053f2dac76dcaee211210e146a2272ea651ca1872aa20f2184b8",
+    ),
+    (
+        "validateSettings",
+        "a0df9aa965ee513d4b4e9108d5c38f26a50293f24b927b4562e305a73a647b07",
+    ),
+    (
+        "convertEditSettings",
+        "1939174e68475b2ed577c55ef389a0a75b793e1113012578e4160f333d916e23",
+    ),
 ];
 
 /// Fails with every result (as lines for [`EXPECTED`]) unless they are

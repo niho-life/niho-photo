@@ -134,9 +134,8 @@ impl Reply {
     #[cfg(test)]
     pub fn encode(&self) -> Vec<u8> {
         let header = self.header_bytes();
-        let mut body = Vec::with_capacity(
-            4 + header.len() + self.blobs.iter().map(Vec::len).sum::<usize>(),
-        );
+        let mut body =
+            Vec::with_capacity(4 + header.len() + self.blobs.iter().map(Vec::len).sum::<usize>());
         body.extend_from_slice(&(header.len() as u32).to_le_bytes());
         body.extend_from_slice(&header);
         for blob in &self.blobs {
@@ -407,10 +406,7 @@ mod tests {
         assert_eq!(bad(&[9, 0, 0, 0, b'{', b'}']), Some(BAD_REQUEST));
         assert_eq!(bad(&[3, 0, 0, 0, b'{', b'x', b'}']), Some(BAD_REQUEST));
         assert_eq!(bad(&body(&json!([1]), b"")), Some(BAD_REQUEST));
-        assert_eq!(
-            bad(&body(&json!({"args": 1}), b"")),
-            Some(BAD_REQUEST)
-        );
+        assert_eq!(bad(&body(&json!({"args": 1}), b"")), Some(BAD_REQUEST));
         assert_eq!(
             bad(&body(&json!({"blobs": [4]}), b"abc")),
             Some(BAD_REQUEST)
@@ -419,14 +415,8 @@ mod tests {
             bad(&body(&json!({"blobs": [1]}), b"abc")),
             Some(BAD_REQUEST)
         );
-        assert_eq!(
-            bad(&body(&json!({"handle": -1}), b"")),
-            Some(BAD_REQUEST)
-        );
-        assert_eq!(
-            bad(&body(&json!({"client": 1}), b"")),
-            Some(BAD_REQUEST)
-        );
+        assert_eq!(bad(&body(&json!({"handle": -1}), b"")), Some(BAD_REQUEST));
+        assert_eq!(bad(&body(&json!({"client": 1}), b"")), Some(BAD_REQUEST));
     }
 
     #[test]

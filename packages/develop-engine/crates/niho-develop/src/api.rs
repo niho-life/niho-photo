@@ -537,7 +537,10 @@ mod tests {
             .unwrap()
             .unwrap();
         assert_eq!((white.temperature, white.tint), (5400.0, 4.0));
-        assert_eq!(white_json(Some(white)), r#"{"temperature":5400.0,"tint":4.0}"#);
+        assert_eq!(
+            white_json(Some(white)),
+            r#"{"temperature":5400.0,"tint":4.0}"#
+        );
         assert_eq!(white_json(None), "null");
         assert_eq!(
             parse_white(Some(r#"{"temperature":-1,"tint":0}"#)).unwrap_err(),

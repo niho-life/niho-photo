@@ -24,14 +24,8 @@ fn native_and_wasm_give_the_same_api_results() {
         f::size_text(frame.width as u64, frame.height as u64),
     ));
     actual.push(("render.approximations", frame.approximations.join(",")));
-    let jpeg = api::export_jpeg(
-        &photo,
-        f::SETTINGS,
-        f::MAX_DIMENSION,
-        f::JPEG_QUALITY,
-        None,
-    )
-    .unwrap();
+    let jpeg =
+        api::export_jpeg(&photo, f::SETTINGS, f::MAX_DIMENSION, f::JPEG_QUALITY, None).unwrap();
     actual.push(("exportJpeg", f::sha256(&jpeg)));
     let png = api::export_png(&photo, f::SETTINGS, f::MAX_DIMENSION, None).unwrap();
     actual.push(("exportPng", f::sha256(&png)));
@@ -85,17 +79,19 @@ fn native_and_wasm_give_the_same_api_results() {
     let small = thumbnail.render(f::SETTINGS, 0, false).unwrap();
     actual.push(("Developer.thumbnail.render", f::sha256(&small.rgba)));
 
-    let mut working = Developer::open_working_copy(&f::working_copy(), f::WORKING_COPY_META).unwrap();
+    let mut working =
+        Developer::open_working_copy(&f::working_copy(), f::WORKING_COPY_META).unwrap();
     let as_shot = working.as_shot_white();
     assert_eq!(
         api::as_shot_white_from_meta(f::WORKING_COPY_META).unwrap(),
         as_shot
     );
     actual.push(("Developer.asShotWhite", as_shot.clone()));
-    let developed = working
-        .render(f::WORKING_COPY_SETTINGS, 0, false)
-        .unwrap();
-    actual.push(("Developer.openWorkingCopy.render", f::sha256(&developed.rgba)));
+    let developed = working.render(f::WORKING_COPY_SETTINGS, 0, false).unwrap();
+    actual.push((
+        "Developer.openWorkingCopy.render",
+        f::sha256(&developed.rgba),
+    ));
 
     let xmp = f::preset_xmp();
     let preset = api::preset_settings(xmp, None).unwrap();

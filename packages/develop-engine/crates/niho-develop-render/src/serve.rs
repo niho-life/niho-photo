@@ -59,7 +59,10 @@ const STACK_BYTES: usize = 8 << 20;
 pub fn run_stdio() -> i32 {
     install_panic_hook();
     let stdin = io::stdin();
-    serve(stdin.lock(), BufWriter::with_capacity(1 << 20, io::stdout()))
+    serve(
+        stdin.lock(),
+        BufWriter::with_capacity(1 << 20, io::stdout()),
+    )
 }
 
 /// Serves `input` / `output` until `input` ends (exit 0) or a frame is

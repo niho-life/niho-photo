@@ -332,8 +332,8 @@ fn call(state: &State, method: &str, request: &Request<'_>) -> Result<Reply, Fai
         }
         "convertEditSettings" => {
             args.expect(1, 2)?;
-            let result = api::convert_edit_settings(args.str(0)?, args.opt_str(1)?)
-                .map_err(Fail::call)?;
+            let result =
+                api::convert_edit_settings(args.str(0)?, args.opt_str(1)?).map_err(Fail::call)?;
             Reply::text(result)
         }
         "Developer.new" => {

@@ -379,7 +379,10 @@ fn serve_gives_the_pinned_api_results() {
         ),
     ));
     let auto = serve.call("Developer.autoSettings", on(json!([settings])), &[]);
-    actual.push(("Developer.autoSettings", f::sha256(auto.string().as_bytes())));
+    actual.push((
+        "Developer.autoSettings",
+        f::sha256(auto.string().as_bytes()),
+    ));
     let upright = serve.call(
         "Developer.estimateUpright",
         on(json!([settings, f::UPRIGHT_MODE])),
@@ -632,7 +635,11 @@ fn bad_requests_get_error_answers_and_serve_goes_on() {
         json!({"args": [f::SETTINGS, "nope", 96], "handle": handle}),
         &[],
     );
-    assert!(missing.error().0.starts_with("maskNotFound"), "{}", missing.text);
+    assert!(
+        missing.error().0.starts_with("maskNotFound"),
+        "{}",
+        missing.text
+    );
     still_answers(&mut serve);
     assert_eq!(serve.finish(), 0);
 }
@@ -660,9 +667,7 @@ fn requests_in_a_row_are_answered_by_id() {
     assert_eq!(replies[&101].string(), api::version());
     let rendered = &replies[&100];
     let mut direct = api::Developer::new(&photo, 0).unwrap();
-    let expected = direct
-        .render(f::SETTINGS, f::MAX_DIMENSION, false)
-        .unwrap();
+    let expected = direct.render(f::SETTINGS, f::MAX_DIMENSION, false).unwrap();
     assert_eq!(
         rendered.blob(&rendered.result()["rgba"]),
         &expected.rgba[..]
