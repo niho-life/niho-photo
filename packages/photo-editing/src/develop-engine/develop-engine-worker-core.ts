@@ -1324,7 +1324,7 @@ export function createDevelopEngineWorkerHandler(
     helperManifestUrl = manifestUrl;
   };
 
-  const loadWasm = async (manifestUrl: string): Promise<void> => {
+  const loadWasm = async (manifestUrl: string, allowThreads = true): Promise<void> => {
     const manifest = await measureAsync("manifestFetch", async () => {
       const response = await deps.fetch(manifestUrl, { cache: "no-cache" });
       if (!response.ok) throw new Error(`develop engine manifest ${response.status}`);
@@ -1338,8 +1338,8 @@ export function createDevelopEngineWorkerHandler(
       (/Safari/i.test(environment.userAgent) && !/Chrome|Chromium|Edg/i.test(environment.userAgent)));
     const cores = environment?.hardwareConcurrency ?? 0;
     const threadedFiles = manifest.threads;
-    if (threadedFiles && environment?.isolated && !webkit && Number.isFinite(cores) && cores >= 4) {
-      const count = Math.min(4, Math.max(2, Math.floor(cores) - 1));
+    if (allowThreads && threadedFiles && environment?.isolated && !webkit && Number.isFinite(cores) && cores >= 4) {
+      const count = Math.min(8, Math.floor(cores));
       try {
         const module = await measureAsync("glueImport", () => deps.importModule(threadedFiles.jsUrl));
         const threaded = readGlue(module);
@@ -1428,7 +1428,7 @@ export function createDevelopEngineWorkerHandler(
           await loadNative(manifestUrl);
         } catch {
           releaseNativeClient();
-          await loadWasm(manifestUrl);
+          await loadWasm(manifestUrl, false);
         }
       } else {
         await loadWasm(manifestUrl);
@@ -1480,7 +1480,7 @@ export function createDevelopEngineWorkerHandler(
     glue = null;
     releaseNativeClient();
 
-    await loadWasm(manifestUrl);
+    await loadWasm(manifestUrl, false);
     if (!input) {
       currentOpenInput = null;
       return;
