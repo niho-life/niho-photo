@@ -155,6 +155,10 @@ def cmd_train(args) -> None:
         img = args.data / "input" / label.name
         if img.exists():
             items.append((img, label))
+    metadata_count = sum(load_ev(img) is not None for img, _ in items)
+    print(f"exposure metadata {metadata_count}/{len(items)}")
+    if args.expect_ev_count is not None and metadata_count != args.expect_ev_count:
+        raise ValueError(f"exposure metadata count differs from --expect-ev-count ({metadata_count} != {args.expect_ev_count})")
     if args.validation_ids:
         val_ids = json.loads(args.validation_ids.read_text())
         if not isinstance(val_ids, list) or not val_ids or any(not isinstance(i, str) for i in val_ids):
@@ -295,6 +299,7 @@ def main() -> None:
     t.add_argument("--epochs", type=int, default=60)
     t.add_argument("--device", default="mps")
     t.add_argument("--validation-ids", type=Path, help="JSON array of image stems from distinct capture groups")
+    t.add_argument("--expect-ev-count", type=int, help="expected number of photos with exposure sidecars; abort on mismatch")
     p = sub.add_parser("predict")
     p.add_argument("--run", required=True, type=Path)
     p.add_argument("--input", required=True, type=Path)

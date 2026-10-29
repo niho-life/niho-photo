@@ -11771,8 +11771,8 @@
     },
     {
       "path": "packages/develop-engine/tools/sky-mask-train/README.md",
-      "sha256": "bd8973307e23ebcef5490b64168409561391e7b7f043fe08fbc1c1baee244262",
-      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。"
+      "sha256": "510018c000bd14671c878c91d228f6d0390b99b44f3333b946c0115aa2925441",
+      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。 変更理由: 学習時に露出メタデータ件数を照合し、スナップショットの欠落を検出する。"
     },
     {
       "path": "packages/develop-engine/tools/sky-mask-train/requirements.txt",
@@ -11786,8 +11786,8 @@
     },
     {
       "path": "packages/develop-engine/tools/sky-mask-train/train_sky.py",
-      "sha256": "f444f19af77a71790cc31a490b28dcf71321aff06a12590afb6b4c3bdd448ec4",
-      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。"
+      "sha256": "42b6c5f023093fba2a6cdf9c31ecd0547d465c2ff62522458297fb98d79309ea",
+      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。 変更理由: 学習時に露出メタデータ件数を照合し、スナップショットの欠落を検出する。"
     },
     {
       "path": "packages/develop-engine/tools/sky-mask-train/evaluate.py",
