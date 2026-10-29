@@ -381,7 +381,8 @@ describe("createNativeDevelopAnalysisStore", () => {
         expect(name).toBe("X-Niho-Develop-Client");
         this.client = value;
       }
-      send(body: Uint8Array) {
+      send(buffer: ArrayBuffer) {
+        const body = new Uint8Array(buffer);
         calls.push({ url: this.url, client: this.client, body });
         const id = new TextDecoder().decode(body.subarray(0, 64));
         if (this.url.endsWith("Analysis.put")) {

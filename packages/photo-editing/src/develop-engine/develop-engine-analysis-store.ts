@@ -98,7 +98,7 @@ export function createNativeDevelopAnalysisStore(): DevelopAnalysisStore | null 
     if (!/^[0-9a-f]{64}$/u.test(id)) throw new Error("invalid analysis cache key");
     return new TextEncoder().encode(id);
   };
-  const request = (method: "Analysis.get" | "Analysis.put", body: Uint8Array): { status: number; bytes: ArrayBuffer | null } => {
+  const request = (method: "Analysis.get" | "Analysis.put", body: ArrayBuffer): { status: number; bytes: ArrayBuffer | null } => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", `${NATIVE_DEVELOP_BASE_URL}${method}`, false);
     xhr.responseType = "arraybuffer";
@@ -108,7 +108,7 @@ export function createNativeDevelopAnalysisStore(): DevelopAnalysisStore | null 
   };
   return {
     async get(id) {
-      const response = request("Analysis.get", idBytes(id));
+      const response = request("Analysis.get", idBytes(id).buffer as ArrayBuffer);
       if (response.status === 404) return null;
       if (response.status !== 200 || !response.bytes) throw new Error("analysis cache unavailable");
       return response.bytes.byteLength > 0 && response.bytes.byteLength <= MAX_ENTRY_BYTES ? response.bytes : null;
@@ -119,7 +119,7 @@ export function createNativeDevelopAnalysisStore(): DevelopAnalysisStore | null 
       const body = new Uint8Array(key.byteLength + bytes.byteLength);
       body.set(key);
       body.set(new Uint8Array(bytes), key.byteLength);
-      if (request("Analysis.put", body).status !== 200) throw new Error("analysis cache unavailable");
+      if (request("Analysis.put", body.buffer as ArrayBuffer).status !== 200) throw new Error("analysis cache unavailable");
     },
   };
 }
