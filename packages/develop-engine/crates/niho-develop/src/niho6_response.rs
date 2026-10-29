@@ -362,25 +362,39 @@ pub fn coefficient_maps_at(
     let mut maps = CoefficientMaps {
         width: features.width,
         height: features.height,
-        highlight_a: Vec::with_capacity(pixels),
-        highlight_b: Vec::with_capacity(pixels),
-        shadow_a: Vec::with_capacity(pixels),
-        shadow_b: Vec::with_capacity(pixels),
+        highlight_a: vec![0.0; pixels],
+        highlight_b: vec![0.0; pixels],
+        shadow_a: vec![0.0; pixels],
+        shadow_b: vec![0.0; pixels],
     };
-    for vector in &features.vectors {
-        let mut feature = *vector;
-        if shift != 0.0 {
-            for index in EXPOSURE_FEATURES {
-                feature[index] += shift;
+    // Each pixel reads only its own features, so rows may run on different
+    // threads (#150).
+    crate::par::for_each_rows_mut(
+        [
+            &mut maps.highlight_a[..],
+            &mut maps.highlight_b[..],
+            &mut maps.shadow_a[..],
+            &mut maps.shadow_b[..],
+        ],
+        features.width.max(1),
+        |y, [ha, hb, sa, sb]| {
+            let start = y * features.width.max(1);
+            for (x, vector) in features.vectors[start..start + ha.len()].iter().enumerate() {
+                let mut feature = *vector;
+                if shift != 0.0 {
+                    for index in EXPOSURE_FEATURES {
+                        feature[index] += shift;
+                    }
+                }
+                let [h0, h1] = models.highlight.infer(&feature);
+                let [s0, s1] = models.shadow.infer(&feature);
+                ha[x] = h0 as f32;
+                hb[x] = h1 as f32;
+                sa[x] = s0 as f32;
+                sb[x] = s1 as f32;
             }
-        }
-        let [ha, hb] = models.highlight.infer(&feature);
-        let [sa, sb] = models.shadow.infer(&feature);
-        maps.highlight_a.push(ha as f32);
-        maps.highlight_b.push(hb as f32);
-        maps.shadow_a.push(sa as f32);
-        maps.shadow_b.push(sb as f32);
-    }
+        },
+    );
     Ok(maps)
 }
 

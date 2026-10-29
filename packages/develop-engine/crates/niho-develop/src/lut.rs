@@ -135,24 +135,30 @@ fn tetrahedral(
 
 impl Cube {
     /// Bakes `transform` (linear in, linear out, `f64`) on the grid.
-    pub fn bake(transform: &dyn Fn([f64; 3]) -> [f64; 3]) -> Self {
+    pub fn bake(transform: &(dyn Fn([f64; 3]) -> [f64; 3] + Sync)) -> Self {
         Self::bake_with_dimension(CUBE_DIMENSION, transform)
     }
 
-    pub fn bake_with_dimension(n: usize, transform: &dyn Fn([f64; 3]) -> [f64; 3]) -> Self {
+    pub fn bake_with_dimension(
+        n: usize,
+        transform: &(dyn Fn([f64; 3]) -> [f64; 3] + Sync),
+    ) -> Self {
         Self::bake_with_precision(n, false, transform)
     }
 
     /// NIHO 3's frozen R115 cube: 64 nodes per edge with f32 entries (the
     /// research name "float64grid" referred to the 64-edge grid, not f64 values).
-    pub fn bake_float(transform: &dyn Fn([f64; 3]) -> [f64; 3]) -> Self {
+    pub fn bake_float(transform: &(dyn Fn([f64; 3]) -> [f64; 3] + Sync)) -> Self {
         Self::bake_float_with_dimension(CUBE_DIMENSION, transform)
     }
 
     /// Bakes an `n^3` cube with unquantized f32 entries. This keeps the same
     /// gamma-1.8 grid, clamps and trilinear application as [`Cube::bake`];
     /// only the 8-bit entry quantization is omitted.
-    pub fn bake_float_with_dimension(n: usize, transform: &dyn Fn([f64; 3]) -> [f64; 3]) -> Self {
+    pub fn bake_float_with_dimension(
+        n: usize,
+        transform: &(dyn Fn([f64; 3]) -> [f64; 3] + Sync),
+    ) -> Self {
         assert!(n >= 2, "a color cube needs at least two nodes per edge");
         Self::bake_with_precision(n, true, transform)
     }
@@ -160,7 +166,7 @@ impl Cube {
     fn bake_with_precision(
         n: usize,
         float_entries: bool,
-        transform: &dyn Fn([f64; 3]) -> [f64; 3],
+        transform: &(dyn Fn([f64; 3]) -> [f64; 3] + Sync),
     ) -> Self {
         let denominator = (n - 1) as f64;
         let linear: Vec<f64> = (0..n)
@@ -176,15 +182,15 @@ impl Cube {
                 code as f32 * (1.0 / 255.0)
             }
         };
-        for b in 0..n {
-            for g in 0..n {
-                let row = (b * n + g) * n;
-                for r in 0..n {
-                    let out = transform([linear[r], linear[g], linear[b]]);
-                    data[row + r] = [encode(out[0]), encode(out[1]), encode(out[2]), 0.0];
-                }
+        // Every node reads only its own coordinates, so the rows of red
+        // (one per blue and green) may run on different threads (#150).
+        crate::par::for_each_row_mut(&mut data, n, |row, entries| {
+            let (b, g) = (row / n, row % n);
+            for (r, entry) in entries.iter_mut().enumerate() {
+                let out = transform([linear[r], linear[g], linear[b]]);
+                *entry = [encode(out[0]), encode(out[1]), encode(out[2]), 0.0];
             }
-        }
+        });
         Self { n, data }
     }
 

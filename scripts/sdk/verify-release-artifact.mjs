@@ -94,9 +94,16 @@ export function validateReleaseManifest(manifest, expectedSource) {
   if (engine.manifest?.file !== `manifest-${engine.crateVersion}.json` || !SHA256.test(engine.manifest?.sha256 ?? "") || engine.manifest?.integrity !== `sha256-${Buffer.from(engine.manifest.sha256, "hex").toString("base64")}` || !Number.isSafeInteger(engine.manifest?.size) || engine.manifest.size <= 0) throw new ReleaseArtifactError("SDK engine manifest recordが不正です");
   if (!Array.isArray(engine.runtimeFiles) || ![".js", ".wasm", ".d.ts"].every((extension) => engine.runtimeFiles.some(({ name }) => name?.endsWith(extension)))) throw new ReleaseArtifactError("SDK engine runtime closureが不正です");
   const runtimeNames = new Set();
-  for (const file of engine.runtimeFiles) {
+  const runtimeRecord = (file) => {
     if (!SAFE_FILE.test(file?.name ?? "") || runtimeNames.has(file.name) || !SHA256.test(file.sha256 ?? "") || file.integrity !== `sha256-${Buffer.from(file.sha256, "hex").toString("base64")}` || !Number.isSafeInteger(file.size) || file.size <= 0) throw new ReleaseArtifactError("SDK engine runtime recordが不正です");
     runtimeNames.add(file.name);
+  };
+  for (const file of engine.runtimeFiles) runtimeRecord(file);
+  // スレッドの版（#151）。これより前の公開済みSDKには無い（candidateは公開済みSDKを読む）ので、あるときだけ照合する。
+  if (engine.threads !== undefined) {
+    const threadsFiles = engine.threads?.runtimeFiles;
+    if (!Array.isArray(threadsFiles) || Object.keys(engine.threads).length !== 1 || ![".js", ".wasm", ".d.ts"].every((extension) => threadsFiles.some((file) => file?.name?.endsWith(extension)))) throw new ReleaseArtifactError("SDK engine threads runtime closureが不正です");
+    for (const file of threadsFiles) runtimeRecord(file);
   }
   const recipe = manifest.recipeCompatibility;
   if (recipe?.format !== "javascript-esm-with-declarations" || JSON.stringify(recipe.supportedVersions) !== JSON.stringify([1, 2, 3, 4, 5, 6, 7, 8, 9]) || recipe.nodeRuntimeValidator !== true || recipe.package !== "niho-photo-contract" || recipe.export !== "." || !Array.isArray(recipe.engineIdentifiers) || new Set(recipe.engineIdentifiers).size !== recipe.engineIdentifiers.length || !recipe.engineIdentifiers.includes(engine.version)) throw new ReleaseArtifactError("SDK recipe契約が不正です");

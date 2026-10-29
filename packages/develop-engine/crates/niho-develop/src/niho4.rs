@@ -155,6 +155,10 @@ impl AnalysisSeed {
 /// instead of a second full-size allocation preserves both the CNR contract
 /// and cache invalidation while the Session owns the source lifetime.
 enum CnrSource {
+    /// A compact transferred analysis keeps the expensive reduced
+    /// coefficients and NIHO 7 maps, but not this full-size source. It is
+    /// rebuilt only when a frame needs a master (or a missing map).
+    Missing,
     Original,
     Filtered(Vec<f32>),
 }
@@ -162,6 +166,7 @@ enum CnrSource {
 impl CnrSource {
     fn data<'a>(&'a self, original: &'a [f32]) -> &'a [f32] {
         match self {
+            Self::Missing => unreachable!("CNR source is hydrated before it is read"),
             Self::Original => original,
             Self::Filtered(data) => data,
         }
@@ -285,6 +290,7 @@ fn make_analysis(
     camera: Camera,
     cached_analysis: Option<AnalysisCache>,
     needs: AnalysisNeeds,
+    needs_cnr_source: bool,
 ) -> Result<AnalysisCache, PrepareError> {
     let baseline_ev = match meta {
         WorkingCopyMeta::Raw { baseline_ev, .. } => *baseline_ev,
@@ -292,7 +298,7 @@ fn make_analysis(
     };
     let cnr_amount = effective_cnr_amount(settings);
     let luminance_nr_amount = luminance_nr_amount(settings);
-    let analysis = if let Some(cached) = cached_analysis.filter(|cached| {
+    let mut analysis = if let Some(cached) = cached_analysis.filter(|cached| {
         cached.camera == camera
             && cached.cnr_amount == cnr_amount
             && cached.luminance_nr_amount == luminance_nr_amount
@@ -304,30 +310,7 @@ fn make_analysis(
     }) {
         cached
     } else {
-        let cnr_source = if cnr_amount == 0.0 && luminance_nr_amount == 0.0 {
-            crate::raw_chroma::validate(&image.data, image.width, image.height, cnr_amount)
-                .map_err(PrepareError::Chroma)?;
-            Arc::new(CnrSource::Original)
-        } else {
-            let chroma = if cnr_amount == 0.0 {
-                image.data.clone()
-            } else {
-                crate::detail::reduce_raw_chroma(&image.data, image.width, image.height, settings)
-                    .map_err(PrepareError::Chroma)?
-            };
-            Arc::new(CnrSource::Filtered(
-                crate::detail::reduce_noise(
-                    &chroma,
-                    image.width,
-                    image.height,
-                    image.width.max(image.height),
-                    crate::detail::SourceSpace::LinearProPhoto,
-                    settings.detail.unwrap_or_default(),
-                    None,
-                )
-                .map_err(PrepareError::Detail)?,
-            ))
-        };
+        let cnr_source = make_cnr_source(image, settings, cnr_amount, luminance_nr_amount)?;
         AnalysisCache {
             camera,
             cnr_amount,
@@ -343,6 +326,14 @@ fn make_analysis(
             preview_source: None,
         }
     };
+
+    let missing_coefficients = needs.coefficients && analysis.coefficients.get().is_none();
+    let missing_niho7 = needs.niho7_highlights && analysis.niho7_highlights.get().is_none();
+    if matches!(analysis.cnr_source.as_ref(), CnrSource::Missing)
+        && (needs_cnr_source || missing_coefficients || missing_niho7)
+    {
+        analysis.cnr_source = make_cnr_source(image, settings, cnr_amount, luminance_nr_amount)?;
+    }
 
     // Canonical analysis must finish before allocating the full prepared
     // master (or preview source), so its full-size quantized copy never
@@ -388,6 +379,37 @@ fn make_analysis(
     Ok(analysis)
 }
 
+fn make_cnr_source(
+    image: &LinearImage,
+    settings: &DevelopSettings,
+    cnr_amount: f64,
+    luminance_nr_amount: f64,
+) -> Result<Arc<CnrSource>, PrepareError> {
+    if cnr_amount == 0.0 && luminance_nr_amount == 0.0 {
+        crate::raw_chroma::validate(&image.data, image.width, image.height, cnr_amount)
+            .map_err(PrepareError::Chroma)?;
+        return Ok(Arc::new(CnrSource::Original));
+    }
+    let chroma = if cnr_amount == 0.0 {
+        image.data.clone()
+    } else {
+        crate::detail::reduce_raw_chroma(&image.data, image.width, image.height, settings)
+            .map_err(PrepareError::Chroma)?
+    };
+    Ok(Arc::new(CnrSource::Filtered(
+        crate::detail::reduce_noise(
+            &chroma,
+            image.width,
+            image.height,
+            image.width.max(image.height),
+            crate::detail::SourceSpace::LinearProPhoto,
+            settings.detail.unwrap_or_default(),
+            None,
+        )
+        .map_err(PrepareError::Detail)?,
+    )))
+}
+
 /// Makes ahead the response analysis frames of `settings`' engine and noise
 /// reduction read once they use Highlights or Shadows (#129: while the
 /// editor is idle), so the first such frame does not wait for it. It is the
@@ -410,6 +432,7 @@ pub fn prepare_analysis(
             coefficients: true,
             niho7_highlights: uses_niho7_engine(settings),
         },
+        false,
     )
 }
 
@@ -450,6 +473,7 @@ pub fn prepare(
         camera,
         cached_analysis,
         AnalysisNeeds::of(settings),
+        true,
     )?;
 
     // Detect on the immutable full-resolution signed CNR source before the
@@ -637,28 +661,33 @@ pub fn prepare(
             );
             let baseline_exposure = libm::exp2(baseline_ev) as f32;
             let h = (-settings.highlights / 100.0) as f32;
-            for (index, ((pixel, highlight_gain), alpha)) in data
-                .chunks_exact_mut(3)
-                .zip(highlight_gains)
-                .zip(highlight_alpha)
-                .enumerate()
-            {
-                let pre = [pixel[0], pixel[1], pixel[2]];
-                let old = bounded_highlight_pixel(pre, highlight_gain, alpha);
-                let highlighted = match &fx_shoulder {
-                    Some((a, b)) => crate::raw_highlight_shoulder::apply_pixel(
+            // Each pixel reads only its own values, so rows may run on
+            // different threads (#150).
+            crate::par::for_each_row_mut(&mut data, prepare_width * 3, |y, row| {
+                let first = y * prepare_width;
+                for (x, pixel) in row.chunks_exact_mut(3).enumerate() {
+                    let index = first + x;
+                    let pre = [pixel[0], pixel[1], pixel[2]];
+                    let old = bounded_highlight_pixel(
                         pre,
-                        old,
-                        a[index],
-                        b[index],
-                        niho7_mask.as_ref().expect("signed NIHO 7 mask")[index],
-                        h,
-                        baseline_exposure,
-                    ),
-                    None => old,
-                };
-                pixel.copy_from_slice(&highlighted);
-            }
+                        highlight_gains[index],
+                        highlight_alpha[index],
+                    );
+                    let highlighted = match &fx_shoulder {
+                        Some((a, b)) => crate::raw_highlight_shoulder::apply_pixel(
+                            pre,
+                            old,
+                            a[index],
+                            b[index],
+                            niho7_mask.as_ref().expect("signed NIHO 7 mask")[index],
+                            h,
+                            baseline_exposure,
+                        ),
+                        None => old,
+                    };
+                    pixel.copy_from_slice(&highlighted);
+                }
+            });
         }
         if settings.shadows > 0.0 {
             let shadow_gains = resize_plane_bilinear(
@@ -668,12 +697,15 @@ pub fn prepare(
                 prepare_width,
                 prepare_height,
             );
-            for (pixel, shadow_gain) in data.chunks_exact_mut(3).zip(shadow_gains) {
-                let scale = libm::exp2f(shadow_gain * shadow_interaction);
-                pixel[0] *= scale;
-                pixel[1] *= scale;
-                pixel[2] *= scale;
-            }
+            crate::par::for_each_row_mut(&mut data, prepare_width * 3, |y, row| {
+                let gains = &shadow_gains[y * prepare_width..];
+                for (pixel, shadow_gain) in row.chunks_exact_mut(3).zip(gains) {
+                    let scale = libm::exp2f(shadow_gain * shadow_interaction);
+                    pixel[0] *= scale;
+                    pixel[1] *= scale;
+                    pixel[2] *= scale;
+                }
+            });
         }
     }
 
@@ -681,15 +713,17 @@ pub fn prepare(
     if !exposure.is_finite() {
         return Err(PrepareError::NonFinite("exposure"));
     }
-    for pixel in data.chunks_exact_mut(3) {
-        let mut value = [pixel[0], pixel[1], pixel[2]];
-        if let Some(matrix) = &white_balance {
-            value = mat_vec_f32(matrix, value);
+    crate::par::for_each_row_mut(&mut data, prepare_width * 3, |_, row| {
+        for pixel in row.chunks_exact_mut(3) {
+            let mut value = [pixel[0], pixel[1], pixel[2]];
+            if let Some(matrix) = &white_balance {
+                value = mat_vec_f32(matrix, value);
+            }
+            for channel in 0..3 {
+                pixel[channel] = value[channel] * exposure;
+            }
         }
-        for channel in 0..3 {
-            pixel[channel] = value[channel] * exposure;
-        }
-    }
+    });
 
     if settings.texture != 0.0 {
         apply_rgb_texture(
@@ -940,12 +974,13 @@ fn resize_plane_bilinear(
     let mut output = vec![0.0; out_width * out_height];
     let scale_x = in_width as f64 / out_width as f64;
     let scale_y = in_height as f64 / out_height as f64;
-    for y in 0..out_height {
+    // Rows read only the source, so they may run on different threads (#150).
+    crate::par::for_each_row_mut(&mut output, out_width, |y, row| {
         let sy = ((y as f64 + 0.5) * scale_y - 0.5).clamp(0.0, (in_height - 1) as f64);
         let y0 = libm::floor(sy) as usize;
         let y1 = (y0 + 1).min(in_height - 1);
         let ty = (sy - y0 as f64) as f32;
-        for x in 0..out_width {
+        for (x, value) in row.iter_mut().enumerate() {
             let sx = ((x as f64 + 0.5) * scale_x - 0.5).clamp(0.0, (in_width - 1) as f64);
             let x0 = libm::floor(sx) as usize;
             let x1 = (x0 + 1).min(in_width - 1);
@@ -954,9 +989,9 @@ fn resize_plane_bilinear(
                 + tx * (source[y0 * in_width + x1] - source[y0 * in_width + x0]);
             let bottom = source[y1 * in_width + x0]
                 + tx * (source[y1 * in_width + x1] - source[y1 * in_width + x0]);
-            output[y * out_width + x] = top + ty * (bottom - top);
+            *value = top + ty * (bottom - top);
         }
-    }
+    });
     output
 }
 

@@ -869,7 +869,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
     if (response.id === initId) {
       initId = null;
       if (response.type === "ready") {
-        if (diagnosticsEnabled()) console.info("[photo-develop-perf]", { stage: "runtime", runtime: response.runtime });
+        if (diagnosticsEnabled()) console.info("[photo-develop-perf]", { stage: "runtime", runtime: response.runtime, ...(response.wasmThreads ? { threads: response.wasmThreads } : {}) });
         geometrySupported = response.geometry === true;
         effectsSupported = response.effects === true;
         colorPointsSupported = response.colorPoints === true;

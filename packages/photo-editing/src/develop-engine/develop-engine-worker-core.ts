@@ -27,7 +27,8 @@ import { parseDevelopEngineManifest } from "./develop-engine-manifest";
  *   計算している間の描画は待たない）。すでに持っている解析（`holdsAnalysis`）は作らない。補助の worker は先回りが尽きた・写真を
  *   替えた・閉じたら終わらせ（遅れて届いた結果は捨てる）、この worker が終わるとブラウザが一緒に終わらせる。補助の worker が
  *   作れない・失敗した・取り込めなかったら、その写真ではこの worker で `Developer.prepareAnalysis` で作る（#129 の先回り。動き出すと
- *   止められない）
+ *   止められない）。compact bytes は Developer と分けた bounded LRU に残し、Developer eviction 後も同じ写真・解析設定の描画直前に
+ *   import する。不一致・壊れた bytes・未対応 glue は捨てて通常の再計算へ戻る
  * - `openWorkingCopy` は作業コピー（16bit PNG とメタデータの JSON。RAW など、移行元設計）を開いて持つ（`open` と同じく前の写真は
  *   手放す。作業コピーは長辺 2560px のまま持ち、描く大きさは `render` で決める）。`exportWorkingCopyJpeg` は持っている写真を
  *   変えずに、別の作業コピーを一時的に開いて丁寧に描き（final）、`OffscreenCanvas` で JPEG にする（sRGB・撮影情報なし）。
@@ -207,7 +208,7 @@ export type DevelopMaskSurfacePng = { id: string; png: ArrayBuffer };
 
 export type DevelopEngineWorkerResponse =
   | { type: "perf"; id: 0; record: DevelopEnginePerfRecord }
-  | ({ type: "ready"; id: number; version: string; runtime: DevelopEngineRuntime } & DevelopEngineWorkerFeatures)
+  | ({ type: "ready"; id: number; version: string; runtime: DevelopEngineRuntime; wasmThreads?: number } & DevelopEngineWorkerFeatures)
   | { type: "unavailable"; id: number; reason: string }
   | { type: "opened"; id: number; width: number; height: number }
   | { type: "frame"; id: number; width: number; height: number; rgba: ArrayBuffer }
@@ -243,6 +244,8 @@ export type DevelopEngineWorkerDeps = {
   createNativeGlue?: () => unknown;
   /** native の通信・handle 失効を表す error の判定（core を transport 実装から分離し、偽 glue で試験できるようにする）。 */
   isNativeUnavailableError?: (error: unknown) => boolean;
+  /** Worker の実行環境。分離とブラウザを確認した場合だけスレッド版を試す。 */
+  threadsEnvironment?: () => { isolated: boolean; hardwareConcurrency: number; userAgent: string };
   /** オプトイン診断だけで使う時計と、安全な定型フィールドだけを受け取るログ口。 */
   now?: () => number;
   logPerf?: (record: DevelopEnginePerfRecord) => void;
@@ -263,7 +266,7 @@ export type DevelopEngineWorkerDeps = {
   createAnalysisHelper?: (receive: (response: DevelopAnalysisHelperResponse | null) => void) => DevelopAnalysisHelper | null;
 };
 
-export type DevelopEngineRuntime = "native" | "wasm";
+export type DevelopEngineRuntime = "native" | "wasm" | "wasm-threads";
 
 export type DevelopEnginePerfRecord = {
   stage:
@@ -310,6 +313,8 @@ type DevelopDeveloper = {
   releaseAnalysisAhead?: () => unknown;
   /** 補助の worker が作った解析の bytes を取り込む（コピー。画素は同じ。#155 の glue から。別の写真・壊れた bytes は throw） */
   importAnalysis?: (bytes: Uint8Array) => unknown;
+  /** 保持中の解析を compact bytes にする（#155。無い glue では解析 bytes cache を使わない） */
+  exportAnalysis?: (settingsJson: string) => unknown;
   /** その設定の解析をもう全部持っている（先回りで作っても見つけるだけ。#155 の glue から） */
   holdsAnalysis?: (settingsJson: string) => unknown;
 /** 面の受け渡し（M4 の glue から。無い glue もある） */
@@ -331,6 +336,15 @@ const PRESET_THUMBNAIL_SESSION_MAX_DIMENSION = 256;
 const HELD_PHOTO_LIMIT = 2;
 
 /**
+ * Developer と分けて持つ compact 解析 bytes の上限。1 件が 16 MiB を超えたら保持せず、4 件・32 MiB のどちらかを超えたら
+ * 最終利用が古い順に捨てる。750x750 の係数 5 面 + FX30 の 2 面（15,750,000 bytes）と形式の header が収まる。
+ * 旧 v2 の full CNR source は通常ここで拒否される。
+ */
+const ANALYSIS_BYTES_ENTRY_LIMIT = 16 * 1024 * 1024;
+const ANALYSIS_BYTES_TOTAL_LIMIT = 32 * 1024 * 1024;
+const ANALYSIS_BYTES_COUNT_LIMIT = 4;
+
+/**
  * 解析を先に作る（#129）のは、通常の要求が来なくなってからこれだけたってから。この worker で作る 1 回は途中で止められない
  * （signed RAW 2560px で Studio の wasm 1.4〜2.4 秒）ので、操作の続いている間は始めない。補助の worker で作るとき（#155）も、
  * 操作の間は CPU とメモリを描画に回すため同じく待つ。
@@ -346,6 +360,11 @@ type KeptPhoto = {
   key: string;
   developer: DevelopDeveloper;
   analysisKey: string | null;
+  analysisSettingsJson: string | null;
+};
+
+type CachedAnalysis = {
+  bytes: ArrayBuffer;
 };
 
 /** native が途中で使えなくなったとき、同じ写真を wasm で開き直すために保つ入力。 */
@@ -844,6 +863,7 @@ export function createDevelopEngineWorkerHandler(
   let glue: DevelopGlue | null = null;
   let version = "";
   let runtime: DevelopEngineRuntime = "wasm";
+  let wasmThreads = 1;
   let activeManifestUrl: string | null = null;
   let nativeReleaseClient: (() => unknown) | null = null;
   // 起こした wasm が効果のある設定（v: 3）を読めるか（起こしたときに 1 回だけ確かめる）
@@ -866,10 +886,15 @@ export function createDevelopEngineWorkerHandler(
   const heldSurfaces = new Map<string, Uint8Array>();
   const thumbnailSurfaces = new Set<string>();
   let currentAnalysisKey: string | null = null;
+  let currentAnalysisSettingsJson: string | null = null;
   // 開いている写真の入力の鍵（鍵が無い写真は手放すときに保たない）と、開いていないが保っている写真（古い順）
   let currentKey: string | null = null;
   let currentOpenInput: CurrentOpenInput | null = null;
   const kept: KeptPhoto[] = [];
+  // 写真 digest + 作業コピー metadata（寸法を含む input）+ engine/CNR/detail + engine 版で分離する。Rust も source
+  // fingerprint を必ず照合する。import が失敗した entry は壊れた/不一致として直ちに捨て、通常の描画再計算へ戻る。
+  const analysisBytes = new Map<string, CachedAnalysis>();
+  let analysisBytesTotal = 0;
   let chain: Promise<void> = Promise.resolve();
   let warmAuto: Extract<DevelopEngineWorkerRequest, { type: "warmAutoSettings" }> | null = null;
   let warmTimer: ReturnType<typeof setTimeout> | null = null;
@@ -888,6 +913,75 @@ export function createDevelopEngineWorkerHandler(
   let helperManifestUrl: string | null = null;
   let nextHelperJobId = 1;
   let handle: (message: DevelopEngineWorkerRequest) => Promise<void>;
+
+  const analysisBytesId = (photoKey: string, analysisKey: string): string =>
+    JSON.stringify([version, photoKey, analysisKey]);
+
+  const dropCachedAnalysis = (id: string) => {
+    const cached = analysisBytes.get(id);
+    if (!cached) return;
+    analysisBytes.delete(id);
+    analysisBytesTotal -= cached.bytes.byteLength;
+  };
+
+  const cacheAnalysisBytes = (photoKey: string | null, analysisKey: string | null, source: Uint8Array | ArrayBuffer) => {
+    if (photoKey === null || analysisKey === null) return;
+    const view = source instanceof Uint8Array ? source : new Uint8Array(source);
+    if (view.byteLength === 0 || view.byteLength > ANALYSIS_BYTES_ENTRY_LIMIT) return;
+    const copy = new Uint8Array(view.byteLength);
+    copy.set(view);
+    const id = analysisBytesId(photoKey, analysisKey);
+    dropCachedAnalysis(id);
+    analysisBytes.set(id, { bytes: copy.buffer });
+    analysisBytesTotal += copy.byteLength;
+    while (analysisBytes.size > ANALYSIS_BYTES_COUNT_LIMIT || analysisBytesTotal > ANALYSIS_BYTES_TOTAL_LIMIT) {
+      const oldest = analysisBytes.keys().next().value as string | undefined;
+      if (oldest === undefined) break;
+      dropCachedAnalysis(oldest);
+    }
+  };
+
+  const cacheAnalysisFromDeveloper = (
+    target: DevelopDeveloper,
+    photoKey: string | null,
+    analysisKey: string | null,
+    settingsJson: string | null,
+  ) => {
+    if (photoKey === null || analysisKey === null || settingsJson === null) return;
+    try {
+      if (target.holdsAnalysis?.(settingsJson) !== true) return;
+      const bytes = target.exportAnalysis?.(settingsJson);
+      if (bytes instanceof Uint8Array) cacheAnalysisBytes(photoKey, analysisKey, bytes);
+    } catch {
+      // export 非対応・転送失敗でも Developer の解放と従来の再計算を続ける。
+    }
+  };
+
+  const restoreCachedAnalysis = (
+    target: DevelopDeveloper,
+    photoKey: string | null,
+    analysisKey: string | null,
+    settingsJson: string,
+  ) => {
+    if (photoKey === null || analysisKey === null) return;
+    const id = analysisBytesId(photoKey, analysisKey);
+    const cached = analysisBytes.get(id);
+    if (!cached) return;
+    // Rust の Session は別設定の解析を 1 件だけ持つ。同じ Developer へ過去に import 済みでも、別 CNR に押し出され得るため
+    // 描画ごとに実際の保持状態を聞く。口が無い・失敗した場合は false として、安全側で再 import する。
+    if (holdsAnalysis(target, settingsJson)) return;
+    try {
+      const importer = target.importAnalysis;
+      if (typeof importer !== "function") return;
+      measure("importAnalysis", () => importer.call(target, new Uint8Array(cached.bytes)));
+      // Map の挿入順を LRU として使う。
+      analysisBytes.delete(id);
+      analysisBytes.set(id, cached);
+    } catch {
+      dropCachedAnalysis(id);
+      // 壊れた bytes・別写真・未対応 glue は捨て、直後の render に通常どおり再計算させる。
+    }
+  };
 
   const recordPerf = (stage: DevelopEnginePerfRecord["stage"], started: number, status: DevelopEnginePerfRecord["status"]) => {
     try {
@@ -1020,7 +1114,10 @@ export function createDevelopEngineWorkerHandler(
         if (analysisHelper !== state || state.waiting !== waiting || developer !== state.developer) return;
         if (bytes !== null) {
           try {
-            measure("importAnalysis", () => state.developer.importAnalysis?.(new Uint8Array(bytes)));
+            const importer = state.developer.importAnalysis;
+            if (typeof importer !== "function") throw new Error("develop engine cannot import analysis");
+            measure("importAnalysis", () => importer.call(state.developer, new Uint8Array(bytes)));
+            cacheAnalysisBytes(currentKey, waiting?.key ?? null, bytes);
           } catch {
             failAnalysisHelper(state);
             return;
@@ -1151,6 +1248,7 @@ export function createDevelopEngineWorkerHandler(
           if (holdsAnalysis(job.developer, settingsJson)) return;
           if (requestAnalysis(job, settingsJson, key)) return;
           measure("prepareAnalysis", () => job.developer.prepareAnalysis?.(settingsJson));
+          cacheAnalysisFromDeveloper(job.developer, currentKey, key, settingsJson);
         })
         .catch(() => undefined);
       chain = next;
@@ -1174,6 +1272,9 @@ export function createDevelopEngineWorkerHandler(
   };
 
   const freeKept = (photo: KeptPhoto | undefined) => {
+    if (photo) {
+      cacheAnalysisFromDeveloper(photo.developer, photo.key, photo.analysisKey, photo.analysisSettingsJson);
+    }
     freeQuietly(photo?.developer ?? null);
   };
 
@@ -1209,7 +1310,12 @@ export function createDevelopEngineWorkerHandler(
         // 手放せなくても描く画素は同じ（メモリが減らないだけ）
       }
       preparedAnalyses.delete(current);
-      kept.push({ key: currentKey, developer: current, analysisKey: currentAnalysisKey });
+      kept.push({
+        key: currentKey,
+        developer: current,
+        analysisKey: currentAnalysisKey,
+        analysisSettingsJson: currentAnalysisSettingsJson,
+      });
     } else {
       releaseThumbnailSession();
       heldSurfaces.clear();
@@ -1218,6 +1324,7 @@ export function createDevelopEngineWorkerHandler(
     developer = null;
     currentKey = null;
     currentAnalysisKey = null;
+    currentAnalysisSettingsJson = null;
     trimKept(HELD_PHOTO_LIMIT);
   };
 
@@ -1240,6 +1347,7 @@ export function createDevelopEngineWorkerHandler(
     developer = photo.developer;
     currentKey = photo.key;
     currentAnalysisKey = photo.analysisKey;
+    currentAnalysisSettingsJson = photo.analysisSettingsJson;
     trimKept(HELD_PHOTO_LIMIT);
     return true;
   };
@@ -1247,6 +1355,8 @@ export function createDevelopEngineWorkerHandler(
   const adoptDeveloper = (next: DevelopDeveloper, key: string | null) => {
     developer = next;
     currentKey = key;
+    currentAnalysisKey = null;
+    currentAnalysisSettingsJson = null;
   };
 
   /** 開き方と入力の bytes の鍵（`digest` が無い・読めなければ null = 保たない）。 */
@@ -1287,6 +1397,7 @@ export function createDevelopEngineWorkerHandler(
       id,
       version,
       runtime,
+      ...(wasmThreads > 1 ? { wasmThreads } : {}),
       ...(glue ? glueFeatures(glue) : {}),
       ...(effects ? { effects: true as const } : {}),
       ...(colorPoints ? { colorPoints: true as const } : {}),
@@ -1320,7 +1431,7 @@ export function createDevelopEngineWorkerHandler(
     helperManifestUrl = manifestUrl;
   };
 
-  const loadWasm = async (manifestUrl: string): Promise<void> => {
+  const loadWasm = async (manifestUrl: string, allowThreads = true): Promise<void> => {
     const manifest = await measureAsync("manifestFetch", async () => {
       const response = await deps.fetch(manifestUrl, { cache: "no-cache" });
       if (!response.ok) throw new Error(`develop engine manifest ${response.status}`);
@@ -1328,6 +1439,41 @@ export function createDevelopEngineWorkerHandler(
       if (!parsed) throw new Error("develop engine manifest is invalid");
       return parsed;
     });
+    const environment = deps.threadsEnvironment?.();
+    // Safari と iOS のブラウザは WebKit の Worker pool が遅くなり続ける計測結果がある（#148）。
+    const webkit = environment && (/iPhone|iPad|iPod/i.test(environment.userAgent) ||
+      (/Safari/i.test(environment.userAgent) && !/Chrome|Chromium|Edg/i.test(environment.userAgent)));
+    const cores = environment?.hardwareConcurrency ?? 0;
+    const threadedFiles = manifest.threads;
+    if (allowThreads && threadedFiles && environment?.isolated && !webkit && Number.isFinite(cores) && cores >= 4) {
+      const count = Math.min(8, Math.floor(cores));
+      try {
+        const module = await measureAsync("glueImport", () => deps.importModule(threadedFiles.jsUrl));
+        const threaded = readGlue(module);
+        if (!threaded || !isRecord(module) || typeof module.initThreadPool !== "function") {
+          throw new Error("threaded develop engine glue is invalid");
+        }
+        await measureAsync("wasmInit", async () => {
+          const output = await threaded.init({ module_or_path: threadedFiles.wasmUrl });
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            await Promise.race([
+              (module.initThreadPool as (threads: number) => Promise<unknown>)(count),
+              // Client 全体の初期化期限は20秒。単一版を再読込する時間を残す。
+              new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("thread pool timed out")), 5_000); }),
+            ]);
+          } finally {
+            if (timer) clearTimeout(timer);
+          }
+          wasmMemory = () => readMemoryBuffer(output);
+        });
+        wasmThreads = count;
+        activateGlue(threaded, manifestUrl, "wasm-threads", manifest.version);
+        return;
+      } catch {
+        // 配布物の不整合、メモリ不足、pool 起動失敗でも単一 wasm の画素を使う。
+      }
+    }
     const loaded = await measureAsync("glueImport", async () => {
       const parsed = readGlue(await deps.importModule(manifest.jsUrl));
       if (!parsed) throw new Error("develop engine glue is invalid");
@@ -1337,6 +1483,7 @@ export function createDevelopEngineWorkerHandler(
       const output = await loaded.init({ module_or_path: manifest.wasmUrl });
       wasmMemory = () => readMemoryBuffer(output);
     });
+    wasmThreads = 1;
     activateGlue(loaded, manifestUrl, "wasm", manifest.version);
   };
 
@@ -1363,6 +1510,7 @@ export function createDevelopEngineWorkerHandler(
         : null;
     await loaded.init({ module_or_path: manifestUrl });
     wasmMemory = () => null;
+    wasmThreads = 1;
     activateGlue(loaded, manifestUrl, "native", "");
   };
 
@@ -1388,7 +1536,7 @@ export function createDevelopEngineWorkerHandler(
           await loadNative(manifestUrl);
         } catch {
           releaseNativeClient();
-          await loadWasm(manifestUrl);
+          await loadWasm(manifestUrl, false);
         }
       } else {
         await loadWasm(manifestUrl);
@@ -1426,21 +1574,24 @@ export function createDevelopEngineWorkerHandler(
     const input = currentOpenInput;
     const key = currentKey;
     const analysisKey = currentAnalysisKey;
+    const analysisSettingsJson = currentAnalysisSettingsJson;
     const surfaces = [...heldSurfaces].map(([surfaceId, png]) => [surfaceId, new Uint8Array(png)] as const);
 
     dropAnalysisAhead();
     releaseThumbnailSession();
     heldSurfaces.clear();
     thumbnailSurfaces.clear();
+    if (developer) cacheAnalysisFromDeveloper(developer, key, analysisKey, analysisSettingsJson);
     freeQuietly(developer);
     developer = null;
     for (const photo of kept.splice(0)) freeKept(photo);
     currentKey = null;
     currentAnalysisKey = null;
+    currentAnalysisSettingsJson = null;
     glue = null;
     releaseNativeClient();
 
-    await loadWasm(manifestUrl);
+    await loadWasm(manifestUrl, false);
     if (!input) {
       currentOpenInput = null;
       return;
@@ -1451,6 +1602,7 @@ export function createDevelopEngineWorkerHandler(
         : openWorkingCopy(input.png, input.metaJson);
     adoptDeveloper(reopened, key);
     currentAnalysisKey = analysisKey;
+    currentAnalysisSettingsJson = analysisSettingsJson;
     if (input.kind === "workingCopy") holdAnalysisSource(reopened, input.png, input.metaJson);
     for (const [surfaceId, png] of surfaces) {
       if (typeof reopened.setMaskSurface !== "function") throw new Error("develop engine cannot restore mask surfaces");
@@ -1540,15 +1692,19 @@ export function createDevelopEngineWorkerHandler(
           const { frame, rgba } = measure(message.interactive ? "renderInteractive" : "renderFinal", () => {
             requireGlue();
             if (!developer) throw new Error("no photo is open");
+            const nextAnalysisKey = analysisSettingsKeyFromJson(message.settingsJson);
+            // Developer が LRU から消えていても、同じ写真・解析設定の compact bytes を描画より先に戻す。
+            // Rust 側でも source fingerprint / camera / baseline / dimensions を照合する。
+            restoreCachedAnalysis(developer, currentKey, nextAnalysisKey, message.settingsJson);
             const frame = readFrame(developer.render(message.settingsJson, message.maxDimension, message.interactive));
             // 丁寧に描いた設定から、静かな間に H/S の解析を先に作る（#129。口の無い glue では何もしない）
             if (!message.interactive && typeof developer.prepareAnalysis === "function") {
               analysisAhead = { developer, settingsJson: message.settingsJson };
             }
-            const nextAnalysisKey = analysisSettingsKeyFromJson(message.settingsJson);
             if (nextAnalysisKey !== null) {
               if (currentAnalysisKey !== null && nextAnalysisKey !== currentAnalysisKey) releaseThumbnailSession();
               currentAnalysisKey = nextAnalysisKey;
+              currentAnalysisSettingsJson = message.settingsJson;
             }
             return { frame, rgba: transferableBuffer(frame.rgba, wasmMemory()) };
           });

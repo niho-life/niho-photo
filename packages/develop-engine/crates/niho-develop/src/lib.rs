@@ -1515,8 +1515,9 @@ impl Session {
 
     /// The response analysis of `settings` as versioned bytes (#155): made
     /// and kept as [`Session::prepare_analysis`] makes it, then written out
-    /// whole (`niho4/transfer.rs`). A helper worker makes them so that the
-    /// editor's session only takes them in ([`Session::import_analysis`]).
+    /// without the full filtered CNR source (`niho4/transfer.rs`). A helper
+    /// worker makes them so that the editor's session only takes them in
+    /// ([`Session::import_analysis`]).
     /// `Ok(None)`: nothing to make ahead (other inputs and engines).
     pub fn export_analysis(
         &mut self,
