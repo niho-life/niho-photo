@@ -19,7 +19,11 @@ parser.add_argument("--input", required=True)
 parser.add_argument("--cache", required=True)
 parser.add_argument("--condition", choices=["cold", "warm"], required=True)
 parser.add_argument("--iteration", type=int, required=True)
+# warmで一覧に戻ってから同じ写真を再表示するまでの間（ms。既定0は今までと同じ。#129）
+parser.add_argument("--idle-ms", type=int, default=0)
 args = parser.parse_args()
+if not 0 <= args.idle_ms <= 30000:
+    parser.error("--idle-ms must be 0..30000")
 
 
 def remove_owned(path):
@@ -53,7 +57,7 @@ def main():
         if args.condition == "cold":
             remove_owned(native_cache)
         config = {"label": "sample", "fileName": source.name, "addPhotos": True,
-                  "mode": args.condition, "iteration": iteration}
+                  "mode": args.condition, "iteration": iteration, "idleMs": args.idle_ms}
         script = work / "probe.js"
         script.write_text(template.replace("__BENCH_CONFIG__", json.dumps(config)))
         report = work / "report.json"
@@ -105,10 +109,19 @@ def main():
 
     # warmは各launch内で正規入力まで開き、一覧へ戻って同じsessionを再表示する。
     result = launch(args.iteration)
+    # プリセット更新の内訳（押してから変わった画が出るまでの区間。許可した名前の有限な時間だけ）
+    preset_stages = {"presetResolve", "presetRenderQueue", "presetWorkerWait", "presetRender", "presetThumbnailBlocked",
+                     "presetThumbnailSession", "presetDeveloperRebuild", "presetThumbnail"}
+    breakdown = result.get("presetBreakdownMs")
+    preset_times = {stage: elapsed for stage, elapsed in (breakdown.items() if isinstance(breakdown, dict) else [])
+                    if stage in preset_stages and type(elapsed) in [int, float] and math.isfinite(elapsed) and elapsed >= 0}
     print(json.dumps({"stagesMs": {
+        **preset_times,
         **result["nativeStagesMs"],
         "editable": result["timeToEditableMs"], "inputAccepted": result["inputAcceptedMs"],
         "renderUpdated": result["exposurePaintMs"], "presetRenderUpdated": result["presetPaintMs"],
+        **({"presetFinalRenderUpdated": result["presetFinalPaintMs"]}
+           if type(result.get("presetFinalPaintMs")) in [int, float] and math.isfinite(result["presetFinalPaintMs"]) and result["presetFinalPaintMs"] >= 0 else {}),
         **({"proxyReady": result["proxyReadyMs"]} if result.get("proxyReadyMs") is not None else {}),
         **({"canonicalReady": result["canonicalReadyMs"]} if result.get("canonicalReadyMs") is not None else {}),
     }, "settingsRetained": result["settingsRetained"], "presetRetained": result["presetRetained"]}))

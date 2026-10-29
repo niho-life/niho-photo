@@ -113,6 +113,7 @@ function createEngine(options: { heal: boolean; masks?: boolean }) {
     builtinPresets: vi.fn(async () => []),
     presetSettings: vi.fn(async () => ({ converted: false, name: "", unsupported: [], settings: null })),
     renderPresetThumbnail: vi.fn(async () => frame()),
+    yieldToEdit: vi.fn(),
     supportsPresetAmount: vi.fn(async () => false),
     supportsSettingsToXmp: vi.fn(async () => false),
     supportsPresetThumbnails: vi.fn(async () => false),

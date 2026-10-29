@@ -41,6 +41,14 @@ case "$cmd" in
     [ -f "$d/compose-error" ] && { printf '{"error":"%s","message":"x"}\n' "$(cat "$d/compose-error")"; exit 3; }
     printf 'PNG' > "$out"
     printf '{"durationMs":5,"format":"png","height":2,"output":"%s","strokes":1,"width":4}\n' "$out" ;;
+  surface)
+    out=""; kind=""
+    while [ $# -gt 0 ]; do
+      case "$1" in --output) out="$2"; shift 2 ;; --kind) kind="$2"; shift 2 ;; *) shift ;; esac
+    done
+    [ -f "$d/surface-error" ] && { printf '{"error":"%s","message":"x"}\n' "$(cat "$d/surface-error")"; exit 2; }
+    cp "$d/surface.png" "$out"
+    printf '{"bytes":19,"durationMs":7,"height":2,"kind":"%s","subjects":1,"surfaceSHA256":"%s","width":4}\n' "$kind" "$(cat "$d/surface-sha")" ;;
 esac
 "#;
 
@@ -438,4 +446,58 @@ fn sweep_removes_only_old_unreferenced_masks() {
     .unwrap();
   assert!(masks.join(&orphan_old).exists() && masks.join(&partial_old).exists());
   assert_eq!(fixture.cutout.sweep_orphan_masks(now).unwrap(), 2);
+}
+
+#[test]
+fn surface_writes_the_png_and_returns_it_with_the_line_without_duration() {
+  let fixture = Fixture::new("surface");
+  let input = fixture.root.join("working.png");
+  fs::write(&input, b"png").unwrap();
+  let png = b"\x89PNG fake surface".to_vec();
+  fs::write(fixture.bin.join("surface.png"), &png).unwrap();
+  fixture.mark("surface-sha", &sha256_hex(&png));
+  let output = fixture.root.join("surface.png");
+  let (summary, bytes) = fixture
+    .cutout
+    .surface_cancellable(&input, "subject", &output, &AtomicBool::new(false))
+    .unwrap();
+  assert_eq!(bytes, png);
+  assert_eq!(summary["kind"], json!("subject"));
+  assert_eq!(summary["surfaceSHA256"], json!(sha256_hex(&png)));
+  assert!(summary.get("durationMs").is_none());
+  assert_eq!(
+    fixture.read("calls.txt").trim(),
+    format!(
+      "surface --input {} --output {} --kind subject",
+      input.display(),
+      output.display()
+    )
+  );
+  assert_eq!(fixture.read("cwd.txt").trim(), "/");
+}
+
+#[test]
+fn surface_failures_keep_the_sidecar_vocabulary() {
+  let fixture = Fixture::new("surface-fail");
+  let input = fixture.root.join("working.png");
+  fs::write(&input, b"png").unwrap();
+  let output = fixture.root.join("surface.png");
+  let run = |output: &Path| {
+    fixture
+      .cutout
+      .surface_cancellable(&input, "subject", output, &AtomicBool::new(false))
+      .unwrap_err()
+      .code
+  };
+  for code in ["no_subjects", "unsupported_kind", "engine_failed"] {
+    fixture.mark("surface-error", code);
+    assert_eq!(run(&output), code);
+  }
+  fixture.mark("surface-error", "something_new");
+  assert_eq!(run(&output), "internal_error");
+  fs::remove_file(fixture.bin.join("surface-error")).unwrap();
+  // 答えの SHA-256 が書いた PNG と違えば渡さない
+  fixture.mark("surface.png", "PNG");
+  fixture.mark("surface-sha", &"0".repeat(64));
+  assert_eq!(run(&fixture.root.join("other.png")), "internal_error");
 }

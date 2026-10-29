@@ -99,9 +99,16 @@ export type DevelopSource =
 
 /**
  * 現像が使えるか（`fullSizeRaster` は HEIC / HEIF・TIFF も原寸で書き出せる、`masks` は部分補正のある設定を原寸で書き出せる。
- * どちらも古い native は返さない）。
+ * どちらも古い native は返さない）。`renderer` は同梱の niho-develop-render が描ける設定（`niho-develop-render capabilities`。答えない
+ * 古い renderer と古い native は null か無い。形は `readPhotoLibraryNativeRenderer` で確かめる）。
  */
-export type DevelopStatus = { available: boolean; raster: boolean; fullSizeRaster?: boolean; masks?: boolean };
+export type DevelopStatus = {
+  available: boolean;
+  raster: boolean;
+  fullSizeRaster?: boolean;
+  masks?: boolean;
+  renderer?: unknown;
+};
 
 /** 背景除去の sidecar が camera の lock の版で使えるか。 */
 export type CutoutStatus = { available: boolean };
@@ -352,6 +359,13 @@ export function createCameraCommands(invoke: Invoke = tauriInvoke) {
     /** 開いた写真のマスクの面の PNG（中身の SHA-256 を `surfaceId` と照らしたもの。無ければ `maskSurfaceMissing`）。 */
     loadMaskSurface: async (photoId: string, surfaceId: string) =>
       toBytes(await call<unknown>("camera_mask_surface_load", { photoId, surfaceId })),
+    /**
+     * 開いた写真の作業画像（RAW は作業コピー）から被写体（・空）のマスクの面を作り、面の置き場へ保存する（niho-photo#135）。
+     * `developSettings` は画面が描いている補正（RAW の作業コピーを描く数式と土台だけを読む）。取り消しは `cutoutCancel(operationId)`
+     * （背景除去と同じ sidecar の枠）。被写体が無ければ `no_subjects`、まだ作れない種類は `unsupported_kind`、止めたら `aborted`。
+     */
+    detectMaskSurface: (photoId: string, kind: "subject" | "sky", operationId: string, developSettings: object) =>
+      call<SavedMaskSurface>("camera_mask_surface_detect", { photoId, kind, operationId, developSettings }),
     /** `surfaceIds`（1〜64 個）のうち、開いた写真の置き場に無い面の id（渡した順）。 */
     missingMaskSurfaces: async (photoId: string, surfaceIds: string[]) =>
       (await call<{ missing: string[] }>("camera_mask_surface_exists", { photoId, surfaceIds })).missing,

@@ -54,13 +54,13 @@ LibRawの行列表、旧DCP8件、旧spec4件、rawtoaces-data、外部ICC、Col
 | core-foundation-sys | 0.8.7 | MIT OR Apache-2.0 | MIT | niho-base-raw: 依存の依存 |
 | cpufeatures | 0.2.17 | MIT OR Apache-2.0 | MIT | niho-camera-profile: SHA-256 の土台（CPU 機能の判定） |
 | crc32fast | 1.5.2 | MIT OR Apache-2.0 | MIT | PNG の CRC |
-| crossbeam-deque | 0.8.8 | MIT OR Apache-2.0 | MIT | niho-base-raw: rayon の依存 |
-| crossbeam-epoch | 0.9.21 | MIT OR Apache-2.0 | MIT | niho-base-raw: rayon の依存 |
-| crossbeam-utils | 0.8.23 | MIT OR Apache-2.0 | MIT | niho-base-raw: rayon の依存 |
+| crossbeam-deque | 0.8.8 | MIT OR Apache-2.0 | MIT | niho-base-raw・niho-develop（`threads`）: rayon の依存 |
+| crossbeam-epoch | 0.9.21 | MIT OR Apache-2.0 | MIT | niho-base-raw・niho-develop（`threads`）: rayon の依存 |
+| crossbeam-utils | 0.8.23 | MIT OR Apache-2.0 | MIT | niho-base-raw・niho-develop（`threads`）: rayon の依存 |
 | crypto-common | 0.1.7 | MIT OR Apache-2.0 | MIT | niho-camera-profile: SHA-256 の土台 |
 | dary_heap | 0.3.9 | MIT OR Apache-2.0 | MIT | niho-base-raw: 依存の依存 |
 | digest | 0.10.7 | MIT OR Apache-2.0 | MIT | niho-camera-profile: SHA-256 の土台 |
-| either | 1.18.0 | MIT OR Apache-2.0 | MIT | niho-base-raw: rayon の依存 |
+| either | 1.18.0 | MIT OR Apache-2.0 | MIT | niho-base-raw・niho-develop（`threads`）: rayon の依存 |
 | enumn | 0.1.14 | MIT OR Apache-2.0 | MIT | niho-base-raw: build 時のみ（proc-macro など） |
 | equivalent | 1.0.2 | Apache-2.0 OR MIT | MIT | niho-base-raw: 依存の依存 |
 | fdeflate | 0.3.7 | MIT OR Apache-2.0 | MIT | PNG の圧縮 |
@@ -136,8 +136,8 @@ LibRawの行列表、旧DCP8件、旧spec4件、rawtoaces-data、外部ICC、Col
 | quote | 1.0.47 | MIT OR Apache-2.0 | MIT | 依存の依存 |
 | r-efi | 6.0.0 | MIT OR Apache-2.0 OR LGPL-2.1-or-later | MIT | niho-base-raw: macOS・Linux では build されない（Windows・Android などの依存） |
 | rawler | 0.8.0 | LGPL-2.1 | LGPL-2.1（例外） | niho-base-raw: RAW のデコード（現行本番はワーカー、R4で端末向けを準備。下の「niho-base-raw の例外」） |
-| rayon | 1.12.0 | MIT OR Apache-2.0 | MIT | niho-base-raw: 行単位の並列化 |
-| rayon-core | 1.13.0 | MIT OR Apache-2.0 | MIT | niho-base-raw: 行単位の並列化 |
+| rayon | 1.12.0 | MIT OR Apache-2.0 | MIT | niho-base-raw・niho-develop（`threads` feature、#148）: 行単位の並列化 |
+| rayon-core | 1.13.0 | MIT OR Apache-2.0 | MIT | niho-base-raw・niho-develop（`threads` feature、#148）: 行単位の並列化 |
 | rle-decode-fast | 1.0.3 | MIT OR Apache-2.0 | MIT | niho-base-raw: 依存の依存 |
 | rustc-demangle | 0.1.28 | MIT/Apache-2.0 | MIT | niho-base-raw: 依存の依存 |
 | rustc_version | 0.4.1 | MIT OR Apache-2.0 | MIT | niho-base-raw: build 時のみ（proc-macro など） |

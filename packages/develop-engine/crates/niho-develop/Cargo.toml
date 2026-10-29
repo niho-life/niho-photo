@@ -23,6 +23,14 @@ jpeg-decoder.workspace = true
 # niho-camera-profile uses). Neither adds a crate to Cargo.lock.
 png = "0.18"
 sha2 = "0.10"
+# `threads` (#148): data-parallel loops on rayon (`src/par.rs`). Every pixel is
+# computed by the same code as the sequential loop, so the bytes do not depend
+# on the thread count. Off by default: the single-thread wasm builds without
+# it. rayon is already in Cargo.lock (niho-base-raw).
+rayon = { version = "1", optional = true }
+
+[features]
+threads = ["dep:rayon"]
 
 [dev-dependencies]
 wasm-bindgen-test = "=0.3.79"

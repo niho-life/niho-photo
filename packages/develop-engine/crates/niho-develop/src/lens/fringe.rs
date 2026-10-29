@@ -12,7 +12,8 @@
 //!    `smoothstep(0.03, 0.09)` per pixel.
 //! 3. Near an edge: its largest value within `radius` pixels (a square,
 //!    [`defringe_radius`]: about 1 px per 512 px of the frame's long edge at
-//!    this scale, 1..6, and inside the window's margin).
+//!    this scale, at least 1, and inside the window's margin: the same
+//!    reach on the photo at every size, #133).
 //! 4. Hue on the hexagon of linear sRGB (`atan2(sqrt(3)/2 (G - B), R - (G +
 //!    B)/2)`: red 0°, yellow 60°, green 120°, blue 240°, magenta 300°). A
 //!    band's range ([`super::PURPLE_HUE`], [`super::GREEN_HUE`]) counts 1
@@ -39,9 +40,12 @@ fn smoothstep(lo: f32, hi: f32, x: f32) -> f32 {
 }
 
 /// The fringe radius on a frame whose long edge is `long_edge` at this
-/// scale, inside a window margin of `pad` pixels.
+/// scale, inside a window margin of `pad` pixels. It grows with the size
+/// without a bound (a full-size export reaches as far on the photo as its
+/// screen at 2560 px, #133); up to a long edge of 3327 px it is the bounded
+/// radius of before (1..6).
 pub(crate) fn defringe_radius(long_edge: usize, pad: usize) -> usize {
-    let r = ((long_edge + 256) / 512).clamp(1, 6);
+    let r = ((long_edge + 256) / 512).max(1);
     r.min(pad.saturating_sub(2)).max(1)
 }
 
@@ -192,7 +196,9 @@ mod tests {
         assert_eq!(defringe_radius(2560, 128), 5);
         assert_eq!(defringe_radius(1024, 32), 2);
         assert_eq!(defringe_radius(100, 4), 1);
-        assert_eq!(defringe_radius(8000, 256), 6);
+        assert_eq!(defringe_radius(3327, 128), 6);
+        assert_eq!(defringe_radius(6000, 256), 12);
+        assert_eq!(defringe_radius(8000, 256), 16);
         assert_eq!(defringe_radius(2560, 4), 2);
     }
 }

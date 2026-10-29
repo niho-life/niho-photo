@@ -30,6 +30,7 @@ mod e2e;
 mod error;
 mod flags;
 mod library;
+mod mask_detection;
 mod mask_surfaces;
 mod photo_bench;
 mod photos;
@@ -107,6 +108,7 @@ pub fn run() {
       develop::install(app.handle());
       develop_engine_sidecar::install(app.handle());
       cutout_commands::install(app.handle());
+      mask_detection::install(app.handle());
       presets::install(app.handle());
       // 更新の確認は裏で 1 回（起動を待たせない。結果は camera.log）
       app.manage(updater::UpdateState::new(updates));
@@ -140,6 +142,7 @@ pub fn run() {
       mask_surfaces::camera_mask_surface_save,
       mask_surfaces::camera_mask_surface_load,
       mask_surfaces::camera_mask_surface_exists,
+      mask_detection::camera_mask_surface_detect,
       photos::camera_photo_versions,
       photos::camera_photo_save_versions,
       develop::camera_develop_status,

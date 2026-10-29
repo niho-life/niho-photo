@@ -30,6 +30,7 @@ import type {
 } from "./browser-photo-editing-model";
 import { useBrowserPhotoDevelop } from "./use-browser-photo-develop";
 import { useBrowserPhotoOpen, type BrowserPhotoOpen } from "./use-browser-photo-open";
+import { BROWSER_PRESET_PREVIEW_FINAL_DELAY_MS } from "./use-browser-photo-presets";
 
 const engineFactory = vi.hoisted(() => vi.fn());
 const paintFrame = vi.hoisted(() => vi.fn());
@@ -178,6 +179,7 @@ function createEngine(options: EngineOptions): DevelopEngine {
     })),
     settingsToXmp: vi.fn(async () => ({ name: "test", xmp: "<xmp />" })),
     renderPresetThumbnail: vi.fn(async () => frame(options.marker)),
+    yieldToEdit: vi.fn(),
     supportsPresetAmount: vi.fn(async () => true),
     supportsSettingsToXmp: vi.fn(async () => true),
     supportsPresetThumbnails: vi.fn(async () => true),
@@ -1161,8 +1163,19 @@ describe("useBrowserPhotoOpen の描いた順（つまみを動かしている�
     expect(current.heal.ready).toBe(true);
   });
 
-  it("行に載せたプリセットの仮の表示は、前の仮の表示・補正の描き途中の画を描かない。適用量を動かす間は途中の画を描く", async () => {
-    const { held } = await openHeld("preview");
+  /** プリセットごとに違う結果（「暗い」はコントラスト −30、ほかは 40）にする（同じ結果だと、覚えた画がほかのプリセットにも当たる）。 */
+  const distinctPresets = (engine: DevelopEngine) => {
+    vi.mocked(engine.presetSettings).mockImplementation(async (xmp: string, base: object | null) => ({
+      converted: true,
+      name: xmp.includes("dark") ? "暗い" : "明るい",
+      unsupported: [],
+      settings: { ...((base as DevelopSettings | null) ?? neutralDevelopSettings()), contrast: xmp.includes("dark") ? -30 : 40 },
+    }));
+  };
+
+  it("行に載せたプリセットの仮の表示は、粗い画を先に出して止まっていれば丁寧な画に差し替え、前の仮の表示・補正の描き途中の画を描かない。押したら粗い画→丁寧な画。適用量を動かす間は途中の画を描く（#127）", async () => {
+    const { engine, held } = await openHeld("preview");
+    distinctPresets(engine);
     const before = mainPaints().length;
     const bright = { key: "builtin:bright", name: "明るい", xmp: "<xmp />" };
     const dark = { key: "builtin:dark", name: "暗い", xmp: "<xmp dark />" };
@@ -1171,36 +1184,92 @@ describe("useBrowserPhotoOpen の描いた順（つまみを動かしている�
     await run(() => current.presets.requestPreview(bright));
     await sleep(200);
     await settleUntil(() => held.length === 2, "bright preview requested");
+    // 載せている行を替えたら、前の行の丁寧な画は出さない
     await run(() => current.presets.requestPreview(dark));
     await sleep(200);
     await settleUntil(() => held.length === 3, "dark preview requested");
-    expect(held.slice(1).map(({ options }) => options.interactive)).toEqual([false, false]);
+    // 仮の表示は粗い画から
+    expect(held.slice(1).map(({ options }) => options.interactive)).toEqual([true, true]);
     await run(() => held[0]!.result.resolve(frame(101)));
     await run(() => held[1]!.result.resolve(frame(102)));
     expect(mainPaints().slice(before)).toEqual([]);
     await run(() => held[2]!.result.resolve(frame(103)));
     expect(mainPaints().slice(before)).toEqual([103]);
+    // 止まったままなら丁寧な画に差し替える
+    await sleep(BROWSER_PRESET_PREVIEW_FINAL_DELAY_MS + 50);
+    await settleUntil(() => held.length === 4, "dark final requested");
+    expect(held.map(({ settings, options }) => [settings.contrast ?? 0, options.interactive])).toEqual([
+      [0, false],
+      [40, true],
+      [-30, true],
+      [-30, false],
+    ]);
+    await run(() => held[3]!.result.resolve(frame(113)));
+    expect(mainPaints().slice(before)).toEqual([103, 113]);
     await run(() => current.presets.requestPreview(null));
     await sleep(200);
-    await settleUntil(() => held.length === 4, "back to settings");
-    await run(() => held[3]!.result.resolve(frame(104)));
-    expect(mainPaints().slice(before)).toEqual([103, 104]);
+    await settleUntil(() => held.length === 5, "back to settings");
+    await run(() => held[4]!.result.resolve(frame(104)));
+    expect(mainPaints().slice(before)).toEqual([103, 113, 104]);
+
+    // 押したら粗い画を出してから丁寧な画（丁寧な画は粗い画を描き終えてから出す）
+    await run(() => current.presets.apply(bright));
+    await settleUntil(() => current.presets.appliedPresetKey === bright.key && held.length === 6, "preset applied");
+    expect(held[5]!.options.interactive).toBe(true);
+    await run(() => held[5]!.result.resolve(frame(105)));
+    await settleUntil(() => held.length === 7, "applied final requested");
+    expect(held[6]!.options.interactive).toBe(false);
+    await run(() => held[6]!.result.resolve(frame(115)));
+    expect(mainPaints().slice(before)).toEqual([103, 113, 104, 105, 115]);
 
     // 適用量（仮の表示を速い描き方で描く間）
-    await run(() => current.presets.apply(bright));
-    await settleUntil(() => current.presets.appliedPresetKey === bright.key && held.length === 5, "preset applied");
-    await run(() => held[4]!.result.resolve(frame(105)));
     await run(() => current.presets.changeAmount(60, "drag"));
-    await settleUntil(() => held.length === 6, "amount 60");
+    await settleUntil(() => held.length === 8, "amount 60");
     await run(() => current.presets.changeAmount(70, "drag"));
-    await settleUntil(() => held.length === 7, "amount 70");
-    expect(held.slice(5).map(({ settings, options }) => [settings.contrast, options.interactive])).toEqual([
+    await settleUntil(() => held.length === 9, "amount 70");
+    expect(held.slice(7).map(({ settings, options }) => [settings.contrast, options.interactive])).toEqual([
       [60, true],
       [70, true],
     ]);
-    await run(() => held[5]!.result.resolve(frame(106)));
-    expect(mainPaints().slice(before)).toEqual([103, 104, 105, 106]);
-    await run(() => held[6]!.result.resolve(frame(107)));
-    expect(mainPaints().slice(before)).toEqual([103, 104, 105, 106, 107]);
+    await run(() => held[7]!.result.resolve(frame(106)));
+    expect(mainPaints().slice(before)).toEqual([103, 113, 104, 105, 115, 106]);
+    await run(() => held[8]!.result.resolve(frame(107)));
+    expect(mainPaints().slice(before)).toEqual([103, 113, 104, 105, 115, 106, 107]);
+  });
+
+  it("載せてから押したときは、載せて描いた丁寧な画を使って描き直さない（届く前に押しても待って使う。#127）", async () => {
+    const { engine, held } = await openHeld("preview-apply");
+    distinctPresets(engine);
+    const before = mainPaints().length;
+    const bright = { key: "builtin:bright", name: "明るい", xmp: "<xmp />" };
+    await run(() => current.presets.requestPreview(bright));
+    await sleep(200);
+    await settleUntil(() => held.length === 1, "coarse preview requested");
+    await run(() => held[0]!.result.resolve(frame(121)));
+    await sleep(BROWSER_PRESET_PREVIEW_FINAL_DELAY_MS + 50);
+    await settleUntil(() => held.length === 2, "final preview requested");
+    await run(() => held[1]!.result.resolve(frame(122)));
+    expect(mainPaints().slice(before)).toEqual([121, 122]);
+    await run(() => current.presets.apply(bright));
+    await settleUntil(() => current.presets.appliedPresetKey === bright.key, "preset applied");
+    expect(held).toHaveLength(2);
+    expect(mainPaints().at(-1)).toBe(122);
+
+    // 載せた丁寧な画がまだ届かないうちに押した: 押した粗い画の後、届いた丁寧な画を使う（同じ設定を描き直さない）
+    const dark = { key: "builtin:dark", name: "暗い", xmp: "<xmp dark />" };
+    await run(() => current.presets.requestPreview(dark));
+    await sleep(200);
+    await settleUntil(() => held.length === 3, "dark coarse requested");
+    await run(() => held[2]!.result.resolve(frame(131)));
+    await sleep(BROWSER_PRESET_PREVIEW_FINAL_DELAY_MS + 50);
+    await settleUntil(() => held.length === 4, "dark final requested");
+    await run(() => current.presets.apply(dark));
+    await settleUntil(() => current.presets.appliedPresetKey === dark.key && held.length === 5, "dark applied");
+    expect(held[4]!.options.interactive).toBe(true);
+    await run(() => held[3]!.result.resolve(frame(132)));
+    await run(() => held[4]!.result.resolve(frame(133)));
+    await sleep(0);
+    expect(held).toHaveLength(5);
+    expect(mainPaints().slice(-2)).toEqual([133, 132]);
   });
 });
