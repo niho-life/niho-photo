@@ -225,7 +225,11 @@ describe("createDevelopEngineWorkerHandler", () => {
       exportJpeg() {
         return new Uint8Array([1]);
       }
-      override render() {
+      override render(
+        _settingsJson: string,
+        _maxDimension: number,
+        _interactive: boolean,
+      ): ReturnType<InstanceType<typeof NativeBase>["render"]> {
         throw unavailable;
       }
     }
