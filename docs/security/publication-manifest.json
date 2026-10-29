@@ -346,9 +346,10 @@
         "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
         "修復とマスク面の能力説明を同じworker契約へ統合する。",
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
-        "見本を編集の描画の後ろへ回す（#126）: 編集が静かな間だけ preview・background を出し、描画ごとの待ちを診断に出す"
+        "見本を編集の描画の後ろへ回す（#126）: 編集が静かな間だけ preview・background を出し、描画ごとの待ちを診断に出す",
+        "空の検出 #141: クライアントに detectSky と supportsSkyDetection を足し、作った面の PNG を encodeMaskSurface と同じく覚える。"
       ],
-      "outputSha256": "001af8e36543b6f658083a958f35a664c49ab85a177d3ee3561a28eb7c04eb4d"
+      "outputSha256": "7bc08c52968d411334acd74310190c49c993a8d0d42efddf8be575f13f788c09"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-manifest.ts",
@@ -456,9 +457,10 @@
         "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
         "プリセットの当てはめと見本用 session の作成を診断の区間に記録（#126）",
-        "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。"
+        "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。",
+        "空の検出 #141: Worker に detectSky の要求と応答、ready の skyDetection（Developer.detectSky があり面を受け渡せるときだけ）を足す。"
       ],
-      "outputSha256": "d453014f19fa1cacff7b40decb194eb7d461451b4f2a559f4b6457cf8d93d6b9"
+      "outputSha256": "11957bfd0280baa9abf775a8957b3d80a2cb156f3750efc36cacd3a9ca32e8c9"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -1382,9 +1384,10 @@
         "部分補正（マスク）#93: マスクの道具をスマホの全画面の編集の層でも出し（写真の上の操作・段・マスクだけの初期化）を渡した",
         "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
-        "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
+        "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。",
+        "空の検出 #141: マスクの道具に撮影時の露出（EV100）を読む口を渡す。"
       ],
-      "outputSha256": "53a1ad69c5b1ef4a4fcf34d166cab541661c64e003bd16d9c2b884c9dbb1e8e5"
+      "outputSha256": "3f8d78b9d63c0e0d3a58546da4c86ae6ca3bd91df95266e2fc2ca4988488d919"
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-adjustment-controls-effects.test.tsx",
@@ -5961,7 +5964,7 @@
         "path": "packages/develop-engine/crates/niho-develop-wasm/src/lib.rs",
         "sha256": "bb2c416ce23b4e3ca3208f32736f22254ed82276b24fd7f49f1a022e4eb85fbd"
       },
-      "outputSha256": "94cabb31f411488f0584ce727e4ae497ff371d3d2fe22e1b04d11db51b3711c7",
+      "outputSha256": "66ce873e4aa0d9ae2fffa15a4abfc85e091d6eb3286f2359f731a3288e5e3412",
       "modifications": [
         "Issue #30 Oklch色ミキサーとengine 10/11対応を反映",
         "部分補正（マスク）#65: validateSettingsのマスク読み取り回帰テストを追加",
@@ -5979,7 +5982,8 @@
         "PR #96: v8 heal設定を受け入れ、v9のみ未対応とするwasm公開検証を更新。",
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
         "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。",
-        "#156: #101 で消えた面の口（maskSurfaceId・encodeMaskSurface・Developer.setMaskSurface / dropMaskSurface / hasMaskSurface / exportJpeg / exportPng、capabilities の surfaces）と試験を戻す。"
+        "#156: #101 で消えた面の口（maskSurfaceId・encodeMaskSurface・Developer.setMaskSurface / dropMaskSurface / hasMaskSurface / exportJpeg / exportPng、capabilities の surfaces）と試験を戻す。",
+        "空の検出 #141: Developer.detectSky（作業画像を engine・look・base だけで長辺 1024 に描いて空の面の PNG を返す）と capabilities の masks.skyDetection、wasm の試験を足す。既存の描画の画素は変えない。"
       ]
     },
     {
@@ -6445,7 +6449,7 @@
         "path": "packages/develop-engine/crates/niho-develop/src/lib.rs",
         "sha256": "1591d49effaa779c8e23ad6877508ccf336565eec8336d5b4e6faa3b5d3846b0"
       },
-      "outputSha256": "ddb9919c7ccaf037509795b1f0b440ee64368c476cbea89769c2618087f11df9",
+      "outputSha256": "96a7d6d4ebbaf4a88d1986d2693a463cd2e072632614cfb4fc6ad94d308ece88",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
@@ -6481,7 +6485,8 @@
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
         "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
         "niho-photo#132: 原寸の書き出しの native の読み込みの上限を 1 億画素に広げる（ブラウザの wasm は 4000 万画素のまま）。",
-        "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。"
+        "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。",
+        "空の検出 #141: 空の推定（候補 A の v1）の sky モジュールを登録する。既存の描画の画素は変えない。"
       ]
     },
     {
@@ -10491,18 +10496,18 @@
     },
     {
       "path": "packages/photo-editing/src/photo-editing-info.ts",
-      "sha256": "e91d4a05e8c769a6179e8beba3d7b38ec1d176812ae7cc1297c92bbf26d91f39",
-      "origin": "niho-photo#43 のため新規作成。右パネルの「情報」の値の整形（ISO・シャッター速度・絞り・焦点距離・寸法・ファイルの大きさ・形式・撮影日時・場所）と群の組み立て。外部コード・実データを含まない。"
+      "sha256": "414613aae5c2d6f297ea997ac9187ad0e42641402b00176b9d058b2124a9eea9",
+      "origin": "niho-photo#43 のため新規作成。右パネルの「情報」の値の整形（ISO・シャッター速度・絞り・焦点距離・寸法・ファイルの大きさ・形式・撮影日時・場所）と群の組み立て。外部コード・実データを含まない。\n変更理由: 空の検出 #141: 写真の情報から撮影時の露出（EV100）を求める photoInfoEv100 を足す。"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-info.test.ts",
-      "sha256": "7810342fe89d332f084574cc34ec47dfe44555985b0dc2eba09815d2af3320a3",
-      "origin": "niho-photo#43 のため新規作成。右パネルの「情報」の値の整形と群の組み立ての test。合成の値だけを使用。"
+      "sha256": "ac1dd18ae8f3f756d457df56da95e955c0ce779704a5ba84afee6061bbed0ea7",
+      "origin": "niho-photo#43 のため新規作成。右パネルの「情報」の値の整形と群の組み立ての test。合成の値だけを使用。\n変更理由: 空の検出 #141: photoInfoEv100 の試験を足す。"
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-editing-info.tsx",
-      "sha256": "d77392f9b5da851901bab26a6c665ecbea38d6f2c166f20fc1d40c041ef2b5c8",
-      "origin": "niho-photo#43 のため新規作成。右パネルの「情報」の面（群の見出しとラベル・値の 2 列の dl、写真の情報の読み出し）。外部コード・実データを含まない。"
+      "sha256": "eeefb8432623d070c7b72dca83e191785c3465afe22213dd4fa7ed4a62242200",
+      "origin": "niho-photo#43 のため新規作成。右パネルの「情報」の面（群の見出しとラベル・値の 2 列の dl、写真の情報の読み出し）。外部コード・実データを含まない。\n変更理由: 空の検出 #141: 写真の情報の問い合わせを「情報」と空の検出の露出で共有し、EV100 を読む口を足す。"
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-editing-info.test.tsx",
@@ -10991,13 +10996,13 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-masks.ts",
-      "sha256": "33d34d95cddeba19164600bb3709250966d30fabef0c73b20db93178a1cd9b2d",
-      "origin": "Issue #67の公開仕様だけから新規作成した、マスクの道具の状態（出す条件・足す / 複製 / 削除 / 反転 / 目・局所の補正・形・初期化・キー）と範囲の重ね表示の面を取りに行く係のReact hook。外部画像・非公開コード・個体metadataを含まない。\n変更理由: PR #99を#91マージ後のmainへ積み直し、遠近補正後のブラシ半径を局所ヤコビアンで写す。\n変更理由: PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。\n変更理由: 部分補正（マスク）#93: 局所のカラーミキサーの書き込み・初期化を足し、スマホの全画面の編集の層でも出せるようにした\n変更理由: 被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
+      "sha256": "8476067882c7719fe241b4aff52fc42c98031ef5b7a9e8e935046ed46a1a2557",
+      "origin": "Issue #67の公開仕様だけから新規作成した、マスクの道具の状態（出す条件・足す / 複製 / 削除 / 反転 / 目・局所の補正・形・初期化・キー）と範囲の重ね表示の面を取りに行く係のReact hook。外部画像・非公開コード・個体metadataを含まない。\n変更理由: PR #99を#91マージ後のmainへ積み直し、遠近補正後のブラシ半径を局所ヤコビアンで写す。\n変更理由: PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。\n変更理由: 部分補正（マスク）#93: 局所のカラーミキサーの書き込み・初期化を足し、スマホの全画面の編集の層でも出せるようにした\n変更理由: 被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。\n変更理由: 空の検出 #141: 出どころが空を作れなくても wasm が探せて面を保存できれば「空」を出し、wasm で探した面をブラシと同じ口で保存して足す。"
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-masks.test.tsx",
-      "sha256": "1f9b70dae9b771518a5dfe22a3c929e38d30bd84363a3321aa68966c6cd2f413",
-      "origin": "Issue #67のため新規作成した、マスクの道具のhook（取り消しの1単位・読める設定・8枚と原寸の書き出しの理由・Esc / Delete）と重ね表示の面の係（rAFでまとめる・古い応答を捨てる）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 部分補正（マスク）#93: 局所のカラーミキサーの書き込みと初期化の回帰を足した\n変更理由: 被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
+      "sha256": "e790bf5a61fc50d6269714f87f835fcacbf0333e64fedbdeabef274a3b6f9fd4",
+      "origin": "Issue #67のため新規作成した、マスクの道具のhook（取り消しの1単位・読める設定・8枚と原寸の書き出しの理由・Esc / Delete）と重ね表示の面の係（rAFでまとめる・古い応答を捨てる）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 部分補正（マスク）#93: 局所のカラーミキサーの書き込みと初期化の回帰を足した\n変更理由: 被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。\n変更理由: 空の検出 #141: 「空」の出し分け・探して保存して足す・空なし・失敗・取り消しの試験を足す。"
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-mask-overlay.tsx",
@@ -11271,13 +11276,13 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-client-surfaces.test.ts",
-      "sha256": "489bda5505a4ec707367f8f07ca11a106cd11904298c4f9244550fe1c36894d8",
-      "origin": "Issue #68のため新規作成した、engineの面の受け渡し（描く前の同期・追い越し・開き直し・上限・重ね表示・書き出し・面の作成）の回帰。外部画像・非公開コード・個体metadataを含まない。"
+      "sha256": "70dace2937d66231e3df66082cc3cf91dded821434db7b654f9843e5ef4284eb",
+      "origin": "Issue #68のため新規作成した、engineの面の受け渡し（描く前の同期・追い越し・開き直し・上限・重ね表示・書き出し・面の作成）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 空の検出 #141: クライアントの detectSky（送る条件・覚えた PNG を次の描画で渡す・空なし・古い wasm）の試験を足す（偽の Worker）。"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-surfaces.test.ts",
-      "sha256": "272963beb82a05447f88319703a270d416c2181c9c63b84b77758056811aae75",
-      "origin": "Issue #68のため新規作成した、Workerの面の受け渡し（能力・渡す/手放す・見本・面の作成・一時的なDeveloperの書き出し）の回帰。外部画像・非公開コード・個体metadataを含まない。"
+      "sha256": "ffae1285034341ff7d0e23e2f27e17d1ddac22d99171870d92916b3d9041a641",
+      "origin": "Issue #68のため新規作成した、Workerの面の受け渡し（能力・渡す/手放す・見本・面の作成・一時的なDeveloperの書き出し）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 空の検出 #141: Worker の detectSky（ready の skyDetection の条件・面の PNG と id・空なし・口の無い glue）の試験を足す（偽の glue）。"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-mask-brush.ts",
@@ -11531,8 +11536,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-editing-workbench-masks.test.tsx",
-      "sha256": "5e1d8940fe6778c75f59b5668bf61769ca966fda8abc92dd1b6964fa92e2d85f",
-      "origin": "Issue #93のため新規作成した、マスクの道具を出す幅（PC・スマホで直せる拠点・直せない拠点）の編集面のjsdom回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: テスト用の engine に yieldToEdit を足す（#126）"
+      "sha256": "4b2e6a133468175ed0690de395286ef617e20c2e2113fd6e12d571ce72da82ca",
+      "origin": "Issue #93のため新規作成した、マスクの道具を出す幅（PC・スマホで直せる拠点・直せない拠点）の編集面のjsdom回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: テスト用の engine に yieldToEdit を足す（#126）\n変更理由: 空の検出 #141: 面を保存できる出どころで wasm が空を探せるとき「空」を出し、露出で探して足す編集面の試験を足す（偽の wasm・偽の出どころ）。"
     },
     {
       "path": "packages/photo-editing/src/editor/use-photo-editing-coarse-pointer.ts",
@@ -11613,6 +11618,11 @@
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-analysis.test.ts",
       "sha256": "cf1753334d1c8773c5de8d4362976e33d46cc9af276c5d241f7eb5434b4a8a39",
       "origin": "Issue #129の公開仕様だけから新規作成した、Worker が静かな間に H/S の解析を先に作る（今の設定・違う CNR のプリセット 1 つまで・通常の要求で止める・写真を替えたら捨てる）回帰（偽の glue・偽の時計）。実写真・非公開コード・私有参照出力を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/crates/niho-develop/src/sky.rs",
+      "sha256": "38aae088cd16d52177cca016fbbce2ed8bc5e56fb0e6e0052906ffcf81dadd25",
+      "origin": "Issue #141 のため新規作成した、写真から空の範囲を推定してマスクの面にする NIHO の推定（#128 の候補 A を v1 として移植。解析 384px の種・空の色の場・領域の成長・guided filter）と、その合成画像の試験。外部画像・非公開コード・第三者の重みを含まない。"
     }
   ],
   "excludedSources": [

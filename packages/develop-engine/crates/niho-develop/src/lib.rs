@@ -52,6 +52,7 @@ pub mod relative_wb;
 pub mod research;
 pub mod resize;
 pub mod settings;
+pub mod sky;
 pub mod spatial;
 pub mod tone_ops;
 pub mod upright;

@@ -14,6 +14,7 @@ import {
   formatPhotoInfoShutter,
   NBSP,
   photoEditingInfoGroups,
+  photoInfoEv100,
   type PhotoEditingInfoPhoto,
 } from "./photo-editing-info";
 
@@ -84,6 +85,27 @@ describe("formatPhotoInfoAperture / formatPhotoInfoFocalLength", () => {
     for (const value of NOT_NUMBERS) {
       expect(formatPhotoInfoAperture(value)).toBeNull();
       expect(plain(formatPhotoInfoFocalLength(value))).toBeNull();
+    }
+  });
+});
+
+describe("photoInfoEv100（空の検出の露出。niho-photo#141）", () => {
+  it("log2(N² / t) − log2(ISO / 100)", () => {
+    // 晴天の 16 の法則: f/16・1/100 秒・ISO 100 は EV 約 14.6
+    expect(photoInfoEv100({ fNumber: 16, exposureTimeSeconds: 1 / 100, iso: 100 })).toBeCloseTo(Math.log2(25_600), 9);
+    expect(photoInfoEv100({ fNumber: 1, exposureTimeSeconds: 1, iso: 100 })).toBe(0);
+    // ISO が 2 倍で 1 段下がる（ISO 400 は 2 段）
+    expect(photoInfoEv100({ fNumber: 2.8, exposureTimeSeconds: 1 / 60, iso: 400 })).toBeCloseTo(Math.log2((2.8 * 2.8) / (1 / 60)) - 2, 9);
+  });
+
+  it("どれかが無い・非有限・0 以下なら null", () => {
+    expect(photoInfoEv100(null)).toBeNull();
+    expect(photoInfoEv100(undefined)).toBeNull();
+    expect(photoInfoEv100({})).toBeNull();
+    for (const value of NOT_NUMBERS) {
+      expect(photoInfoEv100({ fNumber: value, exposureTimeSeconds: 1 / 100, iso: 100 })).toBeNull();
+      expect(photoInfoEv100({ fNumber: 8, exposureTimeSeconds: value, iso: 100 })).toBeNull();
+      expect(photoInfoEv100({ fNumber: 8, exposureTimeSeconds: 1 / 100, iso: value })).toBeNull();
     }
   });
 });

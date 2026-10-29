@@ -4,7 +4,12 @@ import { act, useRef, useState, type MutableRefObject } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { DevelopEngine, DevelopMaskCapabilities, DevelopMaskPlane } from "../develop-engine/develop-engine-client";
+import type {
+  DevelopDetectedSky,
+  DevelopEngine,
+  DevelopMaskCapabilities,
+  DevelopMaskPlane,
+} from "../develop-engine/develop-engine-client";
 import { readDevelopMasks, writeDevelopMasks, type DevelopMask } from "../develop-engine/develop-masks";
 import { neutralDevelopSettings, readDevelopSettings, type DevelopSettings } from "../develop-engine/develop-settings";
 import type { PhotoEditingSettings } from "../photo-editing-types";
@@ -67,11 +72,16 @@ type HarnessProps = {
   disabled?: boolean;
   detect?: PhotoEditingMaskDetectSurface | null;
   detectKinds?: readonly PhotoEditingMaskDetectKind[];
+  /** 既定は座標の基準だけを読む engine */
+  engine?: DevelopEngine;
+  saveMaskSurface?: ((photoId: string, png: Uint8Array) => Promise<{ id: string }>) | null;
+  readEv100?: ((photoId: string) => Promise<number | null>) | null;
 };
 
 function Harness(props: HarnessProps) {
   const mountedRef = useRef(true);
-  const engineRef = useRef<DevelopEngine | null>(engine);
+  const engineRef = useRef<DevelopEngine | null>(null);
+  engineRef.current = props.engine ?? engine;
   const developSessionRef = useRef<DevelopSession | null>(session);
   const [settings, setSettings] = useState(props.initial);
   const ref = useRef(props.initial);
@@ -109,8 +119,34 @@ function Harness(props: HarnessProps) {
     },
     detectMaskSurface: props.detect ?? null,
     detectKinds: props.detectKinds ?? [],
+    saveMaskSurface: props.saveMaskSurface ?? null,
+    readEv100: props.readEv100 ?? null,
   });
   return null;
+}
+
+/** 空を探せる wasm の engine（niho-photo#141）。`detectSky` の答えは後から決める（呼ばれた引数を覚える）。 */
+function deferredSky() {
+  const calls: Array<{ settings: object; ev100: number | null }> = [];
+  let settle: { resolve: (result: DevelopDetectedSky | null) => void; reject: (error: unknown) => void } | null = null;
+  const detectSky = (settings: object, ev100: number | null) => {
+    calls.push({ settings, ev100 });
+    return new Promise<DevelopDetectedSky | null>((resolve, reject) => {
+      settle = { resolve, reject };
+    });
+  };
+  const skyEngine = { imageSize: async () => SOURCE, supportsSkyDetection: () => true, detectSky } as unknown as DevelopEngine;
+  return {
+    engine: skyEngine,
+    calls,
+    resolve: async (result: DevelopDetectedSky | null) => {
+      await act(async () => settle!.resolve(result));
+      await act(async () => undefined);
+    },
+    reject: async (error: unknown) => {
+      await act(async () => settle!.reject(error));
+    },
+  };
 }
 
 /** 答えを後から決める検出（呼ばれた引数を覚える）。 */
@@ -407,6 +443,136 @@ describe("useBrowserPhotoMasks", () => {
     expect(detection.calls[1]!.signal.aborted).toBe(true);
     expect(tool.detecting).toBeNull();
     await detection.resolve({ kind: "detected", id: SURFACE_ID, width: 1024, height: 683 });
+    expect(readDevelopMasks(settingsRef.current)).toHaveLength(0);
+  });
+
+  it("空は、出どころが作れなくても wasm が空を探せて面を保存できれば足せる（niho-photo#141）", async () => {
+    const sky = deferredSky();
+    const save = vi.fn(async () => ({ id: SURFACE_ID }));
+    await render({ support: { ...SURFACE_SUPPORT }, engine: sky.engine, saveMaskSurface: save });
+    expect(tool.kinds).toEqual(["linear", "radial", "brush", "sky"]);
+    // 面を保存できない・空を探せない wasm・面を受け渡せない・空を描けない wasm には出さない
+    await render({ support: { ...SURFACE_SUPPORT }, engine: sky.engine, saveMaskSurface: null });
+    expect(tool.kinds).toEqual(["linear", "radial"]);
+    await render({ support: { ...SURFACE_SUPPORT }, saveMaskSurface: save });
+    expect(tool.kinds).toEqual(["linear", "radial", "brush"]);
+    await render({ support: { ...SURFACE_SUPPORT, surfaces: false }, engine: sky.engine, saveMaskSurface: save });
+    expect(tool.kinds).toEqual(["linear", "radial"]);
+    await render({
+      support: { ...SURFACE_SUPPORT, kinds: ["linear", "radial", "brush", "subject"] },
+      engine: sky.engine,
+      saveMaskSurface: save,
+    });
+    expect(tool.kinds).toEqual(["linear", "radial", "brush"]);
+  });
+
+  it("空を wasm で探して足す: 露出を読んで探し、面をブラシと同じ口で保存して 1 単位で足して選ぶ", async () => {
+    const sky = deferredSky();
+    const save = vi.fn(async (_photoId: string, _png: Uint8Array) => ({ id: SURFACE_ID }));
+    const readEv100 = vi.fn(async () => 13.25);
+    await render({ support: { ...SURFACE_SUPPORT }, engine: sky.engine, saveMaskSurface: save, readEv100 });
+    await enter();
+    const clicked = settingsRef.current;
+    await act(async () => tool.add("sky"));
+    expect(tool.detecting).toBe("sky");
+    expect(tool.canAdd).toBe(false);
+    expect(readEv100).toHaveBeenCalledWith("photo-id-1");
+    expect(sky.calls).toEqual([{ settings: clicked, ev100: 13.25 }]);
+    // 探している間はほかの種類も足さない
+    await act(async () => tool.add("linear"));
+    expect(readDevelopMasks(settingsRef.current)).toHaveLength(0);
+
+    const png = new Uint8Array([0x89, 1, 2]);
+    await sky.resolve({ id: SURFACE_ID, width: 1024, height: 683, png });
+    expect(save).toHaveBeenCalledWith("photo-id-1", png);
+    expect(tool.detecting).toBeNull();
+    expect(commits).toBe(1);
+    const masks = readDevelopMasks(settingsRef.current);
+    expect(masks).toEqual([
+      { id: masks[0]!.id, kind: "sky", enabled: true, invert: false, surface: { id: SURFACE_ID, width: 1024, height: 683 }, adjust: {} },
+    ]);
+    expect(tool.selected?.id).toBe(masks[0]!.id);
+    expect(readable(settingsRef.current)).toBe(true);
+    expect(tool.notice).toBeNull();
+  });
+
+  it("出どころが空を作れるならその口で探す（wasm では探さない）", async () => {
+    const sky = deferredSky();
+    const detection = deferredDetect();
+    const save = vi.fn(async () => ({ id: SURFACE_ID }));
+    await render({
+      support: { ...SURFACE_SUPPORT },
+      engine: sky.engine,
+      saveMaskSurface: save,
+      detect: detection.detect,
+      detectKinds: ["sky"],
+    });
+    expect(tool.kinds).toEqual(["linear", "radial", "brush", "sky"]);
+    await enter();
+    await act(async () => tool.add("sky"));
+    expect(detection.calls).toHaveLength(1);
+    expect(detection.calls[0]).toMatchObject({ kind: "sky" });
+    expect(sky.calls).toEqual([]);
+  });
+
+  it("空が無い・探せない・保存した id が違う・露出を読めないときの扱い", async () => {
+    const save = vi.fn(async () => ({ id: SURFACE_ID }));
+    const missing = deferredSky();
+    await render({ support: { ...SURFACE_SUPPORT }, engine: missing.engine, saveMaskSurface: save });
+    await enter();
+    await act(async () => tool.add("sky"));
+    // 露出を読む口が無ければ相対の明るさ（null）で探す
+    expect(missing.calls[0]!.ev100).toBeNull();
+    await missing.resolve(null);
+    expect(tool.notice).toBe("空が見つかりませんでした。ブラシや線形グラデーションで範囲を選べます。");
+    expect(save).not.toHaveBeenCalled();
+    expect(readDevelopMasks(settingsRef.current)).toHaveLength(0);
+
+    const failing = deferredSky();
+    await render({
+      support: { ...SURFACE_SUPPORT },
+      engine: failing.engine,
+      saveMaskSurface: save,
+      readEv100: async () => {
+        throw new Error("info failed");
+      },
+    });
+    await act(async () => tool.add("sky"));
+    expect(tool.notice).toBeNull();
+    expect(failing.calls[0]!.ev100).toBeNull();
+    await failing.reject(new Error("develop engine cannot detect the sky"));
+    expect(tool.notice).toBe("空のマスクを追加できませんでした。もう一度お試しください。");
+
+    const other = deferredSky();
+    const elsewhere = vi.fn(async () => ({ id: "e".repeat(64) }));
+    await render({ support: { ...SURFACE_SUPPORT }, engine: other.engine, saveMaskSurface: elsewhere });
+    await act(async () => tool.add("sky"));
+    await other.resolve({ id: SURFACE_ID, width: 1024, height: 683, png: new Uint8Array([1]) });
+    expect(elsewhere).toHaveBeenCalledOnce();
+    expect(tool.notice).toBe("空のマスクを追加できませんでした。もう一度お試しください。");
+    expect(readDevelopMasks(settingsRef.current)).toHaveLength(0);
+    expect(commits).toBe(0);
+  });
+
+  it("空を探している間に取り消す・道具を離れると、遅れて届いた面は保存も追加もしない", async () => {
+    const sky = deferredSky();
+    const save = vi.fn(async () => ({ id: SURFACE_ID }));
+    await render({ support: { ...SURFACE_SUPPORT }, engine: sky.engine, saveMaskSurface: save });
+    await enter();
+    await act(async () => tool.add("sky"));
+    await act(async () => tool.cancelDetect());
+    expect(tool.detecting).toBeNull();
+    await sky.resolve({ id: SURFACE_ID, width: 1024, height: 683, png: new Uint8Array([1]) });
+    expect(save).not.toHaveBeenCalled();
+    expect(readDevelopMasks(settingsRef.current)).toHaveLength(0);
+    expect(tool.notice).toBeNull();
+
+    await act(async () => tool.add("sky"));
+    expect(tool.detecting).toBe("sky");
+    await render({ support: { ...SURFACE_SUPPORT }, engine: sky.engine, saveMaskSurface: save, otherToolActive: true });
+    expect(tool.detecting).toBeNull();
+    await sky.resolve({ id: SURFACE_ID, width: 1024, height: 683, png: new Uint8Array([1]) });
+    expect(save).not.toHaveBeenCalled();
     expect(readDevelopMasks(settingsRef.current)).toHaveLength(0);
   });
 
