@@ -57,7 +57,23 @@ export async function smokeRealEngine(manifestPath) {
     const settings = contractModule.neutralDevelopSettings(null);
     const issues = JSON.parse(glue.validateSettings(JSON.stringify(settings)));
     assert.deepEqual(issues, []);
-    return { engine: manifest.engine.version, crateVersion: manifest.engine.crateVersion };
+
+    // スレッドの版（#151）: 平らに置いた glue が helper を版つきの名前で読み、共有メモリで 1 本のまま動く（pool は起こさない）。
+    const threadsFiles = manifest.engine.threads?.runtimeFiles;
+    if (threadsFiles) {
+      const threadsJs = threadsFiles.find(({ name }) => /^niho_develop_wasm_threads-.+\.js$/u.test(name));
+      const threadsWasm = threadsFiles.find(({ name }) => name.endsWith(".wasm"));
+      if (!threadsJs || !threadsWasm) throw new SdkReleaseError("実engine smoke用のスレッドのWASM closureが不足しています");
+      // helper は Worker の中で message を待つ（self）。Node には self が無いので、読むだけのために置く。
+      globalThis.self ??= new EventTarget();
+      const threadsGlue = await import(pathToFileURL(path.join(runtimeRoot, threadsJs.name)).href);
+      if (typeof threadsGlue.initSync !== "function" || typeof threadsGlue.initThreadPool !== "function" || typeof threadsGlue.version !== "function" || typeof threadsGlue.validateSettings !== "function") throw new SdkReleaseError("スレッドの実engineの必須exportがありません");
+      const exports = threadsGlue.initSync({ module: readFileSync(path.join(runtimeRoot, threadsWasm.name)) });
+      if (!(exports.memory.buffer instanceof SharedArrayBuffer)) throw new SdkReleaseError("スレッドの実engineが共有メモリではありません");
+      assert.equal(threadsGlue.version(), glue.version());
+      assert.deepEqual(JSON.parse(threadsGlue.validateSettings(JSON.stringify(settings))), []);
+    }
+    return { engine: manifest.engine.version, crateVersion: manifest.engine.crateVersion, threads: Boolean(threadsFiles) };
   } finally {
     rmSync(consumer, { recursive: true, force: true });
   }
@@ -68,7 +84,7 @@ if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.me
     const argv = process.argv.slice(2);
     if (argv.length !== 2 || argv[0] !== "--manifest") throw new SdkReleaseError("使い方: smoke-real-engine.mjs --manifest <release manifest>");
     const result = await smokeRealEngine(option(argv, "--manifest"));
-    console.log(`実WASMとNode recipe契約を検証しました（${result.engine} / ${result.crateVersion}）`);
+    console.log(`実WASMとNode recipe契約を検証しました（${result.engine} / ${result.crateVersion}${result.threads ? "・スレッドの版" : ""}）`);
   } catch (error) {
     console.error(error instanceof Error ? error.message : "実WASM smokeに失敗しました");
     process.exitCode = 1;

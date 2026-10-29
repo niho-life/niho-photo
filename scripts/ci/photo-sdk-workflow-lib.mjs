@@ -10,6 +10,9 @@ export const publishCondition = "github.event_name == 'workflow_dispatch' && git
 export const buildCommand = "set -euo pipefail\nnpm run sdk:build-engine-runtime -- --output \"$SDK_RUNTIME_DIR\"\nnpm run sdk:pack -- --output \"$SDK_RELEASE_DIR\" --source \"$SDK_SOURCE_SHA\" --engine-assets \"$SDK_RUNTIME_DIR\"\nmanifest=\"$SDK_RELEASE_DIR/niho-photo-sdk-$(node -p 'require(\"./sdk/release-set.json\").version')-$SDK_SOURCE_SHA.json\"\nnpm run sdk:smoke -- --manifest \"$manifest\"\nnpm run sdk:smoke-real-engine -- --manifest \"$manifest\"";
 export const publishVerifyCommand = "node scripts/sdk/verify-release-artifact.mjs --directory \"$SDK_ARTIFACT_DIR\" --expected-source \"$SDK_SOURCE_SHA\" --expected-manifest-sha256 \"$SDK_MANIFEST_SHA256\" --receipt \"$SDK_RECEIPT_FILE\" --artifact-id \"$SDK_ARTIFACT_ID\" --artifact-digest \"$SDK_ARTIFACT_DIGEST\" --artifact-name \"$SDK_ARTIFACT_NAME\" --run-id \"$SDK_RUN_ID\" --run-attempt \"$SDK_RUN_ATTEMPT\"";
 
+// スレッドの版（#151）は固定の 1.98.1 の rust-src で std を作り直す（-Z build-std）。
+export const toolchainCommand = "rustup toolchain install 1.98.1 --profile minimal --target wasm32-unknown-unknown --component rust-src\ncargo +1.98.1 install wasm-bindgen-cli --version 0.2.129 --locked";
+
 export function photoSdkWorkflowFailures(workflow) {
   const failures = [];
   const fail = (message) => failures.push(message);
@@ -51,6 +54,7 @@ export function photoSdkWorkflowFailures(workflow) {
   if (!source?.run?.includes("refs/heads/main") || !source.run.includes("^[a-f0-9]{40}$") || !source.run.includes("git merge-base --is-ancestor") || !source.run.includes("refs/remotes/origin/main") || !source.run.includes('"niho-life/niho-photo"') || source["continue-on-error"]) fail("dispatch sourceは新repository契約を持つmainのfull SHA祖先に限定する必要があります");
   const actualBuild = build?.steps?.find((step) => step.name === "実WASMをbuildしてSDKを検証");
   if (actualBuild?.run !== buildCommand || actualBuild?.env?.SDK_SOURCE_SHA !== "${{ steps.source.outputs.source-sha }}") fail("SDK buildは実WASM→pack→外部consumerを固定順で検証する必要があります");
+  if (build?.steps?.find((step) => step.name === "固定Rust/WASM toolchainを準備")?.run !== toolchainCommand) fail("SDK buildは固定Rust 1.98.1のwasm targetとrust-src（スレッドの版）が必要です");
   const release = build?.steps?.find((step) => step.id === "release");
   if (!release?.run?.includes("verify-release-artifact.mjs") || !release.run.includes("--github-output \"$GITHUB_OUTPUT\"") || release.run.includes("--expected-manifest-sha256")) fail("build側release asset検証が不正です");
   const uploads = build?.steps?.filter((step) => step.uses?.startsWith("actions/upload-artifact@")) ?? [];

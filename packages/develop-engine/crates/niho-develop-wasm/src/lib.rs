@@ -6,11 +6,18 @@
 //! to `{ width, height }`, an error message to a `JsError`. The Mac's
 //! native sidecar (`niho-develop-render serve`) wraps the same calls under
 //! the same names, so both answer alike.
-//! Everything runs single threaded (no SharedArrayBuffer, spec "段 2").
+//! The default build runs single threaded (no SharedArrayBuffer, spec "段 2").
+//! The `threads` build (#151, a cross-origin isolated page only) adds
+//! `initThreadPool(n)` and splits heavy stages on rayon's Web Workers.
 
 use js_sys::{Object, Reflect, Uint8ClampedArray};
 use niho_develop::{api, Rendered};
 use wasm_bindgen::prelude::*;
+
+/// `initThreadPool(n)` (`threads` build only): starts rayon's pool of `n`
+/// Web Workers on the shared memory. The Worker calls it once after `init`.
+#[cfg(all(feature = "threads", target_arch = "wasm32"))]
+pub use wasm_bindgen_rayon::init_thread_pool;
 
 fn js_error(message: String) -> JsError {
     JsError::new(&message)
