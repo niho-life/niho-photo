@@ -1,6 +1,7 @@
 import { DevelopEngineError, DevelopMaskSurfaceError, developEngineErrorOf } from "./develop-engine-errors";
 import { developEngineManifestPath } from "./develop-engine-manifest";
 import type {
+  DevelopEngineDeviceClass,
   DevelopEngineWorkerRequest,
   DevelopEngineWorkerResponse,
   DevelopMaskCapabilities,
@@ -34,7 +35,7 @@ import {
 import { readDevelopSettings, type DevelopSettings } from "./develop-settings";
 import { readDevelopUprightEstimate, type DevelopUprightEstimate, type DevelopUprightMode } from "./develop-upright";
 
-export type { DevelopMaskCapabilities } from "./develop-engine-worker-core";
+export type { DevelopEngineDeviceClass, DevelopMaskCapabilities } from "./develop-engine-worker-core";
 export type { DevelopMaskSurfaceSource } from "./develop-mask-surfaces";
 export { DevelopEngineError, DevelopMaskSurfaceError, type DevelopMaskSurfaceErrorCode } from "./develop-engine-errors";
 
@@ -355,6 +356,8 @@ export type DevelopEngine = {
 export type CreateDevelopEngineOptions = {
   createWorker?: () => Worker | null;
   manifestUrl?: string;
+  /** Worker の cache が使う論理メモリ予算。省略は従来互換の PC。 */
+  deviceClass?: DevelopEngineDeviceClass;
   /** camera だけが指定する native 優先。使えなければ Worker 内で同じ wasm manifest へ戻る。 */
   preferNative?: boolean;
   loadTimeoutMs?: number;
@@ -1045,6 +1048,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
         type: "init",
         id,
         manifestUrl,
+        deviceClass: options.deviceClass ?? "pc",
         ...(diagnostics ? { diagnostics: true } : {}),
         ...(options.preferNative === true ? { preferNative: true } : {}),
       });

@@ -140,6 +140,8 @@ function paintable(order: PaintOrder, sequence: number): boolean {
  */
 export function useBrowserPhotoOpen(params: {
   spotId: string;
+  /** Worker の論理メモリ予算。画面幅の class を呼び出し側が明示する。 */
+  deviceClass: "pc" | "mobile";
   canEdit: boolean;
   openCloudPhotoId: string | null;
   onOpenCloudPhotoHandled: () => void;
@@ -1483,6 +1485,7 @@ export function useBrowserPhotoOpen(params: {
           const canonicalEngine = createDevelopEngine({
             manifestUrl: library.engineAssets.manifestUrl() ?? undefined,
             preferNative: library.engineAssets.preferNative === true,
+            deviceClass: params.deviceClass,
             maskSurfaces: maskSurfaceSource,
           });
           const canonicalReady = await canonicalEngine.ready();
@@ -1569,6 +1572,7 @@ export function useBrowserPhotoOpen(params: {
       maskSurfaceSource,
       mountedRef,
       operationRef,
+      params.deviceClass,
       readyDevelopEngine,
       recordProxyReady,
       releaseOpened,
@@ -1620,6 +1624,7 @@ export function useBrowserPhotoOpen(params: {
       canonicalEngine = createDevelopEngine({
         manifestUrl: library.engineAssets.manifestUrl() ?? undefined,
         preferNative: library.engineAssets.preferNative === true,
+        deviceClass: params.deviceClass,
         maskSurfaces: maskSurfaceSource,
       });
       if (!(await canonicalEngine.ready()) || isStale()) {
@@ -1660,7 +1665,16 @@ export function useBrowserPhotoOpen(params: {
       if (loadAbortRef.current === abort) loadAbortRef.current = null;
       if (openingKeyRef.current === item.key) openingKeyRef.current = null;
     }
-  }, [edit.settingsRef, handoffCanonical, library, maskSurfacePhotoIdRef, maskSurfaceSource, operationRef, sourceContextFor]);
+  }, [
+    edit.settingsRef,
+    handoffCanonical,
+    library,
+    maskSurfacePhotoIdRef,
+    maskSurfaceSource,
+    operationRef,
+    params.deviceClass,
+    sourceContextFor,
+  ]);
 
   /** 開いている写真を、今の開き直しの経路で開き直す（入力を落とし直して、今の行の補正で開く）。 */
   const reopen = (key: string) => {

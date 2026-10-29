@@ -84,7 +84,15 @@ import { parseDevelopEngineManifest } from "./develop-engine-manifest";
  */
 
 export type DevelopEngineWorkerRequest =
-  | { type: "init"; id: number; manifestUrl: string; diagnostics?: boolean; preferNative?: boolean }
+  | {
+      type: "init";
+      id: number;
+      manifestUrl: string;
+      diagnostics?: boolean;
+      preferNative?: boolean;
+      /** 同じ論理メモリ予算の端末別 profile。省略は既存互換の PC。 */
+      deviceClass?: DevelopEngineDeviceClass;
+    }
   | { type: "open"; id: number; bytes: ArrayBuffer; workingMaxDimension: number }
   | { type: "render"; id: number; settingsJson: string; maxDimension: number; interactive: boolean }
   | { type: "sampleColor"; id: number; settingsJson: string; maxDimension: number; x: number; y: number }
@@ -266,6 +274,9 @@ export type DevelopEngineWorkerDeps = {
 
 export type DevelopEngineRuntime = "native" | "wasm";
 
+/** Worker が cache の論理メモリ予算を選ぶ端末 class。client が明示して init に渡す。 */
+export type DevelopEngineDeviceClass = "pc" | "mobile";
+
 export type DevelopEnginePerfRecord = {
   stage:
     | "manifestFetch"
@@ -341,6 +352,35 @@ const HELD_PHOTO_LIMIT = 2;
 const ANALYSIS_BYTES_ENTRY_LIMIT = 16 * 1024 * 1024;
 const ANALYSIS_BYTES_TOTAL_LIMIT = 32 * 1024 * 1024;
 const ANALYSIS_BYTES_COUNT_LIMIT = 4;
+
+/** この長辺を超える書き出しだけ、予約済みの一時 Developer を開く前に安価な cache を先に手放す。 */
+const LARGE_EXPORT_MAX_DIMENSION = 2048;
+
+/**
+ * #155 第2段階の部分実装として、Worker の cache が分け合う論理メモリ予算。unit は実測 RSS や Wasm linear memory の byte 数では
+ * なく、解放順を決めるための重み。物理メモリの hard limit、端末 RAM に応じた動的見積もり、プロセス RSS の減少保証ではない。
+ * Developer の中身は入力・engine・runtime で変わるため精密な byte 数とは扱わない。compact 解析だけは保持 byte 数を 4 MiB ごとに
+ * 1 unit として数える。Wasm memory の `byteLength` は allocator の高水位で、free 後にすぐ縮まらないため予算の現在量には使わない。
+ *
+ * PC 33 unit: active 8 + kept 8 + export reserve 8 + analysis 8 (32 MiB) + thumbnail 1。
+ * mobile 21 unit: active 8 + export reserve 8 + analysis 4 (16 MiB) + thumbnail 1。次の active を確保する前に kept を捨てる。
+ */
+const LOGICAL_MEMORY_UNIT_BYTES = 4 * 1024 * 1024;
+const DEVELOPER_MEMORY_UNITS = 8;
+const THUMBNAIL_MEMORY_UNITS = 1;
+const EXPORT_DEVELOPER_RESERVE_UNITS = DEVELOPER_MEMORY_UNITS;
+const LOGICAL_MEMORY_BUDGET: Readonly<Record<DevelopEngineDeviceClass, number>> = { pc: 33, mobile: 21 };
+
+/** wasm-bindgen / native が明示した allocation failure だけを 1 回再試行する。一般の RangeError や decode error は含めない。 */
+function isDevelopAllocationFailure(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  return (
+    error.name === "OutOfMemoryError" ||
+    /(?:out of memory|memory allocation(?: of \d+ bytes)? failed|failed to allocate|allocation failed|array buffer allocation failed|WebAssembly\.Memory(?:\.prototype)?\.grow)/i.test(
+      error.message,
+    )
+  );
+}
 
 /**
  * 解析を先に作る（#129）のは、通常の要求が来なくなってからこれだけたってから。この worker で作る 1 回は途中で止められない
@@ -875,6 +915,7 @@ export function createDevelopEngineWorkerHandler(
   let lens = false;
   let wasmMemory: () => ArrayBufferLike | null = () => null;
   let diagnostics = false;
+  let deviceClass: DevelopEngineDeviceClass = "pc";
   let unavailableReason: string | null = null;
   let developer: DevelopDeveloper | null = null;
   // 開いている写真の見本用の session（初めて見本を描くときに作る。写真を手放すと一緒に手放す）
@@ -910,6 +951,7 @@ export function createDevelopEngineWorkerHandler(
   let helperManifestUrl: string | null = null;
   let nextHelperJobId = 1;
   let handle: (message: DevelopEngineWorkerRequest) => Promise<void>;
+  let enforcingMemoryBudget = false;
 
   const analysisBytesId = (photoKey: string, analysisKey: string): string =>
     JSON.stringify([version, photoKey, analysisKey]);
@@ -936,6 +978,7 @@ export function createDevelopEngineWorkerHandler(
       if (oldest === undefined) break;
       dropCachedAnalysis(oldest);
     }
+    enforceMemoryBudget();
   };
 
   const cacheAnalysisFromDeveloper = (
@@ -1275,6 +1318,84 @@ export function createDevelopEngineWorkerHandler(
     freeQuietly(photo?.developer ?? null);
   };
 
+  const clearAnalysisBytes = () => {
+    analysisBytes.clear();
+    analysisBytesTotal = 0;
+  };
+
+  const logicalMemoryUnits = (additionalDeveloperUnits = 0): number =>
+    (developer ? DEVELOPER_MEMORY_UNITS : 0) +
+    kept.length * DEVELOPER_MEMORY_UNITS +
+    (thumbnailSession ? THUMBNAIL_MEMORY_UNITS : 0) +
+    Math.ceil(analysisBytesTotal / LOGICAL_MEMORY_UNIT_BYTES) +
+    // 大きい書き出しを始める前に cache を退避できるよう、一時 Developer 1 つ分は常に予約する。
+    EXPORT_DEVELOPER_RESERVE_UNITS +
+    additionalDeveloperUnits;
+
+  /** 安く作り直せる見本 → kept Developer → 高価な compact 解析の順で、現在表示中の Developer は守る。 */
+  function enforceMemoryBudget(additionalDeveloperUnits = 0): void {
+    if (enforcingMemoryBudget) return;
+    enforcingMemoryBudget = true;
+    try {
+      const budget = LOGICAL_MEMORY_BUDGET[deviceClass];
+      while (logicalMemoryUnits(additionalDeveloperUnits) > budget) {
+        if (thumbnailSession) {
+          releaseThumbnailSession();
+          continue;
+        }
+        if (kept.length > 0) {
+          // freeKept は保持している解析を compact bytes に移す。enforcingMemoryBudget の guard で再入を止め、この loop で再評価する。
+          freeKept(kept.shift());
+          continue;
+        }
+        const oldestAnalysis = analysisBytes.keys().next().value as string | undefined;
+        if (oldestAnalysis !== undefined) {
+          dropCachedAnalysis(oldestAnalysis);
+          continue;
+        }
+        // active Developer と export reserve は必須枠。推定 unit を hard allocation limit と誤用して現在表示を捨てない。
+        break;
+      }
+    } finally {
+      enforcingMemoryBudget = false;
+    }
+  }
+
+  /** allocation failure の再試行前に、現在表示に不要な保持物を全部手放す。 */
+  const releaseRecreatableMemory = () => {
+    dropAnalysisAhead();
+    releaseThumbnailSession();
+    try {
+      developer?.releaseAnalysisAhead?.();
+    } catch {
+      // 現在表示中の Developer 自体は守り、補助解析を外せなくても再試行は続ける。
+    }
+    if (developer) preparedAnalyses.delete(developer);
+    for (const photo of kept.splice(0)) freeKept(photo);
+    clearAnalysisBytes();
+  };
+
+  const retryAllocationOnce = <T>(allocate: () => T): T => {
+    try {
+      return allocate();
+    } catch (error) {
+      if (!isDevelopAllocationFailure(error)) throw error;
+      releaseRecreatableMemory();
+      return allocate();
+    }
+  };
+
+  /**
+   * 2048px 以下は export reserve の範囲として cache を保つ。超える場合だけ、安価な thumbnail と kept Developer を一時 Developer より
+   * 先に手放す。kept が持つ解析は compact bytes へ移し、共有予算を超えるか allocation failure が起こるまでは捨てない。
+   */
+  const prepareTemporaryExport = (maxDimension: number) => {
+    if (maxDimension <= LARGE_EXPORT_MAX_DIMENSION) return;
+    releaseThumbnailSession();
+    for (const photo of kept.splice(0)) freeKept(photo);
+    enforceMemoryBudget();
+  };
+
   /** 保っている写真を、開いている写真と合わせて `limit` 枚に収まるまで古いほうから手放す。 */
   const trimKept = (limit: number) => {
     while (kept.length > 0 && kept.length + (developer ? 1 : 0) > limit) freeKept(kept.shift());
@@ -1323,6 +1444,7 @@ export function createDevelopEngineWorkerHandler(
     currentAnalysisKey = null;
     currentAnalysisSettingsJson = null;
     trimKept(HELD_PHOTO_LIMIT);
+    enforceMemoryBudget();
   };
 
   /**
@@ -1478,8 +1600,11 @@ export function createDevelopEngineWorkerHandler(
     manifestUrl: string,
     enableDiagnostics: boolean,
     preferNative: boolean,
+    nextDeviceClass: DevelopEngineDeviceClass,
   ): Promise<void> => {
     diagnostics = enableDiagnostics;
+    deviceClass = nextDeviceClass;
+    enforceMemoryBudget();
     activeManifestUrl = manifestUrl;
     if (glue) {
       postReady(id);
@@ -1591,26 +1716,33 @@ export function createDevelopEngineWorkerHandler(
     settingsJson: string,
     maxDimension: number,
     surfaces: readonly DevelopMaskSurfacePng[] = [],
-  ): { width: number; height: number; rgba: ArrayBuffer } => {
-    const working = openWorkingCopy(png, metaJson);
-    try {
-      if (surfaces.length > 0) setExportSurfaces(working, surfaces);
-      const frame = readFrame(working.render(settingsJson, maxDimension, false));
-      return { width: frame.width, height: frame.height, rgba: transferableBuffer(frame.rgba, wasmMemory()) };
-    } finally {
+  ): { width: number; height: number; rgba: ArrayBuffer } =>
+    retryAllocationOnce(() => {
+      const working = openWorkingCopy(png, metaJson);
       try {
-        working.free();
-      } catch {
-        // 手放すときの失敗で、描いた結果を捨てない
+        if (surfaces.length > 0) setExportSurfaces(working, surfaces);
+        const frame = readFrame(working.render(settingsJson, maxDimension, false));
+        return { width: frame.width, height: frame.height, rgba: transferableBuffer(frame.rgba, wasmMemory()) };
+      } finally {
+        try {
+          working.free();
+        } catch {
+          // 手放すときの失敗で、描いた結果を捨てない
+        }
       }
-    }
-  };
+    });
 
   const processMessage = async (message: DevelopEngineWorkerRequest): Promise<void> => {
     const id = message.id;
     switch (message.type) {
         case "init":
-          await init(id, message.manifestUrl, message.diagnostics === true, message.preferNative === true);
+          await init(
+            id,
+            message.manifestUrl,
+            message.diagnostics === true,
+            message.preferNative === true,
+            message.deviceClass === "mobile" ? "mobile" : "pc",
+          );
           return;
         case "open": {
           dropAnalysisAhead();
@@ -1618,7 +1750,10 @@ export function createDevelopEngineWorkerHandler(
             const loaded = requireGlue();
             const key = await inputKey("open", message.bytes, String(message.workingMaxDimension));
             if (reuseDeveloper(key) && developer) return developer;
-            const next = new loaded.Developer(new Uint8Array(message.bytes), message.workingMaxDimension);
+            enforceMemoryBudget(DEVELOPER_MEMORY_UNITS);
+            const next = retryAllocationOnce(
+              () => new loaded.Developer(new Uint8Array(message.bytes), message.workingMaxDimension),
+            );
             adoptDeveloper(next, key);
             return next;
           });
@@ -1635,7 +1770,8 @@ export function createDevelopEngineWorkerHandler(
             requireGlue();
             const key = await inputKey("openWorkingCopy", message.png, message.metaJson);
             if (reuseDeveloper(key) && developer) return developer;
-            const next = openWorkingCopy(message.png, message.metaJson);
+            enforceMemoryBudget(DEVELOPER_MEMORY_UNITS);
+            const next = retryAllocationOnce(() => openWorkingCopy(message.png, message.metaJson));
             adoptDeveloper(next, key);
             return next;
           });
@@ -1749,6 +1885,7 @@ case "setMaskSurface": {
           deps.post({ type: "maskSurfaceEncoded", id, surfaceId, png }, [png]);          return;
         }
         case "exportJpeg": {
+          prepareTemporaryExport(message.maxDimension);
           const loaded = requireGlue();
           if (message.surfaces && message.surfaces.length > 0) {
             // 一発の書き出しは面を持たないので、同じ作業サイズの一時的な Developer に面を渡して描く（持っている写真は変えない）
@@ -1766,24 +1903,28 @@ case "setMaskSurface": {
               if (!isPositiveInteger(value)) throw new Error("develop engine returned an invalid decode size");
               decodeSize = value;
             }
-            const temporary = new loaded.Developer(input, decodeSize);
-            try {
-              setExportSurfaces(temporary, message.surfaces);
-              if (typeof temporary.exportJpeg !== "function") throw new Error("develop engine cannot export mask surfaces");
-              const jpeg = temporary.exportJpeg(message.settingsJson, message.maxDimension, message.quality);
-              if (!(jpeg instanceof Uint8Array) || jpeg.byteLength === 0) throw new Error("develop engine returned no JPEG");
-              const bytes = transferableBuffer(jpeg, wasmMemory());
-              deps.post({ type: "jpeg", id, bytes }, [bytes]);
-            } finally {
-              freeQuietly(temporary);
-            }
+            const bytes = retryAllocationOnce(() => {
+              const temporary = new loaded.Developer(input, decodeSize);
+              try {
+                setExportSurfaces(temporary, message.surfaces ?? []);
+                if (typeof temporary.exportJpeg !== "function") throw new Error("develop engine cannot export mask surfaces");
+                const jpeg = temporary.exportJpeg(message.settingsJson, message.maxDimension, message.quality);
+                if (!(jpeg instanceof Uint8Array) || jpeg.byteLength === 0) throw new Error("develop engine returned no JPEG");
+                return transferableBuffer(jpeg, wasmMemory());
+              } finally {
+                freeQuietly(temporary);
+              }
+            });
+            deps.post({ type: "jpeg", id, bytes }, [bytes]);
             return;
           }
-          const jpeg = loaded.exportJpeg(
-            new Uint8Array(message.bytes),
-            message.settingsJson,
-            message.maxDimension,
-            message.quality,
+          const jpeg = retryAllocationOnce(() =>
+            loaded.exportJpeg(
+              new Uint8Array(message.bytes),
+              message.settingsJson,
+              message.maxDimension,
+              message.quality,
+            ),
           );
           if (!(jpeg instanceof Uint8Array) || jpeg.byteLength === 0) throw new Error("develop engine returned no JPEG");
           const bytes = transferableBuffer(jpeg, wasmMemory());
@@ -1791,6 +1932,7 @@ case "setMaskSurface": {
           return;
         }
         case "exportWorkingCopyJpeg": {
+          prepareTemporaryExport(message.maxDimension);
           const { width, height, rgba } = renderWorkingCopyOnce(
             message.png,
             message.metaJson,
@@ -1902,7 +2044,11 @@ case "setMaskSurface": {
             if (!opened || typeof opened.thumbnail !== "function") throw new Error("no photo is open");
             if (!thumbnailSession) {
               const makeThumbnail = opened.thumbnail.bind(opened);
-              thumbnailSession = measure("thumbnailSession", () => makeThumbnail(PRESET_THUMBNAIL_SESSION_MAX_DIMENSION));
+              enforceMemoryBudget(THUMBNAIL_MEMORY_UNITS);
+              thumbnailSession = measure("thumbnailSession", () =>
+                retryAllocationOnce(() => makeThumbnail(PRESET_THUMBNAIL_SESSION_MAX_DIMENSION)),
+              );
+              enforceMemoryBudget();
             }
             // 見本の session は面を持たずに始まる: 開いている写真に渡した面をそろえる（面のマスクも見本に描く）
             syncThumbnailSurfaces(thumbnailSession);

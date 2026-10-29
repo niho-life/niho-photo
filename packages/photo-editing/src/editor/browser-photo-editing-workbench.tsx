@@ -448,6 +448,7 @@ export function BrowserPhotoEditingWorkbench(props: {
   const mobileEditingAllowed = props.mobileEditingAllowed === true;
   const editingAllowed = wide || mobileEditingAllowed;
   const mobileEditing = !wide && mobileEditingAllowed;
+  const developDeviceClass = host.isNativeViewport() ? "mobile" : host.isDesktopApp() || wide ? "pc" : "mobile";
   // 1 枚を全画面の編集の層で出す（設定サブタブで面を隠している間は、層も出さない。層は document.body に出るので一緒には隠れない）
   const mobileLayer = mobileEditing && props.active;
   const rootRef = useRef<HTMLElement | null>(null);
@@ -471,6 +472,7 @@ export function BrowserPhotoEditingWorkbench(props: {
 
   const develop = useBrowserPhotoDevelop({
     spotId: props.spotId,
+    deviceClass: developDeviceClass,
     actorId: props.actorId ?? null,
     queryClient,
     mountedRef,
@@ -514,6 +516,7 @@ export function BrowserPhotoEditingWorkbench(props: {
   }, [props.articlePrepareForInsert]);
   const open = useBrowserPhotoOpen({
     spotId: props.spotId,
+    deviceClass: developDeviceClass,
     canEdit: props.canEdit,
     openCloudPhotoId: props.openCloudPhotoId,
     onOpenCloudPhotoHandled: props.onOpenCloudPhotoHandled,
@@ -692,6 +695,7 @@ export function BrowserPhotoEditingWorkbench(props: {
     !host.isDesktopApp() && !host.isNativeViewport();
   const bulk = useBrowserPhotoBulk({
     spotId: props.spotId,
+    deviceClass: developDeviceClass,
     canEdit: props.canEdit,
     wide,
     browserRuntime: browserBulkRuntime,
