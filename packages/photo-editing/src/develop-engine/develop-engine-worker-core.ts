@@ -71,6 +71,10 @@ import { parseDevelopEngineManifest } from "./develop-engine-manifest";
  *   面を持たずに始まる）。`dropMaskSurface` は両方から手放す。写真を手放すと面も手放す。`encodeMaskSurface` は面の値（`width·height`
  *   byte）を 8bit グレーの PNG と id（sha256）にする。`exportJpeg` / `exportWorkingCopyJpeg` に `surfaces` が付いていれば、
  *   一時的な `Developer`（JPEG / PNG は一発の書き出しと同じ作業サイズ）に面を渡して描く（一発の描画は面を持たない）
+ * - 空の検出（niho-photo#141。`docs/local-adjustments.md`「空の検出」）: `detectSky` は開いている写真の
+ *   `Developer.detectSky(settingsJson, ev100)` で作業画像の空の面を作り、面の PNG（transfer）・id（`maskSurfaceId`）・寸法を返す
+ *   （空が無ければ `surface: null`）。描画と同じ列で順に処理する単発の問い合わせ（`estimateUpright` と同じ）。`Developer` に口があり
+ *   面を受け渡せて `sky` を描けるときだけ `ready` に `skyDetection: true` を付け、無い glue・写真を開いていなければ error
  */
 
 export type DevelopEngineWorkerRequest =
@@ -81,6 +85,8 @@ export type DevelopEngineWorkerRequest =
   | { type: "maskPlane"; id: number; settingsJson: string; maskId: string; maxDimension: number }
 /** Upright の推定（`mode`: 1 自動・2 水平・3 垂直・4 フル） */
   | { type: "estimateUpright"; id: number; settingsJson: string; mode: number }
+  /** 空の検出（`ev100` は撮影時の露出〔ISO 100 の EV〕。分からなければ null） */
+  | { type: "detectSky"; id: number; settingsJson: string; ev100: number | null }
 /** 開いている写真の `Developer` へ面を渡す（`png` は transfer） */
   | { type: "setMaskSurface"; id: number; surfaceId: string; png: ArrayBuffer }
   | { type: "dropMaskSurface"; id: number; surfaceId: string }
@@ -163,6 +169,8 @@ export type DevelopEngineWorkerFeatures = {
   perspective?: true;
   /** `Developer.estimateUpright`（Upright。niho-photo#46 後半）があり、遠近も描ける */
   upright?: true;
+  /** `Developer.detectSky`（空の検出。niho-photo#141）があり、面を受け渡せて `sky` を描ける */
+  skyDetection?: true;
   /** wasm が修復の印のある設定（`v: 8` の `heal`。niho-photo#44）を読める。 */
   heal?: true;
   /** wasm がレンズ補正のある設定（`v: 9` の `lens`。niho-photo#45）を読める。 */
@@ -196,6 +204,9 @@ export type DevelopMaskCapabilities = {
 /** 書き出しに添える 1 枚の面（id と PNG）。 */
 export type DevelopMaskSurfacePng = { id: string; png: ArrayBuffer };
 
+/** `detectSky` が作った空の面（`png` は 8bit グレーの面の PNG、`surfaceId` はその sha256、寸法は作業画像の枠の面の大きさ）。 */
+export type DevelopDetectedSkySurface = { surfaceId: string; width: number; height: number; png: ArrayBuffer };
+
 export type DevelopEngineWorkerResponse =
   | { type: "perf"; id: 0; record: DevelopEnginePerfRecord }
   | ({ type: "ready"; id: number; version: string } & DevelopEngineWorkerFeatures)
@@ -221,6 +232,8 @@ export type DevelopEngineWorkerResponse =
   | { type: "maskPlane"; id: number; width: number; height: number; data: ArrayBuffer }
 /** `estimateUpright` の結果（JSON のまま） */
   | { type: "upright"; id: number; resultJson: string }
+  /** `detectSky` の面（PNG と id〔sha256〕と寸法。空が無ければ null） */
+  | { type: "skyDetected"; id: number; surface: DevelopDetectedSkySurface | null }
 | { type: "maskSurfaceSet"; id: number }
   | { type: "maskSurfaceDropped"; id: number; dropped: boolean }
   /** `encodeMaskSurface` の PNG と id（sha256） */
@@ -282,6 +295,8 @@ type DevelopDeveloper = {
   maskPlane?: (settingsJson: string, maskId: string, maxDimension: number) => unknown;
   /** Upright: 今の設定の枠で推定した遠近の JSON（crate 0.23.0 から。無い glue もある） */
   estimateUpright?: (settingsJson: string, mode: number) => unknown;
+  /** 空の面 `{ width, height, png }`（空が無ければ null。niho-photo#141 の glue から。無い glue もある） */
+  detectSky?: (settingsJson: string, ev100?: number) => unknown;
   /** H/S の解析だけを先に作る（描かない。画素は同じ。#129 の glue から。無い glue もある） */
   prepareAnalysis?: (settingsJson: string) => unknown;
   /** 先に作った別の設定の解析を手放す（保つ写真のメモリを減らす。画素は同じ。#129 の glue から） */
@@ -367,6 +382,8 @@ type DevelopGlue = {
   maskPlane: boolean;
   /** `Developer.prototype.estimateUpright` がある（無い glue では Upright のボタンを出さない） */
   upright: boolean;
+  /** `Developer.prototype.detectSky` がある（無い glue では「空」を wasm で探せない） */
+  skyDetection: boolean;
 /** `encodeMaskSurface(width, height, data)`（面の PNG。無い glue では面を作れない） */
   encodeMaskSurface: ((width: number, height: number, data: Uint8Array) => unknown) | null;
   /** `maskSurfaceId(png)`（面の id = sha256） */
@@ -435,6 +452,8 @@ function readGlue(module: unknown): DevelopGlue | null {
 const estimateUpright: unknown = isRecord(developerPrototype)
     ? Reflect.get(developerPrototype, "estimateUpright")
     : undefined;
+  // 空の検出の口（無い glue でも、面は受け渡せる）
+  const detectSky: unknown = isRecord(developerPrototype) ? Reflect.get(developerPrototype, "detectSky") : undefined;
 // 面の受け渡しの口（無い glue でも、線形・円形は描ける）
   const { encodeMaskSurface, maskSurfaceId } = module;
   const surfaceMethods = ["setMaskSurface", "dropMaskSurface", "exportJpeg"].every(
@@ -474,6 +493,7 @@ const estimateUpright: unknown = isRecord(developerPrototype)
     capabilities: typeof capabilities === "function" ? (capabilities as () => unknown) : null,
     maskPlane: typeof maskPlane === "function",
     upright: typeof estimateUpright === "function",
+    skyDetection: typeof detectSky === "function",
 encodeMaskSurface: typeof encodeMaskSurface === "function" ? (encodeMaskSurface as DevelopGlue["encodeMaskSurface"]) : null,
     maskSurfaceId: typeof maskSurfaceId === "function" ? (maskSurfaceId as DevelopGlue["maskSurfaceId"]) : null,
     surfaces: surfaceMethods,  };
@@ -722,6 +742,17 @@ function readMaskPlane(value: unknown): { width: number; height: number; data: U
   return { width, height, data };
 }
 
+/** `Developer.detectSky` の答えを読む（null・undefined は空が無い。形が違えば throw）。 */
+function readDetectedSky(value: unknown): { width: number; height: number; png: Uint8Array } | null {
+  if (value === null || value === undefined) return null;
+  if (!isRecord(value)) throw new Error("develop engine returned an invalid sky surface");
+  const { width, height, png } = value;
+  if (!isPositiveInteger(width) || !isPositiveInteger(height) || !(png instanceof Uint8Array) || png.byteLength === 0) {
+    throw new Error("develop engine returned an invalid sky surface");
+  }
+  return { width, height, png };
+}
+
 /** glue が返した `{ width, height }`（正の整数）を読む。 */
 function readSize(value: unknown): { width: number; height: number } {
   if (!isRecord(value)) throw new Error("develop engine returned no size");
@@ -795,6 +826,8 @@ export function createDevelopEngineWorkerHandler(
   let masks: DevelopMaskCapabilities | null = null;
   let perspective = false;
   let upright = false;
+  // 起こした wasm が空を探せるか（`Developer.detectSky` があり、面を受け渡せて `sky` を描ける）
+  let skyDetection = false;
   let heal = false;
   let lens = false;
   let wasmMemory: () => ArrayBufferLike | null = () => null;
@@ -1095,6 +1128,7 @@ export function createDevelopEngineWorkerHandler(
       ...(masks ? { masks: { ...masks, kinds: [...masks.kinds] } } : {}),
       ...(perspective ? { perspective: true as const } : {}),
       ...(upright ? { upright: true as const } : {}),
+      ...(skyDetection ? { skyDetection: true as const } : {}),
       ...(heal ? { heal: true as const } : {}),
       ...(lens ? { lens: true as const } : {}),
     });
@@ -1136,6 +1170,7 @@ export function createDevelopEngineWorkerHandler(
       masks = readMaskCapabilities(loaded);
       perspective = loaded.geometry !== null && acceptsPerspectiveSettings(loaded.validateSettings);
       upright = perspective && loaded.upright;
+      skyDetection = loaded.skyDetection && masks?.surfaces === true && masks.kinds.includes("sky");
       heal = acceptsHealSettings(loaded.validateSettings);
       lens = acceptsLensSettings(loaded.validateSettings);
       postReady(id);
@@ -1282,6 +1317,27 @@ export function createDevelopEngineWorkerHandler(
           const resultJson = opened.estimateUpright(message.settingsJson, message.mode);
           if (typeof resultJson !== "string") throw new Error("develop engine returned no upright estimate");
           deps.post({ type: "upright", id, resultJson });
+          return;
+        }
+        case "detectSky": {
+          const loaded = requireGlue();
+          const opened = developer;
+          if (!opened) throw new Error("no photo is open");
+          if (!skyDetection || typeof opened.detectSky !== "function" || !loaded.maskSurfaceId) {
+            throw new Error("develop engine cannot detect the sky");
+          }
+          // wasm-bindgen の Option<f64> は undefined を None に読む
+          const found = readDetectedSky(opened.detectSky(message.settingsJson, message.ev100 ?? undefined));
+          if (!found) {
+            deps.post({ type: "skyDetected", id, surface: null });
+            return;
+          }
+          const surfaceId = loaded.maskSurfaceId(found.png);
+          if (typeof surfaceId !== "string" || !/^[0-9a-f]{64}$/.test(surfaceId)) {
+            throw new Error("develop engine returned an invalid mask surface id");
+          }
+          const png = transferableBuffer(found.png, wasmMemory());
+          deps.post({ type: "skyDetected", id, surface: { surfaceId, width: found.width, height: found.height, png } }, [png]);
           return;
         }
 case "setMaskSurface": {

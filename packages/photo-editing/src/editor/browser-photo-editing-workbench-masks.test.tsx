@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
  * - スマホの幅で直せる拠点（`mobileEditingAllowed`）: 全画面の編集の層の道具の帯の「マスク」。押すと段にマスクの道具を出し、写真の
  *   上にマスクの操作を重ねる
  * - スマホの幅で直せない拠点: 出さない
+ * - 空（niho-photo#141）: 面を保存できる出どころで wasm が空を探せれば「空」を出し、写真の情報の露出で探して足す
  */
 
 const mocks = vi.hoisted(() => ({
@@ -401,5 +402,48 @@ describe("マスクの道具を出す幅（niho-photo#93）", () => {
     expect(Array.from(document.body.querySelectorAll("button")).some((button) => button.getAttribute("aria-label") === "マスク")).toBe(
       false,
     );
+  });
+});
+
+describe("空のマスク（niho-photo#141）", () => {
+  const SKY_ID = "c".repeat(64);
+
+  it("面を保存できる出どころで wasm が空を探せれば「空」を出し、押すと撮影時の露出で探して保存し、足す", async () => {
+    const png = new Uint8Array([0x89, 1, 2]);
+    const detectSky = vi.fn(async (_settings: object, _ev100: number | null) => ({ id: SKY_ID, width: 1024, height: 683, png }));
+    mocks.createEngine.mockImplementation(() => ({
+      ...createEngine({ heal: false, masks: true }),
+      supportsMasks: vi.fn(async () => ({
+        kinds: ["linear", "radial", "brush", "subject", "sky"],
+        max: 8,
+        maskPlane: true,
+        surfaces: true,
+      })),
+      supportsSkyDetection: () => true,
+      detectSky,
+    }));
+    const { library } = fakeLibrary();
+    const capabilities: PhotoLibraryCapabilities = { ...CAPABILITIES, maskSurfaces: true, info: true };
+    const saveMaskSurface = vi.fn(async (_photoId: string, _png: Uint8Array) => ({ id: SKY_ID, width: 1024, height: 683 }));
+    const info = vi.fn(async () => ({ fNumber: 8, exposureTimeSeconds: 1 / 250, iso: 200 }));
+    Object.assign(library, {
+      initialCapabilities: capabilities,
+      capabilities: vi.fn(async () => capabilities),
+      saveMaskSurface,
+      info,
+    });
+    await render(library);
+    await openPhoto();
+    await click(byLabel("マスク", rail()));
+    const sky = buttonByText("空");
+    expect(sky).toBeDefined();
+    await click(sky);
+    expect(info).toHaveBeenCalledWith("p1", expect.objectContaining({ signal: expect.anything() }));
+    expect(detectSky).toHaveBeenCalledOnce();
+    // f/8・1/250 秒・ISO 200: log2(64 × 250) − log2(2)
+    expect(detectSky.mock.calls[0]![1]).toBeCloseTo(Math.log2(16_000) - 1, 9);
+    expect(saveMaskSurface).toHaveBeenCalledWith("p1", png);
+    // 足したマスクを選んでいる
+    expect(byLabel("空 1 を選ぶ")?.getAttribute("aria-pressed")).toBe("true");
   });
 });

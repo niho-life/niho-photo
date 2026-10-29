@@ -26,6 +26,9 @@
 //! none and fail on an active surface mask with `maskSurfaceMissing`).
 //! `developer.estimateUpright(settingsJson,
 //! mode)` estimates Upright (the perspective that stands its lines upright).
+//! `developer.detectSky(settingsJson, ev100?)` finds the photo's sky and
+//! gives it as a mask surface PNG (niho-photo#141; `capabilities()`
+//! `masks.skyDetection`).
 //! Heal marks (`developSettings.heal`, v 8) render through `render` and
 //! `developer.render` like any other setting; the Developer keeps their plans
 //! across frames. The lens corrections (`developSettings.lens`, v 9) do too;
@@ -111,14 +114,16 @@ pub fn version() -> String {
 
 /// What this build draws beyond what `validateSettings` reads, as JSON:
 /// `{"masks":{"kinds":["linear","radial","brush","subject","sky"],"max":8,
-/// "maskPlane":true,"surfaces":true}}` — local masks of those kinds render
-/// (at most `max` of them), `Developer.maskPlane` exists, and `surfaces`:
-/// a Developer holds the surfaces of `brush` / `subject` / `sky` masks
-/// (`Developer.setMaskSurface` / `dropMaskSurface`, `Developer.exportJpeg`
-/// / `exportPng`, `encodeMaskSurface`, `maskSurfaceId`); a surface mask
-/// whose surface is not set fails with `maskSurfaceMissing`. A build
-/// without `surfaces` (M2) draws only `linear` and `radial`; a build
-/// without this export draws no masks (it may still validate them).
+/// "maskPlane":true,"surfaces":true,"skyDetection":true}}` — local masks of
+/// those kinds render (at most `max` of them), `Developer.maskPlane`
+/// exists, and `surfaces`: a Developer holds the surfaces of `brush` /
+/// `subject` / `sky` masks (`Developer.setMaskSurface` / `dropMaskSurface`,
+/// `Developer.exportJpeg` / `exportPng`, `encodeMaskSurface`,
+/// `maskSurfaceId`); a surface mask whose surface is not set fails with
+/// `maskSurfaceMissing`. `skyDetection`: `Developer.detectSky` makes a
+/// `sky` mask's surface from the photo (niho-photo#141). A build without
+/// `surfaces` (M2) draws only `linear` and `radial`; a build without this
+/// export draws no masks (it may still validate them).
 #[wasm_bindgen]
 pub fn capabilities() -> String {
     serde_json::json!({
@@ -127,9 +132,36 @@ pub fn capabilities() -> String {
             "max": niho_develop::settings::MAX_LOCAL_MASKS,
             "maskPlane": true,
             "surfaces": true,
+            "skyDetection": true,
         }
     })
     .to_string()
+}
+
+/// Long side of the working image `Developer.detectSky` finds the sky on,
+/// and of the surface it makes (a smaller photo keeps its size).
+const SKY_SURFACE_LONG_EDGE: usize = 1024;
+
+/// The settings a working image renders with, the frame mask surfaces are
+/// made on: `"v": 1` with only these settings' `engine`, `look` and `base`
+/// (no adjustments, geometry, lens corrections, heal marks or masks; as the
+/// Mac's `mask_detection::working_image_settings`). Settings without an
+/// `engine` are an error.
+fn working_image_settings(settings_json: &str) -> Result<DevelopSettings, String> {
+    use serde_json::Value;
+    let given: Value = serde_json::from_str(settings_json).map_err(|e| e.to_string())?;
+    let engine = given
+        .get("engine")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "settings have no engine".to_string())?;
+    let mut settings = serde_json::json!({ "v": 1, "engine": engine });
+    if let Some(look) = given.get("look").and_then(Value::as_str) {
+        settings["look"] = serde_json::json!(look);
+    }
+    if let Some(base) = given.get("base") {
+        settings["base"] = base.clone();
+    }
+    niho_develop::parse_settings(&settings.to_string()).map_err(|e| e.to_string())
 }
 
 /// The id of a mask surface PNG: the sha256 of its bytes (64 lowercase hex
@@ -305,7 +337,7 @@ mod tests {
             value,
             serde_json::json!({"masks": {
                 "kinds": ["linear", "radial", "brush", "subject", "sky"],
-                "max": 8, "maskPlane": true, "surfaces": true
+                "max": 8, "maskPlane": true, "surfaces": true, "skyDetection": true
             }})
         );
     }
@@ -348,6 +380,68 @@ mod tests {
         );
         assert!(developer.drop_mask_surface(&id));
         assert!(!developer.drop_mask_surface(&id));
+    }
+
+    /// A small integer hash (the ground's texture).
+    fn hash(x: usize, y: usize) -> u32 {
+        let mut h = (x as u32).wrapping_mul(0x9e37_79b1) ^ (y as u32).wrapping_mul(0x85eb_ca77);
+        h ^= h >> 15;
+        h = h.wrapping_mul(0xc2b2_ae3d);
+        h ^ (h >> 13)
+    }
+
+    /// A PNG photo: the top half a smooth blue sky (brighter at the top),
+    /// the bottom half textured ground.
+    fn sky_photo(w: usize, h: usize) -> Vec<u8> {
+        let rgba: Vec<u8> = (0..w * h)
+            .flat_map(|i| {
+                let (x, y) = (i % w, i / w);
+                if y < h / 2 {
+                    let t = y as f64 / (h / 2 - 1) as f64;
+                    let at = |top: f64, horizon: f64| (top + (horizon - top) * t).round() as u8;
+                    [at(150.0, 60.0), at(190.0, 120.0), at(245.0, 210.0), 255]
+                } else {
+                    let n = (hash(x, y) % 70) as u8;
+                    [60 + n, 55 + n / 2 + n / 4, 30 + n / 3, 255]
+                }
+            })
+            .collect();
+        niho_develop::encode::encode_png(&rgba, w, h).unwrap()
+    }
+
+    /// "空" (niho-photo#141): `detectSky` finds the sky on the working image
+    /// (the settings' adjustments and geometry are not drawn) and gives a
+    /// surface PNG of its size; a flat wall lit indoors has none.
+    #[test]
+    fn detect_sky_makes_a_surface_of_the_working_image() {
+        let (w, h) = (192usize, 128usize);
+        let mut developer = Developer::new(&sky_photo(w, h), 0).unwrap();
+        // Turned and darkened: neither reaches the working image.
+        let settings = r#"{"v":2,"engine":"niho-10","look":"niho-standard-1","base":null,"exposure":-4,"geometry":{"rotate":90}}"#;
+        let found = developer.sky_surface(settings, Some(14.0)).unwrap();
+        let (width, height, png) = found.expect("sky");
+        assert_eq!((width, height), (w as u32, h as u32));
+        let id = niho_develop::mask_surface::surface_id(&png);
+        let surface = niho_develop::mask_surface::load_surface(&id, &png).unwrap();
+        assert_eq!((surface.width(), surface.height()), (width, height));
+        let mean = |rows: std::ops::Range<usize>| {
+            let values = &surface.data()[rows.start * w..rows.end * w];
+            values.iter().map(|&v| v as f64).sum::<f64>() / values.len() as f64
+        };
+        let (top, bottom) = (mean(0..40), mean(88..128));
+        assert!(top > 180.0, "top {top}");
+        assert!(bottom < 50.0, "bottom {bottom}");
+        // The same photo and settings give the same surface.
+        let again = developer.sky_surface(settings, Some(14.0)).unwrap();
+        assert_eq!(again, Some((width, height, png)));
+        // Settings without an engine are an error.
+        assert!(developer.sky_surface(r#"{"v":1}"#, None).is_err());
+
+        let wall: Vec<u8> = (0..w * h).flat_map(|_| [190, 186, 178, 255]).collect();
+        let wall = niho_develop::encode::encode_png(&wall, w, h).unwrap();
+        let mut indoors = Developer::new(&wall, 0).unwrap();
+        let plain = r#"{"v":5,"engine":"niho-10","look":"niho-standard-1","base":null}"#;
+        assert_eq!(indoors.sky_surface(plain, Some(8.0)).unwrap(), None);
     }
 
     #[test]
@@ -755,5 +849,69 @@ impl Developer {
             .estimate_upright(&settings, mode)
             .to_value()
             .to_string())
+    }
+
+    /// "空" (niho-photo#141, `docs/local-adjustments.md` "空の検出"): this
+    /// photo's sky as a `sky` mask's surface. Found
+    /// ([`niho_develop::sky::estimate_sky`]) on the working image: the frame
+    /// mask coordinates live in (no geometry, no masks), rendered released
+    /// with only these settings' `engine`, `look` and `base` at a long side
+    /// of 1024 (a smaller photo keeps its size). `ev100` is the capture's
+    /// exposure at ISO 100 (`log2(N^2 / t) - log2(ISO / 100)`), omitted when
+    /// unknown (brightness is then relative to the photo). Returns `null`
+    /// without sky, else `{ width, height, png }`: `png` (`Uint8Array`) is
+    /// the surface PNG as `encodeMaskSurface` makes it (`maskSurfaceId`
+    /// names it), `width` / `height` its size (the working image's).
+    /// Settings without an `engine` fail. The render touches the drag
+    /// frames' kept state like any other render (the next frame of the
+    /// photo's own settings renders afresh).
+    #[wasm_bindgen(js_name = detectSky)]
+    pub fn detect_sky(
+        &mut self,
+        settings_json: &str,
+        ev100: Option<f64>,
+    ) -> Result<JsValue, JsError> {
+        let found = self.sky_surface(settings_json, ev100).map_err(js_error)?;
+        let Some((width, height, png)) = found else {
+            return Ok(JsValue::NULL);
+        };
+        let o = size_object(width as usize, height as usize)?;
+        Reflect::set(
+            &o,
+            &JsValue::from_str("png"),
+            &js_sys::Uint8Array::from(&png[..]).into(),
+        )
+        .map_err(|_| JsError::new("set"))?;
+        Ok(o.into())
+    }
+}
+
+impl Developer {
+    /// `detectSky` as Rust values: the surface's `(width, height, png)`, or
+    /// `None` without sky.
+    fn sky_surface(
+        &mut self,
+        settings_json: &str,
+        ev100: Option<f64>,
+    ) -> Result<Option<(u32, u32, Vec<u8>)>, String> {
+        let settings = working_image_settings(settings_json)?;
+        let frame = self
+            .session
+            .render(&settings, SKY_SURFACE_LONG_EDGE, Quality::Final)
+            .map_err(|e| e.to_string())?;
+        let rgb: Vec<u8> = frame
+            .rgba
+            .chunks_exact(4)
+            .flat_map(|p| [p[0], p[1], p[2]])
+            .collect();
+        let sky = niho_develop::sky::estimate_sky(&rgb, frame.width, frame.height, ev100);
+        let Some(sky) = sky else {
+            return Ok(None);
+        };
+        let (width, height) = (sky.width, sky.height);
+        let surface = niho_develop::mask_surface::MaskSurface::new(width, height, sky.data)
+            .map_err(|e| e.to_string())?;
+        let png = niho_develop::mask_surface::encode_surface_png(&surface)?;
+        Ok(Some((width, height, png)))
     }
 }
