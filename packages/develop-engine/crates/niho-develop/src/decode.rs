@@ -18,9 +18,39 @@ use serde_json::Value;
 use std::fmt;
 use std::io::Cursor;
 
-/// Match the supported direct-photo pixel bound used by the browser renderer.
-const MAX_DECODE_IMAGE_PIXELS: u64 = 40_000_000;
+/// Match the supported direct-photo pixel bound used by the browser renderer
+/// ([`DecodeLimits::BROWSER`]).
+pub const MAX_DECODE_IMAGE_PIXELS: u64 = 40_000_000;
 const MAX_DECODE_ALLOCATION_BYTES: u64 = 512 * 1024 * 1024;
+/// The native full-size export's bound ([`DecodeLimits::NATIVE`], 100 MP:
+/// 45 MP and 61 MP sensors with room; niho-photo#132). The native renderer
+/// reports it (`niho-develop-render capabilities`).
+pub const MAX_NATIVE_DECODE_IMAGE_PIXELS: u64 = 100_000_000;
+/// A 16-bit RGBA PNG of [`MAX_NATIVE_DECODE_IMAGE_PIXELS`] (800 MB) with room.
+const MAX_NATIVE_DECODE_ALLOCATION_BYTES: u64 = 1024 * 1024 * 1024;
+
+/// How large a source (JPEG / PNG original, working copy) a decode accepts,
+/// read from the header before a decoder allocates pixels.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct DecodeLimits {
+    /// Most pixels (width x height) of the source.
+    pub max_pixels: u64,
+    /// Most bytes one decoder may allocate.
+    pub max_alloc_bytes: u64,
+}
+
+impl DecodeLimits {
+    /// The browser's wasm and every caller that does not choose (40 MP).
+    pub const BROWSER: Self = Self {
+        max_pixels: MAX_DECODE_IMAGE_PIXELS,
+        max_alloc_bytes: MAX_DECODE_ALLOCATION_BYTES,
+    };
+    /// The native full-size export (`niho-develop-render`, 100 MP).
+    pub const NATIVE: Self = Self {
+        max_pixels: MAX_NATIVE_DECODE_IMAGE_PIXELS,
+        max_alloc_bytes: MAX_NATIVE_DECODE_ALLOCATION_BYTES,
+    };
+}
 
 /// Working-copy encoding (spec: 16-bit PNG, gamma 1.8, ceiling 2.0).
 pub const WORKING_COPY_GAMMA: f64 = 1.8;
@@ -90,19 +120,23 @@ impl fmt::Display for DecodeError {
 impl std::error::Error for DecodeError {}
 
 /// Reject oversized images from header dimensions before a decoder can allocate pixels.
-fn set_decode_limits(decoder: &mut impl ImageDecoder) -> Result<(), DecodeError> {
+fn set_decode_limits(
+    decoder: &mut impl ImageDecoder,
+    bounds: DecodeLimits,
+) -> Result<(), DecodeError> {
     let (width, height) = decoder.dimensions();
     let pixel_count = u64::from(width) * u64::from(height);
-    if width == 0 || height == 0 || pixel_count > MAX_DECODE_IMAGE_PIXELS {
+    if width == 0 || height == 0 || pixel_count > bounds.max_pixels {
         return Err(DecodeError::DecodeFailed(format!(
-            "image exceeds decode limit (maximum {MAX_DECODE_IMAGE_PIXELS} pixels)"
+            "image exceeds decode limit (maximum {} pixels)",
+            bounds.max_pixels
         )));
     }
 
     let mut limits = image::Limits::default();
-    limits.max_image_width = Some(MAX_DECODE_IMAGE_PIXELS as u32);
-    limits.max_image_height = Some(MAX_DECODE_IMAGE_PIXELS as u32);
-    limits.max_alloc = Some(MAX_DECODE_ALLOCATION_BYTES);
+    limits.max_image_width = Some(bounds.max_pixels as u32);
+    limits.max_image_height = Some(bounds.max_pixels as u32);
+    limits.max_alloc = Some(bounds.max_alloc_bytes);
     decoder
         .set_limits(limits)
         .map_err(|e| DecodeError::DecodeFailed(e.to_string()))
@@ -329,6 +363,17 @@ pub fn decode_raster(
     max_dimension: usize,
     filter: Filter,
 ) -> Result<Raster, DecodeError> {
+    decode_raster_with_limits(bytes, max_dimension, filter, DecodeLimits::BROWSER)
+}
+
+/// [`decode_raster`] with the source bound `limits` (the native full-size
+/// export reads up to [`DecodeLimits::NATIVE`]).
+pub fn decode_raster_with_limits(
+    bytes: &[u8],
+    max_dimension: usize,
+    filter: Filter,
+    limits: DecodeLimits,
+) -> Result<Raster, DecodeError> {
     let format =
         image::guess_format(bytes).map_err(|e| DecodeError::DecodeFailed(e.to_string()))?;
     let mut jpeg_size = (0, 0);
@@ -336,14 +381,14 @@ pub fn decode_raster(
         ImageFormat::Jpeg => {
             let mut decoder = image::codecs::jpeg::JpegDecoder::new(Cursor::new(bytes))
                 .map_err(|e| DecodeError::DecodeFailed(e.to_string()))?;
-            set_decode_limits(&mut decoder)?;
+            set_decode_limits(&mut decoder, limits)?;
             let icc = decoder.icc_profile().ok().flatten();
             let orientation = decoder
                 .orientation()
                 .unwrap_or(image::metadata::Orientation::NoTransforms);
             let (width, height) = decoder.dimensions();
             jpeg_size = (width as usize, height as usize);
-            let img = match scaled_jpeg(bytes, width, height, max_dimension) {
+            let img = match scaled_jpeg(bytes, width, height, max_dimension, limits) {
                 Some(img) => img,
                 None => DynamicImage::from_decoder(decoder)
                     .map_err(|e| DecodeError::DecodeFailed(e.to_string()))?,
@@ -353,7 +398,7 @@ pub fn decode_raster(
         ImageFormat::Png => {
             let mut decoder = image::codecs::png::PngDecoder::new(Cursor::new(bytes))
                 .map_err(|e| DecodeError::DecodeFailed(e.to_string()))?;
-            set_decode_limits(&mut decoder)?;
+            set_decode_limits(&mut decoder, limits)?;
             let icc = decoder.icc_profile().ok().flatten();
             let orientation = decoder
                 .orientation()
@@ -500,6 +545,7 @@ fn scaled_jpeg(
     width: u32,
     height: u32,
     max_dimension: usize,
+    limits: DecodeLimits,
 ) -> Option<DynamicImage> {
     if max_dimension == 0 {
         return None;
@@ -513,7 +559,7 @@ fn scaled_jpeg(
         return None;
     }
     let mut decoder = jpeg_decoder::Decoder::new(Cursor::new(bytes));
-    decoder.set_max_decoding_buffer_size(MAX_DECODE_ALLOCATION_BYTES as usize);
+    decoder.set_max_decoding_buffer_size(limits.max_alloc_bytes as usize);
     decoder.read_info().ok()?;
     let info = decoder.info()?;
     if !matches!(
@@ -739,9 +785,19 @@ pub fn decode_working_copy(
     max_dimension: usize,
     filter: Filter,
 ) -> Result<LinearImage, DecodeError> {
+    decode_working_copy_with_limits(bytes, max_dimension, filter, DecodeLimits::BROWSER)
+}
+
+/// [`decode_working_copy`] with the source bound `limits`.
+pub fn decode_working_copy_with_limits(
+    bytes: &[u8],
+    max_dimension: usize,
+    filter: Filter,
+    limits: DecodeLimits,
+) -> Result<LinearImage, DecodeError> {
     let mut decoder = image::codecs::png::PngDecoder::new(Cursor::new(bytes))
         .map_err(|e| DecodeError::DecodeFailed(e.to_string()))?;
-    set_decode_limits(&mut decoder)?;
+    set_decode_limits(&mut decoder, limits)?;
     let img = DynamicImage::from_decoder(decoder)
         .map_err(|e| DecodeError::DecodeFailed(e.to_string()))?;
     let rgb = match img {
@@ -783,12 +839,29 @@ pub fn decode_working_copy_with_meta(
     max_dimension: usize,
     filter: Filter,
 ) -> Result<LinearImage, DecodeError> {
+    decode_working_copy_with_meta_and_limits(
+        bytes,
+        meta,
+        max_dimension,
+        filter,
+        DecodeLimits::BROWSER,
+    )
+}
+
+/// [`decode_working_copy_with_meta`] with the source bound `limits`.
+pub fn decode_working_copy_with_meta_and_limits(
+    bytes: &[u8],
+    meta: &WorkingCopyMeta,
+    max_dimension: usize,
+    filter: Filter,
+    limits: DecodeLimits,
+) -> Result<LinearImage, DecodeError> {
     let Some(WorkingCopyEncoding::SignedGamma18V1 { ceiling }) = meta.encoding() else {
-        return decode_working_copy(bytes, max_dimension, filter);
+        return decode_working_copy_with_limits(bytes, max_dimension, filter, limits);
     };
     let mut decoder = image::codecs::png::PngDecoder::new(Cursor::new(bytes))
         .map_err(|e| DecodeError::DecodeFailed(e.to_string()))?;
-    set_decode_limits(&mut decoder)?;
+    set_decode_limits(&mut decoder, limits)?;
     let img = DynamicImage::from_decoder(decoder)
         .map_err(|e| DecodeError::DecodeFailed(e.to_string()))?;
     let rgb = match img {

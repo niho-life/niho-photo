@@ -275,8 +275,8 @@
         "publication"
       ],
       "if": "needs.plan.outputs.has-native == 'true'",
-      "runs-on": "macos-14",
-      "timeout-minutes": 30,
+      "runs-on": "macos-26",
+      "timeout-minutes": 45,
       "strategy": {
         "fail-fast": false,
         "matrix": "${{ fromJSON(needs.plan.outputs.matrix) }}"
@@ -364,6 +364,16 @@
         },
         {
           "run": "swift test --package-path packages/develop-engine/tools/apple-raw-linear"
+        },
+        {
+          "run": "swift test --package-path packages/develop-engine/tools/niho-camera-cutout"
+        },
+        {
+          "name": "niho-camera-cutout の Vision E2E（合成画像）",
+          "env": {
+            "NIHO_CUTOUT_E2E": "1"
+          },
+          "run": "swift test --package-path packages/develop-engine/tools/niho-camera-cutout --filter VisionEndToEndTests"
         }
       ]
     },

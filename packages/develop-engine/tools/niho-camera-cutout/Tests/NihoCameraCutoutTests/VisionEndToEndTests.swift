@@ -10,7 +10,7 @@ import UniformTypeIdentifiers
 /// Runs Apple Vision for real on a synthetic photo (a shaded object on a
 /// plain wall; no personal photo in Git). Opt-in with NIHO_CUTOUT_E2E=1 so a
 /// plain `swift test` never depends on the Mac's foreground model; the CI
-/// (niho-camera-cutout.yml) runs it on GitHub's macOS runner as its own step.
+/// (the Swift job of public-ci.yml) runs it on GitHub's macOS runner as its own step.
 @Suite(.enabled(if: ProcessInfo.processInfo.environment["NIHO_CUTOUT_E2E"] == "1"))
 struct VisionEndToEndTests {
     @Test func detectsTheObjectAndExportsATransparentPNG() async throws {
@@ -90,6 +90,43 @@ struct VisionEndToEndTests {
         #expect(summary["width"] as? Int == 640)
         let alpha = try alphaChannel(output)
         #expect(alpha[240 * 640 + 320] > 200 && alpha[8 * 640 + 8] < 30)
+    }
+
+    /// `surface` (niho-photo#135): every subject in one canonical gray PNG of
+    /// the working image's frame, shrunk to --max-side.
+    @Test func surfaceIsTheForegroundOfTheWorkingImage() throws {
+        let root = FileManager.default.temporaryDirectory
+            .appendingPathComponent("CutoutSurfaceE2E-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: root, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: root) }
+        let input = root.appendingPathComponent("object.png")
+        try writeSyntheticPhoto(to: input, width: 640, height: 480)
+        let output = root.appendingPathComponent("surface.png")
+
+        let summary = try SurfaceCommand.run(try SurfaceOptions(arguments: [
+            "--input", input.path, "--output", output.path, "--kind", "subject", "--max-side", "320",
+        ]))
+        #expect(summary["kind"] as? String == "subject")
+        #expect(summary["width"] as? Int == 320 && summary["height"] as? Int == 240)
+        #expect(summary["sourceWidth"] as? Int == 640 && summary["sourceHeight"] as? Int == 480)
+        #expect((summary["subjects"] as? Int ?? 0) >= 1)
+        let png = try Data(contentsOf: output)
+        #expect(summary["surfaceSHA256"] as? String == CutoutHash.sha256(png))
+        #expect(summary["bytes"] as? Int == png.count)
+        let surface = try MaskRaster(pngData: png)
+        #expect(surface.width == 320 && surface.height == 240)
+        // Top-left origin: the vase in the middle, the wall in the corners.
+        #expect(surface.pixels[120 * 320 + 160] > 200)
+        #expect(surface.pixels[4 * 320 + 4] < 30)
+        #expect(surface.pixels[235 * 320 + 315] < 30)
+        #expect(try FileManager.default.contentsOfDirectory(atPath: root.path).sorted() == ["object.png", "surface.png"])
+
+        // Never over an existing file.
+        #expect(throws: CutoutError.destinationExists(output)) {
+            try SurfaceCommand.run(try SurfaceOptions(arguments: [
+                "--input", input.path, "--output", output.path, "--kind", "subject",
+            ]))
+        }
     }
 
     /// A warm wall with a soft gradient and a shaded dark-blue vase in front.

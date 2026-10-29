@@ -22,6 +22,8 @@
 
 集計入口は`node apps/camera/scripts/measure-progressive-open.mjs --case dc-s5=<非公開入力> --probe <実測probe> --probe-arg ... --runs 20`です。probeへ`{input}`、`{cache}`、`{condition}`、`{iteration}`を渡せます。coldは反復ごとにアプリcacheを空にし、warmは保持します。OS file cacheは落としません。probeは渡されたcache領域を実際に使う必要があります。mockの反復やnative producerだけの計測をUIの性能受入値に読み替えません。
 
+プリセット更新（`presetRenderUpdated`）は、押してから変わった画が出るまでの内訳も同じ集計に出します（#126）。`presetResolve`は押してからプリセットを当てた結果が返るまで、`presetRenderQueue`は描画の枠でWorkerへ出すのを待った時間、`presetWorkerWait`はWorkerの列で待った時間、`presetRender`は描画そのもの、`presetThumbnailBlocked`はその間にWorkerが見本を描いていた時間、`presetThumbnailSession`は見本用sessionを作った時間、`presetDeveloperRebuild`は写真を開き直した時間です。`presetThumbnail`は見本1枚の長さ（反復内の中央値）です。押した直後は先に粗い画（Interactive）を出してから丁寧な画（Final）に差し替えるので（#127）、`presetRenderUpdated`は最初に画が変わるまで、`presetFinalRenderUpdated`は丁寧な画に差し替わるまでです。どれも`photoDevelopPerf=1`の`[photo-develop-perf]`（Workerの区間と、メインスレッドから見た描画ごとの待ち・往復）と`[photo-develop-ui-perf]`の`presetResolved`から作り、画像・設定は出しません。
+
 MacBook Air M2 / 8GBのcold p50 1秒・p95 2秒、warm p95 500ms、および入力100ms・描画p95 300msが性能受入条件です。Studioの実測はその代替にはしません。実機受入と非公開側のexact SHA取込み・署名・本番配布は別途行います。
 
 ## 実UI probeの再現
@@ -40,6 +42,8 @@ node apps/camera/scripts/measure-progressive-open.mjs \
   --probe-arg --condition --probe-arg '{condition}' \
   --probe-arg --iteration --probe-arg '{iteration}' --runs 20
 ```
+
+warmで一覧に戻ってから同じ写真を再表示するまでに間を置く条件は、`--probe-arg --idle-ms --probe-arg 8000` のように渡します（既定0は今までと同じ。#129のH/Sの解析の先行は、Workerへの要求が500ms来ない間にだけ動くため、間を置かない条件では効きません）。
 
 probeは写真を1枚だけ選んだ一覧を作り、段2のidle準備後にT0を開始します。露光とpresetが両方有効な状態で、最初の露光入力のstate反映と二度のrAF後の変更画を`editable`とし、presetも別操作で描画を検証します。暫定previewを取得できず正規入力を直接開いた回も除外せず、最初のFinal実paintを正規準備完了として遅い実測値を集計に含めます。warmは各反復で同じアプリ内で正規入力まで計測外で開き、一覧へ戻って同じsessionを再表示します。アプリ再起動後にnative cacheだけを残す条件とは区別します。
 

@@ -16,6 +16,8 @@ test("文書変更でもpublicationはworkflow側で常時実行、package実行
   assert.deepEqual(selected(["packages/niho-cloud-contract/src/v1.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/develop-engine/core.rs"]), ["camera", "desktop-photo", "develop-engine"]);
   assert.equal(selectScopes(["packages/develop-engine/core.rs"], all).find((s) => s.scope === "develop-engine").swift, true);
+  // 筆の照合の fixture は TS と cutout の Swift 試験の両方が読む
+  assert.equal(selectScopes(["packages/photo-editing/src/fixtures/cutout-brush-parity.json"], all).find((s) => s.scope === "develop-engine").selected, true);
   assert.deepEqual(selected(["apps/camera/src-tauri/main.rs"]), ["camera"]);
   assert.deepEqual(selected(["packages/desktop-account/login.ts"]), ["camera", "desktop-photo", "desktop-account"]);
   for (const name of [".github/workflows/public-ci.yml", "scripts/ci/scopes.mjs", "package-lock.json", "docs/security/publication-manifest.json"]) assert.equal(selected([name]).length, 5);
@@ -116,7 +118,7 @@ test("現像の公開CIは固定toolchain・実RAW・fit再生成・WASM parity�
   assert.ok(commands.some(([command,args]) => command === "cargo" && args.includes("test") && args.includes("color_points")));
   assert.ok(commands.some(([command,args]) => command === "cargo" && args.includes("test") && args.includes("geometry_perspective")));
   assert.ok(commands.some(([command,args]) => command === "cargo" && args.includes("test") && args.includes("detail_cross_target")));
-  for (const test of ["masks_settings", "masks_geometry_map", "masks_cross_target", "upright", "heal", "lens", "render_identity"]) {
+  for (const test of ["masks_settings", "masks_geometry_map", "masks_cross_target", "upright", "heal", "lens", "session_reuse", "render_identity"]) {
     assert.ok(commands.some(([command,args]) => command === "cargo" && args.includes("wasm32-unknown-unknown") && args.includes("test") && args.includes(test)), test);
   }  for (const step of ["clippy", "test"]) {
     assert.ok(commands.some(([command,args]) => command === "cargo" && args.includes(step) && args.includes("threads") && !args.includes("wasm32-unknown-unknown")), `threads ${step}`);

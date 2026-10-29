@@ -11,11 +11,20 @@
 //! `rasterDecodeSize` gives the working size a Developer needs for the
 //! crop, `geometryOutputSize` the frame's size without rendering.
 //! `developer.autoSettings(settingsJson)` is "自動" (the six Light sliders
-//! and Vibrance for this photo).
+//! and Vibrance for this photo). `developer.prepareAnalysis(settingsJson)`
+//! makes ahead, while idle, the response analysis a preset's first frame
+//! would wait for (#129).
 //! Local masks (`masks`, v 5) render through the same `render` calls;
 //! `capabilities()` says which kinds this build draws and
 //! `developer.maskPlane(settingsJson, maskId, maxDimension)` gives one
-//! mask's plane for the editor's overlay. `developer.estimateUpright(settingsJson,
+//! mask's plane for the editor's overlay. `brush` / `subject` / `sky` masks
+//! sample the surfaces a Developer holds
+//! (`developer.setMaskSurface(id, png)` / `dropMaskSurface(id)`;
+//! `encodeMaskSurface` / `maskSurfaceId` make a surface PNG and its id);
+//! `developer.exportJpeg` / `exportPng` export through the Developer, with
+//! its surfaces (the one-shot `render` / `exportJpeg` / `exportPng` hold
+//! none and fail on an active surface mask with `maskSurfaceMissing`).
+//! `developer.estimateUpright(settingsJson,
 //! mode)` estimates Upright (the perspective that stands its lines upright).
 //! Heal marks (`developSettings.heal`, v 8) render through `render` and
 //! `developer.render` like any other setting; the Developer keeps their plans
@@ -101,21 +110,44 @@ pub fn version() -> String {
 }
 
 /// What this build draws beyond what `validateSettings` reads, as JSON:
-/// `{"masks":{"kinds":["linear","radial"],"max":8,"maskPlane":true}}` —
-/// local masks of those kinds render (`brush` / `subject` / `sky` need a
-/// surface store and fail with `maskSurfaceMissing`), at most `max` of them,
-/// and `Developer.maskPlane` exists. A build without this export draws no
-/// masks (it may still validate them).
+/// `{"masks":{"kinds":["linear","radial","brush","subject","sky"],"max":8,
+/// "maskPlane":true,"surfaces":true}}` — local masks of those kinds render
+/// (at most `max` of them), `Developer.maskPlane` exists, and `surfaces`:
+/// a Developer holds the surfaces of `brush` / `subject` / `sky` masks
+/// (`Developer.setMaskSurface` / `dropMaskSurface`, `Developer.exportJpeg`
+/// / `exportPng`, `encodeMaskSurface`, `maskSurfaceId`); a surface mask
+/// whose surface is not set fails with `maskSurfaceMissing`. A build
+/// without `surfaces` (M2) draws only `linear` and `radial`; a build
+/// without this export draws no masks (it may still validate them).
 #[wasm_bindgen]
 pub fn capabilities() -> String {
     serde_json::json!({
         "masks": {
-            "kinds": ["linear", "radial"],
+            "kinds": ["linear", "radial", "brush", "subject", "sky"],
             "max": niho_develop::settings::MAX_LOCAL_MASKS,
             "maskPlane": true,
+            "surfaces": true,
         }
     })
     .to_string()
+}
+
+/// The id of a mask surface PNG: the sha256 of its bytes (64 lowercase hex
+/// digits, the `surface.id` of the settings).
+#[wasm_bindgen(js_name = maskSurfaceId)]
+pub fn mask_surface_id(png: &[u8]) -> String {
+    niho_develop::mask_surface::surface_id(png)
+}
+
+/// A mask surface PNG of `data` (`width * height` values 0..=255, row-major;
+/// 1..=4096 per side): non-interlaced 8-bit grayscale, the bytes
+/// `Developer.setMaskSurface` takes. The same pixels give the same bytes
+/// (and `maskSurfaceId`) with this build.
+#[wasm_bindgen(js_name = encodeMaskSurface)]
+pub fn encode_mask_surface(width: u32, height: u32, data: &[u8]) -> Result<Vec<u8>, JsError> {
+    let surface = niho_develop::mask_surface::MaskSurface::new(width, height, data.to_vec())
+        .map_err(|reason| js_error(format!("{}: {reason}", niho_develop::MASK_SURFACE_INVALID)))?;
+    niho_develop::mask_surface::encode_surface_png(&surface).map_err(js_error)
 }
 
 /// Renders a JPEG / PNG original: `{ width, height, rgba, approximations }`
@@ -261,15 +293,61 @@ pub fn neutral_settings() -> String {
 
 #[cfg(test)]
 mod tests {
-    use super::{capabilities, neutral_settings, validate_settings};
+    use super::{
+        capabilities, encode_mask_surface, export_png, mask_surface_id, neutral_settings,
+        validate_settings, Developer,
+    };
 
     #[test]
     fn capabilities_name_the_mask_kinds_this_build_draws() {
         let value: serde_json::Value = serde_json::from_str(&capabilities()).unwrap();
         assert_eq!(
             value,
-            serde_json::json!({"masks": {"kinds": ["linear", "radial"], "max": 8, "maskPlane": true}})
+            serde_json::json!({"masks": {
+                "kinds": ["linear", "radial", "brush", "subject", "sky"],
+                "max": 8, "maskPlane": true, "surfaces": true
+            }})
         );
+    }
+
+    /// The Developer's surface store and export (the success paths; the
+    /// failures' codes are the crate's, `tests/masks_surface.rs`).
+    #[test]
+    fn a_developer_exports_a_brush_mask_with_the_surface_it_holds() {
+        let (w, h) = (48usize, 32usize);
+        let rgba: Vec<u8> = (0..w * h)
+            .flat_map(|i| [(i % w * 5) as u8, (i / w * 7) as u8, 90, 255])
+            .collect();
+        let photo = niho_develop::encode::encode_png(&rgba, w, h).unwrap();
+        let data: Vec<u8> = (0..16 * 8)
+            .map(|i| if i % 16 < 8 { 255 } else { 0 })
+            .collect();
+        let png = encode_mask_surface(16, 8, &data).unwrap();
+        let id = mask_surface_id(&png);
+        assert_eq!(id, niho_develop::mask_surface::surface_id(&png));
+        let settings = format!(
+            r#"{{"v":5,"engine":"niho-10","look":"niho-standard-1","base":null,"masks":[{{"id":"b","kind":"brush","surface":{{"id":"{id}","width":16,"height":8}},"adjust":{{"exposure":-1}}}}]}}"#
+        );
+        let mut developer = Developer::new(&photo, 0).unwrap();
+        assert!(!developer.has_mask_surface(&id));
+        developer.set_mask_surface(&id, &png).unwrap();
+        assert!(developer.has_mask_surface(&id));
+        let exported = developer.export_png(&settings, 0).unwrap();
+        let mut session =
+            niho_develop::Session::open_raster(&photo, 0, niho_develop::Filter::Lanczos3).unwrap();
+        session.set_mask_surface(&id, &png).unwrap();
+        let parsed = niho_develop::parse_settings(&settings).unwrap();
+        assert_eq!(exported, session.export_png(&parsed, 0).unwrap());
+        let jpeg = developer.export_jpeg(&settings, 32, 85).unwrap();
+        assert_eq!(jpeg, session.export_jpeg(&parsed, 32, 85).unwrap());
+        // Without the mask the Developer's PNG is the one-shot's.
+        let plain = r#"{"v":5,"engine":"niho-10","look":"niho-standard-1","base":null}"#;
+        assert_eq!(
+            developer.export_png(plain, 0).unwrap(),
+            export_png(&photo, plain, 0, None).unwrap()
+        );
+        assert!(developer.drop_mask_surface(&id));
+        assert!(!developer.drop_mask_surface(&id));
     }
 
     #[test]
@@ -521,14 +599,92 @@ impl Developer {
         frame_object(&frame)
     }
 
+    /// Makes ahead, while the editor is idle, the response analysis frames of
+    /// these settings read once they use Highlights or Shadows (signed RAW:
+    /// the noise reduction source, the response coefficients and the
+    /// highlight maps; #129), so the first such frame does not wait for it.
+    /// Draws nothing and leaves the frames' bytes as they are. `false`:
+    /// nothing to make ahead for this photo and engine.
+    #[wasm_bindgen(js_name = prepareAnalysis)]
+    pub fn prepare_analysis(&mut self, settings_json: &str) -> Result<bool, JsError> {
+        let settings = niho_develop::parse_settings(settings_json).map_err(js_error)?;
+        self.session.prepare_analysis(&settings).map_err(js_error)
+    }
+
+    /// Drops the analysis made ahead for other settings (a kept photo's
+    /// Developer, #129). Frames are the same bytes.
+    #[wasm_bindgen(js_name = releaseAnalysisAhead)]
+    pub fn release_analysis_ahead(&mut self) {
+        self.session.release_analysis_ahead();
+    }
+
+    /// Holds the surface `id` of `brush` / `subject` / `sky` masks for every
+    /// later `render` / `maskPlane` / `exportJpeg` / `exportPng` until
+    /// `dropMaskSurface(id)`. `png` must be the surface `id` names: `id` 64
+    /// lowercase hex digits and the sha256 of `png` (`maskSurfaceId`), at
+    /// most 8 MiB, a still 8-bit grayscale PNG (colour type 0, bit depth 8,
+    /// no transparency) of 1..=4096 pixels per side; else
+    /// `maskSurfaceInvalid` and nothing changes. A `thumbnail()` Developer
+    /// starts without surfaces (set them on it too).
+    #[wasm_bindgen(js_name = setMaskSurface)]
+    pub fn set_mask_surface(&mut self, id: &str, png: &[u8]) -> Result<(), JsError> {
+        self.session.set_mask_surface(id, png).map_err(js_error)
+    }
+
+    /// Drops the surface `id`; `true` when it was held. A frame whose active
+    /// mask needs it is `maskSurfaceMissing` again.
+    #[wasm_bindgen(js_name = dropMaskSurface)]
+    pub fn drop_mask_surface(&mut self, id: &str) -> bool {
+        self.session.drop_mask_surface(id)
+    }
+
+    /// Whether the surface `id` is held.
+    #[wasm_bindgen(js_name = hasMaskSurface)]
+    pub fn has_mask_surface(&self, id: &str) -> bool {
+        self.session.has_mask_surface(id)
+    }
+
+    /// The released frame (`render(settingsJson, maxDimension, false)`, with
+    /// this Developer's surfaces and layers) as a JPEG (`quality` 1..100),
+    /// encoded as the one-shot `exportJpeg` does (no EXIF: add it with
+    /// `withCaptureExif`). At most this Developer's working size (open it at
+    /// `rasterDecodeSize` for a larger export).
+    #[wasm_bindgen(js_name = exportJpeg)]
+    pub fn export_jpeg(
+        &mut self,
+        settings_json: &str,
+        max_dimension: u32,
+        quality: u8,
+    ) -> Result<Vec<u8>, JsError> {
+        let settings = niho_develop::parse_settings(settings_json).map_err(js_error)?;
+        self.session
+            .export_jpeg(&settings, max_dimension as usize, quality)
+            .map_err(js_error)
+    }
+
+    /// `exportJpeg` as the one-shot `exportPng`'s PNG.
+    #[wasm_bindgen(js_name = exportPng)]
+    pub fn export_png(
+        &mut self,
+        settings_json: &str,
+        max_dimension: u32,
+    ) -> Result<Vec<u8>, JsError> {
+        let settings = niho_develop::parse_settings(settings_json).map_err(js_error)?;
+        self.session
+            .export_png(&settings, max_dimension as usize)
+            .map_err(js_error)
+    }
+
     /// One local mask's plane for the editor's overlay: `{ width, height,
     /// data }` where `data` is a `Uint8Array` of `width * height` values
     /// (`round(weight / 65536 * 255)`, row-major, the mask's `invert`
     /// applied, drawn whether or not it is enabled) at the size `render`
     /// gives these settings at `maxDimension`, from the same map and plane
     /// as the render. Leaves the drag frames' kept state as it was. A
-    /// `brush` / `subject` / `sky` mask fails with `maskSurfaceMissing`, an
-    /// id the settings do not have with `maskNotFound`.
+    /// `brush` / `subject` / `sky` mask samples its surface (without it
+    /// `maskSurfaceMissing`, of another size than its `surface`
+    /// `maskSurfaceMismatch`), an id the settings do not have is
+    /// `maskNotFound`.
     #[wasm_bindgen(js_name = maskPlane)]
     pub fn mask_plane(
         &self,

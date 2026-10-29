@@ -232,6 +232,61 @@ enum ComposeCommand {
     }
 }
 
+enum SurfaceCommand {
+    /// The output is a new file (never over an existing one, the input or a
+    /// symlink): the PNG goes to a hidden file in the same folder and is
+    /// linked into place. `sky` has no detector yet (`unsupported_kind`, 2).
+    static func run(_ options: SurfaceOptions) throws -> [String: Any] {
+        let started = ContinuousClock.now
+        try requireReadable(options.input)
+        guard options.kind == .subject else {
+            throw ToolFailure(
+                code: "unsupported_kind",
+                message: "この版は \(options.kind.rawValue) の面を作れません",
+                exitCode: 2
+            )
+        }
+        try requireNew(options.output)
+        let loaded = try MaskSurface.loadInput(options.input, maxSide: options.maxSide)
+        let detected = try MaskSurface.detectForeground(loaded.image)
+        let png = try MaskSurface.encodePNG(detected.mask)
+        try install(png, at: options.output)
+        return [
+            "kind": options.kind.rawValue,
+            "engine": CutoutMaskReference.engineIdentifier,
+            "engineRevision": CutoutMaskReference.engineRevision,
+            "width": detected.mask.width,
+            "height": detected.mask.height,
+            "sourceWidth": loaded.sourceWidth,
+            "sourceHeight": loaded.sourceHeight,
+            "subjects": detected.subjects,
+            "surfaceSHA256": CutoutHash.sha256(png),
+            "bytes": png.count,
+            "durationMs": milliseconds(since: started),
+        ]
+    }
+
+    private static func requireNew(_ destination: URL) throws {
+        var isDirectory: ObjCBool = false
+        guard FileManager.default.fileExists(atPath: destination.path, isDirectory: &isDirectory) else { return }
+        if isDirectory.boolValue { throw CutoutError.destinationIsDirectory(destination) }
+        throw CutoutError.destinationExists(destination)
+    }
+
+    private static func install(_ data: Data, at destination: URL) throws {
+        let directory = destination.deletingLastPathComponent()
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        let temporary = directory.appendingPathComponent(".\(UUID().uuidString)-\(destination.lastPathComponent)")
+        defer { try? FileManager.default.removeItem(at: temporary) }
+        try data.write(to: temporary)
+        // link(2) never replaces a file and refuses an existing symlink.
+        guard Darwin.link(temporary.path, destination.path) == 0 else {
+            if errno == EEXIST { throw CutoutError.destinationExists(destination) }
+            throw CocoaError(.fileWriteUnknown, userInfo: [NSFilePathErrorKey: destination.path])
+        }
+    }
+}
+
 /// Up front, so a missing input is `input_unreadable` (3) and not an OS
 /// error from deep inside ImageIO or the hash stream.
 func requireReadable(_ url: URL) throws {

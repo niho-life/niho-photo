@@ -8,7 +8,7 @@ manifest/receipt/release metadata、完全native closure、candidate manifest、
 
 ## 成果物と識別子
 
-`Public CI` のmain pushは、文書だけの変更でもcameraを検証する。cameraの既存native検証後に、GitHub-hosted `macos-14` runnerでrelease modeのad-hoc署名 `.app` を作る。PRやfork側のmain pushでは成果物を生成・uploadしない。公開CIの権限は `contents: read` だけで、Apple署名、updater署名、認証、配備のsecretやOIDCを要求しない。ビルド環境は必要な公開値だけをallowlistし、Rustは1.98.1、Nodeは24.15.0、npm/Tauriはlockfileと記録された実行版へ結び付ける。Xcodeの実行版も記録する。
+`Public CI` のmain pushは、文書だけの変更でもcameraを検証する。cameraの既存native検証後に、GitHub-hosted `macos-26` runnerでrelease modeのad-hoc署名 `.app` を作る。PRやfork側のmain pushでは成果物を生成・uploadしない。公開CIの権限は `contents: read` だけで、Apple署名、updater署名、認証、配備のsecretやOIDCを要求しない。ビルド環境は必要な公開値だけをallowlistし、Rustは1.98.1、Nodeは24.15.0、npm/Tauriはlockfileと記録された実行版へ結び付ける。Xcodeの実行版も記録する。
 
 GitHub Actions artifact名は `niho-photo-<40桁commit>-macos-<arm64|x64>-run-<run ID>-attempt-<attempt>`。同じcommitのrerunも別名になり、immutable upload名が衝突しない。中の3ファイルは安定したbasename `niho-photo-<40桁commit>-macos-<arm64|x64>` を使う。
 
