@@ -11786,8 +11786,8 @@
     },
     {
       "path": "packages/develop-engine/tools/sky-mask-train/train_sky.py",
-      "sha256": "42b6c5f023093fba2a6cdf9c31ecd0547d465c2ff62522458297fb98d79309ea",
-      "origin": "Issue #158 で NIHO が作成した非公開研究コードを公開用に整理。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。 変更理由: 学習時に露出メタデータ件数を照合し、スナップショットの欠落を検出する。"
+      "sha256": "66e9062e6ff309fc1fcc2e3808b07e50b3d0201aed1f17e943bbe6c33fd9ecbe",
+      "origin": "Issue #158 で NIHO が作成した非公開研究コードを公開用に整理。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。 変更理由: 学習時に露出メタデータ件数を照合し、スナップショットの欠落を検出する。\n変更理由: 露出増強を線形光で計算し、無効な露出値を除外する"
     },
     {
       "path": "packages/develop-engine/tools/sky-mask-train/evaluate.py",

@@ -93,7 +93,13 @@ def load_ev(path: Path) -> float | None:
     if not meta.exists():
         return None
     v = json.loads(meta.read_text()).get("ev100")
-    return float(v) if isinstance(v, (int, float)) else None
+    if type(v) not in (int, float):
+        return None
+    try:
+        ev = float(v)
+    except OverflowError:
+        return None
+    return ev if math.isfinite(ev) else None
 
 
 class Data(torch.utils.data.Dataset):
@@ -123,7 +129,10 @@ class Data(torch.utils.data.Dataset):
         rgb = np.asarray(img).astype(np.float32)
         if self.train:
             gain = 2 ** random.uniform(-0.7, 0.7)  # exposure change; the EV moves the other way
-            rgb = np.clip(rgb * gain * np.array([random.uniform(0.9, 1.1) for _ in range(3)]), 0, 255)
+            srgb = rgb / 255.0
+            linear = np.where(srgb <= 0.04045, srgb / 12.92, ((srgb + 0.055) / 1.055) ** 2.4)
+            linear = np.clip(linear * gain * np.array([random.uniform(0.9, 1.1) for _ in range(3)]), 0, 1)
+            rgb = np.where(linear <= 0.0031308, linear * 12.92, 1.055 * linear ** (1 / 2.4) - 0.055) * 255.0
             if ev is not None:
                 ev = ev - math.log2(gain)
             if random.random() < 0.2:
