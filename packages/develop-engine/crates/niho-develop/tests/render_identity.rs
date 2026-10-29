@@ -294,7 +294,10 @@ const PINNED: &[&str] = &[
 ];
 
 /// `photo engine sha256` of [`STAGE_PHOTOS`] (see [`digests`]).
-const STAGE_PINNED: &[&str] = &[];
+const STAGE_PINNED: &[&str] = &[
+    "signedShoulder niho-7 477fadc05c47e219349b607d309fa785c2b1e8fe7d1bc8d314164c797e81d0fc",
+    "signedShoulder niho-11 0ee87026d9101f16fc3fb56fb9a64ad117972589c4416c5541bf0dc629a2b577",
+];
 
 /// `digests` as drawn here.
 #[cfg(not(feature = "threads"))]
