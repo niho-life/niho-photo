@@ -98,6 +98,10 @@ def main() -> None:
             cells.append(f"{np.mean([results[n][i]['boundaryF'] for i in ids]):.3f}")
         label = "全体" if cat is None else CATEGORY_JA[cat]
         print(f"| {label} | {len(ids)} | " + " | ".join(cells) + " |")
+    no_sky_ids = [s["id"] for s in scenes if "nosky" in s["categories"]]
+    for name in names:
+        false_count = sum(results[name][sid].get("falseSky", 0.0) > 0 for sid in no_sky_ids)
+        print(f"{name}: 空なし誤検出 {false_count}/{len(no_sky_ids)}")
 
 
 if __name__ == "__main__":
