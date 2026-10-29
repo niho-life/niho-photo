@@ -40,6 +40,45 @@ const ENGINE_NATIVE_CLOSURE = [
 const OWNED_SOURCE_PATHS = ["packages/photo-editing", "packages/ui", "packages/niho-cloud-contract", "packages/develop-engine", "packages/desktop-photo", "sdk", "scripts/sdk", "scripts/ci/cloud-contract-sync.mjs", "scripts/ci/image-metadata.mjs", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/ci/photo-sdk-workflow-lib.mjs", "scripts/ci/publication-lib.mjs", "scripts/ci/release-evidence-lib.mjs", "scripts/ci/workflow-lib.mjs", "LICENSE.md", "ASSET_LICENSE.md", "TRADEMARKS.md", "THIRD_PARTY_NOTICES.md"];
 const BUILD_TOOLING_PATHS = ["package.json", "package-lock.json"];
 
+// スレッドの wasm（#151。crossOriginIsolated の画面だけが読む）の build の指定。build と release set の検証が
+// 同じ値を使う。共有メモリの上限は 1 本の wasm と同じ wasm32 の 4GiB（大きな書き出しで 1 本より先に足りなく
+// ならない。確保できない端末は Worker が起動で 1 本へ落ちる）。
+export const THREADS_BUILD = Object.freeze({
+  targetFeatures: Object.freeze(["+atomics", "+bulk-memory", "+mutable-globals", "+simd128"]),
+  maxMemory: 4 * 1024 * 1024 * 1024,
+  buildStd: "panic_abort,std",
+  rustcBootstrap: true,
+});
+
+/** スレッドの wasm の配布名（1 本の `niho_develop_wasm-*` と区別する。worker は wasm-bindgen-rayon の helper を平らにしたもの）。 */
+export function threadsRuntimeFileNames(version) {
+  return Object.freeze({
+    js: `niho_develop_wasm_threads-${version}.js`,
+    dts: `niho_develop_wasm_threads-${version}.d.ts`,
+    wasm: `niho_develop_wasm_threads_bg-${version}.wasm`,
+    wasmDts: `niho_develop_wasm_threads_bg-${version}.wasm.d.ts`,
+    worker: `niho_develop_wasm_threads_worker-${version}.js`,
+  });
+}
+
+const THREADS_TLS_EXPORTS = ["__wasm_init_tls", "__tls_size", "__tls_align", "__tls_base"];
+
+/** スレッドの wasm の rustc の指定（CARGO_ENCODED_RUSTFLAGS の並び。path の remap は build が足す）。 */
+export function threadsRustflags(build = THREADS_BUILD) {
+  return [
+    "-C",
+    `target-feature=${build.targetFeatures.join(",")}`,
+    "-C",
+    "link-arg=--shared-memory",
+    "-C",
+    "link-arg=--import-memory",
+    "-C",
+    `link-arg=--max-memory=${build.maxMemory}`,
+    // wasm-bindgen がスレッドごとの TLS を用意する口
+    ...THREADS_TLS_EXPORTS.flatMap((symbol) => ["-C", `link-arg=--export=${symbol}`]),
+  ];
+}
+
 export class SdkReleaseError extends Error {}
 
 export function sha256(bytes) {
@@ -345,6 +384,8 @@ function stageSourcePackage({ repoRoot, commit, config, definition, stage, rootN
       buildInputs: config.engine.buildInputs,
       commands: {
         wasm: "cargo build --locked --config engine/.cargo/config.toml --manifest-path engine/Cargo.toml --target wasm32-unknown-unknown --release -p niho-develop-wasm",
+        // スレッドの版（#151）: 固定の 1.98.1 に rust-src を足し、RUSTC_BOOTSTRAP=1 で std を作り直す
+        wasmThreads: `RUSTC_BOOTSTRAP=1 RUSTFLAGS="${threadsRustflags().join(" ")}" cargo build --locked --manifest-path engine/Cargo.toml --target wasm32-unknown-unknown --release -p niho-develop-wasm --features threads -Z build-std=${THREADS_BUILD.buildStd}`,
         macosNative: "node engine/build-macos-native.mjs --engine engine --lock <camera-lock.json> --output <new-stage-directory>",
       },
     }));
@@ -495,25 +536,33 @@ export function validateRuntimeAssets({ assetDirectory, engine, expectedSource }
   ) throw new SdkReleaseError("engine runtime の build provenance が selected source と一致しません");
   const names = Object.keys(manifest.files).sort();
   if (!names.length || !engine.requiredExtensions.every((extension) => names.some((name) => name.endsWith(extension)))) throw new SdkReleaseError("engine runtime dependency closure が不足しています");
-  const files = [];
-  for (const name of names) {
-    if (!SIMPLE_ASSET.test(name) || name.includes("..")) throw new SdkReleaseError("engine runtime manifest に不正な path があります");
-    const expected = manifest.files[name];
-    if (!expected || !SHA256.test(expected.sha256 ?? "") || !Number.isSafeInteger(expected.bytes) || expected.bytes <= 0) throw new SdkReleaseError("engine runtime manifest の file metadata が不正です");
-    const full = path.join(assetDirectory, name);
-    let stat;
-    try {
-      stat = lstatSync(full);
-    } catch {
-      throw new SdkReleaseError(`engine runtime dependency がありません: ${name}`);
-    }
-    if (!stat.isFile() || stat.isSymbolicLink()) throw new SdkReleaseError("engine runtime の symlink / 特殊ファイルは禁止です");
-    const bytes = readFileSync(full);
-    if (bytes.length !== expected.bytes || sha256(bytes) !== expected.sha256) throw new SdkReleaseError(`engine runtime asset の hash が一致しません: ${name}`);
-    assertPublicBytes(bytes);
-    files.push({ name, bytes, sha256: expected.sha256, integrity: sri(bytes), size: bytes.length });
+  const files = names.map((name) => readRuntimeAsset(assetDirectory, name, manifest.files[name]));
+  // スレッドの版（#151）は `threads` に分けて書く。`files`（1 本）は古い画面の読み方（.js と .wasm がちょうど 1 つずつ）のまま。
+  const threads = manifest.threads;
+  if (!threads || typeof threads !== "object" || Array.isArray(threads) || !threads.files || typeof threads.files !== "object" || Array.isArray(threads.files)) throw new SdkReleaseError("engine runtime manifest にスレッドの版がありません");
+  if (JSON.stringify(threads.build) !== JSON.stringify(THREADS_BUILD)) throw new SdkReleaseError("スレッドの版の build 指定が固定値と一致しません");
+  const threadsNames = Object.keys(threads.files).sort();
+  const expectedThreadsNames = Object.values(threadsRuntimeFileNames(engine.crateVersion)).sort();
+  if (JSON.stringify(threadsNames) !== JSON.stringify(expectedThreadsNames) || threadsNames.some((name) => names.includes(name))) throw new SdkReleaseError("スレッドの版の file 集合が不正です");
+  const threadsFiles = threadsNames.map((name) => readRuntimeAsset(assetDirectory, name, threads.files[name]));
+  return { manifest, manifestBytes, files, threadsFiles };
+}
+
+function readRuntimeAsset(assetDirectory, name, expected) {
+  if (!SIMPLE_ASSET.test(name) || name.includes("..")) throw new SdkReleaseError("engine runtime manifest に不正な path があります");
+  if (!expected || !SHA256.test(expected.sha256 ?? "") || !Number.isSafeInteger(expected.bytes) || expected.bytes <= 0) throw new SdkReleaseError("engine runtime manifest の file metadata が不正です");
+  const full = path.join(assetDirectory, name);
+  let stat;
+  try {
+    stat = lstatSync(full);
+  } catch {
+    throw new SdkReleaseError(`engine runtime dependency がありません: ${name}`);
   }
-  return { manifest, manifestBytes, files };
+  if (!stat.isFile() || stat.isSymbolicLink()) throw new SdkReleaseError("engine runtime の symlink / 特殊ファイルは禁止です");
+  const bytes = readFileSync(full);
+  if (bytes.length !== expected.bytes || sha256(bytes) !== expected.sha256) throw new SdkReleaseError(`engine runtime asset の hash が一致しません: ${name}`);
+  assertPublicBytes(bytes);
+  return { name, bytes, sha256: expected.sha256, integrity: sri(bytes), size: bytes.length };
 }
 
 function stageRuntimePackage({ stage, config, runtime, rootNotices, engineNotices }) {
@@ -535,7 +584,7 @@ function stageRuntimePackage({ stage, config, runtime, rootNotices, engineNotice
   for (const [name, bytes] of Object.entries(engineNotices)) put(stage, name, bytes);
   const prefix = `develop-engine/${config.engine.version}`;
   put(stage, `${prefix}/${config.engine.manifestName}`, runtime.manifestBytes);
-  for (const file of runtime.files) put(stage, `${prefix}/${file.name}`, file.bytes);
+  for (const file of [...runtime.files, ...runtime.threadsFiles]) put(stage, `${prefix}/${file.name}`, file.bytes);
   return manifest;
 }
 
@@ -694,6 +743,8 @@ export async function packReleaseSet({ repoRoot, configPath = "sdk/release-set.j
           size: runtime.manifestBytes.length,
         },
         runtimeFiles: runtime.files.map(({ name, sha256: hash, integrity, size }) => ({ name, sha256: hash, integrity, size })),
+        // スレッドの版（#151）。Mac の candidate は `runtimeFiles`（1 本）だけを同梱する。
+        threads: { runtimeFiles: runtime.threadsFiles.map(({ name, sha256: hash, integrity, size }) => ({ name, sha256: hash, integrity, size })) },
         contracts: sourceRecords(repoRoot, commit, config.engine.contractPaths),
         buildInputs: sourceRecords(repoRoot, commit, config.engine.buildInputs),
       },
