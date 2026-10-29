@@ -3,6 +3,8 @@
  * 写真本体、ファイル名、パス、補正設定の JSON は保存しない。使えない・容量不足なら呼び出し側が通常の再計算へ戻す。
  */
 
+import { NATIVE_DEVELOP_BASE_URL } from "./develop-engine-native-glue";
+
 export type DevelopAnalysisStore = {
   get: (id: string) => Promise<ArrayBuffer | null>;
   put: (id: string, bytes: ArrayBuffer) => Promise<void>;
@@ -84,6 +86,40 @@ export function createBrowserDevelopAnalysisStore(): DevelopAnalysisStore | null
         };
       }
       await transactionDone(prune);
+    },
+  };
+}
+
+/** Mac アプリでは WebKit storage の初期化後も残る作業コピーの native cache を使う。Worker 内の同期 XHR は現像 glue と同じ口。 */
+export function createNativeDevelopAnalysisStore(): DevelopAnalysisStore | null {
+  if (typeof XMLHttpRequest === "undefined" || !globalThis.crypto?.getRandomValues) return null;
+  const token = Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  const idBytes = (id: string) => {
+    if (!/^[0-9a-f]{64}$/u.test(id)) throw new Error("invalid analysis cache key");
+    return new TextEncoder().encode(id);
+  };
+  const request = (method: "Analysis.get" | "Analysis.put", body: Uint8Array): { status: number; bytes: ArrayBuffer | null } => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", `${NATIVE_DEVELOP_BASE_URL}${method}`, false);
+    xhr.responseType = "arraybuffer";
+    xhr.setRequestHeader("X-Niho-Develop-Client", token);
+    xhr.send(body);
+    return { status: xhr.status, bytes: xhr.response instanceof ArrayBuffer ? xhr.response : null };
+  };
+  return {
+    async get(id) {
+      const response = request("Analysis.get", idBytes(id));
+      if (response.status === 404) return null;
+      if (response.status !== 200 || !response.bytes) throw new Error("analysis cache unavailable");
+      return response.bytes.byteLength > 0 && response.bytes.byteLength <= MAX_ENTRY_BYTES ? response.bytes : null;
+    },
+    async put(id, bytes) {
+      if (bytes.byteLength === 0 || bytes.byteLength > MAX_ENTRY_BYTES) return;
+      const key = idBytes(id);
+      const body = new Uint8Array(key.byteLength + bytes.byteLength);
+      body.set(key);
+      body.set(new Uint8Array(bytes), key.byteLength);
+      if (request("Analysis.put", body).status !== 200) throw new Error("analysis cache unavailable");
     },
   };
 }

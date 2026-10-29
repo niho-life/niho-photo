@@ -62,6 +62,8 @@ pub const CALIBRATION_REGISTRY_FILE: &str = "apple-registry.json";
 pub const SIGNED_CALIBRATION_REGISTRY_FILE: &str = "apple-signed-registry.json";
 /// 作業コピーのキャッシュ（アプリのキャッシュのフォルダの中）と上限。
 pub const CACHE_DIR_NAME: &str = "photo-develop";
+/// NIHO photo の native 解析 bytes。作業コピーと同じキャッシュ消去で削除する。
+pub const ANALYSIS_CACHE_SUFFIX: &str = ".analysis";
 pub const CACHE_MAX_BYTES: u64 = 2 * 1024 * 1024 * 1024;
 /// 作業コピーの長辺（ワーカーの `APPLE_RAW_LINEAR_WORKING_COPY_LONG_EDGE`）。
 pub const WORKING_COPY_LONG_EDGE: u32 = 2560;
@@ -1803,6 +1805,13 @@ impl DevelopCache {
         continue;
       }
       if !metadata.is_file() {
+        continue;
+      }
+      // 段 2 の解析は作業コピーと別の上限で保つが、Mac を返すときの cache_purge では同時に消す。
+      if name.strip_suffix(ANALYSIS_CACHE_SUFFIX).is_some_and(is_content_key) {
+        if purge {
+          let _ = std::fs::remove_file(entry.path());
+        }
         continue;
       }
       if let Some(record) = name.strip_suffix(".tmp") {

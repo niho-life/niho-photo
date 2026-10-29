@@ -12,6 +12,14 @@
 //! - 画面の CSP の `connect-src` に `niho-develop:` を足してある（`tauri.conf.json`。同梱の sidecar へ渡すだけで、外へは出ない）
 
 use crate::develop_engine_sidecar::{is_method_name, CallError, DevelopEngine, Unavailable, MAX_BODY_BYTES};
+use niho_desktop_photo::common::new_opaque_id;
+use niho_desktop_photo::develop::{ANALYSIS_CACHE_SUFFIX, CACHE_DIR_NAME};
+use std::fs::{self, OpenOptions};
+use std::io::{self, Read, Write};
+use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
+use std::path::Path;
+use std::sync::Mutex;
+use std::time::UNIX_EPOCH;
 use tauri::http::{header, response, HeaderMap, Method, Request, Response, StatusCode, Uri};
 use tauri::{Manager, UriSchemeContext, UriSchemeResponder, Wry};
 
@@ -21,6 +29,11 @@ pub const SCHEME: &str = "niho-develop";
 const MAIN_WINDOW_LABEL: &str = "main";
 const NOT_INSTALLED: Unavailable = Unavailable("develop sidecar is not installed");
 const CLIENT_HEADER: &str = "x-niho-develop-client";
+const ANALYSIS_GET: &str = "Analysis.get";
+const ANALYSIS_PUT: &str = "Analysis.put";
+const MAX_ANALYSIS_BYTES: usize = 16 * 1024 * 1024;
+const MAX_ANALYSIS_FILES: usize = 4;
+static ANALYSIS_CACHE_GUARD: Mutex<()> = Mutex::new(());
 
 /// 受ける要求。
 #[derive(Debug, PartialEq, Eq)]
@@ -118,6 +131,114 @@ pub fn respond(engine: &DevelopEngine, client: &str, method: &str, body: &[u8]) 
   }
 }
 
+fn analysis_key(body: &[u8]) -> Option<&str> {
+  let key = std::str::from_utf8(body.get(..64)?).ok()?;
+  (key
+    .bytes()
+    .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase()))
+  .then_some(key)
+}
+
+fn analysis_file_name(key: &str) -> String {
+  format!("{key}{ANALYSIS_CACHE_SUFFIX}")
+}
+
+fn private_analysis_dir(root: &Path) -> io::Result<std::path::PathBuf> {
+  let dir = root.join(CACHE_DIR_NAME);
+  fs::create_dir_all(&dir)?;
+  if !fs::symlink_metadata(&dir)?.file_type().is_dir() {
+    return Err(io::Error::new(
+      io::ErrorKind::InvalidData,
+      "analysis cache directory is not private",
+    ));
+  }
+  fs::set_permissions(&dir, fs::Permissions::from_mode(0o700))?;
+  Ok(dir)
+}
+
+fn write_analysis(dir: &Path, key: &str, bytes: &[u8]) -> io::Result<()> {
+  let _guard = ANALYSIS_CACHE_GUARD.lock().unwrap_or_else(|poison| poison.into_inner());
+  let dir = private_analysis_dir(dir)?;
+  let temp = dir.join(format!(".{}", new_opaque_id("analysis")));
+  let result = (|| {
+    let mut file = OpenOptions::new().write(true).create_new(true).open(&temp)?;
+    file.set_permissions(fs::Permissions::from_mode(0o600))?;
+    file.write_all(bytes)?;
+    file.sync_all()?;
+    fs::rename(&temp, dir.join(analysis_file_name(key)))?;
+    let mut entries = fs::read_dir(&dir)?
+      .filter_map(Result::ok)
+      .filter_map(|entry| {
+        let name = entry.file_name();
+        let name = name.to_str()?;
+        let key = name.strip_suffix(ANALYSIS_CACHE_SUFFIX)?;
+        if key.len() != 64 || analysis_key(key.as_bytes()) != Some(key) {
+          return None;
+        }
+        let metadata = fs::symlink_metadata(entry.path()).ok()?;
+        metadata
+          .file_type()
+          .is_file()
+          .then_some((metadata.modified().unwrap_or(UNIX_EPOCH), entry.path()))
+      })
+      .collect::<Vec<_>>();
+    entries.sort();
+    let excess = entries.len().saturating_sub(MAX_ANALYSIS_FILES);
+    for (_, old) in entries.into_iter().take(excess) {
+      fs::remove_file(old)?;
+    }
+    Ok(())
+  })();
+  if result.is_err() {
+    let _ = fs::remove_file(temp);
+  }
+  result
+}
+
+/** sidecar から独立した、同じ Mac の作業コピーキャッシュ内の解析 bytes。鍵は SHA-256 だけを受ける。 */
+pub fn respond_analysis(root: &Path, method: &str, body: &[u8]) -> Response<Vec<u8>> {
+  let Some(key) = analysis_key(body) else {
+    return bad_request();
+  };
+  match method {
+    ANALYSIS_GET if body.len() == 64 => {
+      let dir = root.join(CACHE_DIR_NAME);
+      match fs::symlink_metadata(&dir) {
+        Ok(metadata) if metadata.file_type().is_dir() => {}
+        Ok(_) => return not_found(),
+        Err(error) if error.kind() == io::ErrorKind::NotFound => return not_found(),
+        Err(_) => return unavailable(Unavailable("analysis cache unavailable")),
+      }
+      let file = dir.join(analysis_file_name(key));
+      let mut opened = match OpenOptions::new().read(true).custom_flags(libc::O_NOFOLLOW).open(&file) {
+        Ok(opened) => opened,
+        Err(error) if error.kind() == io::ErrorKind::NotFound || error.raw_os_error() == Some(libc::ELOOP) => {
+          return not_found()
+        }
+        Err(_) => return unavailable(Unavailable("analysis cache unavailable")),
+      };
+      let Ok(metadata) = opened.metadata() else {
+        return unavailable(Unavailable("analysis cache unavailable"));
+      };
+      if !metadata.is_file() || metadata.len() == 0 || metadata.len() > MAX_ANALYSIS_BYTES as u64 {
+        return not_found();
+      }
+      let mut bytes = Vec::with_capacity(metadata.len() as usize);
+      match opened.read_to_end(&mut bytes) {
+        Ok(length) if length as u64 == metadata.len() => answered(bytes),
+        _ => unavailable(Unavailable("analysis cache unavailable")),
+      }
+    }
+    ANALYSIS_PUT if body.len() > 64 && body.len() <= 64 + MAX_ANALYSIS_BYTES => {
+      match write_analysis(root, key, &body[64..]) {
+        Ok(()) => answered(Vec::new()),
+        Err(_) => unavailable(Unavailable("analysis cache unavailable")),
+      }
+    }
+    _ => bad_request(),
+  }
+}
+
 /// `register_asynchronous_uri_scheme_protocol` の handler。sidecar の待ちは blocking の thread で行う。
 pub fn handle(context: UriSchemeContext<'_, Wry>, request: Request<Vec<u8>>, responder: UriSchemeResponder) {
   let method = match route(context.webview_label(), request.method(), request.uri()) {
@@ -131,6 +252,16 @@ pub fn handle(context: UriSchemeContext<'_, Wry>, request: Request<Vec<u8>>, res
   let Some(client) = client_id(request.headers()).map(str::to_owned) else {
     return responder.respond(bad_request());
   };
+  if method == ANALYSIS_GET || method == ANALYSIS_PUT {
+    let Ok(root) = context.app_handle().path().app_cache_dir() else {
+      return responder.respond(unavailable(Unavailable("analysis cache unavailable")));
+    };
+    let body = request.into_body();
+    tauri::async_runtime::spawn_blocking(move || {
+      responder.respond(respond_analysis(&root, &method, &body));
+    });
+    return;
+  }
   let Some(engine) = context
     .app_handle()
     .try_state::<DevelopEngine>()
@@ -283,5 +414,51 @@ mod tests {
     );
     assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(response.body(), NOT_BUNDLED.0.as_bytes());
+  }
+
+  #[test]
+  fn analysis_cache_uses_only_hash_keys_and_rejects_symlinks() {
+    let root = std::env::temp_dir().join(new_opaque_id("analysis-scheme-test"));
+    fs::create_dir(&root).unwrap();
+    let key = "a".repeat(64);
+    let mut body = key.as_bytes().to_vec();
+    body.extend_from_slice(&[1, 2, 3]);
+    assert_eq!(respond_analysis(&root, ANALYSIS_PUT, &body).status(), StatusCode::OK);
+    assert_eq!(respond_analysis(&root, ANALYSIS_GET, key.as_bytes()).body(), &[1, 2, 3]);
+    assert_eq!(
+      respond_analysis(&root, ANALYSIS_GET, b"not-a-hash").status(),
+      StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+      respond_analysis(&root, ANALYSIS_PUT, key.as_bytes()).status(),
+      StatusCode::BAD_REQUEST
+    );
+    assert_eq!(
+      respond_analysis(&root, ANALYSIS_PUT, &vec![b'a'; 65 + MAX_ANALYSIS_BYTES]).status(),
+      StatusCode::BAD_REQUEST
+    );
+    let file = root.join(CACHE_DIR_NAME).join(analysis_file_name(&key));
+    assert_eq!(fs::metadata(&file).unwrap().permissions().mode() & 0o777, 0o600);
+    fs::remove_file(&file).unwrap();
+    std::os::unix::fs::symlink(root.join("missing"), &file).unwrap();
+    assert_eq!(
+      respond_analysis(&root, ANALYSIS_GET, key.as_bytes()).status(),
+      StatusCode::NOT_FOUND
+    );
+    fs::remove_file(&file).unwrap();
+
+    for digit in b'0'..=b'4' {
+      let key = std::iter::repeat_n(digit, 64).collect::<Vec<_>>();
+      let mut body = key.clone();
+      body.push(digit);
+      assert_eq!(respond_analysis(&root, ANALYSIS_PUT, &body).status(), StatusCode::OK);
+    }
+    let count = fs::read_dir(root.join(CACHE_DIR_NAME))
+      .unwrap()
+      .filter_map(Result::ok)
+      .filter(|entry| entry.file_name().to_string_lossy().ends_with(ANALYSIS_CACHE_SUFFIX))
+      .count();
+    assert_eq!(count, MAX_ANALYSIS_FILES);
+    fs::remove_dir_all(root).unwrap();
   }
 }

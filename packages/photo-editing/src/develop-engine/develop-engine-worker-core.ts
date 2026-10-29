@@ -262,6 +262,8 @@ export type DevelopEngineWorkerDeps = {
   digest?: (bytes: ArrayBuffer) => Promise<string | null>;
   /** 再起動をまたいで compact 解析 bytes を保つ。失敗時は通常の再計算に戻す（#155）。 */
   analysisStore?: DevelopAnalysisStore;
+  /** Mac native で WebKit storage が初期化されても残る作業コピー cache。 */
+  nativeAnalysisStore?: DevelopAnalysisStore;
   /**
    * 先回りの解析を作る補助の worker を作る（#155）。応答を `receive` に渡し、読み込めない・落ちたら null を渡す。省略（worker の中で
    * `Worker` が使えない）・null を返したら、今までどおりこの worker で作る
@@ -920,9 +922,12 @@ export function createDevelopEngineWorkerHandler(
   const analysisBytesId = (photoKey: string, analysisKey: string): string =>
     JSON.stringify([version, photoKey, analysisKey]);
 
-  /** meta JSON を IndexedDB の鍵に置かない。入力・版・解析条件をまとめて SHA-256 にする。 */
+  const activeAnalysisStore = (): DevelopAnalysisStore | undefined =>
+    runtime === "native" ? deps.nativeAnalysisStore ?? deps.analysisStore : deps.analysisStore;
+
+  /** meta JSON を保存先の鍵に置かない。入力・版・解析条件をまとめて SHA-256 にする。 */
   const persistentAnalysisId = async (photoKey: string, analysisKey: string): Promise<string | null> => {
-    if (!deps.analysisStore || !deps.digest) return null;
+    if (!deps.digest) return null;
     try {
       const bytes = new TextEncoder().encode(analysisBytesId(photoKey, analysisKey));
       return await deps.digest(bytes.buffer);
@@ -932,15 +937,17 @@ export function createDevelopEngineWorkerHandler(
   };
 
   const persistAnalysis = (photoKey: string, analysisKey: string, bytes: ArrayBuffer) => {
-    if (!deps.analysisStore) return;
+    const store = activeAnalysisStore();
+    if (!store) return;
     void (async () => {
       const id = await persistentAnalysisId(photoKey, analysisKey);
-      if (id) await deps.analysisStore?.put(id, bytes);
+      if (id) await store.put(id, bytes);
     })().catch(() => undefined);
   };
 
   const loadPersistedAnalysis = async (photoKey: string | null, analysisKey: string | null) => {
-    if (photoKey === null || analysisKey === null || !deps.analysisStore) return;
+    const store = activeAnalysisStore();
+    if (photoKey === null || analysisKey === null || !store) return;
     if (analysisBytes.has(analysisBytesId(photoKey, analysisKey))) return;
     const id = await persistentAnalysisId(photoKey, analysisKey);
     if (!id) return;
@@ -948,7 +955,7 @@ export function createDevelopEngineWorkerHandler(
     let timer: ReturnType<typeof setTimeout> | undefined;
     try {
       const stored = await Promise.race([
-        deps.analysisStore.get(id).catch(() => null),
+        store.get(id).catch(() => null),
         new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), 120); }),
       ]);
       if (stored instanceof ArrayBuffer) cacheAnalysisBytes(photoKey, analysisKey, stored, false);
