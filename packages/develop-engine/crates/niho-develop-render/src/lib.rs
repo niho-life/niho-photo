@@ -27,6 +27,10 @@
 //! stdout carries exactly one JSON line: the summary, or
 //! `{"error":"<code>","message":"..."}` with a non-zero exit code
 //! ([`ErrorCode::exit_code`], README "native CLI").
+//!
+//! `serve` ([`serve`], #152) is the Mac app editor's develop engine instead:
+//! one long-lived process that answers the wasm's calls (`niho_develop::api`)
+//! in frames over stdin / stdout.
 
 use std::fs::{self, File};
 use std::io::{BufWriter, Write};
@@ -39,6 +43,8 @@ use image::{ExtendedColorType, ImageEncoder};
 use niho_develop::settings::READABLE_SETTINGS_VERSIONS;
 use niho_develop::{DecodeError, DevelopSettings, Filter, Quality, Session};
 use serde_json::{json, Value};
+
+pub mod serve;
 
 pub const TOOL_NAME: &str = "niho-develop-render";
 
@@ -198,6 +204,8 @@ pub enum Command {
     Help,
     Version,
     Render(RenderArgs),
+    /// `serve`: frames over stdin / stdout until stdin ends ([`serve`]).
+    Serve,
 }
 
 pub fn version_line() -> String {
@@ -218,6 +226,7 @@ USAGE
        | --raster <original.jpg|png>)
       [--max-dimension <0|px>]          (default 0 = the source's size)
       [--mask-surface <sha256>=<surface.png>]...   (at most 8)
+  niho-develop-render serve
   niho-develop-render version
 
 The output PNG has no ICC profile (sRGB) and is written through a temporary
@@ -245,6 +254,22 @@ Exit codes: 0 ok, 1 invalid_arguments, 2 unsupported_settings,
 3 invalid_settings, 4 input_not_found / read_failed,
 5 decode_failed / unsupported_profile / invalid_metadata,
 6 encode_failed / write_failed, 70 internal_error.
+
+serve answers the browser wasm's calls by their JS names (the Mac app's
+photo editor) until stdin ends (exit 0); a broken frame exits 1. Frames
+(u32 = little endian):
+  request   u32 id, u32 method length, method, u32 body length, body
+  response  u32 id, u32 body length, body   (any order, each whole)
+  body      u32 header length, header (a JSON object), payload (blobs)
+A request header is {\"args\":[...],\"blobs\":[n,...]} with \"handle\"
+(Developer.*) and \"client\" (Developer.new / openWorkingCopy / thumbnail,
+releaseClient); a binary argument is {\"blob\":i}. A response header is
+{\"ok\":true,\"result\":...,\"blobs\":[...]} or
+{\"ok\":false,\"error\":\"...\",\"code\":\"...\"} where code is badRequest,
+unknownMethod, unknownHandle, tooManyDevelopers or internal (none: the
+engine's own message). \"hello\" lists the methods. At most 8 requests at
+a time, 64 Developers, a 64-byte method and a 1 GiB body. stdout carries
+frames only; a panic is a line on stderr.
 ";
 
 /// Parses the arguments after the program name. Options take `--name value`
@@ -257,6 +282,13 @@ pub fn parse(args: &[String]) -> Result<Command, CliError> {
         "-h" | "--help" | "help" => Ok(Command::Help),
         "-V" | "--version" | "version" => Ok(Command::Version),
         "render" => parse_render(rest),
+        "serve" => match rest {
+            [] => Ok(Command::Serve),
+            [flag] if flag == "-h" || flag == "--help" => Ok(Command::Help),
+            [other, ..] => Err(CliError::arguments(format!(
+                "serve takes no arguments (got '{other}')"
+            ))),
+        },
         other => Err(CliError::arguments(format!(
             "unknown subcommand '{other}' (see --help)"
         ))),
@@ -730,19 +762,21 @@ pub fn render(args: &RenderArgs) -> Result<Value, CliError> {
 }
 
 /// Runs a command line (without the program name), prints the stdout line
-/// and returns the exit code.
+/// and returns the exit code (`serve`: serves until stdin ends).
 pub fn run(args: &[String]) -> i32 {
-    let outcome = parse(args).and_then(|command| match command {
-        Command::Help => {
+    let outcome = match parse(args) {
+        Ok(Command::Help) => {
             print!("{USAGE}");
             Ok(None)
         }
-        Command::Version => {
+        Ok(Command::Version) => {
             println!("{}", version_line());
             Ok(None)
         }
-        Command::Render(render_args) => render(&render_args).map(Some),
-    });
+        Ok(Command::Render(render_args)) => render(&render_args).map(Some),
+        Ok(Command::Serve) => return serve::run_stdio(),
+        Err(e) => Err(e),
+    };
     match outcome {
         Ok(Some(summary)) => {
             println!("{summary}");
