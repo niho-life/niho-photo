@@ -6,6 +6,7 @@
 //! `specs/initiatives/niho-develop-engine.md` ("段 2").
 
 pub mod acr3;
+pub mod api;
 pub mod auto;
 pub mod camera_linear;
 pub mod camera_linear_codec;

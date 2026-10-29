@@ -26,6 +26,18 @@ cargo +1.98.1 test --locked --manifest-path packages/develop-engine/Cargo.toml -
 
 校正の補助toolは `tools/calibrate/` と `tools/colorcheck/`、新DCP生成は `tools/independent-profile/`、RAW監査は `tools/asset-audit/`。元の写真やLightroom・Appleの参照出力を再計測する場合は、所有データの配置を引数・環境変数で指定する。非公開の配置や秘密情報は公開ソースに埋め込まない。第三者チャートの既定参照ファイルは同梱せず、測定者が監査した参照値を明示入力する。
 
+## native CLI（`niho-develop-render`）
+
+`crates/niho-develop-render` は段 2 の native CLI。使い方・終了コードの正は `niho-develop-render --help`。
+
+- `render`: 1 枚を 8bit sRGB の PNG に描く（Mac の原寸の書き出し）。stdout は 1 行の JSON（要約か `{"error","message"}`）。
+- `serve`（#152）: Mac アプリの編集画面の現像を 1 つの長く生きるプロセスで受ける。口は wasm の export と同じ名前（`version` … `convertEditSettings`、`Developer.new` … `Developer.free`）と `hello`・`releaseClient`。wasm と serve はどちらも `niho_develop::api` の同じ関数を包むだけなので、画素・bytes・JSON・失敗の message は同じ（`crates/niho-develop/tests/api_cross_target.rs` が native と wasm32 で、`crates/niho-develop-render/tests/serve.rs` が serve で同じ SHA-256 を固定する）。
+  - 封（u32 は little endian）: 要求 `u32 id · u32 M · M bytes method · u32 B · B bytes 本文`、応答 `u32 id · u32 B · B bytes 本文`。本文は `u32 H · H bytes header（JSON object）· payload（blob を前から順に）`。
+  - 要求の header: `{"args":[...],"blobs":[n0,...],"handle"?,"client"?}`（binary の引数は `{"blob":i}`）。応答: `{"ok":true,"result":...,"blobs":[...]}` か `{"ok":false,"error":"...","code"?}`。
+  - 失敗の `code`: `badRequest`（封・引数の形）、`unknownMethod`、`unknownHandle`、`tooManyDevelopers`、`internal`（panic。その Developer を手放す）。口そのものの失敗（設定が読めない等）は `code` 無しで wasm の `JsError` と同じ message。
+  - 要求は並行に処理し（同時 8 まで）、応答は id で対応する（順は要求と違ってよい）。生きている Developer は 64 まで、method は 64 bytes まで、本文は 1 GiB まで。stdin の EOF で exit 0（処理中の要求を返してから）、壊れた封は exit 1。stdout には封だけを書き、panic は stderr へ 1 行。
+  - release profile は `panic = "abort"` なので、release build の panic は `internal` の応答にならずプロセスが終わる（呼ぶ側は落ちた sidecar として扱う）。
+
 ## 忠実度
 
 - 階調（#29、`niho-12`）: 入力 8bit 量子化の無い linear f32 の 1024 段ランプ（空・肌の 2 色の線形補間、中庸と 3 プリセットの 4 設定）で、出力 8bit の隣接差 2 以上は Final で raster 2 → 0（`niho-10` → `niho-12`）、旧 RAW 12 → 5（`niho-2` → `niho-12`）、Interactive で raster 0 → 0、旧 RAW 7 → 5。`niho-12` に残る 5 件（channel 単位）はすべてランプの暗端 11 画素以内で、4096 段ではどの engine も 0 件。[公開測定](fixtures/color/review-2026-10-21/niho12-public-measurement.json)は `crates/niho-develop/examples/niho12_measure.rs` で再現する。

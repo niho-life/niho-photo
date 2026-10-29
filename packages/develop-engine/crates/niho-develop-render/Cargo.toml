@@ -1,6 +1,6 @@
 [package]
 name = "niho-develop-render"
-description = "Native render CLI of niho-develop (stage 2): NIHO Desktop's full-size export as a child process"
+description = "Native CLI of niho-develop (stage 2): NIHO Desktop's full-size export (render) and the Mac editor's develop engine over stdin / stdout (serve)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
