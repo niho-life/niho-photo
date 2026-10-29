@@ -5961,7 +5961,7 @@
         "path": "packages/develop-engine/crates/niho-develop-wasm/src/lib.rs",
         "sha256": "bb2c416ce23b4e3ca3208f32736f22254ed82276b24fd7f49f1a022e4eb85fbd"
       },
-      "outputSha256": "bd520648ce81e2f0998bcf0cccc6447a1a3dd025903a5a58682632d4d7cea9e7",
+      "outputSha256": "26d19981e6a8e6d445facd92c8b41c73b12ce790604f23a0bbec8b3c3470b3ca",
       "modifications": [
         "Issue #30 Oklch色ミキサーとengine 10/11対応を反映",
         "部分補正（マスク）#65: validateSettingsのマスク読み取り回帰テストを追加",
@@ -6445,7 +6445,7 @@
         "path": "packages/develop-engine/crates/niho-develop/src/lib.rs",
         "sha256": "1591d49effaa779c8e23ad6877508ccf336565eec8336d5b4e6faa3b5d3846b0"
       },
-      "outputSha256": "99a5c6ab2cd851904927d7c5d3a433b1ff6b440470a0c702ffe9b7316add2a2b",
+      "outputSha256": "5a7af0060e22c7856ad4a7c3c356fa61587de1a2171ea4f25d614adab2a87bc3",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
@@ -6534,7 +6534,7 @@
         "path": "packages/develop-engine/crates/niho-develop/src/niho4.rs",
         "sha256": "76c59b0f23b8b2a69d7c6b1602566fa222ee14d592ab7b42b6e37b5aba4ab319"
       },
-      "outputSha256": "be90d22506f4b11da61bf55f3e38b52d4be9ff8d230827f979dbedd656bb7b36",
+      "outputSha256": "d6b9266b636c6d80f22552ac939539b2abd1fdddb7bb0f98fe73b413ba67fb8b",
       "modifications": [
         "Issue #28の色相安定engine追加と互換回帰を反映。",
         "新しい色相保持エンジンと新旧バイナリの能力境界・数値回帰を整合。",
@@ -11623,7 +11623,7 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/analysis_transfer.rs",
-      "sha256": "3ce8bd024cd3709026c217e991885e349a60bacb74b8ed96437af8099f69c069",
+      "sha256": "87022c94c973f190428c3a903a9e0b55550dfcd7c2313fb0d756e8aa826cada4",
       "origin": "公開 repo で新規作成（niho-photo#155）。取り込んだ解析で描く Final・Interactive が新しい Session と同じ byte になり、別の写真・壊れた bytes・版違いを断る Rust 回帰（native と wasm。合成画像だけ）。外部コード・実写真を含まない。"
     }
   ],

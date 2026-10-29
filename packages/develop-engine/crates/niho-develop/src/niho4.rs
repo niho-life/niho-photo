@@ -413,6 +413,16 @@ pub fn prepare_analysis(
     )
 }
 
+impl AnalysisCache {
+    /// Whether [`prepare_analysis`] of `settings`, which this cache serves,
+    /// would only find what it makes: the response coefficients and, for
+    /// niho-7 / niho-11, the NIHO 7 highlight maps are made.
+    pub(crate) fn holds(&self, settings: &DevelopSettings) -> bool {
+        self.coefficients.get().is_some()
+            && (!uses_niho7_engine(settings) || self.niho7_highlights.get().is_some())
+    }
+}
+
 /// Prepares a signed RAW master from the full CNR/analysis cache. `target`
 /// reduces that CNR-complete source before the display-only controls; `None`
 /// preserves the frozen full-source preparation order.

@@ -14,8 +14,9 @@
 //! and Vibrance for this photo). `developer.prepareAnalysis(settingsJson)`
 //! makes ahead, while idle, the response analysis a preset's first frame
 //! would wait for (#129); `developer.exportAnalysis(settingsJson)` makes it
-//! as versioned bytes in a helper worker and `developer.importAnalysis(bytes)`
-//! takes them in (#155).
+//! as versioned bytes in a helper worker, `developer.importAnalysis(bytes)`
+//! takes them in and `developer.holdsAnalysis(settingsJson)` says whether
+//! there is anything left to make (#155).
 //! Local masks (`masks`, v 5) render through the same `render` calls;
 //! `capabilities()` says which kinds this build draws and
 //! `developer.maskPlane(settingsJson, maskId, maxDimension)` gives one
@@ -553,6 +554,16 @@ impl Developer {
     pub fn export_analysis(&mut self, settings_json: &str) -> Result<Option<Vec<u8>>, JsError> {
         let settings = niho_develop::parse_settings(settings_json).map_err(js_error)?;
         self.session.export_analysis(&settings).map_err(js_error)
+    }
+
+    /// Whether this Developer holds whole the analysis `prepareAnalysis`
+    /// makes for these settings (a frame of theirs made it, or it was made
+    /// ahead or taken in), so the editor does not make it again (#155).
+    /// `false` also when there is nothing to make ahead.
+    #[wasm_bindgen(js_name = holdsAnalysis)]
+    pub fn holds_analysis(&self, settings_json: &str) -> Result<bool, JsError> {
+        let settings = niho_develop::parse_settings(settings_json).map_err(js_error)?;
+        Ok(self.session.holds_analysis(&settings))
     }
 
     /// Takes in the bytes `exportAnalysis` gave for this photo (a copy;

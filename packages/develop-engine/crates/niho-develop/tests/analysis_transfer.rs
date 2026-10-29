@@ -3,8 +3,10 @@
 //! Session of the same photo took in (`Session::import_analysis`, the
 //! editor's own) draws the Final and Interactive frames a fresh Session
 //! draws. The frames read the analysis taken in (it is not made again), and
-//! bytes of another photo, broken or of another version change nothing.
-//! Native and wasm.
+//! bytes of another photo, broken or of another version change nothing. A
+//! Session says whether it holds an analysis already
+//! (`Session::holds_analysis`: the editor does not make it again). Native
+//! and wasm.
 use niho_develop::decode::encode_signed_working_copy;
 use niho_develop::settings::{
     DetailSettings, ENGINE_NIHO_11, ENGINE_NIHO_14, LOOK_NIHO_STANDARD_1, LOOK_NIHO_STANDARD_5,
@@ -101,6 +103,7 @@ fn steps(session: &Session) -> Vec<DevelopSettings> {
     let mut cnr = manual.clone();
     cnr.color_noise_reduction = 25.0;
     steps.push(cnr);
+    manual.v = manual.v.max(6);
     manual.detail = Some(DetailSettings {
         luminance_noise_reduction: 30.0,
         ..DetailSettings::default()
@@ -148,7 +151,9 @@ fn an_analysis_taken_in_draws_what_a_fresh_session_does() {
             let bytes = export(&photo, settings);
 
             let mut taker = photo.open();
+            assert!(!taker.holds_analysis(settings), "{camera} {index}");
             assert!(taker.import_analysis(&bytes).unwrap(), "{camera} {index}");
+            assert!(taker.holds_analysis(settings), "{camera} {index}");
             let fresh = rgba(&mut photo.open(), settings, Quality::Final);
             assert!(
                 rgba(&mut taker, settings, Quality::Final) == fresh,
@@ -311,6 +316,29 @@ fn raster_png() -> Vec<u8> {
     encode::encode_png(&rgba, width, height).unwrap()
 }
 
+/// A Session holds the whole analysis of settings once a frame of theirs
+/// that uses Highlights / Shadows made it (or it was made ahead or taken
+/// in): making it ahead again would only find it. A frame without them
+/// makes the CNR source only.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn a_session_says_whether_it_holds_the_analysis() {
+    let photo = Photo::of(PANASONIC);
+    let settings = manual(25.0);
+    let mut plain = settings.clone();
+    plain.highlights = 0.0;
+    plain.shadows = 0.0;
+    let mut session = photo.open();
+    session.render(&plain, SIZE, Quality::Final).unwrap();
+    assert!(!session.holds_analysis(&settings));
+    session.render(&settings, SIZE, Quality::Final).unwrap();
+    assert!(session.holds_analysis(&settings));
+    assert!(session.holds_analysis(&plain));
+    assert!(!session.holds_analysis(&manual(0.0)));
+    assert!(session.prepare_analysis(&manual(0.0)).unwrap());
+    assert!(session.holds_analysis(&manual(0.0)));
+}
+
 /// Nothing to make for a JPEG / PNG (no signed RAW analysis).
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
 #[cfg_attr(not(target_arch = "wasm32"), test)]
@@ -321,4 +349,5 @@ fn a_raster_photo_has_no_analysis_to_give() {
     settings.highlights = -60.0;
     let mut raster = Session::open_raster(&raster_png(), 0, Filter::Lanczos3).unwrap();
     assert_eq!(raster.export_analysis(&settings).unwrap(), None);
+    assert!(!raster.holds_analysis(&settings));
 }

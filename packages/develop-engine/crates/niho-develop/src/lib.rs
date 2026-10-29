@@ -1546,6 +1546,32 @@ impl Session {
         Ok(true)
     }
 
+    /// Whether this session holds whole the analysis
+    /// [`Session::prepare_analysis`] makes for `settings` (in the prepared
+    /// master's analysis or the one made ahead or taken in), so making it
+    /// ahead again, here or in a helper worker (#155), would only find it.
+    /// `false` also when there is nothing to make ahead.
+    pub fn holds_analysis(&self, settings: &DevelopSettings) -> bool {
+        if !matches!(self.niho3_mode(settings), Ok(Some(RawEngine::Niho4))) {
+            return false;
+        }
+        let SessionSource::WorkingCopy { image, meta } = self.source.as_ref() else {
+            return false;
+        };
+        [
+            self.niho3.as_ref().map(|prepared| &prepared.analysis),
+            self.niho3_ahead.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .any(|analysis| match analysis {
+            RawAnalysisCache::Niho4(cache) => {
+                analysis.serves(RawEngine::Niho4, image, meta, settings) && cache.holds(settings)
+            }
+            _ => false,
+        })
+    }
+
     /// [`Session::prepare_analysis`]: the analysis it made or filled (a
     /// reference to the kept one's cells), `None` when there is nothing to
     /// make ahead.
