@@ -54,7 +54,10 @@ async function flushPromises() {
 }
 
 async function readyEngine(
-  options: Pick<CreateDevelopEngineOptions, "encodeFrameJpeg" | "previewQuietMs" | "diagnostics" | "preferNative"> & {
+  options: Pick<
+    CreateDevelopEngineOptions,
+    "encodeFrameJpeg" | "previewQuietMs" | "diagnostics" | "preferNative" | "deviceClass"
+  > & {
     geometry?: boolean;
     features?: DevelopEngineWorkerFeatures;
   } = {},
@@ -72,6 +75,7 @@ async function readyEngine(
     type: "init",
     id: init.id,
     manifestUrl: MANIFEST_URL,
+    deviceClass: engineOptions.deviceClass ?? "pc",
     ...(engineOptions.diagnostics ? { diagnostics: true } : {}),
     ...(engineOptions.preferNative ? { preferNative: true } : {}),
   });
@@ -89,6 +93,16 @@ afterEach(() => {
 });
 
 describe("createDevelopEngine", () => {
+  it("端末 class を既定 PC / 明示 mobile として Worker init に渡す", async () => {
+    const pc = await readyEngine();
+    expect(pc.worker.lastRequest("init")).toMatchObject({ deviceClass: "pc" });
+    pc.engine.dispose();
+
+    const mobile = await readyEngine({ deviceClass: "mobile" });
+    expect(mobile.worker.lastRequest("init")).toMatchObject({ deviceClass: "mobile" });
+    mobile.engine.dispose();
+  });
+
   it("native の希望は明示時だけ Worker init に渡す", async () => {
     const { engine, worker } = await readyEngine({ preferNative: true });
     expect(worker.lastRequest("init")).toMatchObject({ preferNative: true });
@@ -108,7 +122,13 @@ describe("createDevelopEngine", () => {
     const worker = new FakeWorker();
     const engine = createDevelopEngine({ createWorker: () => worker as unknown as Worker, manifestUrl: MANIFEST_URL, diagnostics: true });
     const ready = engine.ready();
-    expect(worker.lastRequest("init")).toEqual({ type: "init", id: 1, manifestUrl: MANIFEST_URL, diagnostics: true });
+    expect(worker.lastRequest("init")).toEqual({
+      type: "init",
+      id: 1,
+      manifestUrl: MANIFEST_URL,
+      deviceClass: "pc",
+      diagnostics: true,
+    });
     worker.respond({ type: "ready", id: 1, version: "test", runtime: "wasm" });
     expect(await ready).toBe(true);
     engine.dispose();

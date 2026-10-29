@@ -66,6 +66,8 @@ function cachedFrameOf(cached: CachedFrame | null, key: string, settings: Develo
  */
 export function useBrowserPhotoDevelop(params: {
   spotId: string;
+  /** Worker の論理メモリ予算。画面幅の class を呼び出し側が明示する。 */
+  deviceClass: "pc" | "mobile";
   /** 認証済みユーザー。匿名・未確定では端末退避を読まず、書かない。 */
   actorId: string | null;
   queryClient: QueryClient;
@@ -197,6 +199,7 @@ export function useBrowserPhotoDevelop(params: {
       engineRef.current = createDevelopEngine({
         manifestUrl: library.engineAssets.manifestUrl() ?? undefined,
         preferNative: library.engineAssets.preferNative === true,
+        deviceClass: params.deviceClass,
         maskSurfaces: maskSurfaceSource,
       });
     }
@@ -204,7 +207,7 @@ export function useBrowserPhotoDevelop(params: {
     const ready = await engine.ready();
     if (!ready && mountedRef.current) setDevelopUnavailable(true);
     return ready ? engine : null;
-  }, [library, maskSurfaceSource, mountedRef]);
+  }, [library, maskSurfaceSource, mountedRef, params.deviceClass]);
 
   /** 開いた写真の wasm の編集を持つ（保存の状態は何も送っていない状態から）。 */
   const startSession = useCallback((session: DevelopSession) => {

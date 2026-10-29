@@ -279,6 +279,74 @@ describe("先回りを補助の worker で作る（#155）", () => {
     ]);
   });
 
+  it("通常の 2048px 書き出しは compact 解析を直後も再利用し、大きい書き出しでも Developer eviction 後まで保つ", async () => {
+    const glue = transferGlue({ holds: () => false });
+    const digest = vi.fn(async (bytes: ArrayBuffer) => String(new Uint8Array(bytes)[0]));
+    const { handler, helpers } = setup(glue, fakeHelpers(), { digest });
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await handler(openCopy(2));
+    await handler(final(3));
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    const helper = helpers?.created[0];
+    const [request] = helpers?.requests(helper) ?? [];
+    helper?.receive({ type: "analysis", id: request?.id ?? 0, bytes: bytesOf(7, 8) });
+    await vi.advanceTimersByTimeAsync(0);
+
+    await handler({
+      type: "exportWorkingCopyJpeg",
+      id: 4,
+      png: new Uint8Array([9, 1, 2]).buffer,
+      metaJson: SIGNED_META,
+      settingsJson: SIGNED,
+      maxDimension: 2048,
+      quality: 90,
+    });
+    const afterNormalExport = glue.events.length;
+    await handler({ type: "render", id: 40, settingsJson: SIGNED, maxDimension: 1280, interactive: true });
+    expect(glue.events.slice(afterNormalExport)).toEqual(["import:0", "render:0"]);
+
+    await handler({
+      type: "exportWorkingCopyJpeg",
+      id: 41,
+      png: new Uint8Array([10, 1, 2]).buffer,
+      metaJson: SIGNED_META,
+      settingsJson: SIGNED,
+      maxDimension: 2049,
+      quality: 90,
+    });
+    // B, C で A の Developer を eviction し、A を新しく開き直す。
+    await handler(openCopy(5));
+    await handler(openCopy(6));
+    await handler(openCopy(2));
+    const before = glue.events.length;
+    await handler(final(7));
+
+    expect(glue.events.slice(before)).toEqual(["import:5", "render:5"]);
+    expect(glue.imported.at(-1)).toEqual({ developer: 5, bytes: [7, 8] });
+  });
+
+  it("mobile の admission は kept Developer を compact 解析より先に捨て、開き直した描画へ解析を戻す", async () => {
+    const glue = transferGlue({ holds: () => false });
+    const digest = vi.fn(async (bytes: ArrayBuffer) => String(new Uint8Array(bytes)[0]));
+    const { handler, helpers } = setup(glue, fakeHelpers(), { digest });
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL, deviceClass: "mobile" });
+    await handler(openCopy(2));
+    await handler(final(3));
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    const helper = helpers?.created[0];
+    const [request] = helpers?.requests(helper) ?? [];
+    helper?.receive({ type: "analysis", id: request?.id ?? 0, bytes: bytesOf(7, 8) });
+    await vi.advanceTimersByTimeAsync(0);
+
+    await handler(openCopy(4));
+    await handler(openCopy(2));
+    const before = glue.events.length;
+    await handler(final(5));
+
+    expect(glue.events.slice(before)).toEqual(["import:2", "render:2"]);
+    expect(glue.imported.at(-1)).toEqual({ developer: 2, bytes: [7, 8] });
+  });
+
   it("同じ Developer の1件枠で A→B→A と戻れば再 import し、同じ A の連続 drag では import を繰り返さない", async () => {
     const glue = transferGlue({ trackHeldSlot: true });
     const digest = vi.fn(async (bytes: ArrayBuffer) => String(new Uint8Array(bytes)[0]));
