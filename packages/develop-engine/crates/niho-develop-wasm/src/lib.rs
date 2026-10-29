@@ -13,7 +13,9 @@
 //! `developer.autoSettings(settingsJson)` is "自動" (the six Light sliders
 //! and Vibrance for this photo). `developer.prepareAnalysis(settingsJson)`
 //! makes ahead, while idle, the response analysis a preset's first frame
-//! would wait for (#129).
+//! would wait for (#129); `developer.exportAnalysis(settingsJson)` makes it
+//! as versioned bytes in a helper worker and `developer.importAnalysis(bytes)`
+//! takes them in (#155).
 //! Local masks (`masks`, v 5) render through the same `render` calls;
 //! `capabilities()` says which kinds this build draws and
 //! `developer.maskPlane(settingsJson, maskId, maxDimension)` gives one
@@ -540,6 +542,26 @@ impl Developer {
     #[wasm_bindgen(js_name = releaseAnalysisAhead)]
     pub fn release_analysis_ahead(&mut self) {
         self.session.release_analysis_ahead();
+    }
+
+    /// Makes the analysis `prepareAnalysis` makes and gives it as versioned
+    /// bytes (#155: a helper worker opens the same photo the same way and
+    /// makes it there, so the editor's worker is not held by it). The
+    /// editor's Developer takes them in with `importAnalysis`. `undefined`:
+    /// nothing to make ahead for this photo and engine.
+    #[wasm_bindgen(js_name = exportAnalysis)]
+    pub fn export_analysis(&mut self, settings_json: &str) -> Result<Option<Vec<u8>>, JsError> {
+        let settings = niho_develop::parse_settings(settings_json).map_err(js_error)?;
+        self.session.export_analysis(&settings).map_err(js_error)
+    }
+
+    /// Takes in the bytes `exportAnalysis` gave for this photo (a copy;
+    /// #155). Frames are the same bytes as when this Developer makes the
+    /// analysis. `false`: it already held all of it. Bytes of another photo,
+    /// broken or of an unknown version throw and change nothing.
+    #[wasm_bindgen(js_name = importAnalysis)]
+    pub fn import_analysis(&mut self, bytes: &[u8]) -> Result<bool, JsError> {
+        self.session.import_analysis(bytes).map_err(js_error)
     }
 
     /// One local mask's plane for the editor's overlay: `{ width, height,
