@@ -555,6 +555,7 @@ impl DevelopEngine {
   }
 
   /// method を呼ぶ（初めてなら起動と `hello` を済ませてから）。応答の本文をそのまま返す。
+  #[cfg(test)]
   pub fn call(&self, method: &str, body: &[u8]) -> Result<Vec<u8>, CallError> {
     let session = self.0.ready_session().map_err(CallError::Unavailable)?;
     if !session.knows(method) {

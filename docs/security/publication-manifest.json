@@ -11726,8 +11726,8 @@
     },
     {
       "path": "apps/camera/src-tauri/src/develop_engine_sidecar.rs",
-      "sha256": "679ebe03755e5854669e9ade77f9bcd054a40e84e0d7e49b91946b6cd32fe3fe",
-      "origin": "公開repoで新規作成（niho-photo#152）。同梱の niho-develop-render serve を 1 プロセス持ち、stdin / stdout の封で要求を多重化する（起動・hello・落ちたときの起動し直し・待ちの上限・終了）。偽の serve での試験を含む。外部のコード・実写真・非公開の情報を含まない。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正"
+      "sha256": "5308dfc75f1b1b4ed34c5acd10afcb5db812fc2ef13da195c8ce4728c67e9a9f",
+      "origin": "公開repoで新規作成（niho-photo#152）。同梱の niho-develop-render serve を 1 プロセス持ち、stdin / stdout の封で要求を多重化する（起動・hello・落ちたときの起動し直し・待ちの上限・終了）。偽の serve での試験を含む。外部のコード・実写真・非公開の情報を含まない。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正\n変更理由: CI の未使用警告を防ぎ旧入口をテスト時だけに限定"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop-render/src/serve.rs",
