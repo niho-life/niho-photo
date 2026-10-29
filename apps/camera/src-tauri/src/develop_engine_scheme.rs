@@ -12,7 +12,7 @@
 //! - 画面の CSP の `connect-src` に `niho-develop:` を足してある（`tauri.conf.json`。同梱の sidecar へ渡すだけで、外へは出ない）
 
 use crate::develop_engine_sidecar::{is_method_name, CallError, DevelopEngine, Unavailable, MAX_BODY_BYTES};
-use tauri::http::{header, response, Method, Request, Response, StatusCode, Uri};
+use tauri::http::{header, response, HeaderMap, Method, Request, Response, StatusCode, Uri};
 use tauri::{Manager, UriSchemeContext, UriSchemeResponder, Wry};
 
 /// scheme の名前（`tauri.conf.json` の CSP の `connect-src` と、画面の native glue）。
@@ -20,6 +20,7 @@ pub const SCHEME: &str = "niho-develop";
 /// 現像の口に答える窓（`tauri.conf.json` の窓・capabilities の `windows`）。
 const MAIN_WINDOW_LABEL: &str = "main";
 const NOT_INSTALLED: Unavailable = Unavailable("develop sidecar is not installed");
+const CLIENT_HEADER: &str = "x-niho-develop-client";
 
 /// 受ける要求。
 #[derive(Debug, PartialEq, Eq)]
@@ -55,6 +56,15 @@ pub fn body_fits(length: usize) -> bool {
   length > 0 && length <= MAX_BODY_BYTES
 }
 
+/// The Worker glue sends one random 128-bit token on every request. This
+/// binds its Developer handles to one sidecar process across restarts.
+pub fn client_id(headers: &HeaderMap) -> Option<&str> {
+  headers
+    .get(CLIENT_HEADER)
+    .and_then(|value| value.to_str().ok())
+    .filter(|value| value.len() == 32 && value.bytes().all(|byte| byte.is_ascii_hexdigit()))
+}
+
 /// どの応答にも付ける（画面の XHR が status を読めるように。中身は都度違うのでキャッシュしない）。
 fn base(status: StatusCode) -> response::Builder {
   Response::builder()
@@ -74,7 +84,10 @@ pub fn bad_request() -> Response<Vec<u8>> {
 pub fn preflight() -> Response<Vec<u8>> {
   base(StatusCode::NO_CONTENT)
     .header(header::ACCESS_CONTROL_ALLOW_METHODS, "POST")
-    .header(header::ACCESS_CONTROL_ALLOW_HEADERS, "Content-Type")
+    .header(
+      header::ACCESS_CONTROL_ALLOW_HEADERS,
+      "Content-Type, X-Niho-Develop-Client",
+    )
     .header(header::ACCESS_CONTROL_MAX_AGE, "600")
     .body(Vec::new())
     .expect("204 response")
@@ -97,8 +110,8 @@ pub fn answered(body: Vec<u8>) -> Response<Vec<u8>> {
 }
 
 /// sidecar に渡して応答を作る（blocking。起動と `hello` もここで待つ）。
-pub fn respond(engine: &DevelopEngine, method: &str, body: &[u8]) -> Response<Vec<u8>> {
-  match engine.call(method, body) {
+pub fn respond(engine: &DevelopEngine, client: &str, method: &str, body: &[u8]) -> Response<Vec<u8>> {
+  match engine.call_for_client(client, method, body) {
     Ok(reply) => answered(reply),
     Err(CallError::UnknownMethod) => not_found(),
     Err(CallError::Unavailable(reason)) => unavailable(reason),
@@ -115,6 +128,9 @@ pub fn handle(context: UriSchemeContext<'_, Wry>, request: Request<Vec<u8>>, res
   if !body_fits(request.body().len()) {
     return responder.respond(bad_request());
   }
+  let Some(client) = client_id(request.headers()).map(str::to_owned) else {
+    return responder.respond(bad_request());
+  };
   let Some(engine) = context
     .app_handle()
     .try_state::<DevelopEngine>()
@@ -125,7 +141,7 @@ pub fn handle(context: UriSchemeContext<'_, Wry>, request: Request<Vec<u8>>, res
   let body = request.into_body();
   tauri::async_runtime::spawn_blocking(move || {
     let _activity = crate::activity::hold();
-    responder.respond(respond(&engine, &method, &body));
+    responder.respond(respond(&engine, &client, &method, &body));
   });
 }
 
@@ -133,7 +149,7 @@ pub fn handle(context: UriSchemeContext<'_, Wry>, request: Request<Vec<u8>>, res
 mod tests {
   use super::*;
   use crate::develop_engine_sidecar::test_support::Fake;
-  use crate::develop_engine_sidecar::{Connection, Timeouts, NOT_BUNDLED};
+  use crate::develop_engine_sidecar::{hello_request_body, Connection, Timeouts, NOT_BUNDLED};
   use std::sync::Arc;
   use std::time::Instant;
 
@@ -198,6 +214,12 @@ mod tests {
     assert!(body_fits(1));
     assert!(body_fits(1 << 30));
     assert!(!body_fits((1 << 30) + 1), "1 GiB を超える");
+    let mut headers = HeaderMap::new();
+    assert_eq!(client_id(&headers), None);
+    headers.insert(CLIENT_HEADER, "0123456789abcdef0123456789abcdef".parse().unwrap());
+    assert_eq!(client_id(&headers), Some("0123456789abcdef0123456789abcdef"));
+    headers.insert(CLIENT_HEADER, "short".parse().unwrap());
+    assert_eq!(client_id(&headers), None);
   }
 
   #[test]
@@ -211,7 +233,7 @@ mod tests {
     assert_eq!(preflight.headers()[header::ACCESS_CONTROL_ALLOW_METHODS], "POST");
     assert_eq!(
       preflight.headers()[header::ACCESS_CONTROL_ALLOW_HEADERS],
-      "Content-Type"
+      "Content-Type, X-Niho-Develop-Client"
     );
     assert_eq!(preflight.headers()[header::ACCESS_CONTROL_MAX_AGE], "600");
     let gone = unavailable(NOT_BUNDLED);
@@ -228,15 +250,20 @@ mod tests {
   #[test]
   fn the_sidecar_answer_is_passed_through_and_unknown_methods_are_not_found() {
     let fake = Fake::echo();
-    let response = respond(&fake.engine, "render", b"abc");
+    let client = "0123456789abcdef0123456789abcdef";
+    assert_eq!(
+      respond(&fake.engine, client, "hello", &hello_request_body()).status(),
+      StatusCode::OK
+    );
+    let response = respond(&fake.engine, client, "render", b"abc");
     assert_eq!(response.status(), StatusCode::OK);
     assert_eq!(response.body(), b"render:abc");
     assert_eq!(
-      respond(&fake.engine, "exportTiff", b"abc").status(),
+      respond(&fake.engine, client, "exportTiff", b"abc").status(),
       StatusCode::NOT_FOUND,
       "hello の口の一覧に無い"
     );
-    let crashed = respond(&fake.engine, "crash", b"x");
+    let crashed = respond(&fake.engine, client, "crash", b"x");
     assert_eq!(crashed.status(), StatusCode::SERVICE_UNAVAILABLE);
   }
 
@@ -248,7 +275,12 @@ mod tests {
       Arc::new(|_, _| {}),
       Timeouts::default(),
     );
-    let response = respond(&engine, "render", b"x");
+    let response = respond(
+      &engine,
+      "0123456789abcdef0123456789abcdef",
+      "hello",
+      &hello_request_body(),
+    );
     assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
     assert_eq!(response.body(), NOT_BUNDLED.0.as_bytes());
   }

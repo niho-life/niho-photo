@@ -334,7 +334,7 @@ describe("Worker の中身に native の glue を渡す", () => {
 
 describe("createSyncXhrTransport", () => {
   function fakeXhr(status: number, response: unknown) {
-    const xhr = { open: vi.fn(), send: vi.fn(), responseType: "", status, response };
+    const xhr = { open: vi.fn(), setRequestHeader: vi.fn(), send: vi.fn(), responseType: "", status, response };
     return xhr;
   }
 
@@ -343,9 +343,10 @@ describe("createSyncXhrTransport", () => {
     const xhr = fakeXhr(200, response);
     const transport = createSyncXhrTransport("niho-develop://localhost/", () => xhr as unknown as XMLHttpRequest);
     const body = new Uint8Array(new ArrayBuffer(4));
-    expect(transport("Developer.render", body)).toBe(response);
+    expect(transport("Developer.render", body, "0123456789abcdef0123456789abcdef")).toBe(response);
     expect(xhr.open).toHaveBeenCalledWith("POST", "niho-develop://localhost/Developer.render", false);
     expect(xhr.responseType).toBe("arraybuffer");
+    expect(xhr.setRequestHeader).toHaveBeenCalledWith("X-Niho-Develop-Client", "0123456789abcdef0123456789abcdef");
     expect(xhr.send).toHaveBeenCalledWith(body);
   });
 

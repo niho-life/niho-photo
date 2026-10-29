@@ -11696,13 +11696,13 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-native-glue.ts",
-      "sha256": "13ab667adbfddf9b26becd4796b3bd4728ea41b04d2e7409b4a6954be28184a8",
-      "origin": "公開repoで新規作成（niho-photo#152）。Mac アプリの現像の Worker が読む native の glue。wasm-bindgen の glue と同じ形の口を、同期の XHR（niho-develop://）で sidecar の niho-develop-render serve へ包む。外部のコード・実写真・非公開の情報を含まない。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。"
+      "sha256": "f10e349fad57a461016e9826cdefb3f983d4eec0312ddde796023d6b6790e46f",
+      "origin": "公開repoで新規作成（niho-photo#152）。Mac アプリの現像の Worker が読む native の glue。wasm-bindgen の glue と同じ形の口を、同期の XHR（niho-develop://）で sidecar の niho-develop-render serve へ包む。外部のコード・実写真・非公開の情報を含まない。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-native-glue.test.ts",
-      "sha256": "63574c66ff8a21e50bd3da5632c9964cae48f8e69a53b3bcf5e4a71ddb47f649",
-      "origin": "公開repoで新規作成（niho-photo#152）。native の glue の本文の形・hello の版の確かめ・Developer の handle・失敗の分け方・Worker の中身との組み合わせ・wasm の export との口の一致の試験。合成の値だけを使う。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。"
+      "sha256": "eac5b630b22879c0c64e5c3acaea72cffcb52107ac5257b8b551701c32c0bf51",
+      "origin": "公開repoで新規作成（niho-photo#152）。native の glue の本文の形・hello の版の確かめ・Developer の handle・失敗の分け方・Worker の中身との組み合わせ・wasm の export との口の一致の試験。合成の値だけを使う。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正"
     },
     {
       "path": "apps/camera/scripts/e2e/native-develop.sh",
@@ -11721,13 +11721,13 @@
     },
     {
       "path": "apps/camera/src-tauri/src/develop_engine_scheme.rs",
-      "sha256": "46118a24ba8cae8500b6d432a3bdbe155cc153b68fb8a0514d49afebf87a5fc5",
-      "origin": "公開repoで新規作成（niho-photo#152）。現像の native の口の URI scheme（niho-develop://。main 窓だけ・POST と CORS の preflight・本文は読まずに同梱の sidecar へ渡す）と、その ACL の試験。外部のコード・実写真・非公開の情報を含まない。"
+      "sha256": "2ff7d7d299aba6d1ea4188082d5655badfd632cda29768017af1d375c96f6999",
+      "origin": "公開repoで新規作成（niho-photo#152）。現像の native の口の URI scheme（niho-develop://。main 窓だけ・POST と CORS の preflight・本文は読まずに同梱の sidecar へ渡す）と、その ACL の試験。外部のコード・実写真・非公開の情報を含まない。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正"
     },
     {
       "path": "apps/camera/src-tauri/src/develop_engine_sidecar.rs",
-      "sha256": "022c9c72247302a893ffec0de8806f5b1b078479153c6c488c58ef08cb840efb",
-      "origin": "公開repoで新規作成（niho-photo#152）。同梱の niho-develop-render serve を 1 プロセス持ち、stdin / stdout の封で要求を多重化する（起動・hello・落ちたときの起動し直し・待ちの上限・終了）。偽の serve での試験を含む。外部のコード・実写真・非公開の情報を含まない。"
+      "sha256": "679ebe03755e5854669e9ade77f9bcd054a40e84e0d7e49b91946b6cd32fe3fe",
+      "origin": "公開repoで新規作成（niho-photo#152）。同梱の niho-develop-render serve を 1 プロセス持ち、stdin / stdout の封で要求を多重化する（起動・hello・落ちたときの起動し直し・待ちの上限・終了）。偽の serve での試験を含む。外部のコード・実写真・非公開の情報を含まない。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop-render/src/serve.rs",

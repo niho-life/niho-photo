@@ -94,7 +94,7 @@ export class NativeDevelopUnavailableError extends Error {
 }
 
 /** 1 回の要求（同期）: method と本文を送り、応答の本文を返す。運べなければ {@link NativeDevelopUnavailableError}。 */
-export type NativeDevelopTransport = (method: string, body: Uint8Array<ArrayBuffer>) => ArrayBuffer;
+export type NativeDevelopTransport = (method: string, body: Uint8Array<ArrayBuffer>, client?: string) => ArrayBuffer;
 
 /** `hello` の応答。 */
 export type NativeDevelopHello = {
@@ -114,11 +114,12 @@ export function createSyncXhrTransport(
   baseUrl: string = NATIVE_DEVELOP_BASE_URL,
   createXhr: () => XMLHttpRequest = () => new XMLHttpRequest(),
 ): NativeDevelopTransport {
-  return (method, body) => {
+  return (method, body, client) => {
     const xhr = createXhr();
     try {
       xhr.open("POST", `${baseUrl}${method}`, false);
       xhr.responseType = "arraybuffer";
+      if (client) xhr.setRequestHeader("X-Niho-Develop-Client", client);
       xhr.send(body);
     } catch (error) {
       throw new NativeDevelopUnavailableError(`native develop engine request failed: ${messageOf(error)}`);
@@ -321,7 +322,7 @@ export function createNativeDevelopGlue(
     const header: Record<string, unknown> = { args: encodedArgs };
     if (extra.handle !== undefined) header.handle = extra.handle;
     if (extra.client) header.client = client;
-    const { header: response, blobs: resultBlobs } = decodeNativeDevelopBody(transport(method, encodeNativeDevelopBody(header, blobs)));
+    const { header: response, blobs: resultBlobs } = decodeNativeDevelopBody(transport(method, encodeNativeDevelopBody(header, blobs), client));
     if (response.ok === true) return resolveBlobs(response.result ?? null, resultBlobs);
     const message = typeof response.error === "string" && response.error ? response.error : `native develop ${method} failed`;
     const code = typeof response.code === "string" ? response.code : null;

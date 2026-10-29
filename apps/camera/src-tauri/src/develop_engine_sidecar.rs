@@ -58,6 +58,7 @@ pub const RESTART_LIMIT: Unavailable = Unavailable("develop sidecar restarted to
 pub const EXITED: Unavailable = Unavailable("develop sidecar exited");
 pub const TIMED_OUT: Unavailable = Unavailable("develop sidecar timed out");
 pub const STOPPED: Unavailable = Unavailable("develop sidecar was stopped");
+pub const STALE_CLIENT: Unavailable = Unavailable("develop sidecar was restarted for another client");
 
 /// 要求が通らなかったわけ。
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -260,6 +261,9 @@ impl Close {
 
 /// 起動した 1 つの serve。
 struct Session {
+  /// Monotonically increasing within the app process. A Worker bound to an
+  /// earlier sidecar must never use a recycled numeric Developer handle.
+  generation: u64,
   writer: Mutex<Box<dyn Write + Send>>,
   pending: Mutex<Pending>,
   process: Mutex<Option<Box<dyn Process>>>,
@@ -270,8 +274,9 @@ struct Session {
 }
 
 impl Session {
-  fn new(writer: Box<dyn Write + Send>, process: Box<dyn Process>, log: LogFn) -> Arc<Self> {
+  fn new(writer: Box<dyn Write + Send>, process: Box<dyn Process>, log: LogFn, generation: u64) -> Arc<Self> {
     Arc::new(Self {
+      generation,
       writer: Mutex::new(writer),
       pending: Mutex::new(Pending::default()),
       process: Mutex::new(Some(process)),
@@ -299,7 +304,7 @@ impl Session {
   }
 
   /// 封を書いて、同じ id の応答を待つ。
-  fn request(&self, id: u32, method: &str, body: &[u8], timeout: Duration) -> Reply {
+  fn request(self: &Arc<Self>, id: u32, method: &str, body: &[u8], timeout: Duration) -> Reply {
     let deadline = Instant::now() + timeout;
     let (sender, receiver) = mpsc::sync_channel(1);
     {
@@ -309,18 +314,39 @@ impl Session {
       }
       pending.waiters.insert(id, sender);
     }
+    // The write can itself block forever when a live child stops reading its
+    // pipe. A separate watchdog must own the deadline, not recv_timeout alone.
+    let (cancel, canceled) = mpsc::channel::<()>();
+    let session = Arc::clone(self);
+    if std::thread::Builder::new()
+      .name("niho-develop-serve-deadline".into())
+      .spawn(move || {
+        if matches!(
+          canceled.recv_timeout(deadline.saturating_duration_since(Instant::now())),
+          Err(RecvTimeoutError::Timeout)
+        ) {
+          session.close(Close::Timeout);
+        }
+      })
+      .is_err()
+    {
+      self.close(Close::Timeout);
+      return Err(SPAWN_FAILED);
+    }
     let written = write_request(&mut **lock(&self.writer), id, method, body);
     if written.is_err() {
       self.close(Close::Write);
     }
-    match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
+    let result = match receiver.recv_timeout(deadline.saturating_duration_since(Instant::now())) {
       Ok(reply) => reply,
       Err(RecvTimeoutError::Timeout) => {
         self.close(Close::Timeout);
         Err(TIMED_OUT)
       }
       Err(RecvTimeoutError::Disconnected) => Err(EXITED),
-    }
+    };
+    let _ = cancel.send(());
+    result
   }
 
   /// 子を止め、待っている要求を全部失敗にする（2 回目からは何もしない）。
@@ -369,6 +395,10 @@ fn read_replies(session: Arc<Session>, mut reader: Box<dyn Read + Send>) {
 struct State {
   /// 今の serve（起動中・`hello` 待ちも含む。落ちたら閉じたまま残り、次の起動で外す）
   current: Option<Arc<Session>>,
+  /// A native glue instance is bound to the sidecar generation that answered
+  /// its first hello. Keep this across child restarts and page reloads.
+  clients: HashMap<String, u64>,
+  next_generation: u64,
   /// 最後の `stop()`（またはアプリの起動）の後に起動したか（2 回目からは「起動し直し」として数える）
   started: bool,
   /// 起動し直した時刻（{@link RESTART_WINDOW} より古いものは捨てる）
@@ -439,7 +469,16 @@ impl Engine {
         old.close(Close::Stopped);
       }
       let connection = (self.spawn)().map_err(|reason| self.unavailable(reason))?;
-      let session = Session::new(connection.writer, connection.process, self.log.clone());
+      state.next_generation = state
+        .next_generation
+        .checked_add(1)
+        .expect("sidecar generation overflow");
+      let session = Session::new(
+        connection.writer,
+        connection.process,
+        self.log.clone(),
+        state.next_generation,
+      );
       let reader_session = session.clone();
       let reader = connection.reader;
       let spawned = std::thread::Builder::new()
@@ -524,6 +563,33 @@ impl DevelopEngine {
     session
       .request(session.next_id(), method, body, self.0.timeouts.request)
       .map_err(CallError::Unavailable)
+  }
+
+  /// A WebView Worker's first `hello` binds its random client token to the
+  /// current process. Subsequent calls from that Worker may only reach that
+  /// same process, even if its numeric handles are reused after a restart.
+  pub fn call_for_client(&self, client: &str, method: &str, body: &[u8]) -> Result<Vec<u8>, CallError> {
+    let session = self.0.ready_session().map_err(CallError::Unavailable)?;
+    {
+      let mut state = lock(&self.0.state);
+      match state.clients.get(client).copied() {
+        Some(generation) if generation == session.generation => {}
+        None if method == HELLO => {
+          state.clients.insert(client.to_owned(), session.generation);
+        }
+        _ => return Err(CallError::Unavailable(STALE_CLIENT)),
+      }
+    }
+    if !session.knows(method) {
+      return Err(CallError::UnknownMethod);
+    }
+    let reply = session
+      .request(session.next_id(), method, body, self.0.timeouts.request)
+      .map_err(CallError::Unavailable);
+    if method == "releaseClient" && reply.is_ok() {
+      lock(&self.0.state).clients.remove(client);
+    }
+    reply
   }
 
   /// sidecar を止める（Developer を全部手放す。待っている要求は失敗する）。次の要求はまた起動する（起動し直しに数えない）。
@@ -781,6 +847,7 @@ mod tests {
   use super::test_support::*;
   use super::*;
   use std::sync::mpsc::channel;
+  use std::sync::Condvar;
 
   fn answered(fake: &Fake, method: &str, body: &[u8]) -> Vec<u8> {
     fake.engine.call(method, body).expect("answered")
@@ -969,6 +1036,81 @@ mod tests {
       fake.events("camera.develop_serve_started")[1],
       json!({ "restart": true, "restartsInWindow": 1 })
     );
+  }
+
+  #[test]
+  fn an_old_worker_cannot_use_a_recycled_handle_after_restart() {
+    let fake = Fake::echo();
+    let old = "old-client";
+    let fresh = "new-client";
+    assert_eq!(
+      fake.engine.call_for_client(old, "render", b"old"),
+      Err(CallError::Unavailable(STALE_CLIENT)),
+      "a Worker must say hello before using handles"
+    );
+    fake.engine.call_for_client(old, HELLO, &hello_request_body()).unwrap();
+    assert_eq!(
+      fake.engine.call_for_client(old, "render", b"old").unwrap(),
+      b"render:old"
+    );
+    assert_eq!(
+      fake.engine.call_for_client(old, "crash", b"x"),
+      Err(CallError::Unavailable(EXITED))
+    );
+    fake
+      .engine
+      .call_for_client(fresh, HELLO, &hello_request_body())
+      .unwrap();
+    assert_eq!(fake.spawns(), 2);
+    assert_eq!(
+      fake.engine.call_for_client(old, "render", b"stale"),
+      Err(CallError::Unavailable(STALE_CLIENT)),
+      "the old numeric handle must not reach the new registry"
+    );
+    assert_eq!(
+      fake.engine.call_for_client(fresh, "render", b"new").unwrap(),
+      b"render:new"
+    );
+  }
+
+  #[test]
+  fn deadline_stops_a_child_even_when_writing_to_stdin_is_blocked() {
+    struct BlockedWrite(Arc<(Mutex<bool>, Condvar)>);
+    impl Write for BlockedWrite {
+      fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+        let (closed, changed) = &*self.0;
+        let mut closed = lock(closed);
+        while !*closed {
+          closed = changed.wait(closed).unwrap_or_else(PoisonError::into_inner);
+        }
+        Err(io::ErrorKind::BrokenPipe.into())
+      }
+      fn flush(&mut self) -> io::Result<()> {
+        Ok(())
+      }
+    }
+    struct BlockedProcess(Arc<(Mutex<bool>, Condvar)>);
+    impl Process for BlockedProcess {
+      fn terminate(&mut self) -> Value {
+        let (closed, changed) = &*self.0;
+        *lock(closed) = true;
+        changed.notify_all();
+        Value::Null
+      }
+    }
+    let gate = Arc::new((Mutex::new(false), Condvar::new()));
+    let session = Session::new(
+      Box::new(BlockedWrite(gate.clone())),
+      Box::new(BlockedProcess(gate)),
+      Arc::new(|_, _| {}),
+      1,
+    );
+    let started = Instant::now();
+    assert_eq!(
+      session.request(1, "render", b"photo", Duration::from_millis(100)),
+      Err(TIMED_OUT)
+    );
+    assert!(started.elapsed() < Duration::from_secs(2));
   }
 
   #[test]
