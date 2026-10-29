@@ -176,19 +176,20 @@ fn an_analysis_taken_in_draws_what_a_fresh_session_does() {
     }
 }
 
-/// Where the CNR source's kind is in the bytes (format version 2: after
+/// Where the CNR source's kind is in the bytes (format version 3: after
 /// the source's size and the source fingerprint, `src/niho4/transfer.rs`).
 const CNR_SOURCE_AT: usize = 49;
 
 /// Where the coefficients' maps start in `bytes` and how many values each
-/// has (format version 2, `src/niho4/transfer.rs`).
+/// has (format version 3, `src/niho4/transfer.rs`).
 fn coefficient_maps(bytes: &[u8]) -> (usize, usize) {
     let u32_at = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap()) as usize;
     let (width, height) = (u32_at(33), u32_at(37));
     let mut at = CNR_SOURCE_AT;
     at += match bytes[at] {
-        0 => 1,
-        _ => 1 + width * height * 3 * 4,
+        // Only legacy version 2 tag 1 carries a full filtered source.
+        1 => 1 + width * height * 3 * 4,
+        _ => 1,
     };
     assert_eq!(bytes[at], 1, "coefficients");
     (at + 9, u32_at(at + 1) * u32_at(at + 5))
@@ -203,7 +204,7 @@ fn scale(bytes: &mut [u8], at: usize, count: usize, factor: f32) {
 }
 
 /// The frames read the analysis taken in as it is (it is not made again):
-/// bytes whose coefficients (or CNR source) were changed draw another
+/// bytes whose coefficients were changed draw another
 /// frame. Into a master of the same noise reduction without coefficients
 /// (a frame without Highlights / Shadows), they set only the coefficients.
 #[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
@@ -242,16 +243,59 @@ fn the_frames_read_the_analysis_taken_in() {
             "CNR {cnr}"
         );
     }
+}
 
-    // A darker CNR source: another frame.
-    let settings = manual(25.0);
-    let fresh = rgba(&mut photo.open(), &settings, Quality::Final);
-    let mut changed = export(&photo, &settings);
-    assert_eq!(changed[CNR_SOURCE_AT], 1, "filtered CNR source");
-    scale(&mut changed, CNR_SOURCE_AT + 1, 96 * 72 * 3, 0.5);
-    let mut taker = photo.open();
-    assert!(taker.import_analysis(&changed).unwrap());
-    assert!(rgba(&mut taker, &settings, Quality::Final) != fresh);
+/// Version 3 omits the full filtered CNR source. The imported coefficients
+/// and NIHO 7 maps still draw exact fresh-session bytes after CNR alone is
+/// rebuilt for the next Final / Interactive master.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn cnr_25_niho7_analysis_is_compact_and_exact() {
+    for camera in [PANASONIC, SONY_FX30] {
+        let photo = Photo::of(camera);
+        let settings = manual(25.0);
+        let bytes = export(&photo, &settings);
+        assert_eq!(u16::from_le_bytes(bytes[6..8].try_into().unwrap()), 3);
+        assert_eq!(bytes[CNR_SOURCE_AT], 2, "{camera}: omitted CNR source");
+        assert_eq!(coefficient_maps(&bytes).0, CNR_SOURCE_AT + 1 + 1 + 8);
+
+        let mut final_session = photo.open();
+        assert!(final_session.import_analysis(&bytes).unwrap());
+        assert_eq!(
+            rgba(&mut final_session, &settings, Quality::Final),
+            rgba(&mut photo.open(), &settings, Quality::Final),
+            "{camera}: Final"
+        );
+
+        let dragged = dragged(&settings);
+        let mut interactive_session = photo.open();
+        assert!(interactive_session.import_analysis(&bytes).unwrap());
+        assert_eq!(
+            rgba(&mut interactive_session, &dragged, Quality::Interactive),
+            rgba(&mut photo.open(), &dragged, Quality::Interactive),
+            "{camera}: Interactive"
+        );
+    }
+}
+
+/// Version 2 remains readable for analyses already in flight when a worker
+/// updates. With no noise reduction its layout has no full CNR payload and
+/// is otherwise the same as version 3.
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn version_2_analysis_remains_readable() {
+    let photo = Photo::of(PANASONIC);
+    let settings = manual(0.0);
+    let mut bytes = export(&photo, &settings);
+    bytes[6..8].copy_from_slice(&2u16.to_le_bytes());
+    assert_eq!(bytes[CNR_SOURCE_AT], 0);
+
+    let mut session = photo.open();
+    assert!(session.import_analysis(&bytes).unwrap());
+    assert_eq!(
+        rgba(&mut session, &settings, Quality::Final),
+        rgba(&mut photo.open(), &settings, Quality::Final)
+    );
 }
 
 /// Bytes of another photo (camera, baseline exposure, size, a JPEG / PNG),
@@ -277,8 +321,8 @@ fn bytes_of_another_photo_or_broken_bytes_change_nothing() {
         ("one byte more", edited(&|copy| copy.push(0))),
         ("magic", edited(&|copy| copy[0] = b'X')),
         (
-            "version 1 (no source fingerprint)",
-            edited(&|copy| copy[6..8].copy_from_slice(&1u16.to_le_bytes())),
+            "unknown version",
+            edited(&|copy| copy[6..8].copy_from_slice(&99u16.to_le_bytes())),
         ),
         ("unknown camera", edited(&|copy| copy[8] = 9)),
         (

@@ -5,24 +5,26 @@
 //! frames drawn from an analysis taken in are the bytes the session draws
 //! making it (`tests/analysis_transfer.rs`).
 //!
-//! Version 2 (1 had no source fingerprint and is not read). Numbers are
-//! little-endian; `f32` and `f64` are their bits.
+//! Version 3 (1 had no source fingerprint and is not read; 2 is still
+//! accepted). Numbers are little-endian; `f32` and `f64` are their bits.
 //!
 //! | bytes | |
 //! |---|---|
 //! | 6 | `NIHOAN` |
-//! | 2 | version (`u16`, 2) |
+//! | 2 | version (`u16`, 3) |
 //! | 1 | camera: 0 Panasonic DC-S5, 1 Sony ZV-E10 II, 2 Sony FX30 |
 //! | 8 | effective color noise reduction (`f64`) |
 //! | 8 | luminance noise reduction (`f64`) |
 //! | 8 | baseline exposure (`f64`) |
 //! | 4 + 4 | source width, height (`u32`) |
 //! | 8 | fingerprint of the source pixels (`u64`, [`source_fingerprint`]) |
-//! | 1 (+ …) | CNR source: 0 the source itself (both amounts 0), 1 filtered, then width · height · 3 `f32` |
+//! | 1 | CNR source: 0 the source itself (both amounts 0), 2 filtered but omitted |
 //! | 1 (+ …) | coefficients: 0 none, 1 then width, height (`u32`, the analysis size) and five maps of width · height `f32` (highlight a, b, alpha, shadow a, b) |
 //! | 1 (+ …) | NIHO 7 highlight maps: 0 none, 1 residual (one map), 2 FX30 shoulder (a, b), 3 could not be made; the maps are of the coefficients' size |
 //!
-//! Nothing follows. The CNR source is as it is (not compressed).
+//! Nothing follows. Version 2 used tag 1 followed by the full filtered CNR
+//! source. Version 3 omits it so the bounded editor cache keeps only the
+//! expensive reduced coefficients and NIHO 7 maps; a frame rebuilds CNR.
 
 use super::{analysis_size, camera, AnalysisCache, CnrSource, Niho7HighlightMaps};
 use crate::decode::{LinearImage, WorkingCopyEncoding, WorkingCopyMeta};
@@ -31,10 +33,12 @@ use std::fmt;
 use std::sync::{Arc, OnceLock};
 
 const MAGIC: &[u8; 6] = b"NIHOAN";
-const VERSION: u16 = 2;
+const VERSION: u16 = 3;
+const PREVIOUS_VERSION: u16 = 2;
 
 const CNR_ORIGINAL: u8 = 0;
 const CNR_FILTERED: u8 = 1;
+const CNR_OMITTED: u8 = 2;
 const COEFFICIENTS_NONE: u8 = 0;
 const COEFFICIENTS: u8 = 1;
 const NIHO7_NONE: u8 = 0;
@@ -137,18 +141,14 @@ pub(crate) fn source_fingerprint(data: &[f32]) -> u64 {
 }
 
 impl AnalysisCache {
-    /// This analysis as version 2 bytes (what it holds: a part not made yet
+    /// This analysis as compact version 3 bytes (what it holds: a part not made yet
     /// is written as none). `fingerprint` is [`source_fingerprint`] of the
     /// source it was made from.
     pub(crate) fn to_bytes(&self, fingerprint: u64) -> Vec<u8> {
-        let cnr = match self.cnr_source.as_ref() {
-            CnrSource::Original => None,
-            CnrSource::Filtered(data) => Some(data.as_slice()),
-        };
+        let filtered = self.cnr_amount != 0.0 || self.luminance_nr_amount != 0.0;
         let coefficients = self.coefficients.get();
         let niho7 = self.niho7_highlights.get();
-        let floats = cnr.map_or(0, <[f32]>::len)
-            + coefficients.map_or(0, |maps| maps.width * maps.height * 5)
+        let floats = coefficients.map_or(0, |maps| maps.width * maps.height * 5)
             + match niho7 {
                 Some(Ok(Niho7HighlightMaps::Residual(residual))) => residual.len(),
                 Some(Ok(Niho7HighlightMaps::FxShoulder { a, b })) => a.len() + b.len(),
@@ -164,13 +164,7 @@ impl AnalysisCache {
         out.extend_from_slice(&self.baseline_ev_bits.to_le_bytes());
         put_size(&mut out, self.source_width, self.source_height);
         out.extend_from_slice(&fingerprint.to_le_bytes());
-        match cnr {
-            None => out.push(CNR_ORIGINAL),
-            Some(data) => {
-                out.push(CNR_FILTERED);
-                put_f32s(&mut out, data);
-            }
-        }
+        out.push(if filtered { CNR_OMITTED } else { CNR_ORIGINAL });
         match coefficients {
             None => out.push(COEFFICIENTS_NONE),
             Some(maps) => {
@@ -234,7 +228,8 @@ impl AnalysisCache {
     }
 }
 
-/// Reads version 2 bytes as the analysis of `image` (the session's source,
+/// Reads compact version 3 or legacy version 2 bytes as the analysis of
+/// `image` (the session's source,
 /// opened from `meta`; `fingerprint` is [`source_fingerprint`] of its
 /// pixels): the bytes must be of this photo (camera, baseline exposure,
 /// size and the pixels' fingerprint) and whole. Every length is checked before it is read,
@@ -250,7 +245,7 @@ pub(crate) fn import_analysis(
         return Err(TransferError::NotAnalysis);
     }
     let version = u16::from_le_bytes(reader.array()?);
-    if version != VERSION {
+    if version != VERSION && version != PREVIOUS_VERSION {
         return Err(TransferError::Version(version));
     }
     let code = reader.u8()?;
@@ -288,7 +283,10 @@ pub(crate) fn import_analysis(
     let filtered = !(cnr_amount == 0.0 && luminance_nr_amount == 0.0);
     let cnr_source = match reader.u8()? {
         CNR_ORIGINAL if !filtered => CnrSource::Original,
-        CNR_FILTERED if filtered => CnrSource::Filtered(reader.f32s(image.data.len())?),
+        CNR_FILTERED if filtered && version == PREVIOUS_VERSION => {
+            CnrSource::Filtered(reader.f32s(image.data.len())?)
+        }
+        CNR_OMITTED if filtered && version == VERSION => CnrSource::Missing,
         tag => {
             return Err(TransferError::Section {
                 section: "CNR source",
