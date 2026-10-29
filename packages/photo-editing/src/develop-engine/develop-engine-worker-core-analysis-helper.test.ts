@@ -45,9 +45,20 @@ const PRESETS = [
 ];
 
 /** 同梱のプリセット 3 本（colorful だけ CNR 25）と、解析の受け渡しの口（`transfer: false` で無い glue）のある Developer。 */
-function transferGlue(options: { transfer?: boolean; holds?: (settingsJson: string) => boolean; importThrows?: boolean } = {}) {
+function transferGlue(
+  options: {
+    transfer?: boolean;
+    holds?: (settingsJson: string) => boolean;
+    trackHeldSlot?: boolean;
+    importThrows?: boolean;
+    importFails?: (developer: number, bytes: number[]) => boolean;
+  } = {},
+) {
   const prepared: { developer: number; settingsJson: string }[] = [];
   const imported: { developer: number; bytes: number[] }[] = [];
+  const importAttempts: number[] = [];
+  const events: string[] = [];
+  const heldCnr = new Map<number, number>();
   const developers: FakeDeveloper[] = [];
   class FakeDeveloper {
     readonly width = 4;
@@ -61,6 +72,7 @@ function transferGlue(options: { transfer?: boolean; holds?: (settingsJson: stri
       return new this();
     }
     render() {
+      events.push(`render:${this.index}`);
       return { width: 1, height: 1, rgba: new Uint8ClampedArray([1, 2, 3, 255]) };
     }
     asShotWhite() {
@@ -77,12 +89,20 @@ function transferGlue(options: { transfer?: boolean; holds?: (settingsJson: stri
       throw new Error("the editor's worker does not make the analysis itself");
     }
     importAnalysis(bytes: Uint8Array) {
-      if (options.importThrows) throw new Error("analysis_transfer_failed: the analysis of another photo");
-      imported.push({ developer: this.index, bytes: [...bytes] });
+      const values = [...bytes];
+      importAttempts.push(this.index);
+      events.push(`import:${this.index}`);
+      if (options.importThrows || options.importFails?.(this.index, values)) {
+        throw new Error("analysis_transfer_failed: the analysis of another photo");
+      }
+      if (options.trackHeldSlot && values[0] !== undefined) heldCnr.set(this.index, values[0]);
+      imported.push({ developer: this.index, bytes: values });
       return true;
     }
     holdsAnalysis(settingsJson: string) {
-      return options.holds?.(settingsJson) ?? false;
+      if (options.holds) return options.holds(settingsJson);
+      if (options.trackHeldSlot) return heldCnr.get(this.index) === JSON.parse(settingsJson).colorNoiseReduction;
+      return false;
     }
   }
   const module = {
@@ -98,7 +118,7 @@ function transferGlue(options: { transfer?: boolean; holds?: (settingsJson: stri
       return JSON.stringify({ settings: { ...JSON.parse(baseJson), preset: xmp, highlights: -50, colorNoiseReduction: cnr } });
     }),
   };
-  return { module, prepared, imported, developers };
+  return { module, prepared, imported, importAttempts, events, developers };
 }
 
 type FakeHelper = {
@@ -130,13 +150,18 @@ function fakeHelpers(options: { fail?: boolean } = {}) {
   return { created, create, requests };
 }
 
-function setup(glue = transferGlue(), helpers: ReturnType<typeof fakeHelpers> | null = fakeHelpers()) {
+function setup(
+  glue = transferGlue(),
+  helpers: ReturnType<typeof fakeHelpers> | null = fakeHelpers(),
+  extra: Partial<Pick<DevelopEngineWorkerDeps, "digest">> = {},
+) {
   const posted: DevelopEngineWorkerResponse[] = [];
   const deps: DevelopEngineWorkerDeps = {
     fetch: vi.fn(async () => new Response(JSON.stringify(MANIFEST), { status: 200 })),
     importModule: vi.fn(async () => glue.module),
     post: (message) => posted.push(message),
     ...(helpers ? { createAnalysisHelper: helpers.create } : {}),
+    ...extra,
   };
   return { handler: createDevelopEngineWorkerHandler(deps), posted, glue, helpers };
 }
@@ -217,6 +242,98 @@ describe("先回りを補助の worker で作る（#155）", () => {
     helper?.receive({ type: "analysis", id: request?.id ?? 0, bytes: bytesOf(1) });
     await vi.advanceTimersByTimeAsync(0);
     expect(glue.imported).toEqual([{ developer: 0, bytes: [1] }]);
+  });
+
+  it("Developer が LRU から eviction されても compact 解析 bytes を残し、同じ写真の再 open では描画前に import する", async () => {
+    const glue = transferGlue({
+      holds: () => {
+        throw new Error("holdsAnalysis unavailable");
+      },
+    });
+    const digest = vi.fn(async (bytes: ArrayBuffer) => String(new Uint8Array(bytes)[0]));
+    const { handler, helpers } = setup(glue, fakeHelpers(), { digest });
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await handler(openCopy(2));
+    await handler(final(3));
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    const helper = helpers?.created[0];
+    const [request] = helpers?.requests(helper) ?? [];
+    helper?.receive({ type: "analysis", id: request?.id ?? 0, bytes: bytesOf(7, 8) });
+    await vi.advanceTimersByTimeAsync(0);
+
+    // B, C と開いて A を HELD_PHOTO_LIMIT=2 の Developer LRU から追い出す。
+    await handler(openCopy(4));
+    await handler(openCopy(6));
+    expect(glue.developers[0]).toBeDefined();
+    await handler(openCopy(2));
+    expect(glue.developers).toHaveLength(4);
+
+    const before = glue.events.length;
+    await handler(final(7));
+    await handler({ type: "render", id: 8, settingsJson: SIGNED, maxDimension: 1280, interactive: true });
+    expect(glue.events.slice(before)).toEqual(["import:3", "render:3", "import:3", "render:3"]);
+    expect(glue.imported.slice(-2)).toEqual([
+      { developer: 3, bytes: [7, 8] },
+      { developer: 3, bytes: [7, 8] },
+    ]);
+  });
+
+  it("同じ Developer の1件枠で A→B→A と戻れば再 import し、同じ A の連続 drag では import を繰り返さない", async () => {
+    const glue = transferGlue({ trackHeldSlot: true });
+    const digest = vi.fn(async (bytes: ArrayBuffer) => String(new Uint8Array(bytes)[0]));
+    const { handler, helpers } = setup(glue, fakeHelpers(), { digest });
+    const cnr25 = '{"engine":"niho-11","colorNoiseReduction":25,"exposure":0}';
+    const drag = (id: number, settingsJson: string) =>
+      ({ type: "render", id, settingsJson, maxDimension: 1280, interactive: true }) as const;
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await handler(openCopy(2));
+    await handler(final(3));
+
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    const helper = helpers?.created[0];
+    const first = helpers?.requests(helper)[0];
+    helper?.receive({ type: "analysis", id: first?.id ?? 0, bytes: bytesOf(0) });
+    await vi.advanceTimersByTimeAsync(0);
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    const second = helpers?.requests(helper)[1];
+    expect(cnrOf(second)).toBe(25);
+    helper?.receive({ type: "analysis", id: second?.id ?? 0, bytes: bytesOf(25) });
+    await vi.advanceTimersByTimeAsync(0);
+
+    const before = glue.imported.length;
+    await handler(drag(4, SIGNED));
+    await handler(drag(5, cnr25));
+    await handler(drag(6, SIGNED));
+    expect(glue.imported.slice(before).map((entry) => entry.bytes)).toEqual([[0], [25], [0]]);
+
+    const afterSwitches = glue.imported.length;
+    await handler(drag(7, SIGNED));
+    await handler(drag(8, SIGNED));
+    expect(glue.imported).toHaveLength(afterSwitches);
+  });
+
+  it("eviction 後の compact bytes を import できなければ entry を捨て、同じ描画を従来どおり再計算で続ける", async () => {
+    const glue = transferGlue({ importFails: (developer) => developer === 3 });
+    const digest = vi.fn(async (bytes: ArrayBuffer) => String(new Uint8Array(bytes)[0]));
+    const { handler, helpers } = setup(glue, fakeHelpers(), { digest });
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await handler(openCopy(2));
+    await handler(final(3));
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    const helper = helpers?.created[0];
+    const [request] = helpers?.requests(helper) ?? [];
+    helper?.receive({ type: "analysis", id: request?.id ?? 0, bytes: bytesOf(7, 8) });
+    await vi.advanceTimersByTimeAsync(0);
+
+    await handler(openCopy(4));
+    await handler(openCopy(6));
+    await handler(openCopy(2));
+    const before = glue.events.length;
+    await handler(final(7));
+    await handler(final(8));
+
+    expect(glue.events.slice(before)).toEqual(["import:3", "render:3", "render:3"]);
+    expect(glue.importAttempts.filter((developer) => developer === 3)).toHaveLength(1);
   });
 
   it("写真を替えたら補助の worker を終わらせ、遅れて届いた結果は捨てる。新しい写真には新しい補助の worker を作る", async () => {
