@@ -279,7 +279,10 @@ export function useBrowserPhotoBulk(params: {
   const acquireEngine = useCallback(async (): Promise<EngineLease | null> => {
     const shared = develop.engineRef.current;
     if (shared) return (await shared.ready()) ? { engine: shared, release: () => undefined } : null;
-    const own = createDevelopEngine({ manifestUrl: library.engineAssets.manifestUrl() ?? undefined });
+    const own = createDevelopEngine({
+      manifestUrl: library.engineAssets.manifestUrl() ?? undefined,
+      preferNative: library.engineAssets.preferNative === true,
+    });
     ownEnginesRef.current.add(own);
     const release = () => {
       if (!ownEnginesRef.current.delete(own)) return;

@@ -762,8 +762,8 @@ fn drag_tail(
     cache: Option<&Arc<DragTail>>,
     key_a: String,
     key: String,
-    a: &dyn Fn([f32; 3]) -> [f32; 3],
-    b: &dyn Fn([f32; 3]) -> [f32; 3],
+    a: &(dyn Fn([f32; 3]) -> [f32; 3] + Sync),
+    b: &(dyn Fn([f32; 3]) -> [f32; 3] + Sync),
 ) -> Arc<DragTail> {
     if let Some(t) = cache {
         if t.key == key {
@@ -775,14 +775,15 @@ fn drag_tail(
         _ => {
             let (shaper, nodes) = shaper_and_nodes(a);
             let n = DRAG_TAIL_DIMENSION;
-            let mut grid = Vec::with_capacity(n * n * n);
-            for bi in 0..n {
-                for gi in 0..n {
-                    for ri in 0..n {
-                        grid.push(a([nodes[ri], nodes[gi], nodes[bi]]));
-                    }
+            let mut grid = vec![[0.0; 3]; n * n * n];
+            // Every node reads only its own coordinates, so the rows of red
+            // may run on different threads (#150).
+            crate::par::for_each_row_mut(&mut grid, n, |row, entries| {
+                let (bi, gi) = (row / n, row % n);
+                for (ri, entry) in entries.iter_mut().enumerate() {
+                    *entry = a([nodes[ri], nodes[gi], nodes[bi]]);
                 }
-            }
+            });
             let input = UnitTable::new(|x| shape(&shaper, encode([x, 0.0, 0.0])[0]));
             Arc::new(DragStageA {
                 key: key_a,
@@ -791,7 +792,14 @@ fn drag_tail(
             })
         }
     };
-    let cube = Cube::from_entries(DRAG_TAIL_DIMENSION, stage_a.grid.iter().map(|v| b(*v)));
+    let mut entries = vec![[0.0; 3]; stage_a.grid.len()];
+    crate::par::for_each_row_mut(&mut entries, DRAG_TAIL_DIMENSION, |row, entries| {
+        let start = row * DRAG_TAIL_DIMENSION;
+        for (entry, v) in entries.iter_mut().zip(&stage_a.grid[start..]) {
+            *entry = b(*v);
+        }
+    });
+    let cube = Cube::from_entries(DRAG_TAIL_DIMENSION, entries.into_iter());
     Arc::new(DragTail { stage_a, key, cube })
 }
 
@@ -1667,9 +1675,12 @@ fn local_pass<'c>(
     *cache = None;
     let ln0 = ln0();
     let mut ratio = local_luminance(&ln0, &p)?;
-    for (r, l0) in ratio.data.iter_mut().zip(&ln0.data) {
-        *r = libm::exp2f(*r - l0);
-    }
+    let w = ratio.width;
+    crate::par::for_each_row_mut(&mut ratio.data, w, |y, row| {
+        for (r, l0) in row.iter_mut().zip(&ln0.data[y * w..]) {
+            *r = libm::exp2f(*r - l0);
+        }
+    });
     drop(ln0);
     *cache = Some(LocalPass {
         input_key,
@@ -2139,9 +2150,12 @@ fn render_linear(
             },
             || {
                 let mut ln0 = Plane::new(w, h);
-                for (dst, px) in ln0.data.iter_mut().zip(img.data.chunks_exact(3)) {
-                    *dst = spatial::log_luminance(head([px[0], px[1], px[2]]));
-                }
+                // Rows read only their own pixels (#150).
+                crate::par::for_each_row_mut(&mut ln0.data, w, |y, row| {
+                    for (dst, px) in row.iter_mut().zip(img.data[y * w * 3..].chunks_exact(3)) {
+                        *dst = spatial::log_luminance(head([px[0], px[1], px[2]]));
+                    }
+                });
                 ln0
             },
         )
@@ -3006,9 +3020,12 @@ fn render_raw(
             },
             || {
                 let mut ln0 = Plane::new(w, h);
-                for (dst, px) in ln0.data.iter_mut().zip(img.data.chunks_exact(3)) {
-                    *dst = spatial::log_luminance(head([px[0], px[1], px[2]]));
-                }
+                // Rows read only their own pixels (#150).
+                crate::par::for_each_row_mut(&mut ln0.data, w, |y, row| {
+                    for (dst, px) in row.iter_mut().zip(img.data[y * w * 3..].chunks_exact(3)) {
+                        *dst = spatial::log_luminance(head([px[0], px[1], px[2]]));
+                    }
+                });
                 ln0
             },
         )

@@ -1,38 +1,17 @@
 //! Browser (Web Worker) bindings of `niho-develop` via `wasm-bindgen`.
 //!
-//! Stateless: `render(inputBytes, settingsJson, maxDimension, decodeCap?)`
-//! -> `{ width, height, rgba }` and `exportJpeg(...)` -> JPEG bytes.
-//! `withCaptureExif(jpeg, capturedAt, offsetMinutes)` gives an exported JPEG
-//! the capture date (orientation 1, sRGB; no location or camera).
-//! Stateful: `new Developer(inputBytes, workingMaxDimension)` decodes once;
-//! `developer.render(settingsJson, maxDimension, interactive)` reuses the
-//! decode, the adaptive statistics and the previous frame's cubes.
-//! A geometry (`v: 2`) renders the turned / straightened / cropped frame:
-//! `rasterDecodeSize` gives the working size a Developer needs for the
-//! crop, `geometryOutputSize` the frame's size without rendering.
-//! `developer.autoSettings(settingsJson)` is "自動" (the six Light sliders
-//! and Vibrance for this photo).
-//! Local masks (`masks`, v 5) render through the same `render` calls;
-//! `capabilities()` says which kinds this build draws and
-//! `developer.maskPlane(settingsJson, maskId, maxDimension)` gives one
-//! mask's plane for the editor's overlay. `developer.estimateUpright(settingsJson,
-//! mode)` estimates Upright (the perspective that stands its lines upright).
-//! Heal marks (`developSettings.heal`, v 8) render through `render` and
-//! `developer.render` like any other setting; the Developer keeps their plans
-//! across frames. The lens corrections (`developSettings.lens`, v 9) do too;
-//! the Developer estimates the photo's chromatic aberration once.
+//! Each export wraps one call of `niho_develop::api` (which documents what
+//! it does) and only converts the result for JS: a frame to `{ width,
+//! height, rgba, approximations }` (`rgba` a `Uint8ClampedArray`), a size
+//! to `{ width, height }`, an error message to a `JsError`. The Mac's
+//! native sidecar (`niho-develop-render serve`) wraps the same calls under
+//! the same names, so both answer alike.
 //! The default build runs single threaded (no SharedArrayBuffer, spec "段 2").
 //! The `threads` build (#151, a cross-origin isolated page only) adds
-//! `initThreadPool(n)`: call it once after `init`, and the heavy stages split
-//! their rows and pixels on rayon's Web Workers. The bytes are the single
-//! thread's.
+//! `initThreadPool(n)` and splits heavy stages on rayon's Web Workers.
 
 use js_sys::{Object, Reflect, Uint8ClampedArray};
-use niho_develop::upright::UprightMode;
-use niho_develop::{
-    convert, frame, pipeline, xmp, DevelopSettings, Filter, LightroomWhite, Quality, RenderOptions,
-    Session, WorkingCopyMeta,
-};
+use niho_develop::{api, Rendered};
 use wasm_bindgen::prelude::*;
 
 /// `initThreadPool(n)` (`threads` build only): starts rayon's pool of `n`
@@ -40,11 +19,11 @@ use wasm_bindgen::prelude::*;
 #[cfg(all(feature = "threads", target_arch = "wasm32"))]
 pub use wasm_bindgen_rayon::init_thread_pool;
 
-fn js_error(e: impl std::fmt::Display) -> JsError {
-    JsError::new(&e.to_string())
+fn js_error(message: String) -> JsError {
+    JsError::new(&message)
 }
 
-fn frame_object(frame: &pipeline::Rendered) -> Result<Object, JsError> {
+fn frame_object(frame: &Rendered) -> Result<Object, JsError> {
     let o = Object::new();
     let set = |k: &str, v: &JsValue| {
         Reflect::set(&o, &JsValue::from_str(k), v)
@@ -62,21 +41,21 @@ fn frame_object(frame: &pipeline::Rendered) -> Result<Object, JsError> {
     Ok(o)
 }
 
-fn size_object(width: usize, height: usize) -> Result<Object, JsError> {
+fn size_object(width: u32, height: u32) -> Result<Object, JsError> {
     let o = Object::new();
     for (k, v) in [("width", width), ("height", height)] {
-        Reflect::set(&o, &JsValue::from_str(k), &JsValue::from(v as u32))
+        Reflect::set(&o, &JsValue::from_str(k), &JsValue::from(v))
             .map_err(|_| JsError::new("set"))?;
     }
     Ok(o)
 }
 
-fn sampled_color_object(color: [f64; 3]) -> Result<Object, JsError> {
+fn sampled_color_object(color: api::SampledColor) -> Result<Object, JsError> {
     let o = Object::new();
     for (key, value) in [
-        ("lightness", color[0]),
-        ("chroma", color[1]),
-        ("hue", color[2]),
+        ("lightness", color.lightness),
+        ("chroma", color.chroma),
+        ("hue", color.hue),
     ] {
         Reflect::set(&o, &JsValue::from_str(key), &JsValue::from_f64(value))
             .map_err(|_| JsError::new("set"))?;
@@ -84,53 +63,31 @@ fn sampled_color_object(color: [f64; 3]) -> Result<Object, JsError> {
     Ok(o)
 }
 
-/// One-shot options; `decode_cap` (omitted: 4096) caps the decode of an
-/// original whose crop needs more than `max_dimension`.
-fn options(max_dimension: u32, interactive: bool, decode_cap: Option<u32>) -> RenderOptions {
-    RenderOptions {
-        max_dimension: max_dimension as usize,
-        quality: if interactive {
-            Quality::Interactive
-        } else {
-            Quality::Final
-        },
-        filter: Filter::Lanczos3,
-        decode_cap: decode_cap.map_or(frame::DEFAULT_DECODE_CAP, |c| c as usize),
-    }
-}
-
-/// `niho-develop <crate version> (engine niho-1)`.
+/// `niho_develop::api::version`.
 #[wasm_bindgen]
 pub fn version() -> String {
-    format!(
-        "niho-develop {} (engine {})",
-        niho_develop::CRATE_VERSION,
-        niho_develop::ENGINE_VERSION
-    )
+    api::version()
 }
 
-/// What this build draws beyond what `validateSettings` reads, as JSON:
-/// `{"masks":{"kinds":["linear","radial"],"max":8,"maskPlane":true}}` —
-/// local masks of those kinds render (`brush` / `subject` / `sky` need a
-/// surface store and fail with `maskSurfaceMissing`), at most `max` of them,
-/// and `Developer.maskPlane` exists. A build without this export draws no
-/// masks (it may still validate them).
+/// `niho_develop::api::capabilities`.
 #[wasm_bindgen]
 pub fn capabilities() -> String {
-    serde_json::json!({
-        "masks": {
-            "kinds": ["linear", "radial"],
-            "max": niho_develop::settings::MAX_LOCAL_MASKS,
-            "maskPlane": true,
-        }
-    })
-    .to_string()
+    api::capabilities()
 }
 
-/// Renders a JPEG / PNG original: `{ width, height, rgba, approximations }`
-/// (`rgba` is sRGB 8-bit, ready for `new ImageData(rgba, width, height)`).
-/// With a geometry the original is decoded large enough for the crop to
-/// reach `maxDimension`, up to `decodeCap` (omitted: 4096; 0: no cap).
+/// `niho_develop::api::mask_surface_id`.
+#[wasm_bindgen(js_name = maskSurfaceId)]
+pub fn mask_surface_id(png: &[u8]) -> String {
+    api::mask_surface_id(png)
+}
+
+/// `niho_develop::api::encode_mask_surface`.
+#[wasm_bindgen(js_name = encodeMaskSurface)]
+pub fn encode_mask_surface(width: u32, height: u32, data: &[u8]) -> Result<Vec<u8>, JsError> {
+    api::encode_mask_surface(width, height, data).map_err(js_error)
+}
+
+/// `niho_develop::api::render`: `{ width, height, rgba, approximations }`.
 #[wasm_bindgen]
 pub fn render(
     input_bytes: &[u8],
@@ -138,16 +95,12 @@ pub fn render(
     max_dimension: u32,
     decode_cap: Option<u32>,
 ) -> Result<Object, JsError> {
-    let frame = niho_develop::render(
-        input_bytes,
-        settings_json,
-        &options(max_dimension, false, decode_cap),
-    )
-    .map_err(js_error)?;
+    let frame =
+        api::render(input_bytes, settings_json, max_dimension, decode_cap).map_err(js_error)?;
     frame_object(&frame)
 }
 
-/// Renders and encodes a JPEG (`quality` 1..100; `decodeCap` as `render`).
+/// `niho_develop::api::export_jpeg`.
 #[wasm_bindgen(js_name = exportJpeg)]
 pub fn export_jpeg(
     input_bytes: &[u8],
@@ -156,16 +109,17 @@ pub fn export_jpeg(
     quality: u8,
     decode_cap: Option<u32>,
 ) -> Result<Vec<u8>, JsError> {
-    niho_develop::export_jpeg(
+    api::export_jpeg(
         input_bytes,
         settings_json,
-        &options(max_dimension, false, decode_cap),
+        max_dimension,
         quality,
+        decode_cap,
     )
     .map_err(js_error)
 }
 
-/// Renders and encodes a PNG (`decodeCap` as `render`).
+/// `niho_develop::api::export_png`.
 #[wasm_bindgen(js_name = exportPng)]
 pub fn export_png(
     input_bytes: &[u8],
@@ -173,54 +127,33 @@ pub fn export_png(
     max_dimension: u32,
     decode_cap: Option<u32>,
 ) -> Result<Vec<u8>, JsError> {
-    niho_develop::export_png(
-        input_bytes,
-        settings_json,
-        &options(max_dimension, false, decode_cap),
-    )
-    .map_err(js_error)
+    api::export_png(input_bytes, settings_json, max_dimension, decode_cap).map_err(js_error)
 }
 
-/// The JPEG of an export with the EXIF NIHO writes (F7a #17143): the capture
-/// date and time, orientation 1 and sRGB; no location or camera, any earlier
-/// EXIF removed. `captured_at` is the photo's `capturedAt` (ISO 8601, e.g.
-/// `2026-09-17T02:12:59.000Z`), shown at `offset_minutes` from UTC (Japan:
-/// 540); absent, the JPEG gets no EXIF. Works on the crate's `exportJpeg`
-/// output and on a canvas-encoded JPEG alike.
+/// `niho_develop::api::with_capture_exif`.
 #[wasm_bindgen(js_name = withCaptureExif)]
 pub fn with_capture_exif(
     jpeg_bytes: &[u8],
     captured_at: Option<String>,
     offset_minutes: i32,
 ) -> Result<Vec<u8>, JsError> {
-    let capture = captured_at
-        .map(|iso| niho_develop::exif::CaptureTime::from_iso(&iso, offset_minutes))
-        .transpose()
-        .map_err(js_error)?;
-    niho_develop::exif::with_capture_exif(jpeg_bytes, capture.as_ref()).map_err(js_error)
+    api::with_capture_exif(jpeg_bytes, captured_at.as_deref(), offset_minutes).map_err(js_error)
 }
 
-/// "補正前": the settings with the color adjustments back to neutral,
-/// keeping `v`, `engine`, `look`, `base` and `geometry` (the same cropped
-/// frame with the original's colors).
+/// `niho_develop::api::before_settings`.
 #[wasm_bindgen(js_name = beforeSettings)]
 pub fn before_settings(settings_json: &str) -> Result<String, JsError> {
-    niho_develop::before_settings(settings_json).map_err(js_error)
+    api::before_settings(settings_json).map_err(js_error)
 }
 
-/// A JPEG / PNG's `{ width, height }` with its EXIF orientation applied,
-/// from the header only.
+/// `niho_develop::api::image_size`: `{ width, height }`.
 #[wasm_bindgen(js_name = imageSize)]
 pub fn image_size(input_bytes: &[u8]) -> Result<Object, JsError> {
-    let (width, height) = frame::image_size(input_bytes).map_err(js_error)?;
-    size_object(width, height)
+    let size = api::image_size(input_bytes).map_err(js_error)?;
+    size_object(size.width, size.height)
 }
 
-/// The working size to open a `Developer` of a `width x height` original
-/// at (`imageSize`) so these settings' crop reaches `maxDimension`:
-/// `min(cap, long edge, ceil(long edge * maxDimension / crop long edge))`
-/// (`maxDimension` 0: the original's size; `cap` 0: no cap; without a
-/// geometry the crop is the whole photo).
+/// `niho_develop::api::raster_decode_size`.
 #[wasm_bindgen(js_name = rasterDecodeSize)]
 pub fn raster_decode_size(
     settings_json: &str,
@@ -229,21 +162,10 @@ pub fn raster_decode_size(
     max_dimension: u32,
     cap: u32,
 ) -> Result<u32, JsError> {
-    let settings = niho_develop::parse_settings(settings_json).map_err(js_error)?;
-    let size = niho_develop::raster_decode_size(
-        &settings,
-        width as usize,
-        height as usize,
-        max_dimension as usize,
-        cap as usize,
-    )
-    .map_err(js_error)?;
-    Ok(size as u32)
+    api::raster_decode_size(settings_json, width, height, max_dimension, cap).map_err(js_error)
 }
 
-/// The `{ width, height }` these settings render at from a `sourceWidth x
-/// sourceHeight` source (a Developer's `width` / `height`) at
-/// `maxDimension`, without rendering.
+/// `niho_develop::api::geometry_output_size`: `{ width, height }`.
 #[wasm_bindgen(js_name = geometryOutputSize)]
 pub fn geometry_output_size(
     settings_json: &str,
@@ -251,34 +173,74 @@ pub fn geometry_output_size(
     source_height: u32,
     max_dimension: u32,
 ) -> Result<Object, JsError> {
-    let settings = niho_develop::parse_settings(settings_json).map_err(js_error)?;
-    let (width, height) = niho_develop::output_size(
-        &settings,
-        source_width as usize,
-        source_height as usize,
-        max_dimension as usize,
-    )
-    .map_err(js_error)?;
-    size_object(width, height)
+    let size = api::geometry_output_size(settings_json, source_width, source_height, max_dimension)
+        .map_err(js_error)?;
+    size_object(size.width, size.height)
 }
 
-/// Initial `developSettings` v1 for a new edit ("初期化" saves this).
+/// `niho_develop::api::neutral_settings`.
 #[wasm_bindgen(js_name = neutralSettings)]
 pub fn neutral_settings() -> String {
-    DevelopSettings::new_edit().to_json()
+    api::neutral_settings()
 }
 
 #[cfg(test)]
 mod tests {
-    use super::{capabilities, neutral_settings, validate_settings};
+    use super::{
+        capabilities, encode_mask_surface, export_png, mask_surface_id, neutral_settings,
+        validate_settings, Developer,
+    };
 
     #[test]
     fn capabilities_name_the_mask_kinds_this_build_draws() {
         let value: serde_json::Value = serde_json::from_str(&capabilities()).unwrap();
         assert_eq!(
             value,
-            serde_json::json!({"masks": {"kinds": ["linear", "radial"], "max": 8, "maskPlane": true}})
+            serde_json::json!({"masks": {
+                "kinds": ["linear", "radial", "brush", "subject", "sky"],
+                "max": 8, "maskPlane": true, "surfaces": true
+            }})
         );
+    }
+
+    /// The Developer's surface store and export (the success paths; the
+    /// failures' codes are the crate's, `tests/masks_surface.rs`).
+    #[test]
+    fn a_developer_exports_a_brush_mask_with_the_surface_it_holds() {
+        let (w, h) = (48usize, 32usize);
+        let rgba: Vec<u8> = (0..w * h)
+            .flat_map(|i| [(i % w * 5) as u8, (i / w * 7) as u8, 90, 255])
+            .collect();
+        let photo = niho_develop::encode::encode_png(&rgba, w, h).unwrap();
+        let data: Vec<u8> = (0..16 * 8)
+            .map(|i| if i % 16 < 8 { 255 } else { 0 })
+            .collect();
+        let png = encode_mask_surface(16, 8, &data).unwrap();
+        let id = mask_surface_id(&png);
+        assert_eq!(id, niho_develop::mask_surface::surface_id(&png));
+        let settings = format!(
+            r#"{{"v":5,"engine":"niho-10","look":"niho-standard-1","base":null,"masks":[{{"id":"b","kind":"brush","surface":{{"id":"{id}","width":16,"height":8}},"adjust":{{"exposure":-1}}}}]}}"#
+        );
+        let mut developer = Developer::new(&photo, 0).unwrap();
+        assert!(!developer.has_mask_surface(&id));
+        developer.set_mask_surface(&id, &png).unwrap();
+        assert!(developer.has_mask_surface(&id));
+        let exported = developer.export_png(&settings, 0).unwrap();
+        let mut session =
+            niho_develop::Session::open_raster(&photo, 0, niho_develop::Filter::Lanczos3).unwrap();
+        session.set_mask_surface(&id, &png).unwrap();
+        let parsed = niho_develop::parse_settings(&settings).unwrap();
+        assert_eq!(exported, session.export_png(&parsed, 0).unwrap());
+        let jpeg = developer.export_jpeg(&settings, 32, 85).unwrap();
+        assert_eq!(jpeg, session.export_jpeg(&parsed, 32, 85).unwrap());
+        // Without the mask the Developer's PNG is the one-shot's.
+        let plain = r#"{"v":5,"engine":"niho-10","look":"niho-standard-1","base":null}"#;
+        assert_eq!(
+            developer.export_png(plain, 0).unwrap(),
+            export_png(&photo, plain, 0, None).unwrap()
+        );
+        assert!(developer.drop_mask_surface(&id));
+        assert!(!developer.drop_mask_surface(&id));
     }
 
     #[test]
@@ -309,79 +271,25 @@ mod tests {
     }
 }
 
-/// Validation problems of a `developSettings` JSON (`[]` when valid).
+/// `niho_develop::api::validate_settings`.
 #[wasm_bindgen(js_name = validateSettings)]
 pub fn validate_settings(settings_json: &str) -> String {
-    let issues: Vec<serde_json::Value> = match DevelopSettings::from_json(settings_json) {
-        Err(e) => vec![serde_json::json!({"path": e.path, "code": e.code, "message": e.message})],
-        Ok(s) => s
-            .validate()
-            .into_iter()
-            .map(|e| serde_json::json!({"path": e.path, "code": e.code, "message": e.message}))
-            .collect(),
-    };
-    serde_json::Value::from(issues).to_string()
+    api::validate_settings(settings_json)
 }
 
-/// Bundled presets: `[{ id, name, xmp }]`.
+/// `niho_develop::api::builtin_presets`.
 #[wasm_bindgen(js_name = builtinPresets)]
 pub fn builtin_presets() -> String {
-    let list: Vec<serde_json::Value> = xmp::BUILTIN_PRESETS
-        .iter()
-        .map(|p| serde_json::json!({"id": p.id, "name": p.name, "xmp": p.xmp}))
-        .collect();
-    serde_json::Value::from(list).to_string()
+    api::builtin_presets()
 }
 
-/// XMP preset on `baseJson` (neutral when absent): `{ name, settings,
-/// unsupported, approximate, items, converted, convertIssues, ..., masks }`.
-/// `masks` are the preset's Lightroom masks in the coordinates of the
-/// photo's visible frame (`xmp::PresetResult::masks`; `settings.masks` stay
-/// the base's).
+/// `niho_develop::api::preset_settings`.
 #[wasm_bindgen(js_name = presetSettings)]
 pub fn preset_settings(xmp_text: &str, base_json: Option<String>) -> Result<String, JsError> {
-    let base = match base_json {
-        Some(text) => Some(DevelopSettings::from_json(&text).map_err(js_error)?),
-        None => None,
-    };
-    let result = xmp::preset_settings(xmp_text, base.as_ref()).map_err(js_error)?;
-    Ok(result.to_value().to_string())
+    api::preset_settings(xmp_text, base_json.as_deref()).map_err(js_error)
 }
 
-/// `{"temperature","tint"}` JSON of a white on Lightroom's scale, `null`
-/// without one.
-fn white_json(white: Option<LightroomWhite>) -> String {
-    match white {
-        Some(w) => serde_json::json!({"temperature": w.temperature, "tint": w.tint}).to_string(),
-        None => "null".into(),
-    }
-}
-
-/// Reads `{"temperature","tint"}` (absent or `null`: none).
-fn parse_white(json: Option<String>) -> Result<Option<LightroomWhite>, JsError> {
-    let Some(text) = json else {
-        return Ok(None);
-    };
-    let value: serde_json::Value = serde_json::from_str(&text).map_err(js_error)?;
-    if value.is_null() {
-        return Ok(None);
-    }
-    let number = |key: &str| value.get(key).and_then(serde_json::Value::as_f64);
-    match (number("temperature"), number("tint")) {
-        (Some(temperature), Some(tint)) => LightroomWhite::new(temperature, tint)
-            .map(Some)
-            .ok_or_else(|| JsError::new("asShot: temperature must be positive and tint finite")),
-        _ => Err(JsError::new(
-            "asShot must be {\"temperature\", \"tint\"} or null",
-        )),
-    }
-}
-
-/// XMP preset on `baseJson` at `amount` (0..1.5 = 0..150%; 0 is the base,
-/// 1 the whole preset): `presetSettings`' result with `amount`.
-/// `asShotJson` is the photo's as-shot white (`asShotWhiteFromMeta` /
-/// `Developer.asShotWhite()`, `null` for a JPEG / PNG): an absolute white
-/// moves from it in mireds.
+/// `niho_develop::api::apply_preset`.
 #[wasm_bindgen(js_name = applyPreset)]
 pub fn apply_preset(
     xmp_text: &str,
@@ -389,155 +297,169 @@ pub fn apply_preset(
     amount: f64,
     as_shot_json: Option<String>,
 ) -> Result<String, JsError> {
-    let base = DevelopSettings::from_json(base_json).map_err(js_error)?;
-    let as_shot = parse_white(as_shot_json)?;
-    let result = xmp::apply_preset(xmp_text, &base, amount, as_shot).map_err(js_error)?;
-    Ok(result.to_value().to_string())
+    api::apply_preset(xmp_text, base_json, amount, as_shot_json.as_deref()).map_err(js_error)
 }
 
-/// `developSettings` as a Lightroom XMP preset: `{ xmp, notWritten }`.
-/// `optionsJson`: `{ name?, uuid?, groups? }` (groups: `exposure`,
-/// `whiteBalance`, `tone`, `presence`, `toneCurve`, `hsl`, `colorGrading`,
-/// `calibration`, `blackAndWhite`, `vignette`, `grain`, `noiseReduction`;
-/// noise reduction is written only for NIHO 3; the default leaves
-/// out `exposure` and `whiteBalance`).
+/// `niho_develop::api::settings_to_xmp`.
 #[wasm_bindgen(js_name = settingsToXmp)]
 pub fn settings_to_xmp(
     settings_json: &str,
     options_json: Option<String>,
 ) -> Result<String, JsError> {
-    let settings = DevelopSettings::from_json(settings_json).map_err(js_error)?;
-    let options = match options_json {
-        Some(text) => {
-            let value: serde_json::Value = serde_json::from_str(&text).map_err(js_error)?;
-            xmp::XmpWriteOptions::from_value(&value).map_err(js_error)?
-        }
-        None => xmp::XmpWriteOptions::default(),
-    };
-    Ok(xmp::settings_to_xmp(&settings, &options)
-        .to_value()
-        .to_string())
+    api::settings_to_xmp(settings_json, options_json.as_deref()).map_err(js_error)
 }
 
-/// The as-shot white of a working copy's metadata JSON on Lightroom's
-/// scale: `{ temperature, tint }` JSON, `null` when it has none (a non-RAW
-/// working copy, or no K / tint recorded). For applying a preset without
-/// opening the working copy.
+/// `niho_develop::api::as_shot_white_from_meta`.
 #[wasm_bindgen(js_name = asShotWhiteFromMeta)]
 pub fn as_shot_white_from_meta(meta_json: &str) -> Result<String, JsError> {
-    let meta = WorkingCopyMeta::from_json(meta_json).map_err(js_error)?;
-    Ok(white_json(meta.lightroom_as_shot_white()))
+    api::as_shot_white_from_meta(meta_json).map_err(js_error)
 }
 
-/// Photo Bench `EditSettings` JSON -> `{ ok, settings, issues, notes }`.
+/// `niho_develop::api::convert_edit_settings`.
 #[wasm_bindgen(js_name = convertEditSettings)]
 pub fn convert_edit_settings(
     edit_settings_json: &str,
     base_version: Option<String>,
 ) -> Result<String, JsError> {
-    let outcome = convert::convert_edit_settings_json(edit_settings_json, base_version.as_deref())
-        .map_err(js_error)?;
-    let issues = |list: &[convert::ConvertIssue]| -> Vec<serde_json::Value> {
-        list.iter()
-            .map(|i| serde_json::json!({"path": i.path, "code": i.code, "message": i.message}))
-            .collect()
-    };
-    Ok(serde_json::json!({
-        "converter": outcome.converter,
-        "ok": outcome.ok,
-        "settings": outcome.settings.to_value(),
-        "issues": issues(&outcome.issues),
-        "notes": issues(&outcome.notes),
-    })
-    .to_string())
+    api::convert_edit_settings(edit_settings_json, base_version.as_deref()).map_err(js_error)
 }
 
-/// A decoded photo kept across renders (slider drags).
+/// `niho_develop::api::Developer`: a decoded photo kept across renders
+/// (slider drags).
 #[wasm_bindgen]
 pub struct Developer {
-    session: Session,
+    inner: api::Developer,
 }
 
 #[wasm_bindgen]
 impl Developer {
-    /// Decodes a JPEG / PNG original, reduced to `workingMaxDimension`
-    /// (0 = original size; 2560 matches the working copies).
+    /// `niho_develop::api::Developer::new`.
     #[wasm_bindgen(constructor)]
     pub fn new(input_bytes: &[u8], working_max_dimension: u32) -> Result<Developer, JsError> {
-        let session = Session::open_raster(
-            input_bytes,
-            working_max_dimension as usize,
-            Filter::Lanczos3,
-        )
-        .map_err(js_error)?;
-        Ok(Developer { session })
+        let inner = api::Developer::new(input_bytes, working_max_dimension).map_err(js_error)?;
+        Ok(Developer { inner })
     }
 
-    /// Opens a working copy (16-bit PNG) with its metadata JSON.
+    /// `niho_develop::api::Developer::open_working_copy`.
     #[wasm_bindgen(js_name = openWorkingCopy)]
     pub fn open_working_copy(png: &[u8], meta_json: &str) -> Result<Developer, JsError> {
-        let session =
-            Session::open_working_copy(png, meta_json, Filter::Lanczos3).map_err(js_error)?;
-        Ok(Developer { session })
+        let inner = api::Developer::open_working_copy(png, meta_json).map_err(js_error)?;
+        Ok(Developer { inner })
     }
 
     #[wasm_bindgen(getter)]
     pub fn width(&self) -> u32 {
-        self.session.source_size().0 as u32
+        self.inner.width()
     }
 
     #[wasm_bindgen(getter)]
     pub fn height(&self) -> u32 {
-        self.session.source_size().1 as u32
+        self.inner.height()
     }
 
-    /// The photo's as-shot white on Lightroom's scale: `{ temperature, tint }`
-    /// JSON, `null` for a JPEG / PNG (the `asShotJson` of `applyPreset`).
+    /// `niho_develop::api::Developer::as_shot_white`.
     #[wasm_bindgen(js_name = asShotWhite)]
     pub fn as_shot_white(&self) -> String {
-        white_json(self.session.as_shot_white())
+        self.inner.as_shot_white()
     }
 
-    /// A separate `Developer` for preset previews at a long side of
-    /// `maxDimension` (at most 512; 0 = 512) without decoding again. Signed
-    /// NIHO 3 sources retain their full master internally for canonical
-    /// analysis. Rendering leaves this one's next drag frame as it was.
-    /// Render it with `maxDimension` 0 (its own size).
+    /// `niho_develop::api::Developer::thumbnail`.
     pub fn thumbnail(&self, max_dimension: u32) -> Developer {
         Developer {
-            session: self.session.thumbnail(max_dimension as usize),
+            inner: self.inner.thumbnail(max_dimension),
         }
     }
 
-    /// `interactive`: drag frames (Shadows nDisc 5, statistics at 375px,
-    /// 33^3 tone cube); release with `false` for the exact frame.
+    /// `niho_develop::api::Developer::render`: `{ width, height, rgba,
+    /// approximations }`.
     pub fn render(
         &mut self,
         settings_json: &str,
         max_dimension: u32,
         interactive: bool,
     ) -> Result<Object, JsError> {
-        let settings = niho_develop::parse_settings(settings_json).map_err(js_error)?;
-        let quality = if interactive {
-            Quality::Interactive
-        } else {
-            Quality::Final
-        };
         let frame = self
-            .session
-            .render(&settings, max_dimension as usize, quality)
+            .inner
+            .render(settings_json, max_dimension, interactive)
             .map_err(js_error)?;
         frame_object(&frame)
     }
 
-    /// One local mask's plane for the editor's overlay: `{ width, height,
-    /// data }` where `data` is a `Uint8Array` of `width * height` values
-    /// (`round(weight / 65536 * 255)`, row-major, the mask's `invert`
-    /// applied, drawn whether or not it is enabled) at the size `render`
-    /// gives these settings at `maxDimension`, from the same map and plane
-    /// as the render. Leaves the drag frames' kept state as it was. A
-    /// `brush` / `subject` / `sky` mask fails with `maskSurfaceMissing`, an
-    /// id the settings do not have with `maskNotFound`.
+    /// `niho_develop::api::Developer::prepare_analysis`.
+    #[wasm_bindgen(js_name = prepareAnalysis)]
+    pub fn prepare_analysis(&mut self, settings_json: &str) -> Result<bool, JsError> {
+        self.inner.prepare_analysis(settings_json).map_err(js_error)
+    }
+
+    /// `niho_develop::api::Developer::release_analysis_ahead`.
+    #[wasm_bindgen(js_name = releaseAnalysisAhead)]
+    pub fn release_analysis_ahead(&mut self) {
+        self.inner.release_analysis_ahead();
+    }
+
+    /// `niho_develop::api::Developer::export_analysis`.
+    #[wasm_bindgen(js_name = exportAnalysis)]
+    pub fn export_analysis(&mut self, settings_json: &str) -> Result<Option<Vec<u8>>, JsError> {
+        self.inner.export_analysis(settings_json).map_err(js_error)
+    }
+
+    /// `niho_develop::api::Developer::holds_analysis`.
+    #[wasm_bindgen(js_name = holdsAnalysis)]
+    pub fn holds_analysis(&self, settings_json: &str) -> Result<bool, JsError> {
+        self.inner.holds_analysis(settings_json).map_err(js_error)
+    }
+
+    /// `niho_develop::api::Developer::import_analysis`.
+    #[wasm_bindgen(js_name = importAnalysis)]
+    pub fn import_analysis(&mut self, bytes: &[u8]) -> Result<bool, JsError> {
+        self.inner.import_analysis(bytes).map_err(js_error)
+    }
+
+    /// `niho_develop::api::Developer::set_mask_surface`.
+    #[wasm_bindgen(js_name = setMaskSurface)]
+    pub fn set_mask_surface(&mut self, id: &str, png: &[u8]) -> Result<(), JsError> {
+        self.inner.set_mask_surface(id, png).map_err(js_error)
+    }
+
+    /// `niho_develop::api::Developer::drop_mask_surface`.
+    #[wasm_bindgen(js_name = dropMaskSurface)]
+    pub fn drop_mask_surface(&mut self, id: &str) -> bool {
+        self.inner.drop_mask_surface(id)
+    }
+
+    /// `niho_develop::api::Developer::has_mask_surface`.
+    #[wasm_bindgen(js_name = hasMaskSurface)]
+    pub fn has_mask_surface(&self, id: &str) -> bool {
+        self.inner.has_mask_surface(id)
+    }
+
+    /// `niho_develop::api::Developer::export_jpeg`.
+    #[wasm_bindgen(js_name = exportJpeg)]
+    pub fn export_jpeg(
+        &mut self,
+        settings_json: &str,
+        max_dimension: u32,
+        quality: u8,
+    ) -> Result<Vec<u8>, JsError> {
+        self.inner
+            .export_jpeg(settings_json, max_dimension, quality)
+            .map_err(js_error)
+    }
+
+    /// `niho_develop::api::Developer::export_png`.
+    #[wasm_bindgen(js_name = exportPng)]
+    pub fn export_png(
+        &mut self,
+        settings_json: &str,
+        max_dimension: u32,
+    ) -> Result<Vec<u8>, JsError> {
+        self.inner
+            .export_png(settings_json, max_dimension)
+            .map_err(js_error)
+    }
+
+    /// `niho_develop::api::Developer::mask_plane`: `{ width, height, data }`
+    /// (`data` a `Uint8Array`).
     #[wasm_bindgen(js_name = maskPlane)]
     pub fn mask_plane(
         &self,
@@ -545,23 +467,22 @@ impl Developer {
         mask_id: &str,
         max_dimension: u32,
     ) -> Result<Object, JsError> {
-        let settings = niho_develop::parse_settings(settings_json).map_err(js_error)?;
-        let (width, height, data) = self
-            .session
-            .mask_plane(&settings, mask_id, max_dimension as usize)
+        let plane = self
+            .inner
+            .mask_plane(settings_json, mask_id, max_dimension)
             .map_err(js_error)?;
-        let o = size_object(width, height)?;
+        let o = size_object(plane.width, plane.height)?;
         Reflect::set(
             &o,
             &JsValue::from_str("data"),
-            &js_sys::Uint8Array::from(&data[..]).into(),
+            &js_sys::Uint8Array::from(&plane.data[..]).into(),
         )
         .map_err(|_| JsError::new("set"))?;
         Ok(o)
     }
 
-    /// Samples Stage Q after hue stabilization and before color points /
-    /// Color Grading at normalized rendered-frame coordinates.
+    /// `niho_develop::api::Developer::sample_color`: `{ lightness, chroma,
+    /// hue }`.
     #[wasm_bindgen(js_name = sampleColor)]
     pub fn sample_color(
         &mut self,
@@ -570,43 +491,24 @@ impl Developer {
         x: f64,
         y: f64,
     ) -> Result<Object, JsError> {
-        let settings = niho_develop::parse_settings(settings_json).map_err(js_error)?;
         let color = self
-            .session
-            .sample_color(&settings, max_dimension as usize, x, y)
+            .inner
+            .sample_color(settings_json, max_dimension, x, y)
             .map_err(js_error)?;
         sampled_color_object(color)
     }
 
-    /// "自動": these settings with the six Light sliders and Vibrance set
-    /// for this photo (within its crop), as a `developSettings` JSON; every
-    /// other key keeps the text it was given. The frames' kept state is
-    /// left as it was.
+    /// `niho_develop::api::Developer::auto_settings`.
     #[wasm_bindgen(js_name = autoSettings)]
     pub fn auto_settings(&mut self, settings_json: &str) -> Result<String, JsError> {
-        let settings = niho_develop::parse_settings(settings_json).map_err(js_error)?;
-        let result = self.session.auto_settings(&settings).map_err(js_error)?;
-        niho_develop::auto::write_changes(settings_json, &settings, &result).map_err(js_error)
+        self.inner.auto_settings(settings_json).map_err(js_error)
     }
 
-    /// Upright (niho-photo#46): the perspective that stands this photo's
-    /// lines upright, found on the frame of these settings' quarter turns
-    /// and flips (their straighten angle taken off). `mode`: 1 auto, 2
-    /// level, 3 vertical, 4 full. Returns `{ perspective: { vertical,
-    /// horizontal, rotate, aspect, scale, x, y }, mode, confidence, lines:
-    /// { vertical, horizontal }, reason? }` JSON (`reason` "noLines": the
-    /// identity, nothing to correct). The frames' kept state is left as it
-    /// was.
+    /// `niho_develop::api::Developer::estimate_upright`.
     #[wasm_bindgen(js_name = estimateUpright)]
     pub fn estimate_upright(&self, settings_json: &str, mode: u32) -> Result<String, JsError> {
-        let settings = niho_develop::parse_settings(settings_json).map_err(js_error)?;
-        let mode = UprightMode::from_number(mode).ok_or_else(|| {
-            JsError::new("mode must be 1 (auto), 2 (level), 3 (vertical) or 4 (full)")
-        })?;
-        Ok(self
-            .session
-            .estimate_upright(&settings, mode)
-            .to_value()
-            .to_string())
+        self.inner
+            .estimate_upright(settings_json, mode)
+            .map_err(js_error)
     }
 }

@@ -196,6 +196,7 @@ export function useBrowserPhotoDevelop(params: {
     if (!engineRef.current) {
       engineRef.current = createDevelopEngine({
         manifestUrl: library.engineAssets.manifestUrl() ?? undefined,
+        preferNative: library.engineAssets.preferNative === true,
         maskSurfaces: maskSurfaceSource,
       });
     }

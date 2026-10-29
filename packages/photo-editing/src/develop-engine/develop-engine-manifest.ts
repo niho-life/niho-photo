@@ -22,15 +22,13 @@ export type DevelopEngineManifest = {
   version: string;
   wasmUrl: string;
   jsUrl: string;
+  threads: { wasmUrl: string; jsUrl: string } | null;
 };
 
 /** bundle固有manifestの置き場（旧bundle向けのmanifest.jsonは更新しない）。 */
 export function developEngineManifestPath(): string {
   return `/develop-engine/${DEVELOP_ENGINE_VERSION}/manifest-${DEVELOP_ENGINE_CRATE_VERSION}.json`;
 }
-
-const WASM_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.wasm$/;
-const JS_FILE_NAME = /^[A-Za-z0-9][A-Za-z0-9._-]*\.js$/;
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
@@ -40,11 +38,8 @@ function isRecord(value: unknown): value is Record<string, unknown> {
  * `files` の中から pattern に合うファイル名をちょうど 1 つ選び、manifest の場所から URL を解決する。
  * 無い・2 つ以上ある・単純なファイル名でない（`/`・`..`・絶対 URL）なら null。
  */
-function pickFile(files: Record<string, unknown>, pattern: RegExp, manifestUrl: string): string | null {
-  const names = Object.keys(files).filter((name) => pattern.test(name));
-  if (names.length !== 1) return null;
-  const name = names[0];
-  if (name.includes("..")) return null;
+function pickFile(files: Record<string, unknown>, name: string, manifestUrl: string): string | null {
+  if (!isRecord(files[name])) return null;
   try {
     return new URL(name, manifestUrl).href;
   } catch {
@@ -60,8 +55,12 @@ export function parseDevelopEngineManifest(value: unknown, manifestUrl: string):
   if (!isRecord(value)) return null;
   if (value.engine !== DEVELOP_ENGINE_VERSION || value.version !== DEVELOP_ENGINE_CRATE_VERSION) return null;
   if (!isRecord(value.files)) return null;
-  const wasmUrl = pickFile(value.files, WASM_FILE_NAME, manifestUrl);
-  const jsUrl = pickFile(value.files, JS_FILE_NAME, manifestUrl);
+  const wasmUrl = pickFile(value.files, `niho_develop_wasm_bg-${DEVELOP_ENGINE_CRATE_VERSION}.wasm`, manifestUrl);
+  const jsUrl = pickFile(value.files, `niho_develop_wasm-${DEVELOP_ENGINE_CRATE_VERSION}.js`, manifestUrl);
   if (!wasmUrl || !jsUrl) return null;
-  return { engine: DEVELOP_ENGINE_VERSION, version: DEVELOP_ENGINE_CRATE_VERSION, wasmUrl, jsUrl };
+  const threadFiles = isRecord(value.threads) && isRecord(value.threads.files) ? value.threads.files : {};
+  const threadsWasm = pickFile(threadFiles, `niho_develop_wasm_threads_bg-${DEVELOP_ENGINE_CRATE_VERSION}.wasm`, manifestUrl);
+  const threadsJs = pickFile(threadFiles, `niho_develop_wasm_threads-${DEVELOP_ENGINE_CRATE_VERSION}.js`, manifestUrl);
+  const threads = threadsWasm && threadsJs ? { wasmUrl: threadsWasm, jsUrl: threadsJs } : null;
+  return { engine: DEVELOP_ENGINE_VERSION, version: DEVELOP_ENGINE_CRATE_VERSION, wasmUrl, jsUrl, threads };
 }

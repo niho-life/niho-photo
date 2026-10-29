@@ -1,6 +1,6 @@
 [package]
 name = "niho-develop-render"
-description = "Native render CLI of niho-develop (stage 2): NIHO Desktop's full-size export as a child process"
+description = "Native CLI of niho-develop (stage 2): NIHO Desktop's full-size export (render) and the Mac editor's develop engine over stdin / stdout (serve)"
 version.workspace = true
 edition.workspace = true
 license.workspace = true
@@ -19,6 +19,6 @@ path = "src/main.rs"
 # digest covers niho-develop-wasm's dependency closure, which this crate is
 # not part of (scripts/wasm-manifest.mjs).
 [dependencies]
-niho-develop = { path = "../niho-develop" }
+niho-develop = { path = "../niho-develop", features = ["threads"] }
 serde_json.workspace = true
 image.workspace = true

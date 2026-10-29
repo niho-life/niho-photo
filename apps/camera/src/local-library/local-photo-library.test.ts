@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BrowserPhotoSourceError } from "niho-photo-editing/browser-photo-source";
 import { developEngineManifestPath } from "niho-photo-editing/develop-engine/develop-engine-manifest";
@@ -25,6 +25,8 @@ import {
 /**
  * この Mac の `PhotoLibrary`（契約の型への対応）を、偽の native（invoke）で確かめる。native の口の形は commands.test.ts。
  */
+
+afterEach(() => vi.unstubAllGlobals());
 
 type Call = [command: string, request: Record<string, unknown> | undefined];
 
@@ -58,7 +60,7 @@ const ROOT: LibraryFolder = {
 type SourceWithoutToken = DevelopSource extends infer S ? (S extends DevelopSource ? Omit<S, "token"> : never) : never;
 
 type FakeOptions = {
-  status?: Array<{ available: boolean; raster: boolean; fullSizeRaster?: boolean; masks?: boolean }>;
+  status?: Array<{ available: boolean; raster: boolean; fullSizeRaster?: boolean; masks?: boolean; renderer?: unknown }>;
   cutout?: boolean | CameraCommandError;
   /** entryId → open ごとに返す中身の SHA-256（写真の置き換えのテスト用） */
   hashes?: Record<string, string[]>;
@@ -286,6 +288,8 @@ describe("capabilities", () => {
       exportFolder: true,
       // マスクの面（ブラシ）の置き場はアプリのコマンド（M4 #68）
       maskSurfaces: true,
+      // 被写体のマスクの面は同梱の niho-camera-cutout が答えたときだけ（niho-photo#135。空はまだ作れない）
+      maskDetection: { subject: true, sky: false },
       cutout: true,
       multiSelect: true,
       info: true,
@@ -325,6 +329,30 @@ describe("capabilities", () => {
     ).resolves.toMatchObject({ nativeExport: false, nativeExportMasks: false });
   });
 
+  it("hands the bundled renderer's capabilities to the editor only when it answers them", async () => {
+    const renderer = {
+      settingsVersions: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+      engines: ["niho-1", "niho-2", "niho-14"],
+      features: ["colorGradingLuminance"],
+      maskKinds: ["linear", "radial", "brush", "subject", "sky"],
+      maxPixels: 40_000_000,
+    };
+    const answered = await fakeNative({
+      status: [{ available: true, raster: true, fullSizeRaster: true, masks: true, renderer }],
+    }).library.capabilities();
+    expect(answered.nativeExportRenderer).toEqual(renderer);
+    // 答えない古い renderer（0.16.0）・古い native（`renderer` が無い）・形の違う値は省略（今の遮断のまま）
+    for (const status of [
+      { available: true, raster: true, renderer: null },
+      { available: true, raster: true },
+      { available: true, raster: true, renderer: { ...renderer, settingsVersions: "9" } },
+      { available: false, raster: false, renderer },
+    ]) {
+      const capabilities = await fakeNative({ status: [status], cutout: false }).library.capabilities();
+      expect(capabilities).not.toHaveProperty("nativeExportRenderer");
+    }
+  });
+
   it("enables cutout only after its camera-only sidecar probe succeeds", async () => {
     await expect(fakeNative({ cutout: false }).library.capabilities()).resolves.toMatchObject({ cutout: false });
     await expect(
@@ -336,6 +364,7 @@ describe("capabilities", () => {
   it("serves the bundled wasm manifest from this page's origin", () => {
     const { library } = fakeNative();
     expect(library.engineAssets.manifestUrl()).toBe(new URL(developEngineManifestPath(), window.location.origin).href);
+    expect(library.engineAssets.preferNative).toBe(true);
     expect(library.limits).toEqual({ listPageSize: 500, lookupMaxCount: 100, referencesMaxCount: 0, photosPerRequest: 50 });
   });
 });
@@ -742,6 +771,13 @@ describe("working copies", () => {
   });
 
   it("loads a real-size provisional preview, deduplicates it, and keeps a hash-bound settings-only draft", async () => {
+    // Node 26 は --localstorage-file の指定が無いと global localStorage を undefined にする。
+    const stored = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => { stored.set(key, value); },
+      removeItem: (key: string) => { stored.delete(key); },
+    });
     const fake = fakeNative();
     await expect(
       fake.library.loadInteractivePreview!("e-raw", { signal: signal(), maxDimension: 256 }),
@@ -763,6 +799,7 @@ describe("working copies", () => {
     expect(heic.photo.id).toBe("e-heic");
     expect(commandsOf(sameContent.calls).filter((command) => command === "camera_photo_interactive_preview")).toHaveLength(1);
 
+    expect(() => window.localStorage.setItem("niho-photo-test-storage", "ready")).not.toThrow();
     const settings = { v: 1, engine: "niho-6", look: "niho-standard-1", base: null, exposure: 0.4 } as DevelopSettings;
     const firstDraft = await fake.library.saveProvisionalDraft!("e-raw", sha("e-raw"), settings);
     await expect(fake.library.loadProvisionalDraft!("e-raw", sha("e-raw"))).resolves.toMatchObject({

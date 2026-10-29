@@ -132,6 +132,25 @@ pub const ENGINE_NIHO_13: &str = "niho-13";
 /// `niho-14` settings are frozen from here on.
 pub const ENGINE_NIHO_14: &str = "niho-14";
 
+/// The engines this crate renders (exactly those [`is_known_engine`]
+/// accepts), oldest first: the native renderer reports them
+/// (`niho-develop-render capabilities`).
+pub const KNOWN_ENGINES: [&str; 13] = [
+    ENGINE_NIHO_1,
+    ENGINE_NIHO_2,
+    ENGINE_NIHO_3,
+    ENGINE_NIHO_4,
+    ENGINE_NIHO_5,
+    ENGINE_NIHO_6,
+    ENGINE_NIHO_7,
+    ENGINE_NIHO_8,
+    ENGINE_NIHO_10,
+    ENGINE_NIHO_11,
+    ENGINE_NIHO_12,
+    ENGINE_NIHO_13,
+    ENGINE_NIHO_14,
+];
+
 pub fn is_known_engine(engine: &str) -> bool {
     matches!(
         engine,
@@ -2098,6 +2117,21 @@ fn parse_detail(v: &Value) -> Result<DetailSettings, SettingsError> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn known_engines_are_exactly_the_ones_rendered() {
+        for engine in KNOWN_ENGINES {
+            assert!(is_known_engine(engine), "{engine}");
+        }
+        for n in 0..100 {
+            let engine = format!("niho-{n}");
+            assert_eq!(
+                is_known_engine(&engine),
+                KNOWN_ENGINES.contains(&engine.as_str()),
+                "{engine}"
+            );
+        }
+    }
 
     #[test]
     fn neutral_round_trips_and_is_neutral() {
