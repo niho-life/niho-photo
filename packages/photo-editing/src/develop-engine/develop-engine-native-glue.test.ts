@@ -54,7 +54,10 @@ function fakeServe(overrides: Partial<Record<string, (sent: Sent) => Reply>> = {
   const handlers: Record<string, (sent: Sent) => Reply> = {
     hello: () => ok(HELLO),
     version: () => ok(`niho-develop ${DEVELOP_ENGINE_CRATE_VERSION} (engine ${DEVELOP_ENGINE_VERSION})`),
-    capabilities: () => ok(JSON.stringify({ masks: { kinds: ["linear", "radial"], max: 8, maskPlane: true } })),
+    capabilities: () =>
+      ok(JSON.stringify({ masks: { kinds: ["linear", "radial", "brush", "subject", "sky"], max: 8, maskPlane: true, surfaces: true } })),
+    maskSurfaceId: () => ok("surface-id"),
+    encodeMaskSurface: () => ok({ blob: 0 }, [new Uint8Array([137, 80, 78, 71])]),
     validateSettings: () => ok("[]"),
     render: () => frame(4, 2),
     exportJpeg: () => ok({ blob: 0 }, [new Uint8Array([0xff, 0xd8, 0xff, 0xd9])]),
@@ -67,6 +70,17 @@ function fakeServe(overrides: Partial<Record<string, (sent: Sent) => Reply>> = {
       const developer = developers.get(request.header.handle as number);
       return developer ? frame(developer.width, developer.height) : { ok: false, error: "unknown developer", code: "unknownHandle" };
     },
+    "Developer.prepareAnalysis": () => ok(true),
+    "Developer.releaseAnalysisAhead": () => ok(null),
+    "Developer.exportAnalysis": (request) =>
+      (request.header.args as unknown[])[0] === "none" ? ok(null) : ok({ blob: 0 }, [new Uint8Array([1, 5, 9])]),
+    "Developer.holdsAnalysis": () => ok(true),
+    "Developer.importAnalysis": () => ok(true),
+    "Developer.setMaskSurface": () => ok(null),
+    "Developer.dropMaskSurface": () => ok(true),
+    "Developer.hasMaskSurface": () => ok(true),
+    "Developer.exportJpeg": () => ok({ blob: 0 }, [new Uint8Array([0xff, 0xd8, 0xff, 0xd9])]),
+    "Developer.exportPng": () => ok({ blob: 0 }, [new Uint8Array([137, 80, 78, 71])]),
     "Developer.free": (request) => {
       developers.delete(request.header.handle as number);
       return ok(null);
@@ -133,6 +147,7 @@ describe("createNativeDevelopGlue", () => {
     ["crate の版", { ...HELLO, crateVersion: "0.0.1" }],
     ["engine", { ...HELLO, engine: "niho-1" }],
     ["口の一覧", { ...HELLO, methods: HELLO.methods.filter((name) => name !== "Developer.maskPlane") }],
+    ["未知の口", { ...HELLO, methods: [...HELLO.methods, "Developer.futureMethod"] }],
   ])("%s が合わない sidecar は使わない（Worker は wasm へ落ちる）", async (_label, hello) => {
     const glue = createNativeDevelopGlue(fakeServe({ hello: () => ok(hello) }).transport);
     await expect(glue.default()).rejects.toBeInstanceOf(NativeDevelopUnavailableError);
@@ -148,6 +163,43 @@ describe("createNativeDevelopGlue", () => {
     expect(serve.sent[0].header.args).toEqual([{ blob: 0 }, "{}", 1280, null]);
     expect([...serve.sent[0].blobs[0]]).toEqual([1, 2, 3]);
     expect([...glue.exportJpeg(new Uint8Array([1]), "{}", 0, 90)]).toEqual([0xff, 0xd8, 0xff, 0xd9]);
+    expect(glue.maskSurfaceId(new Uint8Array([9]))).toBe("surface-id");
+    expect([...glue.encodeMaskSurface(2, 1, new Uint8Array([0, 255]))]).toEqual([137, 80, 78, 71]);
+    expect(serve.sent.at(-1)).toMatchObject({ method: "encodeMaskSurface", header: { args: [2, 1, { blob: 0 }] } });
+    expect([...serve.sent.at(-1)!.blobs[0]]).toEqual([0, 255]);
+  });
+
+  it("Developer の解析・マスク面・export を wasm と同じ型へ変換する", () => {
+    const serve = fakeServe();
+    const glue = createNativeDevelopGlue(serve.transport);
+    const developer = new glue.Developer(new Uint8Array([1]), 0);
+    expect(developer.prepareAnalysis("{}")).toBe(true);
+    expect(developer.releaseAnalysisAhead()).toBeUndefined();
+    expect([...developer.exportAnalysis("{}")!]).toEqual([1, 5, 9]);
+    expect(developer.exportAnalysis("none")).toBeUndefined();
+    expect(developer.holdsAnalysis("{}")).toBe(true);
+    expect(developer.importAnalysis(new Uint8Array([4, 2]))).toBe(true);
+    expect(serve.sent.at(-1)).toMatchObject({ method: "Developer.importAnalysis", header: { args: [{ blob: 0 }], handle: 1 } });
+    expect([...serve.sent.at(-1)!.blobs[0]]).toEqual([4, 2]);
+    expect(developer.setMaskSurface("surface-id", new Uint8Array([8, 6]))).toBeUndefined();
+    expect(serve.sent.at(-1)).toMatchObject({ method: "Developer.setMaskSurface", header: { args: ["surface-id", { blob: 0 }], handle: 1 } });
+    expect(developer.hasMaskSurface("surface-id")).toBe(true);
+    expect(developer.dropMaskSurface("surface-id")).toBe(true);
+    expect([...developer.exportJpeg("{}", 1280, 90)]).toEqual([0xff, 0xd8, 0xff, 0xd9]);
+    expect([...developer.exportPng("{}", 1280)]).toEqual([137, 80, 78, 71]);
+    const frame = developer.render("{}", 0, false) as { rgba: Uint8ClampedArray };
+    expect(frame.rgba).toBeInstanceOf(Uint8ClampedArray);
+  });
+
+  it("新しい口の engine error と型の壊れた応答を区別する", () => {
+    const engineError = createNativeDevelopGlue(
+      fakeServe({ "Developer.setMaskSurface": () => ({ ok: false, error: "maskSurfaceInvalid: sha256 does not match" }) }).transport,
+    );
+    const developer = new engineError.Developer(new Uint8Array([1]), 0);
+    expect(() => developer.setMaskSurface("bad", new Uint8Array([1]))).toThrow("maskSurfaceInvalid");
+    const malformed = createNativeDevelopGlue(fakeServe({ "Developer.hasMaskSurface": () => ok("yes") }).transport);
+    const malformedDeveloper = new malformed.Developer(new Uint8Array([1]), 0);
+    expect(() => malformedDeveloper.hasMaskSurface("surface-id")).toThrow(NativeDevelopUnavailableError);
   });
 
   it("Developer は handle で持ち、持ち主の印を送り、free の後は使えない", () => {
@@ -222,6 +274,13 @@ describe("createNativeDevelopGlue", () => {
       .map((match) => jsName(match[1], match[2]));
     expect(new Set(functions)).toEqual(new Set(NATIVE_DEVELOP_FUNCTIONS));
     expect(new Set([...methods, "free"])).toEqual(new Set(NATIVE_DEVELOP_DEVELOPER_METHODS));
+
+    const serveSource = readFileSync(
+      fileURLToPath(new URL("../../../develop-engine/crates/niho-develop-render/src/serve/methods.rs", import.meta.url)),
+      "utf8",
+    );
+    const serveMethods = [...serveSource.matchAll(/^\s*"([A-Za-z.]+)",$/gm)].map((match) => match[1]);
+    expect(new Set(serveMethods)).toEqual(new Set(NATIVE_DEVELOP_METHODS));
   });
 });
 
@@ -263,7 +322,7 @@ describe("Worker の中身に native の glue を渡す", () => {
       upright: true,
       heal: true,
       lens: true,
-      masks: { kinds: ["linear", "radial"], max: 8, maskPlane: true },
+      masks: { kinds: ["linear", "radial", "brush", "subject", "sky"], max: 8, maskPlane: true, surfaces: true },
     });
     await handler({ type: "open", id: 2, bytes: new Uint8Array([1, 2]).buffer, workingMaxDimension: 2560 });
     await handler({ type: "render", id: 3, settingsJson: "{}", maxDimension: 1280, interactive: false });

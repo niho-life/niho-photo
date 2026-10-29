@@ -154,6 +154,8 @@ function setup(
     encodeJpeg?: DevelopEngineWorkerDeps["encodeJpeg"];
     now?: DevelopEngineWorkerDeps["now"];
     logPerf?: DevelopEngineWorkerDeps["logPerf"];
+    createNativeGlue?: DevelopEngineWorkerDeps["createNativeGlue"];
+    isNativeUnavailableError?: DevelopEngineWorkerDeps["isNativeUnavailableError"];
   } = {},
 ) {
   const posted: Posted[] = [];
@@ -167,11 +169,104 @@ function setup(
     encodeJpeg: options.encodeJpeg,
     now: options.now,
     logPerf: options.logPerf,
+    createNativeGlue: options.createNativeGlue,
+    isNativeUnavailableError: options.isNativeUnavailableError,
   };
   return { handler: createDevelopEngineWorkerHandler(deps), deps, posted, glue };
 }
 
 describe("createDevelopEngineWorkerHandler", () => {
+  it("camera の希望時は native を選び、browser の init は同じ注入口があっても wasm のまま", async () => {
+    const native = fakeGlue();
+    const createNativeGlue = vi.fn(() => native.module);
+    const selected = setup({ createNativeGlue });
+    await selected.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL, preferNative: true });
+    expect(selected.posted[0]?.message).toMatchObject({ type: "ready", id: 1, runtime: "native" });
+    expect(selected.deps.fetch).not.toHaveBeenCalled();
+
+    const browser = setup({ createNativeGlue });
+    await browser.handler({ type: "init", id: 2, manifestUrl: MANIFEST_URL });
+    expect(browser.posted[0]?.message).toMatchObject({ type: "ready", id: 2, runtime: "wasm" });
+    expect(createNativeGlue).toHaveBeenCalledOnce();
+    expect(browser.deps.fetch).toHaveBeenCalledOnce();
+  });
+
+  it("native の hello・版・method 検証相当の初期化失敗では wasm へ戻る", async () => {
+    for (const message of ["protocol mismatch", "crate version mismatch", "missing method", "sidecar 503"]) {
+      const native = fakeGlue();
+      const nativeModule = {
+        ...native.module,
+        default: vi.fn(async () => {
+          throw new Error(message);
+        }),
+      };
+      const { handler, posted, deps } = setup({ createNativeGlue: () => nativeModule });
+      await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL, preferNative: true });
+      expect(posted[0]?.message, message).toMatchObject({ type: "ready", runtime: "wasm" });
+      expect(deps.fetch, message).toHaveBeenCalledOnce();
+    }
+  });
+
+  it("native の handle が失効した描画は写真と面を wasm に作り直して 1 回だけ再試行する", async () => {
+    const unavailable = new Error("native handle is gone");
+    const native = fakeGlue();
+    const wasm = fakeGlue();
+    const NativeBase = native.module.Developer;
+    const WasmBase = wasm.module.Developer;
+    const nativeSurfaces = new Map<string, Uint8Array>();
+    const wasmSurfaces = new Map<string, Uint8Array>();
+    class NativeDeveloper extends NativeBase {
+      setMaskSurface(id: string, png: Uint8Array) {
+        nativeSurfaces.set(id, new Uint8Array(png));
+      }
+      dropMaskSurface(id: string) {
+        return nativeSurfaces.delete(id);
+      }
+      exportJpeg() {
+        return new Uint8Array([1]);
+      }
+      override render() {
+        throw unavailable;
+      }
+    }
+    class WasmDeveloper extends WasmBase {
+      setMaskSurface(id: string, png: Uint8Array) {
+        wasmSurfaces.set(id, new Uint8Array(png));
+      }
+      dropMaskSurface(id: string) {
+        return wasmSurfaces.delete(id);
+      }
+      exportJpeg() {
+        return new Uint8Array([1]);
+      }
+    }
+    const capabilities = () => JSON.stringify({ masks: { kinds: ["brush"], max: 8, maskPlane: false, surfaces: true } });
+    const surfaceFunctions = {
+      capabilities,
+      encodeMaskSurface: () => new Uint8Array([1]),
+      maskSurfaceId: () => "a".repeat(64),
+    };
+    const releaseClient = vi.fn();
+    const nativeModule = { ...native.module, ...surfaceFunctions, Developer: NativeDeveloper, releaseClient };
+    const wasmModule = { ...wasm.module, ...surfaceFunctions, Developer: WasmDeveloper };
+    const { handler, posted } = setup({
+      module: wasmModule,
+      createNativeGlue: () => nativeModule,
+      isNativeUnavailableError: (error) => error === unavailable,
+    });
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL, preferNative: true });
+    await handler({ type: "open", id: 2, bytes: new Uint8Array([4, 5, 6]).buffer, workingMaxDimension: 1280 });
+    await handler({ type: "setMaskSurface", id: 3, surfaceId: "surface", png: new Uint8Array([7, 8]).buffer });
+    await handler({ type: "render", id: 4, settingsJson: "{}", maxDimension: 640, interactive: false });
+
+    expect(posted[0]?.message).toMatchObject({ type: "ready", runtime: "native" });
+    expect(posted.at(-1)?.message).toMatchObject({ type: "frame", id: 4, width: 2, height: 1 });
+    expect(wasm.developers).toHaveLength(1);
+    expect([...wasm.developers[0]!.input]).toEqual([4, 5, 6]);
+    expect([...wasmSurfaces.get("surface")!]).toEqual([7, 8]);
+    expect(releaseClient).toHaveBeenCalledOnce();
+  });
+
   it("manifest が読めなければ unavailable を返し、以後の要求は error", async () => {
     const { handler, posted, deps } = setup({ manifestStatus: 404 });
 
@@ -199,7 +294,7 @@ describe("createDevelopEngineWorkerHandler", () => {
     expect(glue.init).toHaveBeenCalledWith({
       module_or_path: `https://photo.example.test/develop-engine/${DEVELOP_ENGINE_VERSION}/niho_develop_wasm_bg-${DEVELOP_ENGINE_CRATE_VERSION}.wasm`,
     });
-    expect(posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test" });
+    expect(posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test", runtime: "wasm" });
   });
 
   it("診断が無効なら時計とログを使わず、応答だけ返す", async () => {
@@ -223,7 +318,7 @@ describe("createDevelopEngineWorkerHandler", () => {
     expect(deps.fetch).toHaveBeenCalledOnce();
     expect(deps.importModule).toHaveBeenCalledOnce();
     expect(glue.init).toHaveBeenCalledOnce();
-    expect(posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test" });
+    expect(posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test", runtime: "wasm" });
     expect(now).toHaveBeenCalled();
     expect(logPerf).not.toHaveBeenCalled();
   });
@@ -330,8 +425,8 @@ describe("createDevelopEngineWorkerHandler", () => {
     await handler({ type: "init", id: 2, manifestUrl: MANIFEST_URL });
 
     expect(posted.map((entry) => entry.message)).toEqual([
-      { type: "ready", id: 1, version: "0.2.0+test", effects: true, colorPoints: true, detail: true, heal: true, lens: true },
-      { type: "ready", id: 2, version: "0.2.0+test", effects: true, colorPoints: true, detail: true, heal: true, lens: true },
+      { type: "ready", id: 1, version: "0.2.0+test", runtime: "wasm", effects: true, colorPoints: true, detail: true, heal: true, lens: true },
+      { type: "ready", id: 2, version: "0.2.0+test", runtime: "wasm", effects: true, colorPoints: true, detail: true, heal: true, lens: true },
     ]);
     // effects・color points・detail・heal・lens の最小設定を各 1 回だけ確認する。
     expect(validateSettings).toHaveBeenCalledTimes(5);
@@ -369,7 +464,7 @@ describe("createDevelopEngineWorkerHandler", () => {
     const { handler, posted } = setup({ module: { ...glue.module, validateSettings } });
     await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
     expect(posted[0]?.message).toEqual({
-      type: "ready", id: 1, version: "0.2.0+test", effects: true, colorPoints: true, detail: true, heal: true,
+      type: "ready", id: 1, version: "0.2.0+test", runtime: "wasm", effects: true, colorPoints: true, detail: true, heal: true,
     });
   });
 
@@ -381,7 +476,7 @@ describe("createDevelopEngineWorkerHandler", () => {
     const { handler, posted } = setup({ module: { ...glue.module, validateSettings } });
     await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
     expect(posted[0]?.message).toEqual({
-      type: "ready", id: 1, version: "0.2.0+test", effects: true, colorPoints: true, heal: true, lens: true,
+      type: "ready", id: 1, version: "0.2.0+test", runtime: "wasm", effects: true, colorPoints: true, heal: true, lens: true,
     });
   });
 
@@ -395,7 +490,7 @@ describe("createDevelopEngineWorkerHandler", () => {
       },
     });
     await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
-    expect(posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test", effects: true, colorPoints: true, detail: true });
+    expect(posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test", runtime: "wasm", effects: true, colorPoints: true, detail: true });
   });
 
   it("sampleColor は正規化座標を session に渡し、Stage Q の Oklch だけを返す", async () => {
@@ -431,7 +526,7 @@ describe("createDevelopEngineWorkerHandler", () => {
       const glue = fakeGlue();
       const { handler, posted } = setup({ module: { ...glue.module, validateSettings } });
       await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
-      expect(posted[0]?.message, label).toEqual({ type: "ready", id: 1, version: "0.2.0+test" });
+      expect(posted[0]?.message, label).toEqual({ type: "ready", id: 1, version: "0.2.0+test", runtime: "wasm" });
     }
   });
 
@@ -455,6 +550,7 @@ describe("createDevelopEngineWorkerHandler", () => {
       type: "ready",
       id: 1,
       version: "0.2.0+test",
+      runtime: "wasm",
       geometry: true,
       effects: true,
       colorPoints: true,
@@ -494,6 +590,7 @@ describe("createDevelopEngineWorkerHandler", () => {
       type: "ready",
       id: 1,
       version: "0.2.0+test",
+      runtime: "wasm",
       geometry: true,
       effects: true,
       colorPoints: true,
@@ -764,11 +861,11 @@ describe("createDevelopEngineWorkerHandler", () => {
     await handler({ type: "init", id: 5, manifestUrl: MANIFEST_URL });
 
     expect(posted.map((entry) => entry.message)).toEqual([
-      { type: "ready", id: 1, version: "0.2.0+test", geometry: true },
+      { type: "ready", id: 1, version: "0.2.0+test", runtime: "wasm", geometry: true },
       { type: "size", id: 2, width: 6000, height: 4004 },
       { type: "decodeSize", id: 3, size: 2560 },
       { type: "size", id: 4, width: 1280, height: 853 },
-      { type: "ready", id: 5, version: "0.2.0+test", geometry: true },
+      { type: "ready", id: 5, version: "0.2.0+test", runtime: "wasm", geometry: true },
     ]);
     // bytes は transfer しない（呼び出し側がこの後 open に渡す）
     expect(posted.every((entry) => entry.transfer === undefined)).toBe(true);
@@ -816,7 +913,7 @@ describe("createDevelopEngineWorkerHandler", () => {
       await handler({ type: "geometryOutputSize", id: 4, settingsJson: "{}", sourceWidth: 2560, sourceHeight: 1707, maxDimension: 1280 });
       await handler({ type: "open", id: 5, bytes: new ArrayBuffer(4), workingMaxDimension: 1280 });
 
-      expect(posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test" });
+      expect(posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test", runtime: "wasm" });
       expect(posted.map((entry) => entry.message.type)).toEqual(["ready", "error", "error", "error", "opened"]);
     }
   });
@@ -891,6 +988,7 @@ describe("createDevelopEngineWorkerHandler", () => {
       type: "ready",
       id: 1,
       version: "0.2.0+test",
+      runtime: "wasm",
       presetAmount: true,
       settingsToXmp: true,
       presetThumbnails: true,
@@ -1042,7 +1140,7 @@ describe("createDevelopEngineWorkerHandler", () => {
     await handler({ type: "renderPresetThumbnail", id: 5, settingsJson: "{}", maxDimension: 96 });
     await handler({ type: "render", id: 6, settingsJson: "{}", maxDimension: 1280, interactive: false });
 
-    expect(posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test" });
+    expect(posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test", runtime: "wasm" });
     expect(posted.map((entry) => entry.message.type)).toEqual(["ready", "opened", "error", "error", "error", "frame"]);
   });
 
@@ -1062,7 +1160,7 @@ describe("createDevelopEngineWorkerHandler", () => {
     await handler({ type: "autoSettings", id: 7, settingsJson: "{}" });
     await handler({ type: "render", id: 8, settingsJson: "{}", maxDimension: 1280, interactive: false });
 
-    expect(posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test", auto: true });
+    expect(posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test", runtime: "wasm", auto: true });
     expect(posted[1]?.message).toMatchObject({ type: "error", id: 2, message: "no photo is open" });
     expect(posted[3]?.message).toEqual({
       type: "auto",
@@ -1141,7 +1239,7 @@ describe("createDevelopEngineWorkerHandler", () => {
     await old.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
     await old.handler({ type: "open", id: 2, bytes: new ArrayBuffer(4), workingMaxDimension: 1280 });
     await old.handler({ type: "estimateUpright", id: 3, settingsJson: "{}", mode: 1 });
-    expect(old.posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test" });
+    expect(old.posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test", runtime: "wasm" });
     expect(old.posted[2]?.message).toMatchObject({ type: "error", id: 3, message: "develop engine cannot estimate upright" });
     // 口の無い glue
     const none = setup();
@@ -1158,7 +1256,7 @@ describe("createDevelopEngineWorkerHandler", () => {
     await handler({ type: "autoSettings", id: 3, settingsJson: "{}" });
     await handler({ type: "render", id: 4, settingsJson: "{}", maxDimension: 1280, interactive: false });
 
-    expect(posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test" });
+    expect(posted[0]?.message).toEqual({ type: "ready", id: 1, version: "0.2.0+test", runtime: "wasm" });
     expect(posted[2]?.message).toMatchObject({ type: "error", id: 3, message: "develop engine cannot pick auto settings" });
     expect(posted.map((entry) => entry.message.type)).toEqual(["ready", "opened", "error", "frame"]);
   });

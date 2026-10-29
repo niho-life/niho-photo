@@ -1,4 +1,5 @@
 import type { DevelopAnalysisHelper, DevelopAnalysisHelperResponse } from "./develop-engine-analysis-worker-core";
+import { createNativeDevelopGlue, NativeDevelopUnavailableError } from "./develop-engine-native-glue";
 import {
   createDevelopEngineWorkerHandler,
   type DevelopEngineWorkerRequest,
@@ -67,6 +68,8 @@ const handler = createDevelopEngineWorkerHandler({
   fetch: (url, init) => fetch(url, init),
   importModule: (url) => import(/* webpackIgnore: true */ /* turbopackIgnore: true */ url),
   post: (message, transfer) => scope.postMessage(message, transfer ?? []),
+  createNativeGlue: () => createNativeDevelopGlue(),
+  isNativeUnavailableError: (error) => error instanceof NativeDevelopUnavailableError,
   // Chrome のメイン画面からも Worker の時間と Wasm 容量を読めるようにする。
   // 診断フラグがないと handler はこの口を呼ばない。
   logPerf: (record) => scope.postMessage({ type: "perf", id: 0, record }, []),

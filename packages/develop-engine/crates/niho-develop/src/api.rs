@@ -96,6 +96,18 @@ pub fn version() -> String {
     )
 }
 
+/// The native render pool size reported by `serve.hello`.
+pub fn thread_count() -> usize {
+    #[cfg(feature = "threads")]
+    {
+        rayon::current_num_threads()
+    }
+    #[cfg(not(feature = "threads"))]
+    {
+        1
+    }
+}
+
 /// What this build draws beyond what [`validate_settings`] reads, as JSON:
 /// `{"masks":{"kinds":["linear","radial","brush","subject","sky"],
 /// "max":8,"maskPlane":true,"surfaces":true}}` — local masks of those

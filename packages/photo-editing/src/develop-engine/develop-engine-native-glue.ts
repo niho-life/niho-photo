@@ -31,6 +31,8 @@ export const NATIVE_DEVELOP_BASE_URL = "niho-develop://localhost/";
 export const NATIVE_DEVELOP_FUNCTIONS = [
   "version",
   "capabilities",
+  "maskSurfaceId",
+  "encodeMaskSurface",
   "render",
   "exportJpeg",
   "exportPng",
@@ -56,6 +58,16 @@ export const NATIVE_DEVELOP_DEVELOPER_METHODS = [
   "asShotWhite",
   "thumbnail",
   "render",
+  "prepareAnalysis",
+  "releaseAnalysisAhead",
+  "exportAnalysis",
+  "holdsAnalysis",
+  "importAnalysis",
+  "setMaskSurface",
+  "dropMaskSurface",
+  "hasMaskSurface",
+  "exportJpeg",
+  "exportPng",
   "maskPlane",
   "sampleColor",
   "autoSettings",
@@ -230,6 +242,16 @@ export type NativeDeveloper = {
   asShotWhite(): string;
   thumbnail(maxDimension: number): NativeDeveloper;
   render(settingsJson: string, maxDimension: number, interactive: boolean): unknown;
+  prepareAnalysis(settingsJson: string): boolean;
+  releaseAnalysisAhead(): void;
+  exportAnalysis(settingsJson: string): Uint8Array | undefined;
+  holdsAnalysis(settingsJson: string): boolean;
+  importAnalysis(bytes: Uint8Array): boolean;
+  setMaskSurface(id: string, png: Uint8Array): void;
+  dropMaskSurface(id: string): boolean;
+  hasMaskSurface(id: string): boolean;
+  exportJpeg(settingsJson: string, maxDimension: number, quality: number): Uint8Array;
+  exportPng(settingsJson: string, maxDimension: number): Uint8Array;
   maskPlane(settingsJson: string, maskId: string, maxDimension: number): unknown;
   sampleColor(settingsJson: string, maxDimension: number, x: number, y: number): unknown;
   autoSettings(settingsJson: string): string;
@@ -248,6 +270,8 @@ export type NativeDevelopGlue = {
   default: (options?: unknown) => Promise<Record<string, never>>;
   version: () => string;
   capabilities: () => string;
+  maskSurfaceId: (png: Uint8Array) => string;
+  encodeMaskSurface: (width: number, height: number, data: Uint8Array) => Uint8Array;
   render: (input: Uint8Array, settingsJson: string, maxDimension: number, decodeCap?: number | null) => unknown;
   exportJpeg: (input: Uint8Array, settingsJson: string, maxDimension: number, quality: number, decodeCap?: number | null) => Uint8Array;
   exportPng: (input: Uint8Array, settingsJson: string, maxDimension: number, decodeCap?: number | null) => Uint8Array;
@@ -314,10 +338,25 @@ export function createNativeDevelopGlue(
     if (typeof result !== "string") throw new NativeDevelopUnavailableError(`native develop ${method} returned no text`);
     return result;
   };
-  const callBytes = (method: string, args: readonly unknown[]): Uint8Array => {
-    const result = call(method, args);
+  const callBytes = (method: string, args: readonly unknown[], handle?: number): Uint8Array => {
+    const result = call(method, args, handle === undefined ? {} : { handle });
     if (!(result instanceof Uint8Array)) throw new NativeDevelopUnavailableError(`native develop ${method} returned no bytes`);
     return result;
+  };
+  const callOptionalBytes = (method: string, args: readonly unknown[], handle: number): Uint8Array | undefined => {
+    const result = call(method, args, { handle });
+    if (result === null) return undefined;
+    if (!(result instanceof Uint8Array)) throw new NativeDevelopUnavailableError(`native develop ${method} returned neither bytes nor null`);
+    return result;
+  };
+  const callBoolean = (method: string, args: readonly unknown[], handle: number): boolean => {
+    const result = call(method, args, { handle });
+    if (typeof result !== "boolean") throw new NativeDevelopUnavailableError(`native develop ${method} returned no boolean`);
+    return result;
+  };
+  const callVoid = (method: string, args: readonly unknown[], handle: number): void => {
+    const result = call(method, args, { handle });
+    if (result !== null) throw new NativeDevelopUnavailableError(`native develop ${method} returned a value`);
   };
 
   /** sidecar の Developer を指す。handle 0 は手放した後。 */
@@ -378,6 +417,46 @@ export function createNativeDevelopGlue(
       return toFrame(call("Developer.render", [settingsJson, maxDimension, interactive], { handle: this.live() }));
     }
 
+    prepareAnalysis(settingsJson: string): boolean {
+      return callBoolean("Developer.prepareAnalysis", [settingsJson], this.live());
+    }
+
+    releaseAnalysisAhead(): void {
+      callVoid("Developer.releaseAnalysisAhead", [], this.live());
+    }
+
+    exportAnalysis(settingsJson: string): Uint8Array | undefined {
+      return callOptionalBytes("Developer.exportAnalysis", [settingsJson], this.live());
+    }
+
+    holdsAnalysis(settingsJson: string): boolean {
+      return callBoolean("Developer.holdsAnalysis", [settingsJson], this.live());
+    }
+
+    importAnalysis(bytes: Uint8Array): boolean {
+      return callBoolean("Developer.importAnalysis", [bytes], this.live());
+    }
+
+    setMaskSurface(id: string, png: Uint8Array): void {
+      callVoid("Developer.setMaskSurface", [id, png], this.live());
+    }
+
+    dropMaskSurface(id: string): boolean {
+      return callBoolean("Developer.dropMaskSurface", [id], this.live());
+    }
+
+    hasMaskSurface(id: string): boolean {
+      return callBoolean("Developer.hasMaskSurface", [id], this.live());
+    }
+
+    exportJpeg(settingsJson: string, maxDimension: number, quality: number): Uint8Array {
+      return callBytes("Developer.exportJpeg", [settingsJson, maxDimension, quality], this.live());
+    }
+
+    exportPng(settingsJson: string, maxDimension: number): Uint8Array {
+      return callBytes("Developer.exportPng", [settingsJson, maxDimension], this.live());
+    }
+
     maskPlane(settingsJson: string, maskId: string, maxDimension: number): unknown {
       return call("Developer.maskPlane", [settingsJson, maskId, maxDimension], { handle: this.live() });
     }
@@ -423,6 +502,8 @@ export function createNativeDevelopGlue(
       const offered = new Set<string>(Array.isArray(methods) ? methods.filter((name): name is string => typeof name === "string") : []);
       const missing = NATIVE_DEVELOP_METHODS.filter((name) => !offered.has(name));
       if (missing.length > 0) throw new NativeDevelopUnavailableError(`native develop engine lacks ${missing.join(", ")}`);
+      const unexpected = [...offered].filter((name) => !NATIVE_DEVELOP_METHODS.includes(name));
+      if (unexpected.length > 0) throw new NativeDevelopUnavailableError(`native develop engine has unknown methods ${unexpected.join(", ")}`);
       hello = {
         protocol: NATIVE_DEVELOP_PROTOCOL,
         tool: typeof tool === "string" ? tool : "",
@@ -435,6 +516,8 @@ export function createNativeDevelopGlue(
     },
     version: () => callString("version", []),
     capabilities: () => callString("capabilities", []),
+    maskSurfaceId: (png) => callString("maskSurfaceId", [png]),
+    encodeMaskSurface: (width, height, data) => callBytes("encodeMaskSurface", [width, height, data]),
     render: (input, settingsJson, maxDimension, decodeCap) => toFrame(call("render", [input, settingsJson, maxDimension, decodeCap])),
     exportJpeg: (input, settingsJson, maxDimension, quality, decodeCap) =>
       callBytes("exportJpeg", [input, settingsJson, maxDimension, quality, decodeCap]),

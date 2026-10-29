@@ -214,7 +214,7 @@ fn hello_names_the_protocol_the_versions_and_the_methods() {
     assert_eq!(hello["tool"], niho_develop_render::version_line());
     assert_eq!(hello["crateVersion"], niho_develop::CRATE_VERSION);
     assert_eq!(hello["engine"], niho_develop::ENGINE_VERSION);
-    assert_eq!(hello["threads"], 1);
+    assert_eq!(hello["threads"], niho_develop::api::thread_count());
     let methods: Vec<&str> = hello["methods"]
         .as_array()
         .unwrap()

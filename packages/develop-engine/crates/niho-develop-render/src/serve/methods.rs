@@ -192,9 +192,7 @@ pub fn hello() -> Value {
         "tool": crate::version_line(),
         "crateVersion": niho_develop::CRATE_VERSION,
         "engine": niho_develop::ENGINE_VERSION,
-        // #148: the rayon pool's thread count once niho-develop has its
-        // `threads` feature (1 without it).
-        "threads": 1,
+        "threads": api::thread_count(),
         "methods": METHODS,
     })
 }

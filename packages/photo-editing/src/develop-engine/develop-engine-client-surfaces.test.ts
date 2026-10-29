@@ -64,7 +64,7 @@ async function readyEngine(options: { source?: DevelopMaskSurfaceSource; masks?:
   });
   const ready = engine.ready();
   const init = worker.requests("init")[0]!;
-  worker.respond({ type: "ready", id: init.id, version: "0.19.0", masks: (options.masks ?? SURFACES) as never });
+  worker.respond({ type: "ready", id: init.id, version: "0.19.0", runtime: "wasm", masks: (options.masks ?? SURFACES) as never });
   expect(await ready).toBe(true);
   return { worker, engine, source };
 }

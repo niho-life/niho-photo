@@ -19,6 +19,6 @@ path = "src/main.rs"
 # digest covers niho-develop-wasm's dependency closure, which this crate is
 # not part of (scripts/wasm-manifest.mjs).
 [dependencies]
-niho-develop = { path = "../niho-develop" }
+niho-develop = { path = "../niho-develop", features = ["threads"] }
 serde_json.workspace = true
 image.workspace = true

@@ -362,6 +362,7 @@ describe("capabilities", () => {
   it("serves the bundled wasm manifest from this page's origin", () => {
     const { library } = fakeNative();
     expect(library.engineAssets.manifestUrl()).toBe(new URL(developEngineManifestPath(), window.location.origin).href);
+    expect(library.engineAssets.preferNative).toBe(true);
     expect(library.limits).toEqual({ listPageSize: 500, lookupMaxCount: 100, referencesMaxCount: 0, photosPerRequest: 50 });
   });
 });
