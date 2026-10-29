@@ -661,43 +661,45 @@ fn gaussian_blur_axes(
         .map(|x| border_index(x as isize - radius as isize, width, border))
         .collect();
     let starts: Vec<_> = (0..kernel.len()).map(|tap| tap * channels).collect();
-    let mut padded = vec![0.0_f32; padded_width * channels];
     let mut horizontal = vec![0.0_f32; source.len()];
     let mut output = vec![0.0_f32; source.len()];
-    for y in 0..height {
-        for (x, &source_x) in x_indices.iter().enumerate() {
-            padded[x * channels..(x + 1) * channels].copy_from_slice(
-                &source[y * row_len + source_x * channels..y * row_len + (source_x + 1) * channels],
-            );
-        }
-        simd::convolve_row(
-            &padded,
-            &starts,
-            &kernel,
-            &mut horizontal[y * row_len..(y + 1) * row_len],
-        );
-    }
+    // Each output row reads only the source (then the horizontal pass), so
+    // the rows of both passes may run on different threads; a row fills its
+    // whole padded copy (#150).
+    crate::par::for_each_row_mut_with(
+        &mut horizontal,
+        row_len,
+        || vec![0.0_f32; padded_width * channels],
+        |padded, y, row| {
+            for (x, &source_x) in x_indices.iter().enumerate() {
+                padded[x * channels..(x + 1) * channels].copy_from_slice(
+                    &source[y * row_len + source_x * channels
+                        ..y * row_len + (source_x + 1) * channels],
+                );
+            }
+            simd::convolve_row(padded, &starts, &kernel, row);
+        },
+    );
     let kernel = if (sigma_y, radius_y) == (sigma, radius) {
         kernel
     } else {
         gaussian_kernel(sigma_y, radius_y)
     };
-    let mut starts = vec![0_usize; kernel.len()];
-    for y in 0..height {
-        for (tap, start) in starts.iter_mut().enumerate() {
-            *start = border_index(
-                y as isize + tap as isize - radius_y as isize,
-                height,
-                border,
-            ) * row_len;
-        }
-        simd::convolve_row(
-            &horizontal,
-            &starts,
-            &kernel,
-            &mut output[y * row_len..(y + 1) * row_len],
-        );
-    }
+    crate::par::for_each_row_mut_with(
+        &mut output,
+        row_len,
+        || vec![0_usize; kernel.len()],
+        |starts, y, row| {
+            for (tap, start) in starts.iter_mut().enumerate() {
+                *start = border_index(
+                    y as isize + tap as isize - radius_y as isize,
+                    height,
+                    border,
+                ) * row_len;
+            }
+            simd::convolve_row(&horizontal, starts, &kernel, row);
+        },
+    );
     output
 }
 

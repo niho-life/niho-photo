@@ -347,16 +347,19 @@ pub fn response_gains(
     let shadow: Vec<f32> = shadow.iter().map(|g| g * share).collect();
     let highlight = resize_plane_bilinear(&highlight, maps.width, maps.height, width, height);
     let shadow = resize_plane_bilinear(&shadow, maps.width, maps.height, width, height);
-    let gains = highlight
-        .into_iter()
-        .zip(shadow)
-        .map(|(gh, gs)| {
-            [
+    let mut gains = vec![[0.0; 2]; width * height];
+    // Each pixel reads only its own gains, so rows may run on different
+    // threads (#150).
+    crate::par::for_each_row_mut(&mut gains, width, |y, row| {
+        let start = y * width;
+        for (x, slot) in row.iter_mut().enumerate() {
+            let (gh, gs) = (highlight[start + x], shadow[start + x]);
+            *slot = [
                 libm::exp2f(gh + gs),
                 libm::exp2f(alpha_h * gh + alpha_s * gs),
-            ]
-        })
-        .collect();
+            ];
+        }
+    });
     Ok(ResponseGains {
         width,
         height,
@@ -374,12 +377,17 @@ pub fn apply_gains(
     assert_eq!((w, h), (gains.width, gains.height), "gains of another size");
     let luma = luminance_weights(space);
     let mut data = image.data.clone();
-    for (px, [g, c]) in data.chunks_exact_mut(3).zip(gains.gains.iter().copied()) {
-        let y = px[0] * luma[0] + px[1] * luma[1] + px[2] * luma[2];
-        for v in px.iter_mut() {
-            *v = *v * g + (*v - y) * (c - g);
+    // Each pixel reads only itself and its gains, so rows may run on
+    // different threads (#150).
+    crate::par::for_each_row_mut(&mut data, w * 3, |row_index, row| {
+        let gains = &gains.gains[row_index * w..];
+        for (px, [g, c]) in row.chunks_exact_mut(3).zip(gains.iter().copied()) {
+            let y = px[0] * luma[0] + px[1] * luma[1] + px[2] * luma[2];
+            for v in px.iter_mut() {
+                *v = *v * g + (*v - y) * (c - g);
+            }
         }
-    }
+    });
     if data.iter().any(|v| !v.is_finite()) {
         return Err(PrepareError::NonFinite("niho-6 preparation"));
     }
@@ -411,19 +419,20 @@ pub(crate) fn resize_plane_bilinear(
             (x0, x1, (sx - x0 as f64) as f32)
         })
         .collect();
-    for y in 0..out_height {
+    // Rows read only the source, so they may run on different threads (#150).
+    crate::par::for_each_row_mut(&mut output, out_width, |y, row| {
         let sy = ((y as f64 + 0.5) * scale_y - 0.5).clamp(0.0, (in_height - 1) as f64);
         let y0 = libm::floor(sy) as usize;
         let y1 = (y0 + 1).min(in_height - 1);
         let ty = (sy - y0 as f64) as f32;
-        for (x, &(x0, x1, tx)) in columns.iter().enumerate() {
+        for (value, &(x0, x1, tx)) in row.iter_mut().zip(columns.iter()) {
             let top = source[y0 * in_width + x0]
                 + tx * (source[y0 * in_width + x1] - source[y0 * in_width + x0]);
             let bottom = source[y1 * in_width + x0]
                 + tx * (source[y1 * in_width + x1] - source[y1 * in_width + x0]);
-            output[y * out_width + x] = top + ty * (bottom - top);
+            *value = top + ty * (bottom - top);
         }
-    }
+    });
     output
 }
 

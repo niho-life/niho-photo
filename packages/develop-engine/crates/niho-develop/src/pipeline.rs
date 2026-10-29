@@ -1667,9 +1667,12 @@ fn local_pass<'c>(
     *cache = None;
     let ln0 = ln0();
     let mut ratio = local_luminance(&ln0, &p)?;
-    for (r, l0) in ratio.data.iter_mut().zip(&ln0.data) {
-        *r = libm::exp2f(*r - l0);
-    }
+    let w = ratio.width;
+    crate::par::for_each_row_mut(&mut ratio.data, w, |y, row| {
+        for (r, l0) in row.iter_mut().zip(&ln0.data[y * w..]) {
+            *r = libm::exp2f(*r - l0);
+        }
+    });
     drop(ln0);
     *cache = Some(LocalPass {
         input_key,
@@ -2139,9 +2142,12 @@ fn render_linear(
             },
             || {
                 let mut ln0 = Plane::new(w, h);
-                for (dst, px) in ln0.data.iter_mut().zip(img.data.chunks_exact(3)) {
-                    *dst = spatial::log_luminance(head([px[0], px[1], px[2]]));
-                }
+                // Rows read only their own pixels (#150).
+                crate::par::for_each_row_mut(&mut ln0.data, w, |y, row| {
+                    for (dst, px) in row.iter_mut().zip(img.data[y * w * 3..].chunks_exact(3)) {
+                        *dst = spatial::log_luminance(head([px[0], px[1], px[2]]));
+                    }
+                });
                 ln0
             },
         )
@@ -3006,9 +3012,12 @@ fn render_raw(
             },
             || {
                 let mut ln0 = Plane::new(w, h);
-                for (dst, px) in ln0.data.iter_mut().zip(img.data.chunks_exact(3)) {
-                    *dst = spatial::log_luminance(head([px[0], px[1], px[2]]));
-                }
+                // Rows read only their own pixels (#150).
+                crate::par::for_each_row_mut(&mut ln0.data, w, |y, row| {
+                    for (dst, px) in row.iter_mut().zip(img.data[y * w * 3..].chunks_exact(3)) {
+                        *dst = spatial::log_luminance(head([px[0], px[1], px[2]]));
+                    }
+                });
                 ln0
             },
         )

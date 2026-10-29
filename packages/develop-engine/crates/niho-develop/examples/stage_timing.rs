@@ -184,10 +184,13 @@ fn scenario(
         .collect()
 }
 
+#[cfg(feature = "threads")]
 fn threads() -> usize {
-    #[cfg(feature = "threads")]
-    return rayon::current_num_threads();
-    #[cfg(not(feature = "threads"))]
+    rayon::current_num_threads()
+}
+
+#[cfg(not(feature = "threads"))]
+fn threads() -> usize {
     1
 }
 

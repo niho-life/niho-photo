@@ -67,6 +67,48 @@ where
     }
 }
 
+/// Calls `f(y, a_row, b_row)` for every row `y` of two buffers split into
+/// the same number of rows (`a` into `a_len`-long rows, `b` into `b_len`-long
+/// ones; a part's result beside its pixels). Rows may run at the same time
+/// on different threads (#150).
+#[inline]
+pub(crate) fn for_each_row_pair_mut<A, B, F>(
+    a: &mut [A],
+    a_len: usize,
+    b: &mut [B],
+    b_len: usize,
+    f: F,
+) where
+    A: Send,
+    B: Send,
+    F: Fn(usize, &mut [A], &mut [B]) + Sync + Send,
+{
+    if a.is_empty() && b.is_empty() {
+        return;
+    }
+    assert!(
+        a_len > 0 && b_len > 0,
+        "rows of a non-empty buffer need a length"
+    );
+    assert_eq!(
+        a.len().div_ceil(a_len),
+        b.len().div_ceil(b_len),
+        "the buffers split together have as many rows"
+    );
+    #[cfg(feature = "threads")]
+    {
+        use rayon::prelude::*;
+        a.par_chunks_mut(a_len)
+            .zip(b.par_chunks_mut(b_len))
+            .enumerate()
+            .for_each(|(y, (a, b))| f(y, a, b));
+    }
+    #[cfg(not(feature = "threads"))]
+    for (y, (a, b)) in a.chunks_mut(a_len).zip(b.chunks_mut(b_len)).enumerate() {
+        f(y, a, b);
+    }
+}
+
 /// Calls `f(first, band)` for consecutive bands of whole `row_len`-long rows
 /// of `data`, `first` being the index of the band's first row: the whole
 /// buffer at once without the feature or on one thread, about four bands
@@ -185,6 +227,19 @@ mod tests {
             },
         );
         assert_eq!(data, (1..=23).collect::<Vec<u32>>());
+    }
+
+    #[test]
+    fn paired_buffers_see_the_same_rows() {
+        let (mut pixels, mut results) = (vec![0u32; 10], vec![0u32; 3]);
+        for_each_row_pair_mut(&mut pixels, 4, &mut results, 1, |y, row, result| {
+            for (x, value) in row.iter_mut().enumerate() {
+                *value = (y * 4 + x) as u32;
+            }
+            result[0] = row.len() as u32 + 100 * y as u32;
+        });
+        assert_eq!(pixels, (0..10).collect::<Vec<u32>>());
+        assert_eq!(results, vec![4, 104, 202]);
     }
 
     #[test]

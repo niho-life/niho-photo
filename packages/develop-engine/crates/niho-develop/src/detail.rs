@@ -233,17 +233,22 @@ fn raster_chroma(
     // Small renders keep at least half a pixel (an explicit amount acts).
     let sigma = (calibration::COLOR_SIGMA * reference_scale(whole_long_edge)).max(0.5);
     let blurred = gaussian_rgb(rgb, width, height, sigma);
-    for (pixel, mean) in rgb.chunks_exact_mut(3).zip(blurred.chunks_exact(3)) {
-        let luma = pixel[0] * weights[0] + pixel[1] * weights[1] + pixel[2] * weights[2];
-        let mean_luma = mean[0] * weights[0] + mean[1] * weights[1] + mean[2] * weights[2];
-        if !(luma > 0.0 && mean_luma > LUMA_FLOOR) {
-            continue;
+    crate::par::for_each_row_mut(rgb, width * 3, |y, row| {
+        for (pixel, mean) in row
+            .chunks_exact_mut(3)
+            .zip(blurred[y * width * 3..].chunks_exact(3))
+        {
+            let luma = pixel[0] * weights[0] + pixel[1] * weights[1] + pixel[2] * weights[2];
+            let mean_luma = mean[0] * weights[0] + mean[1] * weights[1] + mean[2] * weights[2];
+            if !(luma > 0.0 && mean_luma > LUMA_FLOOR) {
+                continue;
+            }
+            let scale = luma / mean_luma;
+            for channel in 0..3 {
+                pixel[channel] += blend * (mean[channel] * scale - pixel[channel]);
+            }
         }
-        let scale = luma / mean_luma;
-        for channel in 0..3 {
-            pixel[channel] += blend * (mean[channel] * scale - pixel[channel]);
-        }
-    }
+    });
 }
 
 /// Luminance NR on `v = sqrt(luma)`: an edge-avoiding a-trous filter
@@ -422,42 +427,48 @@ pub fn sharpen_linear_srgb(
     let blurred = gaussian_mean(&luma, width, height, sigma * scale);
     let gain = sharpening_gain(settings, sigma) as f32;
     let mask = (settings.masking > 0.0).then(|| edge_mask(&luma, width, height, scale, settings));
-    for (index, pixel) in rgb.chunks_exact_mut(3).enumerate() {
-        let level = luma[index];
-        let mut delta = gain * (level - blurred[index]);
-        if let Some(mask) = &mask {
-            delta *= mask[index];
-        }
-        let delta = if delta >= 0.0 {
-            soft_limit(delta, calibration::LIGHT_HALO)
-        } else {
-            let square = level.max(0.0) * level.max(0.0);
-            let slope = calibration::DARK_HALO_SLOPE * square;
-            let limit = slope * calibration::DARK_HALO_MAX / (slope + calibration::DARK_HALO_MAX);
-            if limit > 0.0 {
-                -soft_limit(-delta, limit)
-            } else {
-                0.0
+    // Each pixel reads only its own values, so rows may run on different
+    // threads (#150).
+    crate::par::for_each_row_mut(rgb, width * 3, |y, row| {
+        for (x, pixel) in row.chunks_exact_mut(3).enumerate() {
+            let index = y * width + x;
+            let level = luma[index];
+            let mut delta = gain * (level - blurred[index]);
+            if let Some(mask) = &mask {
+                delta *= mask[index];
             }
-        };
-        // Scale RGB to the new luma so chroma ratios stay (as Lightroom: the
-        // chroma of colored noise grows with the luma it carries). Near
-        // black the ratio is taken against the floor and the rest is added
-        // evenly, so dim colored noise is not multiplied up.
-        let target = level + delta;
-        if level >= SHARPEN_RATIO_FLOOR {
-            let ratio = target / level;
-            pixel[0] *= ratio;
-            pixel[1] *= ratio;
-            pixel[2] *= ratio;
-        } else {
-            let ratio = target / SHARPEN_RATIO_FLOOR;
-            let rest = target - level * ratio;
-            pixel[0] = pixel[0] * ratio + rest;
-            pixel[1] = pixel[1] * ratio + rest;
-            pixel[2] = pixel[2] * ratio + rest;
+            let delta = if delta >= 0.0 {
+                soft_limit(delta, calibration::LIGHT_HALO)
+            } else {
+                let square = level.max(0.0) * level.max(0.0);
+                let slope = calibration::DARK_HALO_SLOPE * square;
+                let limit =
+                    slope * calibration::DARK_HALO_MAX / (slope + calibration::DARK_HALO_MAX);
+                if limit > 0.0 {
+                    -soft_limit(-delta, limit)
+                } else {
+                    0.0
+                }
+            };
+            // Scale RGB to the new luma so chroma ratios stay (as Lightroom: the
+            // chroma of colored noise grows with the luma it carries). Near
+            // black the ratio is taken against the floor and the rest is added
+            // evenly, so dim colored noise is not multiplied up.
+            let target = level + delta;
+            if level >= SHARPEN_RATIO_FLOOR {
+                let ratio = target / level;
+                pixel[0] *= ratio;
+                pixel[1] *= ratio;
+                pixel[2] *= ratio;
+            } else {
+                let ratio = target / SHARPEN_RATIO_FLOOR;
+                let rest = target - level * ratio;
+                pixel[0] = pixel[0] * ratio + rest;
+                pixel[1] = pixel[1] * ratio + rest;
+                pixel[2] = pixel[2] * ratio + rest;
+            }
         }
-    }
+    });
     if let Some(index) = rgb.iter().position(|value| !value.is_finite()) {
         return Err(DetailError::NonFiniteOutput(index));
     }
@@ -569,20 +580,21 @@ fn gaussian_kernel(sigma: f64) -> Vec<f32> {
 fn gaussian_mean(source: &[f32], width: usize, height: usize, sigma: f64) -> Vec<f32> {
     let kernel = gaussian_kernel(sigma);
     let mut horizontal = vec![0.0f32; source.len()];
-    for y in 0..height {
+    // The rows of each pass read only the pass before, so they may run on
+    // different threads (#150).
+    crate::par::for_each_row_mut(&mut horizontal, width, |y, destination| {
         let row = &source[y * width..(y + 1) * width];
-        for x in 0..width {
+        for (x, value) in destination.iter_mut().enumerate() {
             let mut sum = row[x] * kernel[0];
             for (offset, weight) in kernel.iter().copied().enumerate().skip(1) {
                 sum += weight * (row[x.saturating_sub(offset)] + row[(x + offset).min(width - 1)]);
             }
-            horizontal[y * width + x] = sum;
+            *value = sum;
         }
-    }
+    });
     let mut output = vec![0.0f32; source.len()];
-    for y in 0..height {
+    crate::par::for_each_row_mut(&mut output, width, |y, destination| {
         let center = &horizontal[y * width..(y + 1) * width];
-        let destination = &mut output[y * width..(y + 1) * width];
         for (value, source) in destination.iter_mut().zip(center) {
             *value = source * kernel[0];
         }
@@ -593,17 +605,20 @@ fn gaussian_mean(source: &[f32], width: usize, height: usize, sigma: f64) -> Vec
                 *value += weight * (horizontal[up + x] + horizontal[down + x]);
             }
         }
-    }
+    });
     output
 }
 
 /// [`gaussian_mean`] of interleaved RGB.
 fn gaussian_rgb(source: &[f32], width: usize, height: usize, sigma: f64) -> Vec<f32> {
     let kernel = gaussian_kernel(sigma);
+    let stride = width * 3;
     let mut horizontal = vec![0.0f32; source.len()];
-    for y in 0..height {
-        let row = &source[y * width * 3..(y + 1) * width * 3];
-        for x in 0..width {
+    // The rows of each pass read only the pass before, so they may run on
+    // different threads (#150).
+    crate::par::for_each_row_mut(&mut horizontal, stride, |y, destination| {
+        let row = &source[y * stride..(y + 1) * stride];
+        for (x, pixel) in destination.chunks_exact_mut(3).enumerate() {
             let mut sum = [
                 row[x * 3] * kernel[0],
                 row[x * 3 + 1] * kernel[0],
@@ -616,14 +631,12 @@ fn gaussian_rgb(source: &[f32], width: usize, height: usize, sigma: f64) -> Vec<
                     *value += weight * (row[left + channel] + row[right + channel]);
                 }
             }
-            horizontal[(y * width + x) * 3..(y * width + x) * 3 + 3].copy_from_slice(&sum);
+            pixel.copy_from_slice(&sum);
         }
-    }
-    let stride = width * 3;
+    });
     let mut output = vec![0.0f32; source.len()];
-    for y in 0..height {
+    crate::par::for_each_row_mut(&mut output, stride, |y, destination| {
         let center = &horizontal[y * stride..(y + 1) * stride];
-        let destination = &mut output[y * stride..(y + 1) * stride];
         for (value, source) in destination.iter_mut().zip(center) {
             *value = source * kernel[0];
         }
@@ -634,7 +647,7 @@ fn gaussian_rgb(source: &[f32], width: usize, height: usize, sigma: f64) -> Vec<
                 *value += weight * (horizontal[up + x] + horizontal[down + x]);
             }
         }
-    }
+    });
     output
 }
 
