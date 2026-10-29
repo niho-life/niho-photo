@@ -78,7 +78,8 @@ def main():
                 subprocess.run(["/usr/bin/osascript", "-e", "delay 1", "-e",
                                 "tell application " + json.dumps(str(bundle)) + " to activate"],
                                stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, timeout=10)
-                process.wait(timeout=80)
+                # 複数プリセット候補と正規切替が各30秒失敗しても、JS側の失敗レポートを先に残す。
+                process.wait(timeout=150)
             except subprocess.TimeoutExpired:
                 os.killpg(process.pid, signal.SIGTERM)
                 process.wait(timeout=5)
@@ -132,7 +133,7 @@ try:
     lock_path = Path.home() / "Library/Caches/niho-photo-raw-benchmark-probe.lock"
     with lock_path.open("w") as lock:
         fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
-        activity = subprocess.Popen(["/usr/bin/caffeinate", "-d", "-i", "-u", "-t", "90", "-w", str(os.getpid())],
+        activity = subprocess.Popen(["/usr/bin/caffeinate", "-d", "-i", "-u", "-t", "180", "-w", str(os.getpid())],
                                     stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         try:
             main()
