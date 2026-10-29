@@ -11701,8 +11701,8 @@
     },
     {
       "path": "apps/camera/scripts/e2e/native-develop.sh",
-      "sha256": "80808c043cd238850a4a55a81e5b454cbc3daca59f2bb70184ef9664af1dde87",
-      "origin": "公開repoで新規作成（niho-photo#152）。Mac Studio で e2e の Mac アプリと release の sidecar を作り、native と wasm の画素と時間・RSS の高水位を比べる E2E の手順。合成の写真だけを使う。"
+      "sha256": "1f3f43eb329f8de9c1641b58d784b8449f1a6aa7e4b064cdd7ea6ed88b63525c",
+      "origin": "公開repoで新規作成（niho-photo#152）。Mac Studio で e2e の Mac アプリと release の sidecar を作り、native と wasm の画素と時間・RSS の高水位を比べる E2E の手順。合成の写真だけを使う。\n変更理由: Issue #152 の E2E は報告ファイルの生成だけでなく画素一致と失敗を検証する。"
     },
     {
       "path": "apps/camera/scripts/e2e/native-develop.js",

@@ -57,8 +57,29 @@ done
 kill "$PID" 2>/dev/null || true
 wait "$PID" 2>/dev/null || true
 if [ -s "$W/report.json" ]; then
-  node -e 'const r = JSON.parse(require("fs").readFileSync(process.argv[1], "utf8")); r.rssHighWaterMiB = { sidecar: Math.round(+process.argv[2] / 1024), app: Math.round(+process.argv[3] / 1024) }; console.log(JSON.stringify(r, null, 2))' \
-    "$W/report.json" "$SIDECAR_KB" "$APP_KB"
+  node - "$W/report.json" "$SIDECAR_KB" "$APP_KB" <<'NODE'
+const fs = require("node:fs");
+const report = JSON.parse(fs.readFileSync(process.argv[2], "utf8"));
+report.rssHighWaterMiB = {
+  sidecar: Math.round(+process.argv[3] / 1024),
+  app: Math.round(+process.argv[4] / 1024),
+};
+console.log(JSON.stringify(report, null, 2));
+const worker = report.worker;
+if (
+  report.error ||
+  worker?.error ||
+  !Number.isInteger(worker?.hello?.threads) ||
+  worker.hello.threads < 1 ||
+  !Array.isArray(worker.cases) ||
+  worker.cases.length !== 10 ||
+  worker.cases.some((item) => item.samePixels !== true) ||
+  worker.exportJpeg?.sameBytes !== true
+) {
+  console.error("native develop E2E failed: probe error or pixel mismatch");
+  process.exitCode = 1;
+}
+NODE
 else
   echo "no report"
   tail -20 "$W/app.log"
