@@ -185,10 +185,10 @@
       }
     }
     if (presetAt === null) throw new Error("preset-frame-missing");
-    // 暫定画では canonicalReady も丁寧な画への差し替え。任意の計測を正規切替の待機へ直列に足さない。
+    // 暫定画では canonicalReady も丁寧な画への差し替え。正規切替の受入窓中は遅い成功も取りこぼさず、待機は直列に足さない。
     const finalPaint = waitFor(() => events.find((event) =>
       (event.stage === "finalRenderVisible" || event.stage === "canonicalReady") &&
-      event.at >= presetInputStartedAt), 5000).then(async (event) => {
+      event.at >= presetInputStartedAt), 30000).then(async (event) => {
         // canonicalReady は canvas への描画直後なので、実際の提示を2フレーム待ってから記録する。
         if (event.stage === "canonicalReady") {
           await afterPaint();
