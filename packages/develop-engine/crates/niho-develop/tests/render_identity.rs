@@ -9,6 +9,10 @@
 //!
 //! A pixel change (a new engine) updates the pins; a split that changes a
 //! single byte fails here.
+//!
+//! The stages split later (#150) that these photos do not reach have their
+//! own photos and pinned lines ([`STAGE_PHOTOS`]), so the lines above stay
+//! as they were.
 
 use niho_develop::decode::{encode_signed_working_copy, encode_working_copy, LinearImage};
 use niho_develop::{encode, parse_settings, xmp, DevelopSettings, Filter, Quality, Session};
@@ -92,9 +96,14 @@ fn linear() -> LinearImage {
 
 /// [`linear`] as a signed RAW working copy and its metadata.
 fn signed_raw() -> (Vec<u8>, String) {
+    signed_raw_of("panasonic-dc-s5")
+}
+
+/// [`signed_raw`] with the calibration of `camera`.
+fn signed_raw_of(camera: &str) -> (Vec<u8>, String) {
     let (png, encoding) = encode_signed_working_copy(&linear()).unwrap();
     let meta = format!(
-        r#"{{"kind":"raw","baselineEV":-0.25,"asShotWhite":{{"x":0.3127,"y":0.329,"temperature":5500,"tint":0}},"asShotWhiteAdobe":null,"whiteBalanceTable":null,"dcpSha256":"apple-ciraw8/linear-prophoto-d50/cal-panasonic-dc-s5-apple-v4","lookTableIncluded":false,"encoding":{{"kind":"signed-gamma18-v1","ceiling":{}}}}}"#,
+        r#"{{"kind":"raw","baselineEV":-0.25,"asShotWhite":{{"x":0.3127,"y":0.329,"temperature":5500,"tint":0}},"asShotWhiteAdobe":null,"whiteBalanceTable":null,"dcpSha256":"apple-ciraw8/linear-prophoto-d50/cal-{camera}-apple-v4","lookTableIncluded":false,"encoding":{{"kind":"signed-gamma18-v1","ceiling":{}}}}}"#,
         encoding.ceiling()
     );
     (png, meta)
@@ -192,11 +201,26 @@ fn hex(bytes: &[u8]) -> String {
 /// the busy sliders and the masks dragged (long side 96). A refused case is
 /// part of the digest.
 fn digests() -> Vec<String> {
+    digests_of(&PHOTOS)
+}
+
+/// The photos of the stages split in #150 that [`PHOTOS`] do not reach: a
+/// signed RAW working copy of the camera whose NIHO 7 highlights take the
+/// shoulder maps (`raw_highlight_shoulder.rs`).
+const STAGE_PHOTOS: [(&str, &[&str]); 1] = [("signedShoulder", &["niho-7", "niho-11"])];
+
+fn stage_digests() -> Vec<String> {
+    digests_of(&STAGE_PHOTOS)
+}
+
+/// [`digests`] of `photos`.
+fn digests_of(photos: &[(&str, &[&str])]) -> Vec<String> {
     let raster = raster();
     let unsigned = encode_working_copy(&unsigned_linear());
     let (signed, signed_meta) = signed_raw();
+    let (shoulder, shoulder_meta) = signed_raw_of("sony-ilme-fx30");
     let mut out = Vec::new();
-    for (photo, engines) in PHOTOS {
+    for &(photo, engines) in photos {
         for &engine in engines {
             let mut digest = Sha256::new();
             let session = match photo {
@@ -206,6 +230,9 @@ fn digests() -> Vec<String> {
                 }
                 "legacy" => {
                     Session::open_working_copy(&unsigned, LEGACY_RAW_META, Filter::Lanczos3)
+                }
+                "signedShoulder" => {
+                    Session::open_working_copy(&shoulder, &shoulder_meta, Filter::Lanczos3)
                 }
                 _ => Session::open_working_copy(&signed, &signed_meta, Filter::Lanczos3),
             };
@@ -266,31 +293,53 @@ const PINNED: &[&str] = &[
     "signed niho-11 9d4c0a7f17cc583fc62935e48f64f731e16c21fd8f2938cb629e29a243687739",
 ];
 
-#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
-#[cfg_attr(not(target_arch = "wasm32"), test)]
-fn every_engine_draws_the_pinned_bytes_however_the_work_is_split() {
-    #[cfg(not(feature = "threads"))]
-    let computed = digests();
-    #[cfg(feature = "threads")]
-    let computed = {
-        let on = |threads| {
-            rayon::ThreadPoolBuilder::new()
-                .num_threads(threads)
-                .build()
-                .unwrap()
-                .install(digests)
-        };
-        let one = on(1);
-        assert_eq!(on(8), one, "8 threads draw what 1 thread draws");
-        one
+/// `photo engine sha256` of [`STAGE_PHOTOS`] (see [`digests`]).
+const STAGE_PINNED: &[&str] = &[
+    "signedShoulder niho-7 477fadc05c47e219349b607d309fa785c2b1e8fe7d1bc8d314164c797e81d0fc",
+    "signedShoulder niho-11 0ee87026d9101f16fc3fb56fb9a64ad117972589c4416c5541bf0dc629a2b577",
+];
+
+/// `digests` as drawn here.
+#[cfg(not(feature = "threads"))]
+fn computed(digests: fn() -> Vec<String>) -> Vec<String> {
+    digests()
+}
+
+/// `digests` on 1 thread, after checking that 8 threads draw the same.
+#[cfg(feature = "threads")]
+fn computed(digests: fn() -> Vec<String>) -> Vec<String> {
+    let on = |threads| {
+        rayon::ThreadPoolBuilder::new()
+            .num_threads(threads)
+            .build()
+            .unwrap()
+            .install(digests)
     };
+    let one = on(1);
+    assert_eq!(on(8), one, "8 threads draw what 1 thread draws");
+    one
+}
+
+fn assert_pinned(computed: Vec<String>, pinned: &[&str], name: &str) {
     assert_eq!(
         computed,
-        PINNED
+        pinned
             .iter()
             .map(|line| line.to_string())
             .collect::<Vec<_>>(),
-        "pinned digests (paste the left side into PINNED after an engine change):\n{}",
+        "pinned digests (paste the left side into {name} after an engine change):\n{}",
         computed.join("\n")
     );
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn every_engine_draws_the_pinned_bytes_however_the_work_is_split() {
+    assert_pinned(computed(digests), PINNED, "PINNED");
+}
+
+#[cfg_attr(target_arch = "wasm32", wasm_bindgen_test::wasm_bindgen_test)]
+#[cfg_attr(not(target_arch = "wasm32"), test)]
+fn the_split_stages_draw_the_pinned_bytes_however_the_work_is_split() {
+    assert_pinned(computed(stage_digests), STAGE_PINNED, "STAGE_PINNED");
 }

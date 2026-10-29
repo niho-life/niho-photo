@@ -6543,12 +6543,13 @@
         "path": "packages/develop-engine/crates/niho-develop/src/lut.rs",
         "sha256": "d0b9d65a032d449a1f234d6e65ecc328dd44f6fe51ede51d602c5c58aae7e96e"
       },
-      "outputSha256": "2a2cef6c571b9f8e815ec2ef5d1e3794e86447ed05b1832d38da9e1806b39ba7",
+      "outputSha256": "ef9ea8d0956dff4a8076585ad91402614ddc99629f01ec7389e3439d33834790",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #30 Oklch色ミキサーとengine 10/11対応を反映",
         "float LUT生成APIの重複定義を除去",
-        "PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。"
+        "PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。",
+        "Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
       ]
     },
     {
@@ -6573,7 +6574,7 @@
         "path": "packages/develop-engine/crates/niho-develop/src/niho4.rs",
         "sha256": "76c59b0f23b8b2a69d7c6b1602566fa222ee14d592ab7b42b6e37b5aba4ab319"
       },
-      "outputSha256": "e1c436ee2edc7ce19ea36141dffc53c8484534fe02fa519e2b7a3e9a8498222d",
+      "outputSha256": "3988c8f3dbc32d3b1c1b1148f5a89b53a1f9c6dcbf60c39f4d8c1cfb8d9a3250",
       "modifications": [
         "Issue #28の色相安定engine追加と互換回帰を反映。",
         "新しい色相保持エンジンと新旧バイナリの能力境界・数値回帰を整合。",
@@ -6582,7 +6583,9 @@
         "Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。",
         "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。",
         "niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。",
-        "Issue #155 compact analysis transfer"
+        "Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合",
+        "Issue #155 compact analysis transfer",
+        "Issue #150 と #155 の並列化と解析転送を統合し画素を維持"
       ]
     },
     {
@@ -6593,10 +6596,11 @@
         "path": "packages/develop-engine/crates/niho-develop/src/niho4_response.rs",
         "sha256": "9670309454ff32567bd0b4a3ed054f9350e5e80a0b310c49d5368c35308eee42"
       },
-      "outputSha256": "51f61b7ce1d86b43076ebe015ba0a256b2f318310dd99c20c6ff6f948df0d908",
+      "outputSha256": "5d357d9a5f3a098d5eb536d6a7d0ee47798fc5ded7894e31dad3c496b5739708",
       "modifications": [
         "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
-        "#148: H/S の係数の面を行ごとに並列化し、画素の式と順を維持。"
+        "#148: H/S の係数の面を行ごとに並列化し、画素の式と順を維持。",
+        "Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
       ]
     },
     {
@@ -6607,7 +6611,7 @@
         "path": "packages/develop-engine/crates/niho-develop/src/niho6.rs",
         "sha256": "6383017c670ab330829ebd61fde9e374e58f468440969b75cb64f1f4e8d376fd"
       },
-      "outputSha256": "f7fb53e98ee0855fef2b26081bb952efbb6569d75cc8a6abbc14c3de876ec2f0",
+      "outputSha256": "b7571f936c6390c5590c5e78036726296b68fa01415ee9f0d0731640df719c83",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #32 niho-6の準備keyにv5のNR量を含める",
@@ -6615,7 +6619,8 @@
         "Issue #29: niho-12のrasterでniho-6応答を共有",
         "PR #74: #80 統合後に float-cube の変更を重ね、最終ハッシュを反映。",
         "PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。",
-        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ"
+        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
+        "Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
       ]
     },
     {
@@ -6626,9 +6631,10 @@
         "path": "packages/develop-engine/crates/niho-develop/src/niho6_response.rs",
         "sha256": "46c5a52594dc117a72d592550b2d2a2f9eff14844d126740946efba5dd9f13f1"
       },
-      "outputSha256": "c98a6e871e6c4bffbed4126cc62b170330d4412a7c769818bcd7fb266cd21b7c",
+      "outputSha256": "71af31ad9661c205a3a14074f5a5d9e7d5fc3ed4b58359beff046ee863b5aeba",
       "modifications": [
-        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ"
+        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
+        "Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
       ]
     },
     {
@@ -6672,7 +6678,7 @@
         "path": "packages/develop-engine/crates/niho-develop/src/pipeline.rs",
         "sha256": "d982d76cf1b5d34526f700e5edfcef00ae8647d22b845c0f7234ed340ba9d641"
       },
-      "outputSha256": "68ca8dbb2f1272ca6e42b5ab20550831afd001d778425b85d6a7935615441343",
+      "outputSha256": "2d6423d5f0dd3cf950ef2086448afb6815de72e86f5a8ca9dae0ddcdbc7f102c",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
@@ -6701,7 +6707,8 @@
         "PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。",
         "PR #90: local passのcache regression fixtureにsource key引数を追加し、#74の契約へ接続。",
         "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
-        "#148: 出力の色の段を行ごとに分け、画素の式と順を維持。"
+        "#148: 出力の色の段を行ごとに分け、画素の式と順を維持。",
+        "Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
       ]
     },
     {
@@ -6712,11 +6719,12 @@
         "path": "packages/develop-engine/crates/niho-develop/src/raw_chroma.rs",
         "sha256": "c1112a2ac5af26b7c591362a44930271e675d7e29910ae395ff20795a52a8d51"
       },
-      "outputSha256": "2a02afc73c37f9d7e3db98332720bb3b539dd401d9acbc390d558e91eb6ccce4",
+      "outputSha256": "e153c286fae87fbd0e438d60f6dd87b57311c80c6124ded6744d7859aa35bd7b",
       "modifications": [
         "Issue #32 明示v5カラーNRの50超を連続拡張し、チャンネル独立ノイズの合成回帰で検証する",
         "Issue #32 detail uses v6 because Issue #31 masks already owns v5; synchronize the Rust and TypeScript contract, probe, tests, and documentation.",
-        "Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。"
+        "Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。",
+        "Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
       ]
     },
     {
@@ -6738,8 +6746,10 @@
         "path": "packages/develop-engine/crates/niho-develop/src/raw_highlight_recovery.rs",
         "sha256": "4aa9f253b5139e7de923fd39f4b8e5190bb7afff85806d5b445432853c20f6d5"
       },
-      "outputSha256": "4aa9f253b5139e7de923fd39f4b8e5190bb7afff85806d5b445432853c20f6d5",
-      "modifications": []
+      "outputSha256": "6c47ffb2abf5f15e54233119bf06e45646874bb01b25ec57e146b12fa735915a",
+      "modifications": [
+        "Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
+      ]
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/raw_highlight_residual.rs",
@@ -6771,9 +6781,10 @@
         "path": "packages/develop-engine/crates/niho-develop/src/raw_response.rs",
         "sha256": "4a891eaf622932bff11f3942d4020d8d9c514a7f90c133472ddec61b66842ec9"
       },
-      "outputSha256": "be79a2a2a462524ca18301180d01e5513de8b1fc49f7de45939d31151113ef07",
+      "outputSha256": "df86ba33be1401523d75963084dfb95a8e83a58ebcbf87f6bda76c83f537f027",
       "modifications": [
-        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ"
+        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
+        "Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
       ]
     },
     {
@@ -6808,8 +6819,10 @@
         "path": "packages/develop-engine/crates/niho-develop/src/resize.rs",
         "sha256": "08ddfb9d0e995e2dfdaaf7c9d8d5ef63143ac4e1b62fbf3636290dc0c3dca763"
       },
-      "outputSha256": "08ddfb9d0e995e2dfdaaf7c9d8d5ef63143ac4e1b62fbf3636290dc0c3dca763",
-      "modifications": []
+      "outputSha256": "2ca83574ecf30c800dd1b8ca602809def8baf2751f0345217107193a2b4aeb86",
+      "modifications": [
+        "Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
+      ]
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/settings.rs",
@@ -6854,8 +6867,10 @@
         "path": "packages/develop-engine/crates/niho-develop/src/spatial.rs",
         "sha256": "37bfd200363d1f371712c872b92c4c918cd6fe71738a7cd0c40f1edc104a89c3"
       },
-      "outputSha256": "37bfd200363d1f371712c872b92c4c918cd6fe71738a7cd0c40f1edc104a89c3",
-      "modifications": []
+      "outputSha256": "913eb83afabeb84ce70a561368bf21d91f89e2a745846fda2651891a10517634",
+      "modifications": [
+        "Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
+      ]
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/tone_ops.rs",
@@ -10560,8 +10575,8 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/detail.rs",
-      "sha256": "d68787bb652e21261446f535cdf099b21c30c3d138ec954b5f22352a2dcbf8e0",
-      "origin": "Issue #32でNIHOが独立作成したdetail処理・保存契約・合成検証または設計文書。実写真・第三者コードは含まない。\n変更理由: Issue #32 detail uses v6 because Issue #31 masks already owns v5; synchronize the Rust and TypeScript contract, probe, tests, and documentation.\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: #32 の Lightroom 校正（round 32）: シャープを線形光の USM と明暗別のハロー制限・マスクの勾配エネルギーに、輝度 NR を √輝度の edge-avoiding à-trous に、raster のカラー NR を輝度を保つ色比のぼかしに作り直し、係数を Lightroom の統計に当てた"
+      "sha256": "f0065c46af16e6b47ff6650659776fc583b7a20297e6c5cae25ab759d29218b4",
+      "origin": "Issue #32でNIHOが独立作成したdetail処理・保存契約・合成検証または設計文書。実写真・第三者コードは含まない。\n変更理由: Issue #32 detail uses v6 because Issue #31 masks already owns v5; synchronize the Rust and TypeScript contract, probe, tests, and documentation.\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: #32 の Lightroom 校正（round 32）: シャープを線形光の USM と明暗別のハロー制限・マスクの勾配エネルギーに、輝度 NR を √輝度の edge-avoiding à-trous に、raster のカラー NR を輝度を保つ色比のぼかしに作り直し、係数を Lightroom の統計に当てた\n変更理由: Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/detail_cross_target.rs",
@@ -11490,8 +11505,8 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/niho14_analysis.rs",
-      "sha256": "fd6404f3cb1310ad7f12b031c58d64ff6b05c73979ea34961faba9ab47a939ed",
-      "origin": "公開Issue #89 のため公開済み数式・既存primitiveから独立実装したengine・合成テスト・計測コード・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。"
+      "sha256": "afb4dfe0c9ad7b7dc14cc78736aff14251f58df2f1854c7c78c8ff337c6e8c15",
+      "origin": "公開Issue #89 のため公開済み数式・既存primitiveから独立実装したengine・合成テスト・計測コード・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。\n変更理由: Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/niho14.rs",
@@ -11690,13 +11705,13 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/par.rs",
-      "sha256": "6ad96c37f72b3bd74dbe94f412aa4d39b76a1db82888274e18a5186dd99ae8ec",
-      "origin": "公開Issue #148 のため新規作成。threads feature（rayon）で行・項目ごとに分けるだけの並列の道具（feature なしでは逐次のループ）。第三者ソース・非公開の情報を含まない。"
+      "sha256": "ebd2c5969246daa1959efe411edf026b479937511ae38a33a3bb256b09a89850",
+      "origin": "公開Issue #148 のため新規作成。threads feature（rayon）で行・項目ごとに分けるだけの並列の道具（feature なしでは逐次のループ）。第三者ソース・非公開の情報を含まない。\n変更理由: Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/render_identity.rs",
-      "sha256": "09766a9474c33518a48af054ca2a2050743952c7cdce1c99536250a120d20b26",
-      "origin": "公開Issue #148 のため新規作成。全 engine の代表の設定の RGBA の SHA-256 を固定し、既定・threads（1 本と 8 本）・wasm32 で同じ bytes を見る test（数式で作った合成画像だけ。実写真・実 RAW なし）。"
+      "sha256": "f5e3bee3b242c7e521a51bb4cbed4fc70be027e478a0c0952e8d392635482a58",
+      "origin": "公開Issue #148 のため新規作成。全 engine の代表の設定の RGBA の SHA-256 を固定し、既定・threads（1 本と 8 本）・wasm32 で同じ bytes を見る test（数式で作った合成画像だけ。実写真・実 RAW なし）。\n変更理由: Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-native-glue.ts",
@@ -11772,6 +11787,16 @@
       "path": "apps/camera/scripts/e2e/native-develop-ui.sh",
       "sha256": "073d18a160c00daf09906ad677b47a19317506edef76de15443bb8df1c64bdbf",
       "origin": "公開Issue #152 のため新規作成。合成 PNG で camera の画面から露光・プリセット・native runtime を確認する E2E。外部の画像・実写真を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/crates/niho-develop/examples/stage_timing.rs",
+      "sha256": "b14fddd5f30c2e240a9b45fb0451d349d2e51acc8acb884318fb7ab25cf40445",
+      "origin": "公開 Issue #150 のため新規作成。現像段ごとの時間を合成画像で計測する例。実写真や第三者のコードを含まない。\n変更理由: Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
+    },
+    {
+      "path": "packages/develop-engine/tools/stage-wasm-bench.mjs",
+      "sha256": "6e828ce7d1e63b0df416870748926ed44dcb7527d985e90448ea157d6df25a60",
+      "origin": "公開 Issue #150 のため新規作成。単一 wasm の段別計測を実行する補助スクリプト。実写真や第三者のコードを含まない。\n変更理由: Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
     }
   ],
   "excludedSources": [

@@ -61,37 +61,72 @@ pub fn apply(
     }
     let alpha = (amount <= 25.0).then(|| libm::pow(amount / 25.0, LOW_RANGE_POWER) as f32);
     let beta = ((amount - 25.0) / 25.0).min(1.0) as f32;
+    stripes(
+        source,
+        width,
+        height,
+        |halo, halo_rows, center, destination| {
+            let kernel25 = guided(halo, width, halo_rows, halo.len() / 3, 0.1)?;
+            if let Some(alpha) = alpha {
+                for ((original, filtered), result) in halo[center.clone()]
+                    .iter()
+                    .zip(&kernel25[center])
+                    .zip(destination)
+                {
+                    *result = *original + alpha * (*filtered - *original);
+                }
+            } else {
+                let kernel100 = guided(halo, width, halo_rows, halo.len() / 3, 0.4)?;
+                for ((low, high), result) in kernel25[center.clone()]
+                    .iter()
+                    .zip(&kernel100[center])
+                    .zip(destination)
+                {
+                    *result = *low + beta * (*high - *low);
+                }
+            }
+            Ok(())
+        },
+    )
+}
+
+/// `filter(halo, halo_rows, center, destination)` on every stripe of
+/// `STRIPE_ROWS` rows with its halo (`center`: the stripe's values in
+/// `halo`), into the stripe's part of the output. The stripes read only the
+/// source, so they may run on different threads; the error is the first
+/// failing stripe's, as of the loop in order (#150).
+fn stripes(
+    source: &[f32],
+    width: usize,
+    height: usize,
+    filter: impl Fn(&[f32], usize, std::ops::Range<usize>, &mut [f32]) -> Result<(), RawChromaError>
+        + Sync
+        + Send,
+) -> Result<Vec<f32>, RawChromaError> {
     let mut output = vec![0.0; source.len()];
-    for start in (0..height).step_by(STRIPE_ROWS) {
-        let end = start.saturating_add(STRIPE_ROWS).min(height);
-        let halo_start = start.saturating_sub(STRIPE_HALO);
-        let halo_end = end.saturating_add(STRIPE_HALO).min(height);
-        let halo = &source[halo_start * width * 3..halo_end * width * 3];
-        let kernel25 = guided(halo, width, halo_end - halo_start, halo.len() / 3, 0.1)
-            .map_err(|error| stripe_error(error, halo_start * width))?;
-        let center = (start - halo_start) * width * 3..(end - halo_start) * width * 3;
-        let destination = &mut output[start * width * 3..end * width * 3];
-        if let Some(alpha) = alpha {
-            for ((original, filtered), result) in source[start * width * 3..end * width * 3]
-                .iter()
-                .zip(&kernel25[center])
-                .zip(destination)
-            {
-                *result = *original + alpha * (*filtered - *original);
+    let mut errors: Vec<Option<RawChromaError>> =
+        (0..height.div_ceil(STRIPE_ROWS)).map(|_| None).collect();
+    crate::par::for_each_row_pair_mut(
+        &mut output,
+        STRIPE_ROWS * width * 3,
+        &mut errors,
+        1,
+        |stripe, destination, error| {
+            let start = stripe * STRIPE_ROWS;
+            let end = start + destination.len() / (width * 3);
+            let halo_start = start.saturating_sub(STRIPE_HALO);
+            let halo_end = end.saturating_add(STRIPE_HALO).min(height);
+            let halo = &source[halo_start * width * 3..halo_end * width * 3];
+            let center = (start - halo_start) * width * 3..(end - halo_start) * width * 3;
+            if let Err(failed) = filter(halo, halo_end - halo_start, center, destination) {
+                error[0] = Some(stripe_error(failed, halo_start * width));
             }
-        } else {
-            let kernel100 = guided(halo, width, halo_end - halo_start, halo.len() / 3, 0.4)
-                .map_err(|error| stripe_error(error, halo_start * width))?;
-            for ((low, high), result) in kernel25[center.clone()]
-                .iter()
-                .zip(&kernel100[center])
-                .zip(destination)
-            {
-                *result = *low + beta * (*high - *low);
-            }
-        }
+        },
+    );
+    match errors.into_iter().flatten().next() {
+        Some(error) => Err(error),
+        None => Ok(output),
     }
-    Ok(output)
 }
 
 /// Explicit v6 detail control. The frozen 0..50 domain is unchanged; above
@@ -109,18 +144,16 @@ pub fn apply_detail(
     }
     validate_pixels(source, width, height, amount)?;
     let epsilon = (0.4 * libm::pow(4.0, (amount - 50.0) / 50.0)) as f32;
-    let mut output = vec![0.0; source.len()];
-    for start in (0..height).step_by(STRIPE_ROWS) {
-        let end = start.saturating_add(STRIPE_ROWS).min(height);
-        let halo_start = start.saturating_sub(STRIPE_HALO);
-        let halo_end = end.saturating_add(STRIPE_HALO).min(height);
-        let halo = &source[halo_start * width * 3..halo_end * width * 3];
-        let filtered = guided(halo, width, halo_end - halo_start, halo.len() / 3, epsilon)
-            .map_err(|error| stripe_error(error, halo_start * width))?;
-        let center = (start - halo_start) * width * 3..(end - halo_start) * width * 3;
-        output[start * width * 3..end * width * 3].copy_from_slice(&filtered[center]);
-    }
-    Ok(output)
+    stripes(
+        source,
+        width,
+        height,
+        |halo, halo_rows, center, destination| {
+            let filtered = guided(halo, width, halo_rows, halo.len() / 3, epsilon)?;
+            destination.copy_from_slice(&filtered[center]);
+            Ok(())
+        },
+    )
 }
 
 fn stripe_error(error: RawChromaError, pixel_offset: usize) -> RawChromaError {

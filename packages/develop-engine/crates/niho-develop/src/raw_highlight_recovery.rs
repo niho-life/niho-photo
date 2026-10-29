@@ -67,9 +67,15 @@ fn mask_weight(data: &[f32], width: usize, height: usize, index: usize, ceiling:
 /// signed source. NIHO 7 uses this full-source result only for the non-FX
 /// R23 residual; NIHO 5 reconstruction remains unchanged.
 pub(crate) fn mask_weights(data: &[f32], width: usize, height: usize, ceiling: f32) -> Vec<f32> {
-    (0..width * height)
-        .map(|index| mask_weight(data, width, height, index, ceiling))
-        .collect()
+    let mut weights = vec![0.0; width * height];
+    // Each weight reads the unchanged source only, so rows may run on
+    // different threads (#150).
+    crate::par::for_each_row_mut(&mut weights, width, |y, row| {
+        for (x, weight) in row.iter_mut().enumerate() {
+            *weight = mask_weight(data, width, height, y * width + x, ceiling);
+        }
+    });
+    weights
 }
 
 fn luminance(pixel: &[f32]) -> f32 {
@@ -225,24 +231,25 @@ pub(crate) fn apply(data: &mut [f32], width: usize, height: usize, ceiling: f32,
         return;
     }
     let (chroma, mask, small_w, small_h) = propagated_chroma(data, width, height, ceiling);
-    for i in 0..width * height {
-        let x = i % width;
-        let y_pos = i / width;
-        let weight = clip_weight(&data[i * 3..i * 3 + 3], ceiling)
-            * sample_mask(&mask, small_w, small_h, x, y_pos, width, height)
-            * amount;
-        if weight <= 0.0 {
-            continue;
+    // Each pixel reads only itself and the small maps, so rows may run on
+    // different threads (#150).
+    crate::par::for_each_row_mut(data, width * 3, |y_pos, row| {
+        for (x, pixel) in row.chunks_exact_mut(3).enumerate() {
+            let weight = clip_weight(pixel, ceiling)
+                * sample_mask(&mask, small_w, small_h, x, y_pos, width, height)
+                * amount;
+            if weight <= 0.0 {
+                continue;
+            }
+            let y = luminance(pixel).max(0.0);
+            let carried = sample(&chroma, small_w, small_h, x, y_pos, width, height);
+            let shoulder = 1.0 - SHOULDER_STRENGTH * weight;
+            for channel in 0..3 {
+                pixel[channel] =
+                    pixel[channel] * shoulder + y * CHROMA_STRENGTH * weight * carried[channel];
+            }
         }
-        let pixel = &mut data[i * 3..i * 3 + 3];
-        let y = luminance(pixel).max(0.0);
-        let carried = sample(&chroma, small_w, small_h, x, y_pos, width, height);
-        let shoulder = 1.0 - SHOULDER_STRENGTH * weight;
-        for channel in 0..3 {
-            pixel[channel] =
-                pixel[channel] * shoulder + y * CHROMA_STRENGTH * weight * carried[channel];
-        }
-    }
+    });
 }
 
 #[cfg(test)]

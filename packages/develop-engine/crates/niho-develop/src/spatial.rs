@@ -103,33 +103,39 @@ pub fn pyr_down(p: &Plane) -> Plane {
         })
         .collect();
     let mut out = Plane::new(out_w, out_h);
-    let mut row = vec![0.0f32; p.width];
-    for oy in 0..out_h {
-        // Vertical blur of the even row `2 * oy`, all columns.
-        let y = 2 * oy as isize;
-        let src: [usize; 5] = core::array::from_fn(|k| reflect_index(y + k as isize - 2, p.height));
-        let r0 = &p.data[src[0] * p.width..(src[0] + 1) * p.width];
-        let r1 = &p.data[src[1] * p.width..(src[1] + 1) * p.width];
-        let r2 = &p.data[src[2] * p.width..(src[2] + 1) * p.width];
-        let r3 = &p.data[src[3] * p.width..(src[3] + 1) * p.width];
-        let r4 = &p.data[src[4] * p.width..(src[4] + 1) * p.width];
-        for x in 0..p.width {
-            row[x] = BINOM5[0] * r0[x]
-                + BINOM5[1] * r1[x]
-                + BINOM5[2] * r2[x]
-                + BINOM5[3] * r3[x]
-                + BINOM5[4] * r4[x];
-        }
-        // Horizontal blur at even columns.
-        let dst = &mut out.data[oy * out_w..(oy + 1) * out_w];
-        for (d, c) in dst.iter_mut().zip(cols.iter()) {
-            *d = BINOM5[0] * row[c[0]]
-                + BINOM5[1] * row[c[1]]
-                + BINOM5[2] * row[c[2]]
-                + BINOM5[3] * row[c[3]]
-                + BINOM5[4] * row[c[4]];
-        }
-    }
+    // Output rows read only `p`, so they may run on different threads, each
+    // filling its own blurred row (#150).
+    crate::par::for_each_row_mut_with(
+        &mut out.data,
+        out_w,
+        || vec![0.0f32; p.width],
+        |row, oy, dst| {
+            // Vertical blur of the even row `2 * oy`, all columns.
+            let y = 2 * oy as isize;
+            let src: [usize; 5] =
+                core::array::from_fn(|k| reflect_index(y + k as isize - 2, p.height));
+            let r0 = &p.data[src[0] * p.width..(src[0] + 1) * p.width];
+            let r1 = &p.data[src[1] * p.width..(src[1] + 1) * p.width];
+            let r2 = &p.data[src[2] * p.width..(src[2] + 1) * p.width];
+            let r3 = &p.data[src[3] * p.width..(src[3] + 1) * p.width];
+            let r4 = &p.data[src[4] * p.width..(src[4] + 1) * p.width];
+            for x in 0..p.width {
+                row[x] = BINOM5[0] * r0[x]
+                    + BINOM5[1] * r1[x]
+                    + BINOM5[2] * r2[x]
+                    + BINOM5[3] * r3[x]
+                    + BINOM5[4] * r4[x];
+            }
+            // Horizontal blur at even columns.
+            for (d, c) in dst.iter_mut().zip(cols.iter()) {
+                *d = BINOM5[0] * row[c[0]]
+                    + BINOM5[1] * row[c[1]]
+                    + BINOM5[2] * row[c[2]]
+                    + BINOM5[3] * row[c[3]]
+                    + BINOM5[4] * row[c[4]];
+            }
+        },
+    );
     out
 }
 
@@ -165,40 +171,69 @@ impl UpTaps {
 /// [`pyr_up`] stores, so callers can consume them (subtract, add) without a
 /// full-size buffer. The zero samples are skipped (identical values).
 pub fn pyr_up_rows(p: &Plane, out_w: usize, out_h: usize, mut emit: impl FnMut(usize, &[f32])) {
-    let h2 = p.height * 2;
     let taps = UpTaps::new(p.width, out_w);
-    // Vertical pass over the zero-inserted image's even columns only (odd
-    // columns are all zero), then the horizontal taps.
     let mut tmp = vec![0.0f32; p.width];
     let mut row = vec![0.0f32; out_w];
     for y in 0..out_h {
-        tmp.fill(0.0);
-        for (k, w) in BINOM5.iter().enumerate() {
-            let sy = reflect_index(y as isize + k as isize - 2, h2.max(1));
-            if sy % 2 != 0 || h2 == 0 {
-                continue;
-            }
-            let src = &p.data[(sy / 2) * p.width..(sy / 2 + 1) * p.width];
-            for (d, v) in tmp.iter_mut().zip(src.iter()) {
-                *d += w * v;
-            }
-        }
-        for (x, dst) in row.iter_mut().enumerate() {
-            let mut sum = 0.0f32;
-            for (sx, w) in &taps.taps[taps.offsets[x] as usize..taps.offsets[x + 1] as usize] {
-                sum += w * tmp[*sx as usize];
-            }
-            *dst = sum * 4.0;
-        }
+        up_row(p, &taps, y, &mut tmp, &mut row);
         emit(y, &row);
     }
+}
+
+/// Row `y` of [`pyr_up_rows`] into `row` (`tmp`: `p.width` values, filled
+/// here).
+#[inline]
+fn up_row(p: &Plane, taps: &UpTaps, y: usize, tmp: &mut [f32], row: &mut [f32]) {
+    let h2 = p.height * 2;
+    // Vertical pass over the zero-inserted image's even columns only (odd
+    // columns are all zero), then the horizontal taps.
+    tmp.fill(0.0);
+    for (k, w) in BINOM5.iter().enumerate() {
+        let sy = reflect_index(y as isize + k as isize - 2, h2.max(1));
+        if sy % 2 != 0 || h2 == 0 {
+            continue;
+        }
+        let src = &p.data[(sy / 2) * p.width..(sy / 2 + 1) * p.width];
+        for (d, v) in tmp.iter_mut().zip(src.iter()) {
+            *d += w * v;
+        }
+    }
+    for (x, dst) in row.iter_mut().enumerate() {
+        let mut sum = 0.0f32;
+        for (sx, w) in &taps.taps[taps.offsets[x] as usize..taps.offsets[x + 1] as usize] {
+            sum += w * tmp[*sx as usize];
+        }
+        *dst = sum * 4.0;
+    }
+}
+
+/// [`pyr_up_rows`] consumed by the rows of `dst` (`out_w` long):
+/// `f(y, dst_row, up_row)`. Each row reads only `p` and writes only its own
+/// row of `dst` (callers read their other planes at the same row), so rows
+/// may run on different threads, each with its own row buffers (#150).
+fn pyr_up_each_row(
+    p: &Plane,
+    dst: &mut [f32],
+    out_w: usize,
+    f: impl Fn(usize, &mut [f32], &[f32]) + Sync + Send,
+) {
+    let taps = UpTaps::new(p.width, out_w);
+    crate::par::for_each_row_mut_with(
+        dst,
+        out_w,
+        || (vec![0.0f32; p.width], vec![0.0f32; out_w]),
+        |(tmp, row), y, dst_row| {
+            up_row(p, &taps, y, tmp, row);
+            f(y, dst_row, &row[..]);
+        },
+    );
 }
 
 /// `_pyr_up`: zero-insert to `2w x 2h`, blur5 x4, crop to `out_w x out_h`.
 pub fn pyr_up(p: &Plane, out_w: usize, out_h: usize) -> Plane {
     let mut out = Plane::new(out_w, out_h);
-    pyr_up_rows(p, out_w, out_h, |y, row| {
-        out.data[y * out_w..(y + 1) * out_w].copy_from_slice(row);
+    pyr_up_each_row(p, &mut out.data, out_w, |_, dst, row| {
+        dst.copy_from_slice(row);
     });
     out
 }
@@ -207,9 +242,8 @@ pub fn pyr_up(p: &Plane, out_w: usize, out_h: usize) -> Plane {
 /// commutative, so this equals the reference's `pyr_up(src) + dst`).
 fn add_pyr_up(src: &Plane, dst: &mut Plane) {
     let w = dst.width;
-    let h = dst.height;
-    pyr_up_rows(src, w, h, |y, row| {
-        for (d, u) in dst.data[y * w..(y + 1) * w].iter_mut().zip(row) {
+    pyr_up_each_row(src, &mut dst.data, w, |_, dst, row| {
+        for (d, u) in dst.iter_mut().zip(row) {
             *d += u;
         }
     });
@@ -238,8 +272,8 @@ pub fn laplacian_pyramid(g: &[Plane]) -> Vec<Plane> {
     for i in 0..g.len() - 1 {
         let mut level = g[i].clone();
         let w = level.width;
-        pyr_up_rows(&g[i + 1], w, level.height, |y, row| {
-            for (d, u) in level.data[y * w..(y + 1) * w].iter_mut().zip(row) {
+        pyr_up_each_row(&g[i + 1], &mut level.data, w, |_, dst, row| {
+            for (d, u) in dst.iter_mut().zip(row) {
                 *d -= u;
             }
         });
@@ -457,9 +491,8 @@ fn apply_multiscale_gain(mut ln: Plane, gains: &[f64]) -> Plane {
     // coarse. `(G - up) * k` rounds exactly like storing `G - up` first.
     let k0 = gains[0] as f32;
     let w = ln.width;
-    let h = ln.height;
-    pyr_up_rows(&g[0], w, h, |y, row| {
-        for (v, u) in ln.data[y * w..(y + 1) * w].iter_mut().zip(row) {
+    pyr_up_each_row(&g[0], &mut ln.data, w, |_, dst, row| {
+        for (v, u) in dst.iter_mut().zip(row) {
             *v = (*v - u) * k0;
         }
     });
@@ -468,9 +501,8 @@ fn apply_multiscale_gain(mut ln: Plane, gains: &[f64]) -> Plane {
         let lower = &mut lo[l - 1];
         let k = gains[l] as f32;
         let w = lower.width;
-        let h = lower.height;
-        pyr_up_rows(&hi[0], w, h, |y, row| {
-            for (v, u) in lower.data[y * w..(y + 1) * w].iter_mut().zip(row) {
+        pyr_up_each_row(&hi[0], &mut lower.data, w, |_, dst, row| {
+            for (v, u) in dst.iter_mut().zip(row) {
                 *v = (*v - u) * k;
             }
         });
@@ -560,9 +592,9 @@ fn apply_single_op_llf(
         }
         let w = ln.width;
         let mut out = Plane::new(w, ln.height);
-        pyr_up_rows(&d, w, ln.height, |y, row| {
+        pyr_up_each_row(&d, &mut out.data, w, |y, dst, row| {
             let src = &ln.data[y * w..(y + 1) * w];
-            for ((o, s), dv) in out.data[y * w..(y + 1) * w].iter_mut().zip(src).zip(row) {
+            for ((o, s), dv) in dst.iter_mut().zip(src).zip(row) {
                 *o = s + dv;
             }
         });
@@ -623,24 +655,26 @@ fn apply_single_op_llf(
     let mut remapped = Plane::new(ln.width, ln.height);
     for (k, g0) in g0_grid.iter().enumerate() {
         let g0 = *g0 as f32;
-        for (dst, v) in remapped.data.iter_mut().zip(ln.data.iter()) {
-            let d = v - g0;
-            let ad = d.abs();
-            let sgn = if d > 0.0 {
-                1.0
-            } else if d < 0.0 {
-                -1.0
-            } else {
-                0.0
-            };
-            *dst = g0 + sgn * remap_magnitude(ad, params.sigma_r, params.alpha, params.beta);
-        }
+        let w = ln.width;
+        crate::par::for_each_row_mut(&mut remapped.data, w, |y, row| {
+            for (dst, v) in row.iter_mut().zip(ln.data[y * w..].iter()) {
+                let d = v - g0;
+                let ad = d.abs();
+                let sgn = if d > 0.0 {
+                    1.0
+                } else if d < 0.0 {
+                    -1.0
+                } else {
+                    0.0
+                };
+                *dst = g0 + sgn * remap_magnitude(ad, params.sigma_r, params.alpha, params.beta);
+            }
+        });
         let gk = gaussian_levels(&remapped, levels);
         // Level 0: the fraction comes from the input value.
         {
-            let a = &mut acc[0].data;
-            let w = ln.width;
-            pyr_up_rows(&gk[0], w, ln.height, |y, row| {
+            let remapped = &remapped;
+            pyr_up_each_row(&gk[0], &mut acc[0].data, w, |y, a, row| {
                 let start = y * w;
                 for (x, u) in row.iter().enumerate() {
                     let i = start + x;
@@ -653,7 +687,7 @@ fn apply_single_op_llf(
                         continue;
                     };
                     if wt != 0.0 {
-                        a[i] += wt * (remapped.data[i] - u);
+                        a[x] += wt * (remapped.data[i] - u);
                     }
                 }
             });
@@ -662,9 +696,8 @@ fn apply_single_op_llf(
             let lower = &gk[l - 1];
             let idx = &idx_by_level[l - 1];
             let frac = &frac_by_level[l - 1];
-            let a = &mut acc[l].data;
             let w = lower.width;
-            pyr_up_rows(&gk[l], w, lower.height, |y, row| {
+            pyr_up_each_row(&gk[l], &mut acc[l].data, w, |y, a, row| {
                 let start = y * w;
                 for (x, u) in row.iter().enumerate() {
                     let i = start + x;
@@ -677,7 +710,7 @@ fn apply_single_op_llf(
                         continue;
                     };
                     if wt != 0.0 {
-                        a[i] += wt * (lower.data[i] - u);
+                        a[x] += wt * (lower.data[i] - u);
                     }
                 }
             });
@@ -732,9 +765,11 @@ pub fn log_luminance(px: [f32; 3]) -> f32 {
 /// `SpatialToneOps.luminancePlane`: `log2(max(Y, 3e-5))` of ProPhoto RGB.
 pub fn luminance_plane(rgb: &[f32], width: usize, height: usize) -> Plane {
     let mut p = Plane::new(width, height);
-    for (dst, px) in p.data.iter_mut().zip(rgb.chunks_exact(3)) {
-        *dst = log_luminance([px[0], px[1], px[2]]);
-    }
+    crate::par::for_each_row_mut(&mut p.data, width, |y, row| {
+        for (dst, px) in row.iter_mut().zip(rgb[y * width * 3..].chunks_exact(3)) {
+            *dst = log_luminance([px[0], px[1], px[2]]);
+        }
+    });
     p
 }
 
@@ -790,9 +825,9 @@ pub fn preview_luminance(ln0: &Plane, p: &SpatialParams) -> Option<Plane> {
     drop(half);
     let w = ln0.width;
     let mut ln = Plane::new(w, ln0.height);
-    pyr_up_rows(&delta, w, ln0.height, |y, row| {
+    pyr_up_each_row(&delta, &mut ln.data, w, |y, dst, row| {
         let src = &ln0.data[y * w..(y + 1) * w];
-        for ((o, s), dv) in ln.data[y * w..(y + 1) * w].iter_mut().zip(src).zip(row) {
+        for ((o, s), dv) in dst.iter_mut().zip(src).zip(row) {
             *o = s + dv;
         }
     });
@@ -881,16 +916,18 @@ pub fn apply_in_place(rgb: &mut [f32], width: usize, height: usize, p: &SpatialP
     let Some(ln) = spatial_luminance(&ln0, p) else {
         return;
     };
-    for ((px, l1), l0) in rgb
-        .chunks_exact_mut(3)
-        .zip(ln.data.iter())
-        .zip(ln0.data.iter())
-    {
-        let ratio = libm::exp2f(l1 - l0);
-        px[0] *= ratio;
-        px[1] *= ratio;
-        px[2] *= ratio;
-    }
+    crate::par::for_each_row_mut(rgb, width * 3, |y, row| {
+        for ((px, l1), l0) in row
+            .chunks_exact_mut(3)
+            .zip(ln.data[y * width..].iter())
+            .zip(ln0.data[y * width..].iter())
+        {
+            let ratio = libm::exp2f(l1 - l0);
+            px[0] *= ratio;
+            px[1] *= ratio;
+            px[2] *= ratio;
+        }
+    });
 }
 
 // MARK: - Adaptive statistics and laws (`SpatialAdaptiveStats` / `Law`)
@@ -910,11 +947,19 @@ const HIGHLIGHT_THRESHOLD: f32 = -1.0;
 /// Stats of straight RGB (already at the statistic resolution).
 pub fn compute_stats(rgb: &[f32], width: usize, height: usize, luma: [f32; 3]) -> AdaptiveStats {
     let mut ln = Plane::new(width, height);
+    crate::par::for_each_row_mut(&mut ln.data, width, |row_index, row| {
+        for (dst, px) in row
+            .iter_mut()
+            .zip(rgb[row_index * width * 3..].chunks_exact(3))
+        {
+            let y = (px[0] * luma[0] + px[1] * luma[1] + px[2] * luma[2]).max(LN_FLOOR);
+            *dst = libm::log2f(y);
+        }
+    });
+    // The sum stays in pixel order (a reduction is not split).
     let mut sum = 0.0f64;
-    for (dst, px) in ln.data.iter_mut().zip(rgb.chunks_exact(3)) {
-        let y = (px[0] * luma[0] + px[1] * luma[1] + px[2] * luma[2]).max(LN_FLOOR);
-        *dst = libm::log2f(y);
-        sum += *dst as f64;
+    for value in &ln.data {
+        sum += *value as f64;
     }
     let count = ln.data.len().max(1) as f64;
     let mean_ln = if ln.data.is_empty() { 0.0 } else { sum / count };
@@ -980,9 +1025,10 @@ fn gaussian_blur(p: &Plane, sigma: f64) -> Plane {
                 .collect()
         })
         .collect();
-    for y in 0..p.height {
+    // The rows of each pass read only the pass before, so they may run on
+    // different threads (#150).
+    crate::par::for_each_row_mut(&mut horizontal.data, p.width, |y, dst| {
         let row = &p.data[y * p.width..(y + 1) * p.width];
-        let dst = &mut horizontal.data[y * p.width..(y + 1) * p.width];
         for (d, taps) in dst.iter_mut().zip(xmap.iter()) {
             let mut acc = 0.0f32;
             for (idx, w) in taps.iter().zip(kernel.iter()) {
@@ -990,10 +1036,9 @@ fn gaussian_blur(p: &Plane, sigma: f64) -> Plane {
             }
             *d = acc;
         }
-    }
+    });
     let mut out = Plane::new(p.width, p.height);
-    for y in 0..p.height {
-        let dst = &mut out.data[y * p.width..(y + 1) * p.width];
+    crate::par::for_each_row_mut(&mut out.data, p.width, |y, dst| {
         for (o, w) in (-radius..=radius).zip(kernel.iter()) {
             let sy = reflect_index(y as isize + o, p.height);
             let src = &horizontal.data[sy * p.width..(sy + 1) * p.width];
@@ -1001,7 +1046,7 @@ fn gaussian_blur(p: &Plane, sigma: f64) -> Plane {
                 dst[x] += src[x] * w;
             }
         }
-    }
+    });
     out
 }
 

@@ -41,6 +41,8 @@ pub fn features(
 }
 
 const N: usize = FEATURE_COUNT;
+/// The groups of four pixels a task of [`coefficient_maps_at`] takes.
+const GROUPS_PER_BLOCK: usize = 256;
 const H1: usize = 8;
 const H2: usize = 4;
 
@@ -184,28 +186,44 @@ pub fn coefficient_maps_at(
         shadow_a: vec![0.0; pixels],
         shadow_b: vec![0.0; pixels],
     };
-    for start in (0..pixels).step_by(4) {
-        let count = (pixels - start).min(4);
-        let mut lanes = [[0.0_f32; 4]; N];
-        for lane in 0..4 {
-            // The last group repeats its last pixel.
-            let mut vector = features.vectors[start + lane.min(count - 1)];
-            if shift != 0.0 {
-                for index in niho6_response::EXPOSURE_FEATURES {
-                    vector[index] += shift;
+    // Blocks of whole groups of four pixels (each lane reads only its own
+    // pixel) may run on different threads; the groups are those of one loop
+    // over all pixels (#150).
+    crate::par::for_each_rows_mut(
+        [
+            &mut maps.highlight_a[..],
+            &mut maps.highlight_b[..],
+            &mut maps.shadow_a[..],
+            &mut maps.shadow_b[..],
+        ],
+        GROUPS_PER_BLOCK * 4,
+        |block, [block_ha, block_hb, block_sa, block_sb]| {
+            let first = block * GROUPS_PER_BLOCK * 4;
+            for offset in (0..block_ha.len()).step_by(4) {
+                let start = first + offset;
+                let count = (pixels - start).min(4);
+                let mut lanes = [[0.0_f32; 4]; N];
+                for lane in 0..4 {
+                    // The last group repeats its last pixel.
+                    let mut vector = features.vectors[start + lane.min(count - 1)];
+                    if shift != 0.0 {
+                        for index in niho6_response::EXPOSURE_FEATURES {
+                            vector[index] += shift;
+                        }
+                    }
+                    for (feature, slot) in vector.iter().zip(lanes.iter_mut()) {
+                        slot[lane] = *feature;
+                    }
                 }
+                let [ha, hb, sa, sb] = infer_both(networks, &lanes);
+                let end = offset + count;
+                block_ha[offset..end].copy_from_slice(&ha[..count]);
+                block_hb[offset..end].copy_from_slice(&hb[..count]);
+                block_sa[offset..end].copy_from_slice(&sa[..count]);
+                block_sb[offset..end].copy_from_slice(&sb[..count]);
             }
-            for (feature, slot) in vector.iter().zip(lanes.iter_mut()) {
-                slot[lane] = *feature;
-            }
-        }
-        let [ha, hb, sa, sb] = infer_both(networks, &lanes);
-        let end = start + count;
-        maps.highlight_a[start..end].copy_from_slice(&ha[..count]);
-        maps.highlight_b[start..end].copy_from_slice(&hb[..count]);
-        maps.shadow_a[start..end].copy_from_slice(&sa[..count]);
-        maps.shadow_b[start..end].copy_from_slice(&sb[..count]);
-    }
+        },
+    );
     Ok(maps)
 }
 
