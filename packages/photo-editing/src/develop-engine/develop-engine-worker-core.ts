@@ -1,5 +1,6 @@
 import type { DevelopAnalysisHelper, DevelopAnalysisHelperResponse } from "./develop-engine-analysis-worker-core";
 import { parseDevelopEngineManifest } from "./develop-engine-manifest";
+import type { DevelopAnalysisStore } from "./develop-engine-analysis-store";
 
 /**
  * 段 2 の wasm を動かす Web Worker の中身（移行元設計。移行時の設計文書「段 2」）。テストできるよう、
@@ -259,6 +260,8 @@ export type DevelopEngineWorkerDeps = {
    * 省略・null は写真を保たない（今までどおり手放す）
    */
   digest?: (bytes: ArrayBuffer) => Promise<string | null>;
+  /** 再起動をまたいで compact 解析 bytes を保つ。失敗時は通常の再計算に戻す（#155）。 */
+  analysisStore?: DevelopAnalysisStore;
   /**
    * 先回りの解析を作る補助の worker を作る（#155）。応答を `receive` に渡し、読み込めない・落ちたら null を渡す。省略（worker の中で
    * `Worker` が使えない）・null を返したら、今までどおりこの worker で作る
@@ -917,6 +920,45 @@ export function createDevelopEngineWorkerHandler(
   const analysisBytesId = (photoKey: string, analysisKey: string): string =>
     JSON.stringify([version, photoKey, analysisKey]);
 
+  /** meta JSON を IndexedDB の鍵に置かない。入力・版・解析条件をまとめて SHA-256 にする。 */
+  const persistentAnalysisId = async (photoKey: string, analysisKey: string): Promise<string | null> => {
+    if (!deps.analysisStore || !deps.digest) return null;
+    try {
+      const bytes = new TextEncoder().encode(analysisBytesId(photoKey, analysisKey));
+      return await deps.digest(bytes.buffer);
+    } catch {
+      return null;
+    }
+  };
+
+  const persistAnalysis = (photoKey: string, analysisKey: string, bytes: ArrayBuffer) => {
+    if (!deps.analysisStore) return;
+    void (async () => {
+      const id = await persistentAnalysisId(photoKey, analysisKey);
+      if (id) await deps.analysisStore?.put(id, bytes);
+    })().catch(() => undefined);
+  };
+
+  const loadPersistedAnalysis = async (photoKey: string | null, analysisKey: string | null) => {
+    if (photoKey === null || analysisKey === null || !deps.analysisStore) return;
+    if (analysisBytes.has(analysisBytesId(photoKey, analysisKey))) return;
+    const id = await persistentAnalysisId(photoKey, analysisKey);
+    if (!id) return;
+    // 壊れた/固まった保存先のために編集を待たせ続けない。時間切れなら通常の render で再計算する。
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    try {
+      const stored = await Promise.race([
+        deps.analysisStore.get(id).catch(() => null),
+        new Promise<null>((resolve) => { timer = setTimeout(() => resolve(null), 120); }),
+      ]);
+      if (stored instanceof ArrayBuffer) cacheAnalysisBytes(photoKey, analysisKey, stored, false);
+    } catch {
+      // 保存先の障害は編集の障害にしない。
+    } finally {
+      if (timer !== undefined) clearTimeout(timer);
+    }
+  };
+
   const dropCachedAnalysis = (id: string) => {
     const cached = analysisBytes.get(id);
     if (!cached) return;
@@ -924,7 +966,7 @@ export function createDevelopEngineWorkerHandler(
     analysisBytesTotal -= cached.bytes.byteLength;
   };
 
-  const cacheAnalysisBytes = (photoKey: string | null, analysisKey: string | null, source: Uint8Array | ArrayBuffer) => {
+  const cacheAnalysisBytes = (photoKey: string | null, analysisKey: string | null, source: Uint8Array | ArrayBuffer, persist = true) => {
     if (photoKey === null || analysisKey === null) return;
     const view = source instanceof Uint8Array ? source : new Uint8Array(source);
     if (view.byteLength === 0 || view.byteLength > ANALYSIS_BYTES_ENTRY_LIMIT) return;
@@ -934,6 +976,7 @@ export function createDevelopEngineWorkerHandler(
     dropCachedAnalysis(id);
     analysisBytes.set(id, { bytes: copy.buffer });
     analysisBytesTotal += copy.byteLength;
+    if (persist) persistAnalysis(photoKey, analysisKey, copy.buffer);
     while (analysisBytes.size > ANALYSIS_BYTES_COUNT_LIMIT || analysisBytesTotal > ANALYSIS_BYTES_TOTAL_LIMIT) {
       const oldest = analysisBytes.keys().next().value as string | undefined;
       if (oldest === undefined) break;
@@ -957,7 +1000,7 @@ export function createDevelopEngineWorkerHandler(
     }
   };
 
-  const restoreCachedAnalysis = (
+  const restoreCachedAnalysis = async (
     target: DevelopDeveloper,
     photoKey: string | null,
     analysisKey: string | null,
@@ -965,6 +1008,8 @@ export function createDevelopEngineWorkerHandler(
   ) => {
     if (photoKey === null || analysisKey === null) return;
     const id = analysisBytesId(photoKey, analysisKey);
+    if (holdsAnalysis(target, settingsJson)) return;
+    await loadPersistedAnalysis(photoKey, analysisKey);
     const cached = analysisBytes.get(id);
     if (!cached) return;
     // Rust の Session は別設定の解析を 1 件だけ持つ。同じ Developer へ過去に import 済みでも、別 CNR に押し出され得るため
@@ -1689,17 +1734,23 @@ export function createDevelopEngineWorkerHandler(
           return;
         }
         case "render": {
+          const opened = developer;
+          const photoKey = currentKey;
+          const nextAnalysisKey = analysisSettingsKeyFromJson(message.settingsJson);
+          // 再起動後も同じ写真・解析設定の compact bytes を描画より先に戻す。保存先が遅い/壊れたら再計算する。
+          if (opened) await restoreCachedAnalysis(opened, photoKey, nextAnalysisKey, message.settingsJson);
           const { frame, rgba } = measure(message.interactive ? "renderInteractive" : "renderFinal", () => {
             requireGlue();
-            if (!developer) throw new Error("no photo is open");
-            const nextAnalysisKey = analysisSettingsKeyFromJson(message.settingsJson);
-            // Developer が LRU から消えていても、同じ写真・解析設定の compact bytes を描画より先に戻す。
-            // Rust 側でも source fingerprint / camera / baseline / dimensions を照合する。
-            restoreCachedAnalysis(developer, currentKey, nextAnalysisKey, message.settingsJson);
-            const frame = readFrame(developer.render(message.settingsJson, message.maxDimension, message.interactive));
+            if (!opened) throw new Error("no photo is open");
+            const frame = readFrame(opened.render(message.settingsJson, message.maxDimension, message.interactive));
+            // 初回の描画で作った解析も、補助の先回りを待たずに次の起動へ残す。
+            if (nextAnalysisKey !== null && photoKey !== null &&
+              !analysisBytes.has(analysisBytesId(photoKey, nextAnalysisKey))) {
+              cacheAnalysisFromDeveloper(opened, photoKey, nextAnalysisKey, message.settingsJson);
+            }
             // 丁寧に描いた設定から、静かな間に H/S の解析を先に作る（#129。口の無い glue では何もしない）
-            if (!message.interactive && typeof developer.prepareAnalysis === "function") {
-              analysisAhead = { developer, settingsJson: message.settingsJson };
+            if (!message.interactive && typeof opened.prepareAnalysis === "function") {
+              analysisAhead = { developer: opened, settingsJson: message.settingsJson };
             }
             if (nextAnalysisKey !== null) {
               if (currentAnalysisKey !== null && nextAnalysisKey !== currentAnalysisKey) releaseThumbnailSession();
