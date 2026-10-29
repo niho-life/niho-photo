@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
+import { createHash } from "node:crypto";
 
 import {
   createDevelopAnalysisWorkerHandler,
@@ -153,7 +154,7 @@ function fakeHelpers(options: { fail?: boolean } = {}) {
 function setup(
   glue = transferGlue(),
   helpers: ReturnType<typeof fakeHelpers> | null = fakeHelpers(),
-  extra: Partial<Pick<DevelopEngineWorkerDeps, "digest">> = {},
+  extra: Partial<Pick<DevelopEngineWorkerDeps, "digest" | "analysisStore">> = {},
 ) {
   const posted: DevelopEngineWorkerResponse[] = [];
   const deps: DevelopEngineWorkerDeps = {
@@ -545,5 +546,52 @@ describe("先回りを補助の worker で作る（#155）", () => {
     expect(glue.imported.map((entry) => new TextDecoder().decode(new Uint8Array(entry.bytes)))).toEqual(["2,1,2|0", "2,1,2|25"]);
     expect(glue.prepared).toEqual([]);
     expect(terminate).toHaveBeenCalledTimes(1);
+  });
+
+  it("補助の worker の解析をハッシュ鍵で保存し、再起動後は描画前に取り込む。保存先が壊れても描ける", async () => {
+    const entries = new Map<string, ArrayBuffer>();
+    const analysisStore: NonNullable<DevelopEngineWorkerDeps["analysisStore"]> = {
+      get: vi.fn(async (id) => entries.get(id) ?? null),
+      put: vi.fn(async (id, bytes) => { entries.set(id, bytes.slice(0)); }),
+    };
+    const digest: NonNullable<DevelopEngineWorkerDeps["digest"]> = async (bytes) =>
+      createHash("sha256").update(new Uint8Array(bytes)).digest("hex");
+    const first = setup(transferGlue(), fakeHelpers(), { analysisStore, digest });
+    await first.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await first.handler(openCopy(2));
+    await first.handler(final(3));
+    await vi.advanceTimersByTimeAsync(QUIET_MS);
+    const helper = first.helpers?.created[0];
+    const request = first.helpers?.requests(helper)[0];
+    helper?.receive({ type: "analysis", id: request?.id ?? 0, bytes: bytesOf(7, 8) });
+    await vi.advanceTimersByTimeAsync(0);
+    expect([...entries.keys()]).toEqual([expect.stringMatching(/^[0-9a-f]{64}$/)]);
+
+    const second = setup(transferGlue(), null, { analysisStore, digest });
+    await second.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await second.handler(openCopy(2));
+    await second.handler(final(3));
+    expect(second.glue.events.slice(0, 2)).toEqual(["import:0", "render:0"]);
+    expect(second.glue.imported).toEqual([{ developer: 0, bytes: [7, 8] }]);
+    expect(second.posted.at(-1)).toMatchObject({ type: "frame", id: 3 });
+
+    const broken = setup(transferGlue({ importThrows: true }), null, { analysisStore, digest });
+    await broken.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await broken.handler(openCopy(2));
+    await broken.handler(final(3));
+    expect(broken.glue.events).toEqual(["import:0", "render:0"]);
+    expect(broken.posted.at(-1)).toMatchObject({ type: "frame", id: 3 });
+
+    const unavailableStore: NonNullable<DevelopEngineWorkerDeps["analysisStore"]> = {
+      get: () => new Promise<ArrayBuffer | null>(() => undefined),
+      put: async () => undefined,
+    };
+    const slow = setup(transferGlue(), null, { analysisStore: unavailableStore, digest });
+    await slow.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await slow.handler(openCopy(2));
+    const rendering = slow.handler(final(3));
+    await vi.advanceTimersByTimeAsync(120);
+    await rendering;
+    expect(slow.posted.at(-1)).toMatchObject({ type: "frame", id: 3 });
   });
 });

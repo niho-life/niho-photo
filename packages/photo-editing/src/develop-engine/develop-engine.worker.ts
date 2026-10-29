@@ -1,4 +1,5 @@
 import type { DevelopAnalysisHelper, DevelopAnalysisHelperResponse } from "./develop-engine-analysis-worker-core";
+import { createBrowserDevelopAnalysisStore, createNativeDevelopAnalysisStore } from "./develop-engine-analysis-store";
 import { createNativeDevelopGlue, NativeDevelopUnavailableError } from "./develop-engine-native-glue";
 import {
   createDevelopEngineWorkerHandler,
@@ -64,6 +65,9 @@ function createAnalysisHelper(receive: (response: DevelopAnalysisHelperResponse 
   }
 }
 
+const analysisStore = createBrowserDevelopAnalysisStore();
+const nativeAnalysisStore = createNativeDevelopAnalysisStore();
+
 const handler = createDevelopEngineWorkerHandler({
   fetch: (url, init) => fetch(url, init),
   importModule: (url) => import(/* webpackIgnore: true */ /* turbopackIgnore: true */ url),
@@ -80,6 +84,8 @@ const handler = createDevelopEngineWorkerHandler({
   logPerf: (record) => scope.postMessage({ type: "perf", id: 0, record }, []),
   encodeJpeg,
   digest,
+  ...(analysisStore ? { analysisStore } : {}),
+  ...(nativeAnalysisStore ? { nativeAnalysisStore } : {}),
   // worker の中で Worker を使えない環境（古い WebKit など）は今までどおり描画の worker で先回りを作る
   ...(typeof Worker === "function" ? { createAnalysisHelper } : {}),
 });

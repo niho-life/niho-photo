@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 
 import { describe, expect, it, vi } from "vitest";
 
+import { createNativeDevelopAnalysisStore } from "./develop-engine-analysis-store";
 import { DEVELOP_ENGINE_CRATE_VERSION, DEVELOP_ENGINE_VERSION, developEngineManifestPath } from "./develop-engine-manifest";
 import {
   createNativeDevelopGlue,
@@ -359,5 +360,101 @@ describe("createSyncXhrTransport", () => {
     });
     const broken = createSyncXhrTransport("niho-develop://localhost/", () => failing as unknown as XMLHttpRequest);
     expect(() => broken("hello", new Uint8Array(new ArrayBuffer(4)))).toThrow(NativeDevelopUnavailableError);
+  });
+});
+
+describe("createNativeDevelopAnalysisStore", () => {
+  it("ハッシュ鍵の解析だけを native cache に送り、WebKit storage を使わず再取得する", async () => {
+    const stored = new Map<string, ArrayBuffer>();
+    const calls: { url: string; client: string; body: Uint8Array }[] = [];
+    class FakeXhr {
+      status = 0;
+      response: ArrayBuffer | null = null;
+      responseType = "";
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      onabort: (() => void) | null = null;
+      private url = "";
+      private client = "";
+      open(method: string, url: string, async: boolean) {
+        expect([method, async]).toEqual(["POST", true]);
+        this.url = url;
+      }
+      setRequestHeader(name: string, value: string) {
+        expect(name).toBe("X-Niho-Develop-Client");
+        this.client = value;
+      }
+      send(buffer: ArrayBuffer) {
+        const body = new Uint8Array(buffer);
+        calls.push({ url: this.url, client: this.client, body });
+        const id = new TextDecoder().decode(body.subarray(0, 64));
+        if (this.url.endsWith("Analysis.put")) {
+          stored.set(id, body.slice(64).buffer);
+          this.status = 200;
+          this.response = new ArrayBuffer(0);
+        } else {
+          this.response = stored.get(id) ?? null;
+          this.status = this.response ? 200 : 404;
+        }
+        queueMicrotask(() => this.onload?.());
+      }
+      abort() {
+        this.onabort?.();
+      }
+    }
+    vi.stubGlobal("XMLHttpRequest", FakeXhr);
+    try {
+      const store = createNativeDevelopAnalysisStore();
+      expect(store).not.toBeNull();
+      const id = "a".repeat(64);
+      await store?.put(id, new Uint8Array([1, 2, 3]).buffer);
+      expect([...(new Uint8Array((await store?.get(id)) ?? new ArrayBuffer(0)))]).toEqual([1, 2, 3]);
+      expect(await store?.get("b".repeat(64))).toBeNull();
+      await expect(store?.get("not-a-hash")).rejects.toThrow("invalid analysis cache key");
+      expect(calls.map((call) => call.url)).toEqual([
+        "niho-develop://localhost/Analysis.put",
+        "niho-develop://localhost/Analysis.get",
+        "niho-develop://localhost/Analysis.get",
+      ]);
+      expect(calls.every((call) => /^[0-9a-f]{32}$/u.test(call.client))).toBe(true);
+      expect(new TextDecoder().decode(calls[0]?.body.subarray(0, 64))).toBe(id);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("止まった native cache 取得を中断し、描画の再計算へ戻せる", async () => {
+    vi.useFakeTimers();
+    let aborted = 0;
+    class StalledXhr {
+      responseType = "";
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      onabort: (() => void) | null = null;
+      open(method: string, _url: string, async: boolean) {
+        expect([method, async]).toEqual(["POST", true]);
+      }
+      setRequestHeader() {}
+      send() {}
+      abort() {
+        aborted += 1;
+        this.onabort?.();
+      }
+    }
+    vi.stubGlobal("XMLHttpRequest", StalledXhr);
+    try {
+      const store = createNativeDevelopAnalysisStore();
+      expect(store).not.toBeNull();
+      const settled = store?.get("a".repeat(64)).then(
+        () => new Error("cache unexpectedly loaded"),
+        (error: unknown) => error,
+      );
+      await vi.advanceTimersByTimeAsync(100);
+      expect(await settled).toEqual(new Error("analysis cache request timed out"));
+      expect(aborted).toBe(1);
+    } finally {
+      vi.useRealTimers();
+      vi.unstubAllGlobals();
+    }
   });
 });

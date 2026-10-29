@@ -482,9 +482,10 @@
         "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
         "Issue #155 親レビューに従い通常exportの解析cache保持・kept優先eviction・temporary全体retryへ修正",
         "Issue #151 と #155 の Worker 変更を main に統合し画素の契約を維持",
-        "Issue #151 のスレッド版選択と #155 の cache 予算を同じ Worker に統合"
+        "Issue #151 のスレッド版選択と #155 の cache 予算を同じ Worker に統合",
+        "Issue #155: 解析再利用と共有メモリ予算の変更を統合"
       ],
-      "outputSha256": "176bd92908251073b2b3d79291da509e6f3a480a14c387e3aaf897e416b7822b"
+      "outputSha256": "dbdeae8b390349309b7e184d838e787f2b56958cd5a4ef312e7998abe2e68393"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -494,14 +495,15 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
         "sha256": "fd4cedb6e946a8a19e0e5a07d205829ff1251cfd9dbb50aedcb391feb031ba64"
       },
-      "outputSha256": "eca2c0f6fe6a021e9c2508fd92848616d45dd884b09dffec194e0917c756254d",
+      "outputSha256": "950576e37a13b5a3c89763ab8a2ca010980e0d032376be81ef9b20935689e2b2",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。",
         "niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。",
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
-        "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
+        "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
+        "Issue #155: 解析再利用と共有メモリ予算の変更を統合"
       ]
     },
     {
@@ -4723,7 +4725,7 @@
         "path": "packages/desktop-photo/src/develop.rs",
         "sha256": "7f13c1e41e82bf4bc91bef5e4a8b61f092ab0b986a6a95c5559c2246bb74d864"
       },
-      "outputSha256": "2dc1368ccf2c99d395b2cf5d4ce8ef46f18f04fe89a01abb48e53db2fc2cdea4",
+      "outputSha256": "af798f26b1d894ec9c24084fef372b009a713297e390181535cb7a8b8537486b",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #5の共有入力能力レジストリ、段階別検証、公開回帰契約に合わせて更新。",
@@ -4738,7 +4740,8 @@
         "PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。",
         "部分補正（マスク）#68: 描かれるマスクの面を置き場から読み --mask-surface で sidecar へ渡し、無ければ書き出す前に断る",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
-        "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。"
+        "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。",
+        "Issue #155: 解析再利用と共有メモリ予算の変更を統合"
       ]
     },
     {
@@ -4773,13 +4776,14 @@
         "path": "packages/desktop-photo/src/develop_tests.rs",
         "sha256": "1cc6592304eb32e255c6318bb07fe762c88a3da142125c8004be1bdd436958cc"
       },
-      "outputSha256": "b89dbe6ae9c7a020fd3494b9308ae2da3da4465380a1755f863485624f517394",
+      "outputSha256": "6b336b69e73bc6bf997d4d106c66f31cbbe40a5ab68055af7611787ff7c8cc1d",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "private絶対path guardに合わせ、合成テスト用のpathを予約済み/test-data配下へ正規化。実装の挙動は変更しない。",
         "公開現像workspace向けにLibRaw由来値と参照を除去。独立測定DCP・合成テスト・metadata正規化・公開契約と書式へ調整。",
         "Issue #13の段階RAW open、競合回帰、匿名の区間計測を追加。正規producerの数式と成果物は維持。",
-        "区間ログへ設定や画像識別情報を含めない公開合成テストを追加。"
+        "区間ログへ設定や画像識別情報を含めない公開合成テストを追加。",
+        "Issue #155: 解析再利用と共有メモリ予算の変更を統合"
       ]
     },
     {
@@ -9906,6 +9910,11 @@
   ],
   "generatedFiles": [
     {
+      "path": "packages/photo-editing/src/develop-engine/develop-engine-analysis-store.ts",
+      "sha256": "12894676068e9ce7075b5c709b169c28463eebff8125b25e9d045800bbd7048b",
+      "origin": "公開 Issue #155 の解析再利用のため、この公開リポジトリで新規作成した IndexedDB と native cache の保存部。入力のハッシュと engine / 解析条件で識別した compact 解析 bytes のみを扱い、実写真・ファイル名・パス・非公開情報を含まない。\n変更理由: Issue #155: 解析再利用と共有メモリ予算の変更を統合\n変更理由: Issue #155: native XHR の送信 body を ArrayBuffer に固定して型検査を通す\n変更理由: PR #170 review: native 解析キャッシュを非同期かつ中断可能にして描画待ちを上限内にする"
+    },
+    {
       "path": "packages/desktop-photo/src/capabilities.rs",
       "sha256": "096dd18e819707063ad4983a6fa1f1b3b6562353fba0ea4ee603804fe17e9a95",
       "origin": "Issue #5のため独立作成。公開仕様から拡張子・MIME・UTType・magic bytes・処理段階の能力レジストリと権利安全な合成signatureテストを実装。外部コード・画像・個体metadataを含まない。\n変更理由: Issue #5親レビューに従い形式検査・エラー保持・実decoder公開CI回帰を補強。\n変更理由: AVIFをHEICと誤認しない拡張子不一致回帰を追加。\n変更理由: 並行testの一時directory名をatomic連番でも分離しclock分解能によるfixture削除衝突を防ぐ。"
@@ -11727,8 +11736,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-analysis-helper.test.ts",
-      "sha256": "b8b09cb8751f9ece4119f2bd794573f0e7ebf463eabfe6a0388acd6838038a6f",
-      "origin": "公開 repo で新規作成（niho-photo#155）。描画の worker が先回りを補助の worker に頼み、取り込み、写真の切り替えで終わらせ、失敗で #129 の先回りへ戻る試験（偽の glue だけ）。外部コード・実写真を含まない。\n変更理由: Issue #155 analysis cache eviction tests\n変更理由: Issue #155 review: A-B-A and repeated drag cache tests\n変更理由: Issue #155 親レビューに従い通常exportの解析cache保持・kept優先eviction・temporary全体retryへ修正"
+      "sha256": "c9642cb90b2a86e78f81c15c1aef3b59c648a00937504fa37c3266d6ac785a9e",
+      "origin": "公開 repo で新規作成（niho-photo#155）。描画の worker が先回りを補助の worker に頼み、取り込み、写真の切り替えで終わらせ、失敗で #129 の先回りへ戻る試験（偽の glue だけ）。外部コード・実写真を含まない。\n変更理由: Issue #155 analysis cache eviction tests\n変更理由: Issue #155 review: A-B-A and repeated drag cache tests\n変更理由: Issue #155 親レビューに従い通常exportの解析cache保持・kept優先eviction・temporary全体retryへ修正\n変更理由: Issue #155: 解析再利用と共有メモリ予算の変更を統合"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/par.rs",
@@ -11747,8 +11756,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-native-glue.test.ts",
-      "sha256": "eac5b630b22879c0c64e5c3acaea72cffcb52107ac5257b8b551701c32c0bf51",
-      "origin": "公開repoで新規作成（niho-photo#152）。native の glue の本文の形・hello の版の確かめ・Developer の handle・失敗の分け方・Worker の中身との組み合わせ・wasm の export との口の一致の試験。合成の値だけを使う。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正"
+      "sha256": "717da25ab8dd8c61ff3ec649d0dc9449d52f0247a1fb301d2c73e733991fcfda",
+      "origin": "公開repoで新規作成（niho-photo#152）。native の glue の本文の形・hello の版の確かめ・Developer の handle・失敗の分け方・Worker の中身との組み合わせ・wasm の export との口の一致の試験。合成の値だけを使う。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正\n変更理由: Issue #155: 解析再利用と共有メモリ予算の変更を統合\n変更理由: Issue #155: native XHR の ArrayBuffer 送信を試験する\n変更理由: PR #170 review: native 解析キャッシュの非同期と応答停止時の中断を試験する"
     },
     {
       "path": "apps/camera/scripts/e2e/native-develop.sh",
@@ -11767,8 +11776,8 @@
     },
     {
       "path": "apps/camera/src-tauri/src/develop_engine_scheme.rs",
-      "sha256": "2ff7d7d299aba6d1ea4188082d5655badfd632cda29768017af1d375c96f6999",
-      "origin": "公開repoで新規作成（niho-photo#152）。現像の native の口の URI scheme（niho-develop://。main 窓だけ・POST と CORS の preflight・本文は読まずに同梱の sidecar へ渡す）と、その ACL の試験。外部のコード・実写真・非公開の情報を含まない。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正"
+      "sha256": "484dcdaab6940efaa9f1de035d16a9724e10435d9a71a33dae45dec91458aa7e",
+      "origin": "公開repoで新規作成（niho-photo#152）。現像の native の口の URI scheme（niho-develop://。main 窓だけ・POST と CORS の preflight・本文は読まずに同梱の sidecar へ渡す）と、その ACL の試験。外部のコード・実写真・非公開の情報を含まない。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正\n変更理由: Issue #155: 解析再利用と共有メモリ予算の変更を統合"
     },
     {
       "path": "apps/camera/src-tauri/src/develop_engine_sidecar.rs",
@@ -11899,7 +11908,6 @@
       "path": "scripts/sdk/verify-release-artifact.mjs",
       "sha256": "600cf2647380a1e8670fa9641cbbb38f34664330ec53269f958627a2026d2667",
       "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/verify-release-artifact.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
-
     }
   ],
   "excludedSources": [

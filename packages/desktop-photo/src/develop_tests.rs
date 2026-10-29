@@ -605,10 +605,12 @@ fn cache_sweep_removes_the_least_recently_used_over_the_limit() {
   assert!(cache.find(&"c".repeat(64), "other recipe", None).is_none());
   fs::write(&stored[2].file, b"short").unwrap();
   assert!(cache.find(&"c".repeat(64), "recipe", None).is_none());
-  // cache_purge は作業コピーを全部消す
+  let analysis = dir.join(format!("{}{}", "a".repeat(64), ANALYSIS_CACHE_SUFFIX));
+  fs::write(&analysis, b"derived analysis").unwrap();
+  // cache_purge は作業コピーと写真から作った解析を消す
   let purged = cache.purge();
   assert!(purged.removed >= 2, "{purged:?}");
-  assert!(!stored[0].file.exists() && !fresh_orphan.exists());
+  assert!(!stored[0].file.exists() && !fresh_orphan.exists() && !analysis.exists());
   assert!(
     !fresh_work.exists(),
     "explicit purge removes a recent work directory too"
