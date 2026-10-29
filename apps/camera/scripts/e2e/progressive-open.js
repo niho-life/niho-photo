@@ -112,7 +112,8 @@
     history.replaceState(null, "", "?photoDevelopPerf=1");
     localStorage.clear();
     stage = "add-folder";
-    const addMenu = await waitFor(() => [...document.querySelectorAll("button")].find((element) => element.textContent.trim() === "フォルダや写真を追加" && !element.disabled));
+    const addMenu = await waitFor(() => [...document.querySelectorAll("button")].find((element) =>
+      (element.textContent.trim() === "フォルダや写真を追加" || element.getAttribute("aria-label") === "フォルダや写真を追加") && !element.disabled));
     addMenu.click();
     const add = await waitFor(() => [...document.querySelectorAll('button, [role="menuitem"]') ]
       .find((element) => element.textContent.trim() === (config.addPhotos ? "写真を選ぶ" : "フォルダを追加") && !element.disabled));
