@@ -790,6 +790,7 @@ describe("working copies", () => {
     expect(heic.photo.id).toBe("e-heic");
     expect(commandsOf(sameContent.calls).filter((command) => command === "camera_photo_interactive_preview")).toHaveLength(1);
 
+    expect(() => window.localStorage.setItem("niho-photo-test-storage", "ready")).not.toThrow();
     const settings = { v: 1, engine: "niho-6", look: "niho-standard-1", base: null, exposure: 0.4 } as DevelopSettings;
     const firstDraft = await fake.library.saveProvisionalDraft!("e-raw", sha("e-raw"), settings);
     await expect(fake.library.loadProvisionalDraft!("e-raw", sha("e-raw"))).resolves.toMatchObject({

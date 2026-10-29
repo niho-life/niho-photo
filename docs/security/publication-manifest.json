@@ -4508,9 +4508,10 @@
         "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
         "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。",
-        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。"
+        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
+        "Issue #152 の E2E 前に camera 単体試験の保存領域の前提を検証する。"
       ],
-      "outputSha256": "5f4b7fd06e0dce19d6e38e06fd5565a55e29579af3b79a2220b5cfa8e6e752fc"
+      "outputSha256": "065423ac8d34390dae2ee68442416b766325991420e080ca3ee3b5e6e1a18403"
     },
     {
       "path": "apps/camera/src/local-library/local-photo-library.ts",
