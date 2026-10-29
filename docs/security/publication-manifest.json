@@ -9911,8 +9911,8 @@
   "generatedFiles": [
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-analysis-store.ts",
-      "sha256": "5db81be2e7cef7b06ac8ebe974f77cdcb01c8569d034213ce92d1b2ea3177e4d",
-      "origin": "公開 Issue #155 の解析再利用のため、この公開リポジトリで新規作成した IndexedDB と native cache の保存部。入力のハッシュと engine / 解析条件で識別した compact 解析 bytes のみを扱い、実写真・ファイル名・パス・非公開情報を含まない。\n変更理由: Issue #155: 解析再利用と共有メモリ予算の変更を統合\n変更理由: Issue #155: native XHR の送信 body を ArrayBuffer に固定して型検査を通す"
+      "sha256": "12894676068e9ce7075b5c709b169c28463eebff8125b25e9d045800bbd7048b",
+      "origin": "公開 Issue #155 の解析再利用のため、この公開リポジトリで新規作成した IndexedDB と native cache の保存部。入力のハッシュと engine / 解析条件で識別した compact 解析 bytes のみを扱い、実写真・ファイル名・パス・非公開情報を含まない。\n変更理由: Issue #155: 解析再利用と共有メモリ予算の変更を統合\n変更理由: Issue #155: native XHR の送信 body を ArrayBuffer に固定して型検査を通す\n変更理由: PR #170 review: native 解析キャッシュを非同期かつ中断可能にして描画待ちを上限内にする"
     },
     {
       "path": "packages/desktop-photo/src/capabilities.rs",
@@ -11756,8 +11756,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-native-glue.test.ts",
-      "sha256": "954e9b0516cc5b21382f80cef127cc9ad2eb3a8d51faf92db118bfab767afb09",
-      "origin": "公開repoで新規作成（niho-photo#152）。native の glue の本文の形・hello の版の確かめ・Developer の handle・失敗の分け方・Worker の中身との組み合わせ・wasm の export との口の一致の試験。合成の値だけを使う。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正\n変更理由: Issue #155: 解析再利用と共有メモリ予算の変更を統合\n変更理由: Issue #155: native XHR の ArrayBuffer 送信を試験する"
+      "sha256": "717da25ab8dd8c61ff3ec649d0dc9449d52f0247a1fb301d2c73e733991fcfda",
+      "origin": "公開repoで新規作成（niho-photo#152）。native の glue の本文の形・hello の版の確かめ・Developer の handle・失敗の分け方・Worker の中身との組み合わせ・wasm の export との口の一致の試験。合成の値だけを使う。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正\n変更理由: Issue #155: 解析再利用と共有メモリ予算の変更を統合\n変更理由: Issue #155: native XHR の ArrayBuffer 送信を試験する\n変更理由: PR #170 review: native 解析キャッシュの非同期と応答停止時の中断を試験する"
     },
     {
       "path": "apps/camera/scripts/e2e/native-develop.sh",

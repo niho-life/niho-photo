@@ -371,10 +371,13 @@ describe("createNativeDevelopAnalysisStore", () => {
       status = 0;
       response: ArrayBuffer | null = null;
       responseType = "";
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      onabort: (() => void) | null = null;
       private url = "";
       private client = "";
       open(method: string, url: string, async: boolean) {
-        expect([method, async]).toEqual(["POST", false]);
+        expect([method, async]).toEqual(["POST", true]);
         this.url = url;
       }
       setRequestHeader(name: string, value: string) {
@@ -393,6 +396,10 @@ describe("createNativeDevelopAnalysisStore", () => {
           this.response = stored.get(id) ?? null;
           this.status = this.response ? 200 : 404;
         }
+        queueMicrotask(() => this.onload?.());
+      }
+      abort() {
+        this.onabort?.();
       }
     }
     vi.stubGlobal("XMLHttpRequest", FakeXhr);
@@ -412,6 +419,41 @@ describe("createNativeDevelopAnalysisStore", () => {
       expect(calls.every((call) => /^[0-9a-f]{32}$/u.test(call.client))).toBe(true);
       expect(new TextDecoder().decode(calls[0]?.body.subarray(0, 64))).toBe(id);
     } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("止まった native cache 取得を中断し、描画の再計算へ戻せる", async () => {
+    vi.useFakeTimers();
+    let aborted = 0;
+    class StalledXhr {
+      responseType = "";
+      onload: (() => void) | null = null;
+      onerror: (() => void) | null = null;
+      onabort: (() => void) | null = null;
+      open(method: string, _url: string, async: boolean) {
+        expect([method, async]).toEqual(["POST", true]);
+      }
+      setRequestHeader() {}
+      send() {}
+      abort() {
+        aborted += 1;
+        this.onabort?.();
+      }
+    }
+    vi.stubGlobal("XMLHttpRequest", StalledXhr);
+    try {
+      const store = createNativeDevelopAnalysisStore();
+      expect(store).not.toBeNull();
+      const settled = store?.get("a".repeat(64)).then(
+        () => new Error("cache unexpectedly loaded"),
+        (error: unknown) => error,
+      );
+      await vi.advanceTimersByTimeAsync(100);
+      expect(await settled).toEqual(new Error("analysis cache request timed out"));
+      expect(aborted).toBe(1);
+    } finally {
+      vi.useRealTimers();
       vi.unstubAllGlobals();
     }
   });

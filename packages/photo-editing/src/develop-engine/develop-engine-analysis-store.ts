@@ -90,7 +90,7 @@ export function createBrowserDevelopAnalysisStore(): DevelopAnalysisStore | null
   };
 }
 
-/** Mac アプリでは WebKit storage の初期化後も残る作業コピーの native cache を使う。Worker 内の同期 XHR は現像 glue と同じ口。 */
+/** Mac アプリでは WebKit storage の初期化後も残る作業コピーの native cache を使う。任意の cache I/O は描画 worker を止めない。 */
 export function createNativeDevelopAnalysisStore(): DevelopAnalysisStore | null {
   if (typeof XMLHttpRequest === "undefined" || !globalThis.crypto?.getRandomValues) return null;
   const token = Array.from(globalThis.crypto.getRandomValues(new Uint8Array(16)), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -98,17 +98,31 @@ export function createNativeDevelopAnalysisStore(): DevelopAnalysisStore | null 
     if (!/^[0-9a-f]{64}$/u.test(id)) throw new Error("invalid analysis cache key");
     return new TextEncoder().encode(id);
   };
-  const request = (method: "Analysis.get" | "Analysis.put", body: ArrayBuffer): { status: number; bytes: ArrayBuffer | null } => {
-    const xhr = new XMLHttpRequest();
-    xhr.open("POST", `${NATIVE_DEVELOP_BASE_URL}${method}`, false);
-    xhr.responseType = "arraybuffer";
-    xhr.setRequestHeader("X-Niho-Develop-Client", token);
-    xhr.send(body);
-    return { status: xhr.status, bytes: xhr.response instanceof ArrayBuffer ? xhr.response : null };
-  };
+  const request = (method: "Analysis.get" | "Analysis.put", body: ArrayBuffer, timeoutMs: number): Promise<{ status: number; bytes: ArrayBuffer | null }> =>
+    new Promise((resolve, reject) => {
+      const xhr = new XMLHttpRequest();
+      xhr.open("POST", `${NATIVE_DEVELOP_BASE_URL}${method}`, true);
+      xhr.responseType = "arraybuffer";
+      xhr.setRequestHeader("X-Niho-Develop-Client", token);
+      const finish = (error?: Error) => {
+        clearTimeout(timer);
+        if (error) reject(error);
+        else resolve({ status: xhr.status, bytes: xhr.response instanceof ArrayBuffer ? xhr.response : null });
+      };
+      xhr.onload = () => finish();
+      xhr.onerror = () => finish(new Error("analysis cache request failed"));
+      xhr.onabort = () => finish(new Error("analysis cache request timed out"));
+      const timer = setTimeout(() => xhr.abort(), timeoutMs);
+      try {
+        xhr.send(body);
+      } catch (error) {
+        clearTimeout(timer);
+        reject(error);
+      }
+    });
   return {
     async get(id) {
-      const response = request("Analysis.get", idBytes(id).buffer as ArrayBuffer);
+      const response = await request("Analysis.get", idBytes(id).buffer as ArrayBuffer, 100);
       if (response.status === 404) return null;
       if (response.status !== 200 || !response.bytes) throw new Error("analysis cache unavailable");
       return response.bytes.byteLength > 0 && response.bytes.byteLength <= MAX_ENTRY_BYTES ? response.bytes : null;
@@ -119,7 +133,7 @@ export function createNativeDevelopAnalysisStore(): DevelopAnalysisStore | null 
       const body = new Uint8Array(key.byteLength + bytes.byteLength);
       body.set(key);
       body.set(new Uint8Array(bytes), key.byteLength);
-      if (request("Analysis.put", body.buffer as ArrayBuffer).status !== 200) throw new Error("analysis cache unavailable");
+      if ((await request("Analysis.put", body.buffer as ArrayBuffer, 5_000)).status !== 200) throw new Error("analysis cache unavailable");
     },
   };
 }
