@@ -3926,10 +3926,11 @@
         "path": "apps/camera/src-tauri/src/command_acl_tests.rs",
         "sha256": "d97ef44c1fb122bcdac7705ec24f5b23dbb81b2808b8da18001106af9c49cc43"
       },
-      "outputSha256": "e66b3072ffb5c8ffdff99f64b437335d4c7c3682add600d8e1be86b7b9330811",
+      "outputSha256": "ecb3837f458016d078d2de0e29ea999a028d502c16da510376fd8668faf27af8",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
-        "Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。"
+        "Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。",
+        "niho-photo#152: Mac アプリの現像を native の sidecar（niho-develop-render serve）で描く口（niho-develop://・native の glue・E2E）を足す。"
       ]
     },
     {
@@ -4064,7 +4065,7 @@
         "path": "apps/camera/src-tauri/src/lib.rs",
         "sha256": "e6415b3d0633bb4753761b89f8860fffcfa9b67f95832ab971bd9b13eebaaffc"
       },
-      "outputSha256": "9b5edd17563f6e627c543e7cac62a02fe26cdfa8f6299e9744eed6a712997bfa",
+      "outputSha256": "9a72018deaf5406babd69155b160657c0f5ac278f31f68718656ae8702e40412",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "共有形式フィルターを使う複数写真pickerと参照削除コマンドを同梱UIの権限内に追加 / 選択写真専用commandをinvoke handlerへ登録。",
@@ -4080,7 +4081,8 @@
         "PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。",
         "PR #98で選別フラグの保存経路とUIを更新する。",
         "公式配布では検証可能なSDK専用asset sectionをTauri asset providerへ接続する",
-        "新規runtime asset moduleの宣言順をcargo fmtの規約へ合わせる"
+        "新規runtime asset moduleの宣言順をcargo fmtの規約へ合わせる",
+        "niho-photo#152: Mac アプリの現像を native の sidecar（niho-develop-render serve）で描く口（niho-develop://・native の glue・E2E）を足す。"
       ]
     },
     {
@@ -4237,11 +4239,12 @@
         "path": "apps/camera/src-tauri/tauri.conf.json",
         "sha256": "7db852216a552cff994a2e1a60d83b445db318b438ad6f11d60e90da725c211f"
       },
-      "outputSha256": "6759e199c7ca7ff38496a59ba285d4ec3f2fbddccb496a260e988b0afa910d99",
+      "outputSha256": "21f914b8bbc2ccec8a9690dad0cc8f4f90ee9813f64501bca242eccf17d9672e",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。",
-        "Issue #49の統合確認: 窓のbackgroundColorを画面の地（#FCFBF9）に揃える。"
+        "Issue #49の統合確認: 窓のbackgroundColorを画面の地（#FCFBF9）に揃える。",
+        "niho-photo#152: Mac アプリの現像を native の sidecar（niho-develop-render serve）で描く口（niho-develop://・native の glue・E2E）を足す。"
       ]
     },
     {
@@ -11494,6 +11497,16 @@
       "path": "apps/camera/scripts/e2e/native-develop-worker.js",
       "sha256": "1fd7136f798a0951355bea4dd996c019b58e8cdac17c25dc22b890d9e9c692db",
       "origin": "公開repoで新規作成（niho-photo#152）。E2E の Worker。合成の写真を native の sidecar（同期の XHR）と同梱の wasm で描き、画素の一致と時間を測る。"
+    },
+    {
+      "path": "apps/camera/src-tauri/src/develop_engine_scheme.rs",
+      "sha256": "46118a24ba8cae8500b6d432a3bdbe155cc153b68fb8a0514d49afebf87a5fc5",
+      "origin": "公開repoで新規作成（niho-photo#152）。現像の native の口の URI scheme（niho-develop://。main 窓だけ・POST と CORS の preflight・本文は読まずに同梱の sidecar へ渡す）と、その ACL の試験。外部のコード・実写真・非公開の情報を含まない。"
+    },
+    {
+      "path": "apps/camera/src-tauri/src/develop_engine_sidecar.rs",
+      "sha256": "022c9c72247302a893ffec0de8806f5b1b078479153c6c488c58ef08cb840efb",
+      "origin": "公開repoで新規作成（niho-photo#152）。同梱の niho-develop-render serve を 1 プロセス持ち、stdin / stdout の封で要求を多重化する（起動・hello・落ちたときの起動し直し・待ちの上限・終了）。偽の serve での試験を含む。外部のコード・実写真・非公開の情報を含まない。"
     }
   ],
   "excludedSources": [
