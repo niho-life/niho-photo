@@ -11,13 +11,18 @@ import type { PhotoEditingSettings } from "../photo-editing-types";
 
 import type { DevelopSession } from "./browser-photo-editing-model";
 import type { PhotoEditingSettingsUpdate, PhotoEditingSliderPhase } from "./photo-editing-adjustment-controls";
+import type { PhotoLibraryMaskDetectionResult } from "../library/photo-library";
+
 import {
   createPhotoEditingMaskPlaneLoader,
   fillPhotoEditingMaskOverlay,
+  photoEditingMaskDetectKinds,
   photoEditingMaskExportBlocked,
   useBrowserPhotoMasks,
   useBrowserPhotoMasksSupport,
   type BrowserPhotoMaskTool,
+  type PhotoEditingMaskDetectKind,
+  type PhotoEditingMaskDetectSurface,
   type PhotoEditingMaskPlaneRequest,
 } from "./use-browser-photo-masks";
 
@@ -38,7 +43,20 @@ let phases: PhotoEditingSliderPhase[];
 let commits: number;
 
 const engine = { imageSize: async () => SOURCE } as unknown as DevelopEngine;
-const session = { key: PHOTO_KEY, input: { kind: "workingCopy" }, working: null, workSize: SOURCE } as unknown as DevelopSession;
+const session = {
+  key: PHOTO_KEY,
+  photoId: "photo-id-1",
+  input: { kind: "workingCopy" },
+  working: null,
+  workSize: SOURCE,
+} as unknown as DevelopSession;
+/** 面を受け渡せて被写体も描ける wasm（niho-photo#135） */
+const SURFACE_SUPPORT: DevelopMaskCapabilities = {
+  kinds: ["linear", "radial", "brush", "subject", "sky"],
+  max: 8,
+  maskPlane: true,
+  surfaces: true,
+};
 
 type HarnessProps = {
   initial: DevelopSettings;
@@ -47,6 +65,8 @@ type HarnessProps = {
   exportBlocked?: boolean;
   otherToolActive?: boolean;
   disabled?: boolean;
+  detect?: PhotoEditingMaskDetectSurface | null;
+  detectKinds?: readonly PhotoEditingMaskDetectKind[];
 };
 
 function Harness(props: HarnessProps) {
@@ -87,9 +107,35 @@ function Harness(props: HarnessProps) {
       seed += 0.137;
       return seed % 1;
     },
+    detectMaskSurface: props.detect ?? null,
+    detectKinds: props.detectKinds ?? [],
   });
   return null;
 }
+
+/** 答えを後から決める検出（呼ばれた引数を覚える）。 */
+function deferredDetect() {
+  const calls: Array<{ photoId: string; kind: PhotoEditingMaskDetectKind; developSettings: object; signal: AbortSignal }> = [];
+  let settle: { resolve: (result: PhotoLibraryMaskDetectionResult) => void; reject: (error: unknown) => void } | null = null;
+  const detect: PhotoEditingMaskDetectSurface = (photoId, kind, options) => {
+    calls.push({ photoId, kind, ...options });
+    return new Promise((resolve, reject) => {
+      settle = { resolve, reject };
+    });
+  };
+  return {
+    detect,
+    calls,
+    resolve: async (result: PhotoLibraryMaskDetectionResult) => {
+      await act(async () => settle!.resolve(result));
+    },
+    reject: async (error: unknown) => {
+      await act(async () => settle!.reject(error));
+    },
+  };
+}
+
+const SURFACE_ID = "f".repeat(64);
 
 async function render(props: Partial<HarnessProps> = {}) {
   await act(async () => {
@@ -278,6 +324,90 @@ describe("useBrowserPhotoMasks", () => {
     expect(handled).toBe(true);
     expect(readDevelopMasks(settingsRef.current)).toHaveLength(0);
     expect(tool.handleShortcut("grid", { preventDefault })).toBe(false);
+  });
+
+  it("被写体は、面を受け渡せる wasm で出どころが作れる種類のときだけ足せる（niho-photo#135）", async () => {
+    const { detect } = deferredDetect();
+    await render({ support: SURFACE_SUPPORT, detect, detectKinds: ["subject"] });
+    expect(tool.kinds).toEqual(["linear", "radial", "subject"]);
+    await render({ support: SURFACE_SUPPORT, detect: null, detectKinds: ["subject"] });
+    expect(tool.kinds).toEqual(["linear", "radial"]);
+    await render({ support: SURFACE_SUPPORT, detect, detectKinds: [] });
+    expect(tool.kinds).toEqual(["linear", "radial"]);
+    await render({ support: { ...SURFACE_SUPPORT, surfaces: false }, detect, detectKinds: ["subject"] });
+    expect(tool.kinds).toEqual(["linear", "radial"]);
+    await render({ support: { ...SURFACE_SUPPORT, kinds: ["linear", "radial", "brush"] }, detect, detectKinds: ["subject"] });
+    expect(tool.kinds).toEqual(["linear", "radial"]);
+    expect(photoEditingMaskDetectKinds({})).toEqual([]);
+    expect(photoEditingMaskDetectKinds({ maskDetection: { subject: true, sky: false } })).toEqual(["subject"]);
+  });
+
+  it("被写体を足す: 探している間はほかの追加を止め、できた面のマスクを 1 単位で足して選ぶ", async () => {
+    const detection = deferredDetect();
+    await render({ support: SURFACE_SUPPORT, detect: detection.detect, detectKinds: ["subject"] });
+    await enter();
+    await act(async () => tool.add("subject"));
+    expect(tool.detecting).toBe("subject");
+    expect(tool.canAdd).toBe(false);
+    expect(detection.calls).toHaveLength(1);
+    expect(detection.calls[0]).toMatchObject({ photoId: "photo-id-1", kind: "subject" });
+    expect(detection.calls[0]!.developSettings).toBe(settingsRef.current);
+    expect(detection.calls[0]!.signal.aborted).toBe(false);
+    // 探している間はほかの種類も足さない
+    await act(async () => tool.add("linear"));
+    expect(readDevelopMasks(settingsRef.current)).toHaveLength(0);
+
+    await detection.resolve({ kind: "detected", id: SURFACE_ID, width: 1024, height: 683 });
+    expect(tool.detecting).toBeNull();
+    expect(commits).toBe(1);
+    const masks = readDevelopMasks(settingsRef.current);
+    expect(masks).toEqual([
+      { id: masks[0]!.id, kind: "subject", enabled: true, invert: false, surface: { id: SURFACE_ID, width: 1024, height: 683 }, adjust: {} },
+    ]);
+    expect(tool.selected?.id).toBe(masks[0]!.id);
+    expect(settingsRef.current.v).toBe(5);
+    expect(readable(settingsRef.current)).toBe(true);
+    expect(tool.canAdd).toBe(true);
+  });
+
+  it("被写体が見つからない・探せないときは足さずに理由の 1 行を出す", async () => {
+    const missing = deferredDetect();
+    await render({ support: SURFACE_SUPPORT, detect: missing.detect, detectKinds: ["subject"] });
+    await enter();
+    await act(async () => tool.add("subject"));
+    await missing.resolve({ kind: "notFound" });
+    expect(tool.notice).toBe("被写体が見つかりませんでした。ブラシや円形グラデーションで範囲を選べます。");
+    expect(readDevelopMasks(settingsRef.current)).toHaveLength(0);
+    expect(commits).toBe(0);
+
+    const failing = deferredDetect();
+    await render({ support: SURFACE_SUPPORT, detect: failing.detect, detectKinds: ["subject"] });
+    await act(async () => tool.add("subject"));
+    expect(tool.notice).toBeNull();
+    await failing.reject(new Error("engine_failed"));
+    expect(tool.notice).toBe("被写体のマスクを追加できませんでした。もう一度お試しください。");
+    expect(readDevelopMasks(settingsRef.current)).toHaveLength(0);
+  });
+
+  it("取り消すと検出を止め（signal）、遅れて届いた面は足さない。道具を離れても止める", async () => {
+    const detection = deferredDetect();
+    await render({ support: SURFACE_SUPPORT, detect: detection.detect, detectKinds: ["subject"] });
+    await enter();
+    await act(async () => tool.add("subject"));
+    await act(async () => tool.cancelDetect());
+    expect(detection.calls[0]!.signal.aborted).toBe(true);
+    expect(tool.detecting).toBeNull();
+    await detection.resolve({ kind: "detected", id: SURFACE_ID, width: 1024, height: 683 });
+    expect(readDevelopMasks(settingsRef.current)).toHaveLength(0);
+    expect(tool.notice).toBeNull();
+
+    await act(async () => tool.add("subject"));
+    expect(tool.detecting).toBe("subject");
+    await render({ support: SURFACE_SUPPORT, detect: detection.detect, detectKinds: ["subject"], otherToolActive: true });
+    expect(detection.calls[1]!.signal.aborted).toBe(true);
+    expect(tool.detecting).toBeNull();
+    await detection.resolve({ kind: "detected", id: SURFACE_ID, width: 1024, height: 683 });
+    expect(readDevelopMasks(settingsRef.current)).toHaveLength(0);
   });
 
   it("「初期化」はマスクだけを外す（1 単位）。切り抜き・背景除去の道具に移ると「補正」に戻る", async () => {

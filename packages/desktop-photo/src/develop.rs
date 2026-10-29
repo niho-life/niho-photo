@@ -88,6 +88,121 @@ const NIHO11_MIN_RENDER_VERSION: &str = "0.18.0";
 /// 描ける niho-develop-render の最小の版。これより古い sidecar へは `masks` のある設定を渡さない（`v: 5` を読めないか、マスクを
 /// 描かない）。0.19.0 は線形・円形（#66）と面の口（#68）を同じ版で出す（どちらも公開前）ので、版の境は 1 つ。
 pub const MASKS_MIN_RENDER_VERSION: &str = "0.19.0";
+/// 同梱の niho-develop-render が描ける設定（`niho-develop-render capabilities` の 1 行。niho-photo#131）。原寸の書き出しへ渡せる
+/// 設定は、版ではなくこれで決める。この口の無い古い renderer（0.16.0 など）は無い（None）扱いで、画面は遠近・修復・レンズ補正・
+/// 中間調 / 全体の輝度を原寸へ渡さない（`packages/photo-editing/src/photo-editing-native-export.ts`）。
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct RenderCapabilities {
+  /// 読める `developSettings.v`
+  pub settings_versions: Vec<u32>,
+  /// 描ける `developSettings.engine`
+  pub engines: Vec<String>,
+  /// `v` を上げずに足した描画（`colorGradingLuminance`: 中間調・全体の輝度）。古い renderer は黙って描かない
+  pub features: Vec<String>,
+  /// 描けるマスクの種類（`brush`・`subject`・`sky` は面を `--mask-surface` で受け取る）
+  pub mask_kinds: Vec<String>,
+  /// 読める元（オリジナル・作業コピー）の最大の画素数
+  pub max_pixels: u64,
+}
+
+/// {@link RenderCapabilities} の一覧の長さ・名前の長さの上限（壊れた出力を覚えない）。
+const RENDER_CAPABILITY_MAX_ITEMS: usize = 64;
+const RENDER_CAPABILITY_MAX_NAME: usize = 64;
+/// 中間調・全体の輝度（{@link RenderCapabilities::features}）。
+const RENDER_FEATURE_COLOR_GRADING_LUMINANCE: &str = "colorGradingLuminance";
+
+impl RenderCapabilities {
+  /// `niho-develop-render capabilities` の stdout を読む。形が違えば None（描ける設定が分からない = 古い renderer と同じ扱い）。
+  pub fn parse(stdout: &str) -> Option<Self> {
+    let value: Value = serde_json::from_str(stdout.trim()).ok()?;
+    if value.get("tool").and_then(Value::as_str) != Some(DEVELOP_RENDER_NAME) {
+      return None;
+    }
+    let names = |key: &str| -> Option<Vec<String>> {
+      let items = value.get(key)?.as_array()?;
+      if items.len() > RENDER_CAPABILITY_MAX_ITEMS {
+        return None;
+      }
+      items
+        .iter()
+        .map(|item| {
+          item
+            .as_str()
+            .filter(|name| !name.is_empty() && name.len() <= RENDER_CAPABILITY_MAX_NAME)
+            .map(str::to_string)
+        })
+        .collect()
+    };
+    let versions = value.get("settingsVersions")?.as_array()?;
+    if versions.is_empty() || versions.len() > RENDER_CAPABILITY_MAX_ITEMS {
+      return None;
+    }
+    let settings_versions = versions
+      .iter()
+      .map(|item| item.as_u64().and_then(|v| u32::try_from(v).ok()).filter(|v| *v > 0))
+      .collect::<Option<Vec<u32>>>()?;
+    let engines = names("engines").filter(|engines| !engines.is_empty())?;
+    let max_pixels = value.get("maxPixels")?.as_u64().filter(|pixels| *pixels > 0)?;
+    Some(Self {
+      settings_versions,
+      engines,
+      features: names("features")?,
+      mask_kinds: names("maskKinds")?,
+      max_pixels,
+    })
+  }
+
+  /// 画面へ渡す形（`camera_develop_status` の `renderer`。`PhotoLibraryCapabilities.nativeExportRenderer`）。
+  pub fn to_json(&self) -> Value {
+    json!({
+      "settingsVersions": self.settings_versions,
+      "engines": self.engines,
+      "features": self.features,
+      "maskKinds": self.mask_kinds,
+      "maxPixels": self.max_pixels,
+    })
+  }
+
+  /// この設定を描けないときの理由（ログ用）。`v`・`engine` が読めない版か、`v` を上げずに足した描画（中間調・全体の輝度）を
+  /// 描けない。`v`・`engine` の無い設定はここでは見ない（renderer が `unsupported_settings` で断る）。
+  pub fn unsupported_reason(&self, develop_settings: &Value) -> Option<String> {
+    if let Some(v) = develop_settings.get("v").and_then(Value::as_f64) {
+      if !self.settings_versions.iter().any(|readable| f64::from(*readable) == v) {
+        return Some(format!(
+          "developSettings v {v} is not readable by the bundled niho-develop-render"
+        ));
+      }
+    }
+    if let Some(engine) = develop_settings.get("engine").and_then(Value::as_str) {
+      if !self.engines.iter().any(|known| known == engine) {
+        return Some(format!(
+          "engine {engine} is not rendered by the bundled niho-develop-render"
+        ));
+      }
+    }
+    if uses_color_grading_luminance(develop_settings)
+      && !self
+        .features
+        .iter()
+        .any(|feature| feature == RENDER_FEATURE_COLOR_GRADING_LUMINANCE)
+    {
+      return Some("the bundled niho-develop-render does not draw the midtone / global luminance".into());
+    }
+    None
+  }
+}
+
+/// 中間調・全体の輝度（`colorGrading.midtone.luminance`・`colorGrading.global.luminance`）が 0 でない（数でない値も、描けない
+/// 設定として true）。
+fn uses_color_grading_luminance(develop_settings: &Value) -> bool {
+  ["midtone", "global"].iter().any(|zone| {
+    develop_settings
+      .get("colorGrading")
+      .and_then(|grading| grading.get(zone))
+      .and_then(|band| band.get("luminance"))
+      .is_some_and(|luminance| luminance.as_f64() != Some(0.0))
+  })
+}
 pub(crate) const SIGNED_REGISTRY_SNAPSHOT: &[u8] = include_bytes!("../calibration/apple-signed-registry.json");
 
 #[derive(Clone, Copy)]
@@ -187,6 +302,9 @@ pub mod develop_code {
   /// 補正の描かれるマスク（ブラシ・被写体・空）の面が、この Mac の面の置き場（{@link DevelopPhotos::mask_surface}）に無い・
   /// 読めない（エンジンの `maskSurfaceMissing` と同じ語）。書き出しの前に断る
   pub const MASK_SURFACE_MISSING: &str = "maskSurfaceMissing";
+  /// 写真が原寸では大きすぎる（同梱の renderer が読める画素数を超える・この Mac のメモリに収まらない見込み。
+  /// {@link FullSizeTooLarge}）。書き出しの前に断る（niho-photo#132）
+  pub const TOO_LARGE: &str = "tooLarge";
 }
 
 pub const UNAVAILABLE_MESSAGE: &str = "この NIHO Desktop では現像を使えません。NIHO Desktop を入れ直してください。";
@@ -412,6 +530,141 @@ pub fn cloud_work_kind(file_name: &str, size_bytes: u64) -> Option<CloudWorkKind
     "heic" | "heif" | "tif" | "tiff" => Some(CloudWorkKind::Raster),
     "png" if size_bytes > DIRECT_RASTER_MAX_BYTES => Some(CloudWorkKind::Raster),
     _ => None,
+  }
+}
+
+// ---------------------------------------------------------------------------
+// 原寸の書き出しの大きさ（niho-photo#132）
+
+/// `capabilities` に答えない古い niho-develop-render が読める画素数（crate の `MAX_DECODE_IMAGE_PIXELS`。配布中の 0.16.0 も
+/// 4,000 万画素を超える作業コピー・オリジナルを読み込みで断る）。
+pub const LEGACY_RENDER_MAX_PIXELS: u64 = 40_000_000;
+/// 原寸の書き出しの一番重い段に使ってよいメモリ（物理メモリのこの割合。ほかのアプリと macOS の分を残す）。
+pub const FULL_SIZE_MEMORY_SHARE: f64 = 0.75;
+/// niho-develop-render の原寸（`--max-dimension 0`）の peak memory footprint の 1 画素あたりの bytes。補正の無い描画と、補正ごとの
+/// 足し（niho-photo#132。Studio・release・合成の作業コピー 24 / 45 / 61MP の実測〔`niho-develop-render` の `tests/cli.rs` の
+/// `full_size_peak_memory`〕を安全側に丸めた値）。実測は基本の補正だけで 1 画素 40〜41 bytes、マスク 3 枚で 77〜79、ディテール
+/// で 75〜81、遠近で 56〜60、修復で 53〜55、レンズで 57〜61、全部で 157〜181（61MP・全部で 10.3 GiB）。
+const RENDER_BYTES_PER_PIXEL: f64 = 44.0;
+const RENDER_MASK_BYTES_PER_PIXEL: f64 = 14.0;
+const RENDER_DETAIL_BYTES_PER_PIXEL: f64 = 42.0;
+const RENDER_GEOMETRY_BYTES_PER_PIXEL: f64 = 22.0;
+const RENDER_HEAL_BYTES_PER_PIXEL: f64 = 16.0;
+const RENDER_LENS_BYTES_PER_PIXEL: f64 = 22.0;
+/// apple-raw-linear の原寸の段（RAW の `render --long-edge full`・HEIC / TIFF の `raster --long-edge full`）の 1 画素あたり
+/// （DC-S5 の 24MP で peak memory footprint 1.4〜1.5 GiB。`tools/apple-raw-linear/README.md`）。
+const SOURCE_STAGE_BYTES_PER_PIXEL: f64 = 68.0;
+
+/// 原寸では書き出せない写真（読める画素数を超える・この Mac のメモリに収まらない見込み。niho-photo#132）。
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FullSizeTooLarge {
+  /// この Mac で原寸の書き出しが描ける長辺の見込み（画素）
+  pub max_long_edge: u64,
+}
+
+impl FullSizeTooLarge {
+  /// 書き出しの前に出す 1 行（「この写真は原寸では大きすぎます（長辺 7,747 px まで）。」）。
+  pub fn message(&self) -> String {
+    format!(
+      "この写真は原寸では大きすぎます（長辺 {} px まで）。",
+      grouped_digits(self.max_long_edge)
+    )
+  }
+}
+
+/// 3 桁ごとに「,」を入れる（画面の数の書き方。`toLocaleString("ja-JP")` と同じ）。
+fn grouped_digits(value: u64) -> String {
+  let digits = value.to_string();
+  let mut out = String::with_capacity(digits.len() + digits.len() / 3);
+  for (i, digit) in digits.chars().enumerate() {
+    if i > 0 && (digits.len() - i) % 3 == 0 {
+      out.push(',');
+    }
+    out.push(digit);
+  }
+  out
+}
+
+/// 原寸の書き出しの一番重い段の最大メモリの見積もり（bytes）。段は 1 つずつ動くので、元を原寸にする段（RAW・HEIC / TIFF）と
+/// niho-develop-render の段の大きい方。後者は補正ごとに足す（マスクは描かれる層の数、8 枚まで）。
+pub fn full_size_peak_bytes(pixels: u64, input: ExportInput, develop_settings: &Value) -> u64 {
+  let present = |key: &str| match develop_settings.get(key) {
+    None | Some(Value::Null) => false,
+    Some(Value::Array(items)) => !items.is_empty(),
+    Some(Value::Object(fields)) => !fields.is_empty(),
+    Some(_) => true,
+  };
+  let masks = develop_settings
+    .get("masks")
+    .and_then(Value::as_array)
+    .map_or(0, |masks| masks.len().min(8));
+  let mut per_pixel = RENDER_BYTES_PER_PIXEL + RENDER_MASK_BYTES_PER_PIXEL * masks as f64;
+  for (key, bytes) in [
+    ("detail", RENDER_DETAIL_BYTES_PER_PIXEL),
+    ("geometry", RENDER_GEOMETRY_BYTES_PER_PIXEL),
+    ("heal", RENDER_HEAL_BYTES_PER_PIXEL),
+    ("lens", RENDER_LENS_BYTES_PER_PIXEL),
+  ] {
+    if present(key) {
+      per_pixel += bytes;
+    }
+  }
+  let source = match input {
+    ExportInput::Raster => 0.0,
+    ExportInput::Raw | ExportInput::RasterFullSize => SOURCE_STAGE_BYTES_PER_PIXEL,
+  };
+  (per_pixel.max(source) * pixels as f64).ceil() as u64
+}
+
+/// `width`×`height`（向きを反映した寸法）の写真を原寸で書き出せないか。`max_pixels` は同梱の renderer が読める画素数、`memory`
+/// はこの Mac の物理メモリ（分からなければ None で、メモリでは断らない）。書き出せる長辺の見込みは、画素数とメモリの両方に収まる
+/// 大きさ（見積もりは画素数に比例する）。
+pub fn full_size_too_large(
+  width: u64,
+  height: u64,
+  input: ExportInput,
+  develop_settings: &Value,
+  max_pixels: u64,
+  memory: Option<u64>,
+) -> Option<FullSizeTooLarge> {
+  let pixels = width.checked_mul(height).filter(|pixels| *pixels > 0)?;
+  let mut share = 1.0_f64;
+  if pixels > max_pixels {
+    share = share.min(max_pixels as f64 / pixels as f64);
+  }
+  if let Some(memory) = memory {
+    let budget = memory as f64 * FULL_SIZE_MEMORY_SHARE;
+    let peak = full_size_peak_bytes(pixels, input, develop_settings) as f64;
+    if peak > budget {
+      share = share.min(budget / peak);
+    }
+  }
+  (share < 1.0).then(|| FullSizeTooLarge {
+    max_long_edge: (width.max(height) as f64 * share.sqrt()).floor() as u64,
+  })
+}
+
+/// この Mac の物理メモリ（bytes。macOS の `hw.memsize`。読めなければ None）。
+pub fn physical_memory_bytes() -> Option<u64> {
+  #[cfg(target_os = "macos")]
+  {
+    let mut value: u64 = 0;
+    let mut size = std::mem::size_of::<u64>();
+    // SAFETY: `hw.memsize` は 64 bit の整数。`value` と `size` はこの呼び出しの間だけ有効な領域を指す。
+    let status = unsafe {
+      libc::sysctlbyname(
+        c"hw.memsize".as_ptr(),
+        (&mut value as *mut u64).cast(),
+        &mut size,
+        std::ptr::null_mut(),
+        0,
+      )
+    };
+    (status == 0 && size == std::mem::size_of::<u64>() && value > 0).then_some(value)
+  }
+  #[cfg(not(target_os = "macos"))]
+  {
+    None
   }
 }
 
@@ -1668,6 +1921,8 @@ pub struct Sidecars {
   pub signed_registry_sha256: Option<String>,
   pub apple_raw_linear_version: String,
   pub develop_render_version: String,
+  /// 同梱の niho-develop-render が描ける設定（答えない古い renderer は None）
+  pub develop_render_capabilities: Option<RenderCapabilities>,
   /// RAW の作業コピーの作り方（apple-raw-linear の版と校正の中身）。変われば作業コピーを作り直す
   pub raw_recipe: String,
   pub signed_raw_recipe: Option<String>,
@@ -1849,6 +2104,18 @@ pub fn probe_sidecars(
     .then(|| parse_version_line(DEVELOP_RENDER_NAME, &render.stdout))
     .flatten()
     .ok_or_else(|| format!("niho-develop-render version failed: {}", render.summary()))?;
+  // 描ける設定（niho-photo#131）。この口の無い古い renderer は invalid_arguments で答えるので、失敗にせず None にする
+  let capabilities = run_sidecar(
+    &paths.develop_render,
+    &os_args([OsStr::new("capabilities")]),
+    timeout,
+    grace,
+    running,
+  );
+  let develop_render_capabilities = capabilities
+    .succeeded()
+    .then(|| RenderCapabilities::parse(&capabilities.stdout))
+    .flatten();
   let registry_sha256 = std::fs::read(&registry)
     .map(|bytes| sha256_hex(&bytes))
     .map_err(|err| format!("calibration registry: {}", err.kind()))?;
@@ -1871,6 +2138,7 @@ pub fn probe_sidecars(
     signed_registry_sha256,
     apple_raw_linear_version,
     develop_render_version,
+    develop_render_capabilities,
     signed_raw_recipe,
   })
 }
@@ -2385,6 +2653,7 @@ impl PhotoDevelop {
           json!({
             "appleRawLinear": sidecars.apple_raw_linear_version,
             "developRender": sidecars.develop_render_version,
+            "developRenderCapabilities": sidecars.develop_render_capabilities.is_some(),
             "attempt": state.attempts,
             "elapsedMs": started.elapsed().as_millis() as u64,
           }),
@@ -2448,6 +2717,21 @@ impl PhotoDevelop {
       Err(std::sync::TryLockError::WouldBlock) => return false,
     };
     state.ready.as_ref().is_some_and(|sidecars| sidecars.supports_masks())
+  }
+
+  /// 同梱の niho-develop-render が描ける設定（{@link RenderCapabilities}）。起動時の確かめが終わって使えて、renderer が
+  /// `capabilities` に答えたときだけ（待たない）。
+  pub fn render_capabilities_cached(&self) -> Option<RenderCapabilities> {
+    self.cache.as_ref()?;
+    let state = match self.probe.try_lock() {
+      Ok(state) => state,
+      Err(std::sync::TryLockError::Poisoned(error)) => error.into_inner(),
+      Err(std::sync::TryLockError::WouldBlock) => return None,
+    };
+    state
+      .ready
+      .as_ref()
+      .and_then(|sidecars| sidecars.develop_render_capabilities.clone())
   }
 
   /// 原寸ラスタ書き出しで必要な `raster --long-edge full` を持つ sidecar が使えるときだけ true（待たない）。
@@ -3724,6 +4008,18 @@ impl PhotoDevelop {
         ),
       ));
     }
+    // 描ける設定の分かる renderer には、読めない `v`・engine・描かない輝度を渡さない（原寸の作業コピーを作る前に断る。niho-photo#131）
+    if let Some(reason) = sidecars
+      .develop_render_capabilities
+      .as_ref()
+      .and_then(|capabilities| capabilities.unsupported_reason(develop_settings))
+    {
+      return Err(DevelopError::new(
+        develop_code::UNSUPPORTED_SETTINGS,
+        UNSUPPORTED_SETTINGS_MESSAGE,
+        reason,
+      ));
+    }
     let cache = self.cache()?;
     let photo = photos.open_photo(photo_id).ok_or_else(not_open)?;
     validate_develop_input(&photo.path, CapabilityStage::FullRender)?;
@@ -3957,6 +4253,64 @@ impl PhotoDevelop {
     let sidecars = self.sidecars()?;
     self.export_input_of(&sidecars, &photo)?;
     Ok(photo)
+  }
+
+  /// 原寸では大きすぎる写真か（保存ダイアログを出す前・フォルダへの 1 枚ごと。niho-photo#132）。同梱の renderer が読める画素数
+  /// （`capabilities` の `maxPixels`。答えない古い renderer は {@link LEGACY_RENDER_MAX_PIXELS}）と、この Mac のメモリに収まる見込み
+  /// （{@link full_size_peak_bytes}）で決める。写真が開いていない・書き出せない形式・sidecar が使えない・寸法が分からないときは
+  /// None（断らない。失敗は今までどおり書き出しの中で返る）。
+  pub fn full_size_too_large(
+    &self,
+    photos: &dyn DevelopPhotos,
+    photo_id: &str,
+    develop_settings: &Value,
+  ) -> Option<FullSizeTooLarge> {
+    let photo = photos.open_photo(photo_id)?;
+    let sidecars = self.sidecars().ok()?;
+    let input = self.export_input_of(&sidecars, &photo).ok()?;
+    let (width, height) = self.full_size_dimensions(&sidecars, &photo.path, input)?;
+    let max_pixels = sidecars
+      .develop_render_capabilities
+      .as_ref()
+      .map_or(LEGACY_RENDER_MAX_PIXELS, |capabilities| capabilities.max_pixels);
+    let too_large = full_size_too_large(
+      width,
+      height,
+      input,
+      develop_settings,
+      max_pixels,
+      physical_memory_bytes(),
+    );
+    if let Some(too_large) = too_large {
+      self.log(
+        "export_too_large",
+        json!({ "width": width, "height": height, "maxPixels": max_pixels, "maxLongEdge": too_large.max_long_edge }),
+      );
+    }
+    too_large
+  }
+
+  /// 原寸の書き出しの元の寸法（向きを反映。{@link inspect_photo} と同じ読み方: RAW は `apple-raw-linear info`、ほかは ImageIO）。
+  fn full_size_dimensions(&self, sidecars: &Sidecars, path: &Path, input: ExportInput) -> Option<(u64, u64)> {
+    if input == ExportInput::Raw {
+      let run = self.run(
+        &sidecars.paths.apple_raw_linear,
+        &os_args([OsStr::new("info"), path.as_os_str(), OsStr::new("--json")]),
+        self.config.timeouts.query,
+      );
+      let info: Value = run
+        .succeeded()
+        .then(|| serde_json::from_str(&run.stdout).ok())
+        .flatten()?;
+      let page = raw_page_info(&info)?;
+      return Some((page.get("width")?.as_u64()?, page.get("height")?.as_u64()?));
+    }
+    match &self.config.raster_info {
+      Some(read) => read(path),
+      None => read_raster_info(path),
+    }
+    .ok()?
+    .display_dimensions()
   }
 
   /// 原寸の書き出しの入力（{@link export_input_for}）。HEIC / HEIF・TIFF は同梱の apple-raw-linear が `raster` を持つ（0.4.3〜）

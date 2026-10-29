@@ -2,13 +2,16 @@
 //!
 //! - 画面は同梱の React（`tauri.conf.json` の `frontendDist` = `../dist`）。remote の配信元は持たず、コマンドを呼べるのは
 //!   同梱の画面（local）の main 窓だけ（`capabilities/default.json`。`command_acl_tests.rs` が確かめる）。
-//! - 写真の閲覧・編集・書き出しはオフラインで完結する（spec 決まりごと 4）。画面の CSP の `connect-src` は `'self'` と IPC
-//!   だけで、画面から外へは通信できない。
+//! - 写真の閲覧・編集・書き出しはオフラインで完結する（spec 決まりごと 4）。画面の CSP の `connect-src` は `'self'` と IPC と
+//!   `niho-develop:`（同梱の sidecar で現像するだけ・外へは出ない）だけで、画面から外へは通信できない。
 //! - コマンドは `generate_handler!` に登録し、`permissions/camera.toml` の permission と capability で許可する。
 //! - この Mac の `PhotoLibrary`（spec「接続口 PhotoLibrary」）: フォルダ（`library.rs`）・写真を開く・補正の保存（`photos.rs`）・
 //!   現像と原寸の書き出し（`develop.rs`）・選別のフラグ（`flags.rs`。niho-photo#47）。本体は `packages/desktop-photo`（NIHO Desktop と
 //!   同じ関数）。この Mac のプリセット（`presets.rs`）。
 //!   一覧のサムネイルは URI scheme `niho-thumb://`（`thumbnail_scheme.rs`）、端末への保存とオリジナルの書き出しは `save.rs`。
+//! - 編集中の現像は、画面の Worker が URI scheme `niho-develop://`（`develop_engine_scheme.rs`）へ送り、同梱の
+//!   `niho-develop-render serve`（`develop_engine_sidecar.rs`。長く生きる 1 プロセス・全コア）が描く（Issue #152。使えなければ
+//!   画面の wasm で描く）。
 //! - 受入用の E2E（feature `e2e`。配布の build には入らない）は `e2e.rs`。
 //! - 自動更新（`updater.rs`。C5 #18393）: 起動時に 1 回、Rust の側で更新フィードを見て、次に開いたときに新しい版になる
 //!   （画面の通信ではない。spec 決まりごと 4 の唯一の例外）。
@@ -19,12 +22,15 @@ mod app_log;
 mod cutout;
 mod cutout_commands;
 mod develop;
+mod develop_engine_scheme;
+mod develop_engine_sidecar;
 mod dialog;
 #[cfg(feature = "e2e")]
 mod e2e;
 mod error;
 mod flags;
 mod library;
+mod mask_detection;
 mod mask_surfaces;
 mod photo_bench;
 mod photos;
@@ -36,7 +42,11 @@ mod thumbnail_scheme;
 mod updater;
 
 use serde::Serialize;
+use tauri::webview::PageLoadEvent;
 use tauri::Manager;
+
+/// 同梱の画面の窓（`tauri.conf.json` の窓・capabilities の `windows`）。
+const MAIN_WINDOW_LABEL: &str = "main";
 
 /// 画面に返すアプリの情報（版の 1 行・問い合わせ用）。
 #[derive(Debug, Serialize, PartialEq, Eq)]
@@ -80,6 +90,15 @@ pub fn run() {
   builder
     // 一覧のタイル・開いた直後の仮の画（entryId だけを受け、パスは受けない・返さない）
     .register_asynchronous_uri_scheme_protocol(thumbnail_scheme::SCHEME, thumbnail_scheme::handle)
+    // 編集中の現像（main 窓の Worker から本文を受け、同梱の sidecar の応答を返す。最初の要求で sidecar を起動する）
+    .register_asynchronous_uri_scheme_protocol(develop_engine_scheme::SCHEME, develop_engine_scheme::handle)
+    // main 窓を読み込み直したら現像の sidecar を止める（前の画面の Developer を全部手放す）。E2E の plugin の on_page_load とは
+    // 別の hook で、どちらも呼ばれる
+    .on_page_load(|webview, payload| {
+      if webview.label() == MAIN_WINDOW_LABEL && payload.event() == PageLoadEvent::Started {
+        develop_engine_sidecar::stop(webview.app_handle());
+      }
+    })
     .setup(move |app| {
       // フォルダは最初の「フォルダを追加」か覚えたフォルダの一覧まで読まない。現像の sidecar は裏で 1 回だけ確かめる
       account::install(app.handle());
@@ -87,7 +106,9 @@ pub fn run() {
       photos::install(app.handle());
       flags::install(app.handle());
       develop::install(app.handle());
+      develop_engine_sidecar::install(app.handle());
       cutout_commands::install(app.handle());
+      mask_detection::install(app.handle());
       presets::install(app.handle());
       // 更新の確認は裏で 1 回（起動を待たせない。結果は camera.log）
       app.manage(updater::UpdateState::new(updates));
@@ -121,6 +142,7 @@ pub fn run() {
       mask_surfaces::camera_mask_surface_save,
       mask_surfaces::camera_mask_surface_load,
       mask_surfaces::camera_mask_surface_exists,
+      mask_detection::camera_mask_surface_detect,
       photos::camera_photo_versions,
       photos::camera_photo_save_versions,
       develop::camera_develop_status,
@@ -152,6 +174,7 @@ pub fn run() {
       // 差し替える（起動中に差し替えると、動いている現像が新しい sidecar・校正を起動してしまう。updater.rs）
       if let tauri::RunEvent::Exit = event {
         develop::shutdown(app);
+        develop_engine_sidecar::stop(app);
         cutout_commands::shutdown(app);
         updater::install_staged_on_exit(app, app_log::log_fn(app));
       }

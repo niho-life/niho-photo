@@ -7,7 +7,9 @@
 //!
 //! 1. **Analysis image.** The photo as opened (before the geometry, the
 //!    white balance and every adjustment); one longer than 2560 px is
-//!    block-averaged by the smallest integer factor that brings it there.
+//!    reduced to a long edge of 2560 px (Lanczos 3 in linear light, as the
+//!    screen's working image), so the full-size export finds the estimate
+//!    its screen found (#133).
 //! 2. **Edges.** On a grid of about 640 columns, points between 20% and 97%
 //!    of the half diagonal whose green gradient (on the square root, a ±2 px
 //!    stencil) is at least 0.012 per pixel and points along the radius (the
@@ -33,6 +35,7 @@
 //! in wasm.
 
 use crate::decode::LinearImage;
+use crate::resize::{fitted_size, resample, Filter};
 
 /// The estimate of one photo: red's and blue's scale against green, minus 1
 /// (0: no correction).
@@ -61,41 +64,27 @@ const MIN_SHIFT_PX: f64 = 0.25;
 const TUKEY: f64 = 4.685;
 const MIN_SCALE_PX: f64 = 0.02;
 
-/// The analysis image: `image` itself, or block-averaged so its long edge
-/// is at most [`ANALYSIS_LONG_EDGE`] (centered: the remainder is dropped
-/// evenly on both sides).
+/// The analysis image: `image` itself, or reduced to a long edge of
+/// [`ANALYSIS_LONG_EDGE`] (Lanczos 3 in linear light, as the screen's
+/// working image is reduced): a full-size export finds the estimate its
+/// screen found, whose thresholds are in pixels of that size (#133).
 fn analysis_image(image: &LinearImage) -> std::borrow::Cow<'_, LinearImage> {
     let long = image.width.max(image.height);
     if long <= ANALYSIS_LONG_EDGE {
         return std::borrow::Cow::Borrowed(image);
     }
-    let f = long.div_ceil(ANALYSIS_LONG_EDGE);
-    let (w, h) = (image.width / f, image.height / f);
-    let (x0, y0) = ((image.width - w * f) / 2, (image.height - h * f) / 2);
-    let mut data = vec![0.0f32; w * h * 3];
-    let inv = 1.0 / (f * f) as f32;
-    for y in 0..h {
-        for x in 0..w {
-            let mut acc = [0.0f32; 3];
-            for yy in 0..f {
-                let row = (y0 + y * f + yy) * image.width;
-                for xx in 0..f {
-                    let i = (row + x0 + x * f + xx) * 3;
-                    acc[0] += image.data[i];
-                    acc[1] += image.data[i + 1];
-                    acc[2] += image.data[i + 2];
-                }
-            }
-            let o = (y * w + x) * 3;
-            data[o] = acc[0] * inv;
-            data[o + 1] = acc[1] * inv;
-            data[o + 2] = acc[2] * inv;
-        }
-    }
+    let (w, h) = fitted_size(image.width, image.height, ANALYSIS_LONG_EDGE);
     std::borrow::Cow::Owned(LinearImage {
         width: w,
         height: h,
-        data,
+        data: resample(
+            &image.data,
+            image.width,
+            image.height,
+            w,
+            h,
+            Filter::Lanczos3,
+        ),
     })
 }
 

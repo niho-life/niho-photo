@@ -6,6 +6,7 @@
 //! `specs/initiatives/niho-develop-engine.md` ("段 2").
 
 pub mod acr3;
+pub mod api;
 pub mod auto;
 pub mod camera_linear;
 pub mod camera_linear_codec;
@@ -71,7 +72,11 @@ pub use settings::{DevelopSettings, SettingsError};
 pub use spatial::Quality;
 
 use head_wb::HeadWhiteBalance;
-use std::{collections::BTreeMap, fmt, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    fmt,
+    sync::{Arc, Mutex},
+};
 
 /// Latest formula version this bundle can render. Settings constructors keep
 /// their own compatibility defaults; this advertises reader capability.
@@ -118,6 +123,10 @@ pub enum Error {
     },
     /// [`Session::mask_plane`] of an id the settings do not have.
     MaskNotFound(String),
+    /// [`Session::import_analysis`] of bytes that are not this photo's
+    /// analysis: another photo's, broken, or of a version this build does
+    /// not read. Nothing changes (a frame that needs it makes it).
+    AnalysisTransfer(String),
 }
 
 impl fmt::Display for Error {
@@ -157,6 +166,7 @@ impl fmt::Display for Error {
                 expected.0, expected.1, actual.0, actual.1
             ),
             Error::MaskNotFound(id) => write!(f, "{MASK_NOT_FOUND}: no mask {id}"),
+            Error::AnalysisTransfer(e) => write!(f, "analysis_transfer_failed: {e}"),
         }
     }
 }
@@ -880,6 +890,12 @@ pub struct Session {
     /// response coefficients, used while that session holds them by a
     /// preparation of the same CNR amount instead of computing them again.
     niho3_seed: Option<RawAnalysisSeed>,
+    /// A NIHO 3 analysis besides the prepared master's: made ahead of the
+    /// frames ([`Session::prepare_analysis`], #129) or set aside when a frame
+    /// took that one (another color noise reduction amount, as
+    /// `niho-colorful`'s). The next preparation whose settings it serves uses
+    /// it instead of making it again. One.
+    niho3_ahead: Option<RawAnalysisCache>,
     /// The `niho-6` analysis of the whole photo, shared with the sessions
     /// made from this one (preset previews, auto): the first that needs it
     /// computes it from [`Session::niho6_source`].
@@ -927,6 +943,9 @@ pub struct Session {
     /// The photo's chromatic aberration, shared with the sessions made
     /// from this one.
     lens: Arc<LensCache>,
+    /// [`niho4::source_fingerprint`] of the source the analysis is made
+    /// from, with the source's address and length (#155): counted once.
+    source_fingerprint: Mutex<Option<(usize, usize, u64)>>,
 }
 
 impl Session {
@@ -942,7 +961,24 @@ impl Session {
         working_max_dimension: usize,
         filter: Filter,
     ) -> Result<Self, Error> {
-        let raster = decode::decode_raster(input, working_max_dimension, filter)?;
+        Self::open_raster_with_limits(
+            input,
+            working_max_dimension,
+            filter,
+            decode::DecodeLimits::BROWSER,
+        )
+    }
+
+    /// [`Session::open_raster`] with the source bound `limits` (the native
+    /// full-size export opens up to [`decode::DecodeLimits::NATIVE`]).
+    pub fn open_raster_with_limits(
+        input: &[u8],
+        working_max_dimension: usize,
+        filter: Filter,
+        limits: decode::DecodeLimits,
+    ) -> Result<Self, Error> {
+        let raster =
+            decode::decode_raster_with_limits(input, working_max_dimension, filter, limits)?;
         Ok(Self::with_source(SessionSource::Raster(raster), filter))
     }
 
@@ -983,16 +1019,29 @@ impl Session {
             niho3: None,
             parked_niho3: None,
             niho3_seed: None,
+            niho3_ahead: None,
             healed: None,
             heal_plans: Arc::default(),
             lens,
+            source_fingerprint: Mutex::new(None),
         }
     }
 
     /// Opens a working copy (16-bit PNG) with its metadata JSON.
     pub fn open_working_copy(png: &[u8], meta_json: &str, filter: Filter) -> Result<Self, Error> {
+        Self::open_working_copy_with_limits(png, meta_json, filter, decode::DecodeLimits::BROWSER)
+    }
+
+    /// [`Session::open_working_copy`] with the source bound `limits`.
+    pub fn open_working_copy_with_limits(
+        png: &[u8],
+        meta_json: &str,
+        filter: Filter,
+        limits: decode::DecodeLimits,
+    ) -> Result<Self, Error> {
         let meta = WorkingCopyMeta::from_json(meta_json)?;
-        let image = decode::decode_working_copy_with_meta(png, &meta, 0, filter)?;
+        let image =
+            decode::decode_working_copy_with_meta_and_limits(png, &meta, 0, filter, limits)?;
         Ok(Self::with_source(
             SessionSource::WorkingCopy { image, meta },
             filter,
@@ -1451,6 +1500,163 @@ impl Session {
         .map_err(Error::Niho6Prepare)
     }
 
+    /// Makes ahead the response analysis the frames of `settings` read once
+    /// they use Highlights or Shadows (#129: the editor calls it while idle),
+    /// so the first such frame, a preset's, does not wait for it: for a
+    /// signed RAW `niho-4` / `-5` / `-7` / `-11`, the color noise reduction
+    /// source, the response coefficients and the NIHO 7 highlight maps. The
+    /// frames are the same bytes as without it. Kept in the prepared master's
+    /// analysis when that serves these settings' noise reduction, else as the
+    /// one analysis made ahead. `Ok(false)`: nothing to make ahead (other
+    /// inputs and engines).
+    pub fn prepare_analysis(&mut self, settings: &DevelopSettings) -> Result<bool, Error> {
+        Ok(self.analysis_ahead(settings)?.is_some())
+    }
+
+    /// The response analysis of `settings` as versioned bytes (#155): made
+    /// and kept as [`Session::prepare_analysis`] makes it, then written out
+    /// whole (`niho4/transfer.rs`). A helper worker makes them so that the
+    /// editor's session only takes them in ([`Session::import_analysis`]).
+    /// `Ok(None)`: nothing to make ahead (other inputs and engines).
+    pub fn export_analysis(
+        &mut self,
+        settings: &DevelopSettings,
+    ) -> Result<Option<Vec<u8>>, Error> {
+        let Some(analysis) = self.analysis_ahead(settings)? else {
+            return Ok(None);
+        };
+        let SessionSource::WorkingCopy { image, .. } = self.source.as_ref() else {
+            return Ok(None);
+        };
+        Ok(Some(analysis.to_bytes(self.source_fingerprint(image))))
+    }
+
+    /// [`niho4::source_fingerprint`] of `image` (this session's source):
+    /// counted once, again only when the source is another allocation.
+    fn source_fingerprint(&self, image: &LinearImage) -> u64 {
+        let key = (image.data.as_ptr() as usize, image.data.len());
+        let mut held = self
+            .source_fingerprint
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match *held {
+            Some((ptr, len, fingerprint)) if (ptr, len) == key => fingerprint,
+            _ => {
+                let fingerprint = niho4::source_fingerprint(&image.data);
+                *held = Some((key.0, key.1, fingerprint));
+                fingerprint
+            }
+        }
+    }
+
+    /// Takes in the analysis [`Session::export_analysis`] wrote for this
+    /// photo (opened the same way, in another session or worker; #155) as
+    /// the analysis made ahead: frames that read it are the same bytes as
+    /// when this session makes it. What the prepared master's analysis or
+    /// the one made ahead of the same noise reduction already holds is
+    /// kept, and only what they lack is set (`Ok(false)`: nothing). Bytes
+    /// of another photo, broken or of another version are
+    /// [`Error::AnalysisTransfer`] and change nothing.
+    pub fn import_analysis(&mut self, bytes: &[u8]) -> Result<bool, Error> {
+        let transfer_error =
+            |error: niho4::TransferError| Error::AnalysisTransfer(error.to_string());
+        let SessionSource::WorkingCopy { image, meta } = self.source.as_ref() else {
+            return Err(transfer_error(niho4::TransferError::NotSignedRaw));
+        };
+        let fingerprint = self.source_fingerprint(image);
+        let imported =
+            niho4::import_analysis(bytes, image, meta, fingerprint).map_err(transfer_error)?;
+        let held = [
+            self.niho3.as_ref().map(|prepared| &prepared.analysis),
+            self.niho3_ahead.as_ref(),
+        ];
+        if let Some(analysis) = held.into_iter().flatten().find_map(|held| match held {
+            RawAnalysisCache::Niho4(analysis) if analysis.same_key(&imported) => Some(analysis),
+            _ => None,
+        }) {
+            return Ok(analysis.fill_from(imported));
+        }
+        self.niho3_ahead = Some(RawAnalysisCache::Niho4(imported));
+        Ok(true)
+    }
+
+    /// Whether this session holds whole the analysis
+    /// [`Session::prepare_analysis`] makes for `settings` (in the prepared
+    /// master's analysis or the one made ahead or taken in), so making it
+    /// ahead again, here or in a helper worker (#155), would only find it.
+    /// `false` also when there is nothing to make ahead.
+    pub fn holds_analysis(&self, settings: &DevelopSettings) -> bool {
+        if !matches!(self.niho3_mode(settings), Ok(Some(RawEngine::Niho4))) {
+            return false;
+        }
+        let SessionSource::WorkingCopy { image, meta } = self.source.as_ref() else {
+            return false;
+        };
+        [
+            self.niho3.as_ref().map(|prepared| &prepared.analysis),
+            self.niho3_ahead.as_ref(),
+        ]
+        .into_iter()
+        .flatten()
+        .any(|analysis| match analysis {
+            RawAnalysisCache::Niho4(cache) => {
+                analysis.serves(RawEngine::Niho4, image, meta, settings) && cache.holds(settings)
+            }
+            _ => false,
+        })
+    }
+
+    /// [`Session::prepare_analysis`]: the analysis it made or filled (a
+    /// reference to the kept one's cells), `None` when there is nothing to
+    /// make ahead.
+    fn analysis_ahead(
+        &mut self,
+        settings: &DevelopSettings,
+    ) -> Result<Option<niho4::AnalysisCache>, Error> {
+        if self.niho3_mode(settings)? != Some(RawEngine::Niho4) {
+            return Ok(None);
+        }
+        let SessionSource::WorkingCopy { image, meta } = self.source.as_ref() else {
+            return Ok(None);
+        };
+        let serves =
+            |cache: &RawAnalysisCache| cache.serves(RawEngine::Niho4, image, meta, settings);
+        let in_master = self
+            .niho3
+            .as_ref()
+            .map(|prepared| &prepared.analysis)
+            .filter(|analysis| serves(analysis));
+        let ahead = self
+            .niho3_ahead
+            .as_ref()
+            .filter(|analysis| serves(analysis));
+        let keep = in_master.is_none() && ahead.is_none();
+        // A strong reference to the same cells: filling it fills theirs.
+        let cached = in_master.or(ahead).and_then(|analysis| {
+            match analysis.downgrade().upgrade(RawEngine::Niho4) {
+                Some(RawAnalysisCache::Niho4(cache)) => Some(cache),
+                _ => None,
+            }
+        });
+        let analysis = niho4::prepare_analysis(image, meta, settings, cached)
+            .map_err(|error| Error::Niho4Prepare(error.to_string()))?;
+        if keep {
+            let kept = analysis.downgrade().upgrade();
+            self.niho3_ahead = Some(RawAnalysisCache::Niho4(analysis));
+            return Ok(kept);
+        }
+        Ok(Some(analysis))
+    }
+
+    /// Drops the analysis made ahead ([`Session::prepare_analysis`]) or set
+    /// aside by a frame of another noise reduction: for a session kept while
+    /// its photo is not open (#129), which then holds what its own settings'
+    /// frames read and no more. Frames are the same bytes (one that needs it
+    /// makes it again).
+    pub fn release_analysis_ahead(&mut self) {
+        self.niho3_ahead = None;
+    }
+
     /// The NIHO 3 analysis this session holds, for a session made from it.
     fn niho3_analysis(&self) -> Option<RawAnalysisSeed> {
         match &self.niho3 {
@@ -1655,12 +1861,24 @@ impl Session {
             };
             let cached_analysis = match current {
                 Some(current) if current.serves(engine, image, meta, settings) => Some(current),
-                current => self
-                    .niho3_seed
-                    .as_ref()
-                    .and_then(|seed| seed.upgrade(engine))
-                    .filter(|seed| seed.serves(engine, image, meta, settings))
-                    .or(current),
+                current => match self
+                    .niho3_ahead
+                    .take_if(|ahead| ahead.serves(engine, image, meta, settings))
+                {
+                    // The one it replaces is set aside in turn, so going back
+                    // (a preset of another noise reduction) does not make it
+                    // again: two analyses at most.
+                    Some(ahead) => {
+                        self.niho3_ahead = current;
+                        Some(ahead)
+                    }
+                    None => self
+                        .niho3_seed
+                        .as_ref()
+                        .and_then(|seed| seed.upgrade(engine))
+                        .filter(|seed| seed.serves(engine, image, meta, settings))
+                        .or(current),
+                },
             };
             match (parked, cached_analysis) {
                 (Some(parked), Some(analysis)) => {

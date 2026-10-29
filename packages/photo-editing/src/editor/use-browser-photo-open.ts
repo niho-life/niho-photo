@@ -84,7 +84,7 @@ import { useBrowserPhotoDevelopReload } from "./use-browser-photo-develop-reload
 import { useBrowserPhotoEditSettings } from "./use-browser-photo-edit-settings";
 import { useBrowserPhotoHeal } from "./use-browser-photo-heal";
 import type { BrowserPhotoItems } from "./use-browser-photo-items";
-import { useBrowserPhotoPresets } from "./use-browser-photo-presets";
+import { BROWSER_PRESET_PREVIEW_FINAL_DELAY_MS, useBrowserPhotoPresets } from "./use-browser-photo-presets";
 import { useBrowserPhotoSettingsClipboard } from "./use-browser-photo-settings-clipboard";
 import { useBrowserPhotoWorkingSize } from "./use-browser-photo-working-size";
 
@@ -354,6 +354,8 @@ export function useBrowserPhotoOpen(params: {
   const previewSettings = presets.previewSettings;
   const previewSettingsRef = useRef(previewSettings);
   previewSettingsRef.current = previewSettings;
+  // 押して当てた結果の key（面の描画が 1 回だけ受け取り、先に粗い画を出す。#127）
+  const coarseFirstKeyRef = presets.coarseFirstKeyRef;
   // 適用量を動かしている間の仮の表示は速い描き方（行に載せている間の仮の表示は丁寧に）
   const previewInteractive = presets.previewInteractive;
   // 補正のコピー / 貼り付け（F5a-2 移行元設計）も、wasm で開いた写真を 1 枚で見ている間だけ
@@ -456,6 +458,13 @@ export function useBrowserPhotoOpen(params: {
   const cropFrameCacheRef = useRef<{ key: string; settingsJson: string; epoch: number; frame: DevelopFrame } | null>(null);
   /** 修復の道具の間に描いた幾何なしの画（同じ設定なら描き直さない。niho-photo#44） */
   const healFrameCacheRef = useRef<{ key: string; settingsJson: string; epoch: number; frame: DevelopFrame } | null>(null);
+  /**
+   * 行に載せたプリセットの仮の表示の丁寧な画（押して当てた結果が同じ設定なら描き直さない。#127）。写真の入力の世代・作業サイズが
+   * 変わったら使わない
+   */
+  const previewFrameCacheRef = useRef<
+    { key: string; settingsJson: string; epoch: number; generation: number; frame: DevelopFrame } | null
+  >(null);
   const framePostProcessRef = params.framePostProcessRef;
   const onFramePaintedRef = params.onFramePaintedRef;
   /**
@@ -555,7 +564,7 @@ export function useBrowserPhotoOpen(params: {
     const timelineGeneration = timelineRef.current?.generation ?? null;
     const paintGeneration = order.generation;
     /** 描画の流れ（同じ写真・同じ作業サイズの、同じ道具の画。つまみを動かしている間の続きの判定に使う） */
-    const streamOf = (lane: "crop" | "heal" | "compare" | "settings" | "preview") => `${lane}\n${workingEpoch}\n${key}`;
+    const streamOf = (lane: "crop" | "heal" | "compare" | "settings" | "preview" | "applied") => `${lane}\n${workingEpoch}\n${key}`;
     const paint = (target: HTMLCanvasElement, frame: DevelopFrame, final: boolean, raw = false, keepSize = false) => {
       if (engineRef.current !== engine || order.generation !== paintGeneration) return;
       // 操作中の小さな画（色ポイント・マスクの 640px）は、今の canvas の大きさのまま描く（写真の大きさを跳ねさせない）
@@ -689,6 +698,10 @@ export function useBrowserPhotoOpen(params: {
     const shownSettings = previewSettings ?? settings;
     const settingsJson = JSON.stringify(shownSettings);
     const previewing = previewSettings !== null;
+    // 押して当てた結果か（1 回だけ受け取る。覚えている画を描くときも受け取って、後から戻したときに粗い画を出さない）
+    const coarseKey = coarseFirstKeyRef.current;
+    const appliedPreset = !previewing && coarseKey !== null && coarseKey === developSettingsKey(shownSettings);
+    if (appliedPreset) coarseFirstKeyRef.current = null;
     const initial = initialFrameRef.current;
     // 保存済みの同じ版の画は Final 由来。開くだけで原寸 RAW を再計算せず、操作時に必要な画だけ描く。
     // 重ねる係が描かせた（`forcedPaintKey`）写真は、クラウドのプレビューのままにせず描く（背景除去を重ねる）
@@ -704,70 +717,144 @@ export function useBrowserPhotoOpen(params: {
       paint(canvas, cached.frame, true);
       return;
     }
+    // 行に載せて描いた丁寧な画と同じ設定（載せてから押した）なら描き直さない（#127）
+    const cachedPreview = previewFrameCacheRef.current;
+    if (
+      cachedPreview?.key === key &&
+      cachedPreview.settingsJson === settingsJson &&
+      cachedPreview.epoch === workingEpoch &&
+      cachedPreview.generation === paintGeneration
+    ) {
+      order.painted = invalidatePaints(order);
+      if (!previewing) frameCacheRef.current = { key, settingsJson, frame: cachedPreview.frame };
+      paint(canvas, cachedPreview.frame, true);
+      return;
+    }
     const interactive = provisionalQuality || (previewing ? previewInteractive : dragging);
     // Point selections stay exact while dragging; only the temporary preview of an operation (a slider / handle drag,
     // an interactive preset preview) is smaller with active color points or masks, painted at the canvas' current size.
     // Final render, provisional-quality display, sampling, saved previews and export keep their size.
     const operating = previewing ? previewInteractive : dragging;
+    /** 今の設定（仮の表示を含む）を描いて、まだ描いてよければ出す（丁寧な画は覚える）。 */
+    const renderShown = (sequence: number) => {
+      if (engineRef.current !== engine || order.generation !== paintGeneration) return;
+      // 粗い画を待つ間に、載せていた仮の表示の丁寧な画が届いていれば（載せてから押した）描き直さない（#127）
+      const preview = previewFrameCacheRef.current;
+      if (!previewing && preview?.key === key && preview.settingsJson === settingsJson && preview.epoch === workingEpoch &&
+        preview.generation === paintGeneration) {
+        frameCacheRef.current = { key, settingsJson, frame: preview.frame };
+        if (!paintable(order, sequence) || !canvasRef.current) return;
+        order.painted = sequence;
+        paint(canvasRef.current, preview.frame, true);
+        return;
+      }
+      const maxDimension = operating ? developInteractiveMaxDimension(shownSettings) : DEVELOP_PREVIEW_MAX_DIMENSION;
+      const renderRequestedAt = photoDevelopDiagnosticsEnabled() ? performance.now() : null;
+      void engine
+        .render(shownSettings, { maxDimension, interactive })
+        .then((frame) => {
+          if (!frame) return;
+          if (engineRef.current !== engine || order.generation !== paintGeneration) return;
+          clearMaskSurfaceIssue(key);
+          if (!interactive && !previewing) uploadInitial(settingsJson, frame);
+          // 載せた仮の表示の丁寧な画は、もう出さなくても覚える（押した結果が同じなら描き直さない。#127）
+          if (!interactive && previewing) {
+            previewFrameCacheRef.current = { key, settingsJson, epoch: workingEpoch, generation: paintGeneration, frame };
+          }
+          if (openedRef.current?.key !== key || compareOriginalRef.current || cropActiveRef.current || healActiveRef.current) return;
+          if (!paintable(order, sequence) || !canvasRef.current) return;
+          const paintedCanvas = canvasRef.current;
+          order.painted = sequence;
+          if (!interactive && !previewing) frameCacheRef.current = { key, settingsJson, frame };
+          paint(paintedCanvas, frame, (provisionalQuality || !interactive) && !previewing, false, maxDimension < DEVELOP_PREVIEW_MAX_DIMENSION);
+          if (renderRequestedAt !== null) {
+            requestAnimationFrame(() => requestAnimationFrame(() => {
+              if (engineRef.current !== engine || order.generation !== paintGeneration ||
+                openedRef.current?.key !== key || order.requested !== sequence || viewModeRef.current !== "loupe" ||
+                canvasRef.current !== paintedCanvas || !paintedCanvas.isConnected ||
+                paintedCanvas.getClientRects().length === 0 || getComputedStyle(paintedCanvas).visibility === "hidden") return;
+              console.info("[photo-develop-ui-perf]", {
+                stage: previewing ? "presetRenderVisible" : interactive ? "interactiveRenderVisible" : "finalRenderVisible",
+                durationMs: Math.max(0, performance.now() - renderRequestedAt),
+              });
+            }));
+          }
+        })
+        .catch((error: unknown) => {
+          if (!(error instanceof DevelopMaskSurfaceError)) {
+            failInitial(sequence);
+            return;
+          }
+          // 面を読めないマスク（M4 #68）: 黙って外して描かない。前の画のまま、マスクの面に理由を出す（読み直せる）
+          reportMaskSurfaceIssue(key, [error.maskId]);
+          const current = openedRef.current;
+          if (current?.key !== key || !current.previewPending) return;
+          // 開いた直後でまだ wasm の画が無い: 写真の編集を止めないよう、読めないマスクを当てない 1 枚を描く（覚えない・上げない）
+          void renderDevelopWithoutUnreadableMasks(engine, shownSettings, { maxDimension, interactive }, error).then(
+            ({ frame, maskIds }) => {
+              reportMaskSurfaceIssue(key, maskIds);
+              if (!frame) return;
+              if (engineRef.current !== engine || order.generation !== paintGeneration) return;
+              if (openedRef.current?.key !== key || compareOriginalRef.current || cropActiveRef.current) return;
+              if (sequence !== order.requested || !canvasRef.current) return;
+              order.painted = sequence;
+              paint(canvasRef.current, frame, true);
+            },
+            () => failInitial(sequence),
+          );
+        });
+    };
+    // 押して当てた結果・行に載せた仮の表示は、先に粗い画（速い描き方）を出してから丁寧な画に差し替える（#127。丁寧な画は今と
+    // 同じ）。押した結果は粗い画を描き終えてから丁寧な画を出す（Worker は 1 本で、同じ枠の「次」は 1 つなので、続けて出すと粗い画が
+    // 捨てられる）。載せた仮の表示は止まって {@link BROWSER_PRESET_PREVIEW_FINAL_DELAY_MS} たってから丁寧な画
+    const coarseFirst = !interactive && (previewing || appliedPreset);
+    const stream = streamOf(previewing ? "preview" : appliedPreset ? "applied" : "settings");
+    let coarse: Promise<void> = Promise.resolve();
+    if (coarseFirst) {
+      const coarseMaxDimension = developInteractiveMaxDimension(shownSettings);
+      // 押した結果の粗い画は丁寧な画と同じ流れ（丁寧な画の要求で消さない）。仮の表示は前の仮の表示の画を描かない
+      const coarseSequence = requestPaint(order, stream, appliedPreset);
+      coarse = engine.render(shownSettings, { maxDimension: coarseMaxDimension, interactive: true }).then(
+        (frame) => {
+          if (!frame) return;
+          if (engineRef.current !== engine || order.generation !== paintGeneration) return;
+          if (openedRef.current?.key !== key || compareOriginalRef.current || cropActiveRef.current || healActiveRef.current) return;
+          if (!paintable(order, coarseSequence) || !canvasRef.current) return;
+          order.painted = coarseSequence;
+          paint(canvasRef.current, frame, false, false, coarseMaxDimension < DEVELOP_PREVIEW_MAX_DIMENSION);
+        },
+        () => undefined,
+      );
+    }
+    if (previewing && coarseFirst) {
+      let live = true;
+      const timer = setTimeout(() => {
+        void coarse.then(() => {
+          if (live) renderShown(requestPaint(order, stream, false));
+        });
+      }, BROWSER_PRESET_PREVIEW_FINAL_DELAY_MS);
+      return () => {
+        live = false;
+        clearTimeout(timer);
+      };
+    }
     // 補正のつまみ・適用量を動かしている間（と離した直後の丁寧な 1 枚）は、描き終えた途中の画も描く。行に載せただけの仮の表示は
     // つまみの流れではない（前の仮の表示・補正の途中の画を描かない）
-    const sequence = requestPaint(order, streamOf(previewing ? "preview" : "settings"), operating);
-    const maxDimension = operating ? developInteractiveMaxDimension(shownSettings) : DEVELOP_PREVIEW_MAX_DIMENSION;
-    const renderRequestedAt = photoDevelopDiagnosticsEnabled() ? performance.now() : null;
-    void engine
-      .render(shownSettings, { maxDimension, interactive })
-      .then((frame) => {
-        if (!frame) return;
-        if (engineRef.current !== engine || order.generation !== paintGeneration) return;
-        clearMaskSurfaceIssue(key);
-        if (!interactive && !previewing) uploadInitial(settingsJson, frame);
-        if (openedRef.current?.key !== key || compareOriginalRef.current || cropActiveRef.current || healActiveRef.current) return;
-        if (!paintable(order, sequence) || !canvasRef.current) return;
-        const paintedCanvas = canvasRef.current;
-        order.painted = sequence;
-        if (!interactive && !previewing) frameCacheRef.current = { key, settingsJson, frame };
-        paint(paintedCanvas, frame, (provisionalQuality || !interactive) && !previewing, false, maxDimension < DEVELOP_PREVIEW_MAX_DIMENSION);
-        if (renderRequestedAt !== null) {
-          requestAnimationFrame(() => requestAnimationFrame(() => {
-            if (engineRef.current !== engine || order.generation !== paintGeneration ||
-              openedRef.current?.key !== key || order.requested !== sequence || viewModeRef.current !== "loupe" ||
-              canvasRef.current !== paintedCanvas || !paintedCanvas.isConnected ||
-              paintedCanvas.getClientRects().length === 0 || getComputedStyle(paintedCanvas).visibility === "hidden") return;
-            console.info("[photo-develop-ui-perf]", {
-              stage: previewing ? "presetRenderVisible" : interactive ? "interactiveRenderVisible" : "finalRenderVisible",
-              durationMs: Math.max(0, performance.now() - renderRequestedAt),
-            });
-          }));
-        }
-      })
-      .catch((error: unknown) => {
-        if (!(error instanceof DevelopMaskSurfaceError)) {
-          failInitial(sequence);
-          return;
-        }
-        // 面を読めないマスク（M4 #68）: 黙って外して描かない。前の画のまま、マスクの面に理由を出す（読み直せる）
-        reportMaskSurfaceIssue(key, [error.maskId]);
-        const current = openedRef.current;
-        if (current?.key !== key || !current.previewPending) return;
-        // 開いた直後でまだ wasm の画が無い: 写真の編集を止めないよう、読めないマスクを当てない 1 枚を描く（覚えない・上げない）
-        void renderDevelopWithoutUnreadableMasks(engine, shownSettings, { maxDimension, interactive }, error).then(
-          ({ frame, maskIds }) => {
-            reportMaskSurfaceIssue(key, maskIds);
-            if (!frame) return;
-            if (engineRef.current !== engine || order.generation !== paintGeneration) return;
-            if (openedRef.current?.key !== key || compareOriginalRef.current || cropActiveRef.current) return;
-            if (sequence !== order.requested || !canvasRef.current) return;
-            order.painted = sequence;
-            paint(canvasRef.current, frame, true);
-          },
-          () => failInitial(sequence),
-        );
-      });
+    const sequence = requestPaint(order, stream, operating);
+    if (!coarseFirst) {
+      renderShown(sequence);
+      return;
+    }
+    void coarse.then(() => {
+      // 粗い画を待つ間に新しい要求が来たら、この丁寧な画は出さない（新しい要求が描く）
+      if (order.requested === sequence) renderShown(sequence);
+    });
     // `canvasSurface`: canvas が付け替わったら描き直す（同じ設定の丁寧な画が残っていれば、それをそのまま描く）
   }, [
     beforeFrameRef,
     canvasRef,
     canvasSurface,
+    coarseFirstKeyRef,
     compareOriginal,
     cropActive,
     cropSettling,
@@ -1395,6 +1482,7 @@ export function useBrowserPhotoOpen(params: {
 
           const canonicalEngine = createDevelopEngine({
             manifestUrl: library.engineAssets.manifestUrl() ?? undefined,
+            preferNative: library.engineAssets.preferNative === true,
             maskSurfaces: maskSurfaceSource,
           });
           const canonicalReady = await canonicalEngine.ready();
@@ -1531,6 +1619,7 @@ export function useBrowserPhotoOpen(params: {
     try {
       canonicalEngine = createDevelopEngine({
         manifestUrl: library.engineAssets.manifestUrl() ?? undefined,
+        preferNative: library.engineAssets.preferNative === true,
         maskSurfaces: maskSurfaceSource,
       });
       if (!(await canonicalEngine.ready()) || isStale()) {
