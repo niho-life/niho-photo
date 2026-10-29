@@ -29,7 +29,14 @@ type Posted = { message: DevelopEngineWorkerResponse; transfer: Transferable[] |
 
 function heldGlue() {
   const events: string[] = [];
-  const state = { failDecode: false };
+  const state = {
+    failDecode: false,
+    openAttempts: 0,
+    openFailures: [] as Error[],
+    renderFailures: [] as Error[],
+    exportAttempts: 0,
+    exportFailures: [] as Error[],
+  };
   const developers: FakeDeveloper[] = [];
   const thumbnails: FakeDeveloper[] = [];
   class FakeDeveloper {
@@ -49,10 +56,15 @@ function heldGlue() {
       developers.push(this);
     }
     static openWorkingCopy(png: Uint8Array, metaJson: string) {
+      state.openAttempts += 1;
+      const failure = state.openFailures.shift();
+      if (failure) throw failure;
       if (state.failDecode) throw new Error("decodeFailed");
       return new FakeDeveloper(png, 2560, metaJson);
     }
     render(settingsJson: string) {
+      const failure = state.renderFailures.shift();
+      if (failure) throw failure;
       this.renders.push(settingsJson);
       return { width: 1, height: 1, rgba: new Uint8ClampedArray([1, 2, 3, 255]) };
     }
@@ -68,6 +80,9 @@ function heldGlue() {
       return this.surfaces.delete(id);
     }
     exportJpeg() {
+      state.exportAttempts += 1;
+      const failure = state.exportFailures.shift();
+      if (failure) throw failure;
       return new Uint8Array([0xff, 0xd8]);
     }
   }
@@ -142,6 +157,22 @@ describe("Worker が同じ写真を保つ（#129）", () => {
     expect(glue.events).toEqual(["decode A", "decode B", "free A", "decode C", "free B", "decode D"]);
     // D を開いた後に C へ戻るとデコードしない（D は保つ）
     expect(glue.developers.find((developer) => developer.name === "D")?.free).not.toHaveBeenCalled();
+  });
+
+  it("既定 PC は 2 枚を保ち、mobile は次の Developer を開く前に kept を手放す", async () => {
+    const pc = setup();
+    await pc.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL, deviceClass: "pc" });
+    await pc.handler(open(2, "A"));
+    await pc.handler({ type: "close", id: 3 });
+    await pc.handler(open(4, "B"));
+    expect(pc.glue.events).toEqual(["decode A", "decode B"]);
+
+    const mobile = setup();
+    await mobile.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL, deviceClass: "mobile" });
+    await mobile.handler(open(2, "A"));
+    await mobile.handler({ type: "close", id: 3 });
+    await mobile.handler(open(4, "B"));
+    expect(mobile.glue.events).toEqual(["decode A", "free A", "decode B"]);
   });
 
   it("鍵は開き方も含む（作業サイズ・メタデータが違えば別の写真としてデコードする）", async () => {
@@ -229,5 +260,160 @@ describe("Worker が同じ写真を保つ（#129）", () => {
 
     expect(glue.events).toEqual(["decode A"]);
     expect(posted.at(-1)?.message).toMatchObject({ type: "frame", id: 6 });
+  });
+
+  it("大きい作業コピーの書き出し前に見本と kept を解放し、active と結果 bytes は保つ", async () => {
+    const { handler, posted, glue } = setup();
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await handler(open(2, "A"));
+    await handler({ type: "close", id: 3 });
+    await handler(open(4, "B"));
+    await handler({ type: "renderPresetThumbnail", id: 5, settingsJson: "{}", maxDimension: 96 });
+    const active = glue.developers.find((entry) => entry.name === "B")!;
+    const thumbnail = glue.thumbnails[0]!;
+
+    await handler({
+      type: "exportWorkingCopyJpeg",
+      id: 6,
+      png: bytesOf("X"),
+      metaJson: "{}",
+      settingsJson: "{}",
+      maxDimension: 2049,
+      quality: 90,
+    });
+
+    expect(glue.events).toEqual([
+      "decode A",
+      "decode B",
+      "decode thumbnail of 256",
+      "free thumbnail of 256",
+      "free A",
+      "decode X",
+      "free X",
+    ]);
+    expect(active.free).not.toHaveBeenCalled();
+    expect(thumbnail.free).toHaveBeenCalledOnce();
+    const result = posted.at(-1)?.message;
+    expect(result).toMatchObject({ type: "frame", id: 6 });
+    expect(Array.from(new Uint8Array(result?.type === "frame" ? result.rgba : new ArrayBuffer(0)))).toEqual([1, 2, 3, 255]);
+  });
+
+  it("通常の 2048px 書き出しでは予算内の kept Developer を保ち、後でデコードせず再利用する", async () => {
+    const { handler, glue } = setup();
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await handler(open(2, "A"));
+    await handler({ type: "close", id: 3 });
+    await handler(open(4, "B"));
+    await handler({
+      type: "exportWorkingCopyJpeg",
+      id: 5,
+      png: bytesOf("X"),
+      metaJson: "{}",
+      settingsJson: "{}",
+      maxDimension: 2048,
+      quality: 90,
+    });
+    await handler(open(6, "A"));
+
+    expect(glue.events).toEqual(["decode A", "decode B", "decode X", "free X"]);
+    expect(glue.developers.find((entry) => entry.name === "A")?.free).not.toHaveBeenCalled();
+  });
+
+  it("allocation failure だけは保持物を解放して 1 回だけ再試行し、同じ結果 bytes を返す", async () => {
+    const { handler, posted, glue } = setup();
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await handler(open(2, "A"));
+    await handler({ type: "close", id: 3 });
+    glue.state.openFailures.push(new Error("memory allocation of 1048576 bytes failed"));
+
+    await handler({
+      type: "exportWorkingCopyJpeg",
+      id: 4,
+      png: bytesOf("X"),
+      metaJson: "{}",
+      settingsJson: "{}",
+      maxDimension: 2048,
+      quality: 90,
+    });
+
+    expect(glue.state.openAttempts).toBe(2);
+    const result = posted.at(-1)?.message;
+    expect(result).toMatchObject({ type: "frame", id: 4 });
+    expect(Array.from(new Uint8Array(result?.type === "frame" ? result.rgba : new ArrayBuffer(0)))).toEqual([1, 2, 3, 255]);
+  });
+
+  it("一時作業コピーの render で allocation failure なら先に temporary を free し、最初から1回だけ再試行する", async () => {
+    const { handler, posted, glue } = setup();
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await handler(open(2, "A"));
+    await handler({ type: "close", id: 3 });
+    glue.state.renderFailures.push(new Error("out of memory"));
+
+    await handler({
+      type: "exportWorkingCopyJpeg",
+      id: 4,
+      png: bytesOf("X"),
+      metaJson: "{}",
+      settingsJson: "{}",
+      maxDimension: 2048,
+      quality: 90,
+    });
+
+    expect(glue.state.openAttempts).toBe(2);
+    expect(glue.events).toEqual(["decode A", "decode X", "free X", "free A", "decode X", "free X"]);
+    expect(posted.at(-1)?.message).toMatchObject({ type: "frame", id: 4 });
+  });
+
+  it("surface 付き exportJpeg の allocation failure も temporary を free して全体を1回だけ再試行する", async () => {
+    const { handler, posted, glue } = setup();
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await handler(open(2, "A"));
+    await handler({ type: "close", id: 3 });
+    glue.state.exportFailures.push(new Error("failed to allocate 4096 bytes"));
+
+    await handler({
+      type: "exportJpeg",
+      id: 4,
+      bytes: bytesOf("X"),
+      settingsJson: "{}",
+      maxDimension: 2048,
+      quality: 90,
+      surfaces: [{ id: SURFACE_ID, png: new Uint8Array([1]).buffer }],
+    });
+
+    expect(glue.state.exportAttempts).toBe(2);
+    expect(glue.events).toEqual(["decode A", "decode X", "free X", "free A", "decode X", "free X"]);
+    const result = posted.at(-1)?.message;
+    expect(result).toMatchObject({ type: "jpeg", id: 4 });
+    expect(Array.from(new Uint8Array(result?.type === "jpeg" ? result.bytes : new ArrayBuffer(0)))).toEqual([0xff, 0xd8]);
+  });
+
+  it("一時作業コピーの render が非メモリエラーなら再試行しない", async () => {
+    const { handler, posted, glue } = setup();
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    glue.state.renderFailures.push(new Error("renderFailed"));
+    await handler({
+      type: "exportWorkingCopyJpeg",
+      id: 2,
+      png: bytesOf("X"),
+      metaJson: "{}",
+      settingsJson: "{}",
+      maxDimension: 2048,
+      quality: 90,
+    });
+
+    expect(glue.state.openAttempts).toBe(1);
+    expect(glue.events).toEqual(["decode X", "free X"]);
+    expect(posted.at(-1)?.message).toEqual({ type: "error", id: 2, message: "renderFailed" });
+  });
+
+  it("非メモリの open error は再試行しない", async () => {
+    const { handler, posted, glue } = setup();
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    glue.state.openFailures.push(new Error("decodeFailed"));
+    await handler({ type: "openWorkingCopy", id: 2, png: bytesOf("X"), metaJson: "{}" });
+
+    expect(glue.state.openAttempts).toBe(1);
+    expect(posted.at(-1)?.message).toEqual({ type: "error", id: 2, message: "decodeFailed" });
   });
 });

@@ -18,12 +18,23 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 const mocks = vi.hoisted(() => ({
   confirm: vi.fn(),
   createEngine: vi.fn(),
+  deviceClasses: [] as Array<"pc" | "mobile">,
 }));
 
 vi.mock("niho-ui/app-dialog", () => ({ appDialog: { confirm: mocks.confirm, alert: vi.fn(async () => undefined) } }));
 vi.mock("../develop-engine/develop-engine-client", async (importOriginal) => {
   const actual = await importOriginal<typeof import("../develop-engine/develop-engine-client")>();
   return { ...actual, createDevelopEngine: mocks.createEngine };
+});
+vi.mock("./use-browser-photo-develop", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("./use-browser-photo-develop")>();
+  return {
+    ...actual,
+    useBrowserPhotoDevelop(params: Parameters<typeof actual.useBrowserPhotoDevelop>[0]) {
+      mocks.deviceClasses.push(params.deviceClass);
+      return actual.useBrowserPhotoDevelop(params);
+    },
+  };
 });
 
 import type {
@@ -178,11 +189,11 @@ async function settle() {
   }
 }
 
-async function render(library: PhotoLibrary, extra: { canEdit?: boolean } = {}) {
+async function render(library: PhotoLibrary, extra: { canEdit?: boolean } = {}, editingHost = host) {
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
-        <PhotoLibraryProvider library={library} host={host}>
+        <PhotoLibraryProvider library={library} host={editingHost}>
           <BrowserPhotoEditingWorkbench
             spotId="local"
             canEdit={extra.canEdit ?? true}
@@ -275,6 +286,7 @@ beforeEach(() => {
   mocks.confirm.mockReset();
   mocks.confirm.mockResolvedValue(true);
   mocks.createEngine.mockReset();
+  mocks.deviceClasses.length = 0;
   mocks.createEngine.mockImplementation(() => ({
     ready: vi.fn(async () => false),
     dispose: vi.fn(),
@@ -290,6 +302,28 @@ afterEach(async () => {
   Object.defineProperty(window, "innerWidth", { configurable: true, value: initialInnerWidth });
   window.localStorage.clear();
   vi.restoreAllMocks();
+});
+
+describe("現像 Worker の端末区分", () => {
+  it.each([
+    { initialWidth: 1280, resizedWidth: 768, expectedClass: "pc" },
+    { initialWidth: 768, resizedWidth: 1280, expectedClass: "mobile" },
+  ] as const)(
+    "画面幅が $initialWidth から $resizedWidth へ変わっても $expectedClass を保つ",
+    async ({ initialWidth, resizedWidth, expectedClass }) => {
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: initialWidth });
+      await render(fakeLibrary().library, {}, { ...host, isDesktopApp: () => false });
+      const beforeResize = mocks.deviceClasses.length;
+      expect(beforeResize).toBeGreaterThan(0);
+      expect(mocks.deviceClasses.at(-1)).toBe(expectedClass);
+
+      Object.defineProperty(window, "innerWidth", { configurable: true, value: resizedWidth });
+      await act(async () => window.dispatchEvent(new Event("resize")));
+      await settle();
+      expect(mocks.deviceClasses.length).toBeGreaterThan(beforeResize);
+      expect(mocks.deviceClasses.at(-1)).toBe(expectedClass);
+    },
+  );
 });
 
 describe("一覧の選別", () => {

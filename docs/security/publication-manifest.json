@@ -297,7 +297,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine-client.test.ts",
         "sha256": "ab57eb9cc53aee5fc1ca937830d4eb7c979bf9da92b32c220bdeab772e8db065"
       },
-      "outputSha256": "e6e516b83a7c711ee779949c13ab542cc2c88e95082ab4df1a30c4ff5dafb628",
+      "outputSha256": "0fb6a4ebeefdce798c44085b0c2a57e24d3c4cd29f0d844f0daf5c700a969c95",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -317,7 +317,8 @@
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
         "見本を編集の描画の後ろへ回す（#126）の順番と診断の記録を検査",
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
-        "Issue #152 の runtime 診断を既存の描画時間テストの期待値へ追加。"
+        "Issue #152 の runtime 診断を既存の描画時間テストの期待値へ追加。",
+        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加"
       ]
     },
     {
@@ -350,9 +351,11 @@
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
         "見本を編集の描画の後ろへ回す（#126）: 編集が静かな間だけ preview・background を出し、描画ごとの待ちを診断に出す",
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
-        "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
+        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
+        "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
+        "Issue #151 のスレッド版と #155 の論理予算を同じ client に統合"
       ],
-      "outputSha256": "53e7b6a87a6d61a836f746b05e779e7b032185cd1727273fa57f654121a1984e"
+      "outputSha256": "a81896cec7c20604916b80b0eb386b1e11423ba8d6cbfc6370d3ef56072ceb01"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-manifest.ts",
@@ -476,9 +479,12 @@
         "PR #165 レビュー: pool 待ちを5秒にして単一 wasm 復旧時間を確保",
         "Issue #155 bounded analysis bytes cache",
         "Issue #155 review: validate held analysis per render and fit maximum compact bytes",
-        "Issue #151 と #155 の Worker 変更を main に統合し画素の契約を維持"
+        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
+        "Issue #155 親レビューに従い通常exportの解析cache保持・kept優先eviction・temporary全体retryへ修正",
+        "Issue #151 と #155 の Worker 変更を main に統合し画素の契約を維持",
+        "Issue #151 のスレッド版選択と #155 の cache 予算を同じ Worker に統合"
       ],
-      "outputSha256": "1967f6afa965f5bc68be20fc8f0cdd30f6cbbff75c84c9052713198d1f6dc32e"
+      "outputSha256": "176bd92908251073b2b3d79291da509e6f3a480a14c387e3aaf897e416b7822b"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -1405,9 +1411,11 @@
         "部分補正（マスク）#93: マスクの道具をスマホの全画面の編集の層でも出し（写真の上の操作・段・マスクだけの初期化）を渡した",
         "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
-        "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
+        "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。",
+        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
+        "画面幅変更後も編集面の端末メモリ区分を固定する（#155 レビュー）"
       ],
-      "outputSha256": "53a1ad69c5b1ef4a4fcf34d166cab541661c64e003bd16d9c2b884c9dbb1e8e5"
+      "outputSha256": "46679373b77f16f45162d41f7e89797fef6c69a3ce4dcd90e88c35a262a71fe9"
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-adjustment-controls-effects.test.tsx",
@@ -1853,11 +1861,12 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-bulk.ts",
         "sha256": "6518780c290b04a91f2e924816046a80f599da9d08957a516a77b94c9e02f828"
       },
-      "outputSha256": "b53648f33bf42851a981f0c4da35aec4e6a1ab0e74496c42dfc920ddb93536d3",
+      "outputSha256": "a1b555492913a574b6f4880a029b589d9bb2e8f6e869c0f1c0f75d6381ed8107",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
-        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。"
+        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
+        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加"
       ]
     },
     {
@@ -1917,7 +1926,7 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-develop.ts",
         "sha256": "491153dcf3675cfd0b822a008f101a77125411c9e18966ea7b7fb96e18ce8228"
       },
-      "outputSha256": "39108f4d991388f726e2cb73028c652089fd38facfa8984ff2715f944cd612d0",
+      "outputSha256": "411e1418fe1890361af4ef4018ff14697cfb04b9e1893cc6d307cf73b966c261",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -1926,7 +1935,8 @@
         "PR #99を#91マージ後のmainへ積み直し、遠近補正後のブラシ半径を局所ヤコビアンで写す。",
         "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
         "版の面の取り消し/やり直しと補正後プレビューの抑止に伴う変更。",
-        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。"
+        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
+        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加"
       ]
     },
     {
@@ -2113,9 +2123,10 @@
         "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
         "ドラッグ中の描画の順序管理の修正に伴う変更。",
         "プリセットを押した・乗せたときは先に粗い画を出してから丁寧な画に差し替え、乗せた丁寧な画を押したときに使い回す（#127）",
-        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。"
+        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
+        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加"
       ],
-      "outputSha256": "cdb4a696c57191403b63cb00876f78fb3b9cc0438920741f855a2e944f070608"
+      "outputSha256": "be8991309a95b0a7c5eef3f75e75dc8892d61217b32215e04f02284276c559b8"
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-preset-support.ts",
@@ -10371,8 +10382,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-progressive-open.test.tsx",
-      "origin": "Issue #13のため独立作成。actual React hooksと合成library/engine/frameだけで、provisional編集、canonical handoff、history、retry、abort、旧frame遮断を検証。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 公開signed RAW契約に合う合成metadataで実hookの正規切替を検証。\n変更理由: preview取得失敗でも正規入力の実hookで補正を続けられる回帰を追加。\n変更理由: fallback後の補正を実際にflushし通常保存のbaseと値まで検証。\n変更理由: preset適用・量drag・量commitを未解決のままhandoffに重ねるfailure injectionを追加。\n変更理由: 非同期プリセットfixtureにも実契約のversionとengineを含め型検査する\n変更理由: 同一内容draftの再表示から正規base確定後の既存saverまで実hookで回帰検証する\n変更理由: draft復元テストでも一覧復帰の成功値を明示確認しact補助のvoid型契約に合わせる\n変更理由: Expect current niho-11 default in handoff tests\n変更理由: niho-photo#36 描いた画をヒストグラムへ渡すことを検証。\n変更理由: niho-photo#41 比較の間の補正前の描画（描き直さない・ヒストグラムへ渡さない・canonical差し替え）を検証。\n変更理由: niho-photo#41 の比較UIを #72 のヒストグラム・Jキー契約と併存するようmainへ積み直した。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: niho-photo#46 で engine の mock に supportsPerspective を足した。\n変更理由: PR #97積み直し後の現行develop engine能力stubに更新。\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: ドラッグ中の描画の順序管理の修正に伴う変更。\n変更理由: テスト用の engine に yieldToEdit を足す（#126）\n変更理由: 粗い画を先に出す順番と、乗せてから押したときに描き直さないことを検査（#127）\n変更理由: 押した結果の key を確定した編集内容から取り、テストのプリセットを結果ごとに分ける（#127）",
-      "sha256": "9782ba857d60ac98cef68441fc3aa8b5862c7148159488c48a316a2d880578b8"
+      "origin": "Issue #13のため独立作成。actual React hooksと合成library/engine/frameだけで、provisional編集、canonical handoff、history、retry、abort、旧frame遮断を検証。外部画像・非公開コード・個体metadataを含まない。\n変更理由: 公開signed RAW契約に合う合成metadataで実hookの正規切替を検証。\n変更理由: preview取得失敗でも正規入力の実hookで補正を続けられる回帰を追加。\n変更理由: fallback後の補正を実際にflushし通常保存のbaseと値まで検証。\n変更理由: preset適用・量drag・量commitを未解決のままhandoffに重ねるfailure injectionを追加。\n変更理由: 非同期プリセットfixtureにも実契約のversionとengineを含め型検査する\n変更理由: 同一内容draftの再表示から正規base確定後の既存saverまで実hookで回帰検証する\n変更理由: draft復元テストでも一覧復帰の成功値を明示確認しact補助のvoid型契約に合わせる\n変更理由: Expect current niho-11 default in handoff tests\n変更理由: niho-photo#36 描いた画をヒストグラムへ渡すことを検証。\n変更理由: niho-photo#41 比較の間の補正前の描画（描き直さない・ヒストグラムへ渡さない・canonical差し替え）を検証。\n変更理由: niho-photo#41 の比較UIを #72 のヒストグラム・Jキー契約と併存するようmainへ積み直した。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: niho-photo#46 で engine の mock に supportsPerspective を足した。\n変更理由: PR #97積み直し後の現行develop engine能力stubに更新。\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: ドラッグ中の描画の順序管理の修正に伴う変更。\n変更理由: テスト用の engine に yieldToEdit を足す（#126）\n変更理由: 粗い画を先に出す順番と、乗せてから押したときに描き直さないことを検査（#127）\n変更理由: 押した結果の key を確定した編集内容から取り、テストのプリセットを結果ごとに分ける（#127）\n変更理由: Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
+      "sha256": "5c6718d2acca3d6b4a2dd494399bbd04d7752bb5ddf3f28f5e11e29b69b608db"
     },
     {
       "path": ".github/workflows/public-ci.yml",
@@ -11306,8 +11317,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-editing-workbench-flags.test.tsx",
-      "sha256": "b727c9afecd7d475b2ba1a7b471d08a5dde386506004be10ec8d41adec7f9c16",
-      "origin": "niho-photo#47 のため新規作成。編集面の選別の結合の test（偽の写真の出どころ・合成の行だけを使用）。\n変更理由: PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。"
+      "sha256": "1c425d408b791b617ffc01c8d1656fe026e68b8e79b0773c9e4f693bdcb943af",
+      "origin": "niho-photo#47 のため新規作成。編集面の選別の結合の test（偽の写真の出どころ・合成の行だけを使用）。\n変更理由: PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。\n変更理由: 画面幅をまたぐ端末区分の回帰試験を追加（#155 レビュー）"
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-flag-keys.test.tsx",
@@ -11681,8 +11692,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-held.test.ts",
-      "sha256": "a9193d3487e47694e2b4d941038fc3600ca39935686548dcf25a9bcd9a421aea",
-      "origin": "Issue #129の公開仕様だけから新規作成した、Worker が同じ写真の Developer を開き方と入力の SHA-256 の鍵で保って使い回す・古いほうから手放す・面を外す回帰（偽の glue）。実写真・非公開コード・私有参照出力を含まない。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。"
+      "sha256": "679b29c8ddbf870cc767637da190410fb2fa351de03d34278fc6533e8ecda7c6",
+      "origin": "Issue #129の公開仕様だけから新規作成した、Worker が同じ写真の Developer を開き方と入力の SHA-256 の鍵で保って使い回す・古いほうから手放す・面を外す回帰（偽の glue）。実写真・非公開コード・私有参照出力を含まない。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。\n変更理由: Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加\n変更理由: Issue #155 親レビューに従い通常exportの解析cache保持・kept優先eviction・temporary全体retryへ修正"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-analysis.test.ts",
@@ -11716,8 +11727,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-analysis-helper.test.ts",
-      "sha256": "52888b5cefb96530c1eb3b070e52adc465a672d373a3ed025b4a597e06ce958f",
-      "origin": "公開 repo で新規作成（niho-photo#155）。描画の worker が先回りを補助の worker に頼み、取り込み、写真の切り替えで終わらせ、失敗で #129 の先回りへ戻る試験（偽の glue だけ）。外部コード・実写真を含まない。\n変更理由: Issue #155 analysis cache eviction tests\n変更理由: Issue #155 review: A-B-A and repeated drag cache tests"
+      "sha256": "b8b09cb8751f9ece4119f2bd794573f0e7ebf463eabfe6a0388acd6838038a6f",
+      "origin": "公開 repo で新規作成（niho-photo#155）。描画の worker が先回りを補助の worker に頼み、取り込み、写真の切り替えで終わらせ、失敗で #129 の先回りへ戻る試験（偽の glue だけ）。外部コード・実写真を含まない。\n変更理由: Issue #155 analysis cache eviction tests\n変更理由: Issue #155 review: A-B-A and repeated drag cache tests\n変更理由: Issue #155 親レビューに従い通常exportの解析cache保持・kept優先eviction・temporary全体retryへ修正"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/par.rs",

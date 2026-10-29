@@ -141,6 +141,8 @@ function selectionKeyOf(keys: readonly string[]): string {
 
 export function useBrowserPhotoBulk(params: {
   spotId: string;
+  /** Worker の論理メモリ予算。host / 画面 class を呼び出し側が明示する。 */
+  deviceClass: "pc" | "mobile";
   canEdit: boolean;
   /** PC の広い幅（1024px 以上）。狭い幅はメニューを「操作」に畳み、キーは扱わない */
   wide: boolean;
@@ -176,6 +178,7 @@ export function useBrowserPhotoBulk(params: {
 }): { menu: BrowserPhotoBulkMenuProps | null } {
   const {
     spotId,
+    deviceClass,
     canEdit,
     wide,
     browserRuntime,
@@ -282,6 +285,7 @@ export function useBrowserPhotoBulk(params: {
     const own = createDevelopEngine({
       manifestUrl: library.engineAssets.manifestUrl() ?? undefined,
       preferNative: library.engineAssets.preferNative === true,
+      deviceClass,
     });
     ownEnginesRef.current.add(own);
     const release = () => {
@@ -293,7 +297,7 @@ export function useBrowserPhotoBulk(params: {
       return null;
     }
     return { engine: own, release };
-  }, [develop.engineRef, library]);
+  }, [develop.engineRef, deviceClass, library]);
 
   /**
    * プリセットを当てられる wasm か確かめ、同梱のプリセットを読む（メニューを初めて開いたときに 1 回。読めなかったら開き直したときに

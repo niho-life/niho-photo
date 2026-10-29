@@ -333,6 +333,7 @@ function Harness(props: { library: PhotoLibrary; items: BrowserItem[] }) {
   const queryClientRef = useRef(new QueryClient());
   const develop = useBrowserPhotoDevelop({
     spotId: "spot",
+    deviceClass: "pc",
     actorId: null,
     queryClient: queryClientRef.current,
     mountedRef,
@@ -343,6 +344,7 @@ function Harness(props: { library: PhotoLibrary; items: BrowserItem[] }) {
   });
   current = useBrowserPhotoOpen({
     spotId: "spot",
+    deviceClass: "pc",
     canEdit: true,
     openCloudPhotoId: null,
     onOpenCloudPhotoHandled: vi.fn(),
