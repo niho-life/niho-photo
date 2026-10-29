@@ -15,12 +15,22 @@ import {
   matchesPackagePath,
   packReleaseSet,
   sha256,
+  THREADS_BUILD,
+  threadsRuntimeFileNames,
   validateConfig,
   validateRuntimeAssets,
   verifyReleaseManifestFiles,
 } from "./release-set-lib.mjs";
 import { smokeConsumer } from "./smoke-consumer.mjs";
-import { rewriteVersionedRuntimeReferences, runtimeBuildEnvironment, versionedRuntimeFileName } from "./build-develop-engine-runtime.mjs";
+import {
+  rewriteThreadsRuntimeReferences,
+  rewriteVersionedRuntimeReferences,
+  runtimeBuildEnvironment,
+  threadsRuntimeBuildEnvironment,
+  versionedRuntimeFileName,
+  versionedThreadsRuntimeFileName,
+  wasmMemoryImports,
+} from "./build-develop-engine-runtime.mjs";
 import { normalizeArtifactDigest, validateReleaseManifest, verifyReleaseArtifact } from "./verify-release-artifact.mjs";
 import { nativeBuildEnvironment, swiftSourcePrefixArguments, validateNativeSourceClosure } from "../../packages/develop-engine/build-macos-native.mjs";
 
@@ -60,19 +70,29 @@ function runtimeFixture(root, config, source = { commit: "a".repeat(40), tree: "
     [`niho_develop_wasm_bg-${config.engine.crateVersion}.wasm`]: Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00]),
     [`niho_develop_wasm-${config.engine.crateVersion}.d.ts`]: "export default function init(input?: unknown): Promise<unknown>;\n",
   };
+  const threadsNames = threadsRuntimeFileNames(config.engine.crateVersion);
+  const threadsValues = {
+    [threadsNames.js]: `import { startWorkers } from "./${threadsNames.worker}";\nexport default async function init() {}\nexport function initThreadPool() {}\n`,
+    [threadsNames.dts]: "export function initThreadPool(num_threads: number): Promise<any>;\n",
+    [threadsNames.wasm]: Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x02]),
+    [threadsNames.wasmDts]: "export const memory: WebAssembly.Memory;\n",
+    [threadsNames.worker]: `export async function startWorkers() { await import("./${threadsNames.js}"); }\n`,
+  };
+  const records = (entries) => Object.fromEntries(Object.entries(entries).map(([name, value]) => {
+    const bytes = Buffer.isBuffer(value) ? value : Buffer.from(value);
+    return [name, { sha256: sha256(bytes), bytes: bytes.length }];
+  }));
   const manifest = {
     schemaVersion: 1,
     engine: config.engine.version,
     version: config.engine.crateVersion,
     source: { repository: config.repository ?? "niho-life/niho-photo", ...source },
     build: { rustToolchain: "1.98.1", wasmBindgen: "0.2.129", target: "wasm32-unknown-unknown", profile: "release" },
-    files: Object.fromEntries(Object.entries(values).map(([name, value]) => {
-      const bytes = Buffer.isBuffer(value) ? value : Buffer.from(value);
-      return [name, { sha256: sha256(bytes), bytes: bytes.length }];
-    })),
+    files: records(values),
+    threads: { files: records(threadsValues), build: { ...THREADS_BUILD } },
   };
   put(directory, config.engine.manifestName, `${JSON.stringify(manifest, null, 2)}\n`);
-  for (const [name, value] of Object.entries(values)) put(directory, name, value);
+  for (const [name, value] of Object.entries({ ...values, ...threadsValues })) put(directory, name, value);
   return directory;
 }
 
@@ -124,6 +144,64 @@ test("wasm-bindgen の出力名と JS/d.ts 内部参照を同じ crate version �
   assert.match(rewritten, /niho_develop_wasm-0\.25\.0\.js/);
   assert.doesNotMatch(rewritten, /niho_develop_wasm_bg\.wasm/);
   assert.equal(rewriteVersionedRuntimeReferences("niho_develop_wasm_bg.wasm", Buffer.from("bytes"), "0.25.0").toString(), "bytes");
+});
+
+test("スレッドの版の helper と glue の参照を平らな版つきのファイルへ書き換える", () => {
+  const names = threadsRuntimeFileNames("0.26.0");
+  const helperPath = "snippets/wasm-bindgen-rayon-38edf6e439f6d70d/src/workerHelpers.js";
+  assert.equal(versionedThreadsRuntimeFileName(helperPath, "0.26.0"), names.worker);
+  assert.equal(versionedThreadsRuntimeFileName("niho_develop_wasm_threads.js", "0.26.0"), names.js);
+  assert.equal(versionedThreadsRuntimeFileName("niho_develop_wasm_threads_bg.wasm", "0.26.0"), names.wasm);
+  assert.equal(versionedThreadsRuntimeFileName("niho_develop_wasm_threads_bg.wasm.d.ts", "0.26.0"), names.wasmDts);
+  assert.equal(versionedThreadsRuntimeFileName("snippets/other/src/x.js", "0.26.0"), undefined);
+  const glue = [
+    "import { startWorkers } from './snippets/wasm-bindgen-rayon-38edf6e439f6d70d/src/workerHelpers.js';",
+    'const imports = { "./niho_develop_wasm_threads_bg.js": import0 };',
+    "module_or_path = new URL('niho_develop_wasm_threads_bg.wasm', import.meta.url);",
+  ].join("\n");
+  const rewrittenGlue = rewriteThreadsRuntimeReferences("niho_develop_wasm_threads.js", Buffer.from(glue), "0.26.0").toString();
+  assert.ok(rewrittenGlue.includes(`from "./${names.worker}"`));
+  assert.ok(rewrittenGlue.includes(`new URL('${names.wasm}'`));
+  assert.ok(rewrittenGlue.includes('"./niho_develop_wasm_threads_bg.js": import0'));
+  const helper = [
+    "// resolve the main module via `../../..` (`[out-dir]/snippets/wasm-bindgen-rayon-[hash]/workerHelpers.js`)",
+    "  // TODO: while `new URL('...', import.meta.url) becomes a semi-standard",
+    "  const pkg = await import('../../..');",
+    "      const worker = new Worker(new URL('./workerHelpers.js', import.meta.url), {",
+  ].join("\n");
+  const rewrittenHelper = rewriteThreadsRuntimeReferences(helperPath, Buffer.from(helper), "0.26.0").toString();
+  assert.ok(rewrittenHelper.includes(`import("./${names.js}")`));
+  assert.ok(rewrittenHelper.includes(`new URL("./${names.worker}", import.meta.url)`));
+  assert.match(rewrittenHelper, /\/\/ resolve the main module via `\.\.\/\.\.\/\.\.`/u);
+  assert.throws(() => rewriteThreadsRuntimeReferences(helperPath, Buffer.from("const pkg = await import('../../..');\n"), "0.26.0"), /helper から helper（0 件）/u);
+  assert.throws(() => rewriteThreadsRuntimeReferences("niho_develop_wasm_threads.js", Buffer.from(`${glue}\n${glue.split("\n")[0]}`), "0.26.0"), /glue から helper（2 件）/u);
+  assert.throws(() => rewriteThreadsRuntimeReferences("niho_develop_wasm_threads.js", Buffer.from(`${glue}\nimport("./snippets/other.js");`), "0.26.0"), /版の無い参照/u);
+  assert.throws(() => rewriteThreadsRuntimeReferences("niho_develop_wasm_threads.js", Buffer.from(`${glue}\nimport("./elsewhere.js");`), "0.26.0"), /配布物の外/u);
+  assert.equal(rewriteThreadsRuntimeReferences("niho_develop_wasm_threads_bg.wasm", Buffer.from("bytes"), "0.26.0").toString(), "bytes");
+});
+
+test("スレッドの wasm の共有メモリの import を読む", () => {
+  const body = [0x01, 0x03, ...Buffer.from("wbg"), 0x06, ...Buffer.from("memory"), 0x02, 0x03, 0x11, 0x80, 0x80, 0x04];
+  const module = Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00, 0x00, 0x02, 0x01, 0x78, 0x02, body.length, ...body]);
+  assert.deepEqual(wasmMemoryImports(module), [{ module: "wbg", field: "memory", shared: true, initial: 17, maximum: 65536 }]);
+  assert.equal(wasmMemoryImports(module)[0].maximum * 65536, THREADS_BUILD.maxMemory);
+  assert.deepEqual(wasmMemoryImports(Buffer.from([0x00, 0x61, 0x73, 0x6d, 0x01, 0x00, 0x00, 0x00])), []);
+  assert.throws(() => wasmMemoryImports(Buffer.from("not wasm")), /wasm/u);
+});
+
+test("スレッドの版は固定の 1.98.1 のまま共有メモリ・build-std で隔離して build する", () => {
+  const scratch = { home: "/isolated/home", cargoHome: "/isolated/cargo", temporary: "/isolated/tmp", target: "/isolated/target", threadsTarget: "/isolated/target-threads" };
+  const env = threadsRuntimeBuildEnvironment({ PATH: "/bin", HOME: "/synthetic/home", RUSTFLAGS: "unapproved", RUSTC_BOOTSTRAP: "0" }, scratch);
+  const flags = env.CARGO_ENCODED_RUSTFLAGS.split("\x1f");
+  assert.equal(env.RUSTUP_TOOLCHAIN, "1.98.1");
+  assert.equal(env.RUSTC_BOOTSTRAP, "1");
+  assert.equal(env.RUSTFLAGS, undefined);
+  assert.equal(env.CARGO_TARGET_DIR, "/isolated/target-threads");
+  assert.equal(env.HOME, "/isolated/home");
+  for (const flag of ["target-feature=+atomics,+bulk-memory,+mutable-globals,+simd128", "link-arg=--shared-memory", "link-arg=--import-memory", `link-arg=--max-memory=${THREADS_BUILD.maxMemory}`, "link-arg=--export=__wasm_init_tls", "link-arg=--export=__tls_size", "link-arg=--export=__tls_align", "link-arg=--export=__tls_base"]) assert.ok(flags.includes(flag), flag);
+  for (const prefix of [realRoot, "/synthetic/home", "/isolated/cargo", "/synthetic/home/.rustup", "/isolated/tmp"]) assert.ok(flags.some((flag) => flag.startsWith(`--remap-path-prefix=${prefix}=`)), prefix);
+  assert.equal(THREADS_BUILD.maxMemory, 4294967296);
+  assert.throws(() => threadsRuntimeBuildEnvironment({ HOME: "/synthetic/home" }, { ...scratch, threadsTarget: "relative" }), /隔離/u);
 });
 
 test("engine runtime build は外部Cargo設定を捨てpathをremapする", () => {
@@ -205,6 +283,27 @@ test("engine runtime の欠落・tamper・symlink を拒否する", () => {
   const expectedSource = { commit: "a".repeat(40), tree: "b".repeat(40) };
   const valid = validateRuntimeAssets({ assetDirectory: assets, engine: config.engine, expectedSource });
   assert.equal(valid.files.length, 3);
+  assert.equal(valid.threadsFiles.length, 5);
+  const manifestPath = path.join(assets, config.engine.manifestName);
+  const original = readFileSync(manifestPath, "utf8");
+  for (const [pattern, mutate] of [
+    [/スレッドの版がありません/u, (value) => { delete value.threads; }],
+    [/build 指定/u, (value) => { value.threads.build.maxMemory = 2 ** 31; }],
+    [/build 指定/u, (value) => { value.threads.build.rustcBootstrap = false; }],
+    [/file 集合/u, (value) => { value.threads.files["extra.js"] = value.threads.files[Object.keys(value.threads.files)[0]]; }],
+    [/file 集合/u, (value) => { delete value.threads.files[threadsRuntimeFileNames(config.engine.crateVersion).worker]; }],
+  ]) {
+    const changed = JSON.parse(original);
+    mutate(changed);
+    writeFileSync(manifestPath, JSON.stringify(changed));
+    assert.throws(() => validateRuntimeAssets({ assetDirectory: assets, engine: config.engine, expectedSource }), pattern);
+  }
+  writeFileSync(manifestPath, original);
+  const threadsWorker = path.join(assets, threadsRuntimeFileNames(config.engine.crateVersion).worker);
+  const workerBytes = readFileSync(threadsWorker);
+  writeFileSync(threadsWorker, "tampered");
+  assert.throws(() => validateRuntimeAssets({ assetDirectory: assets, engine: config.engine, expectedSource }), /hash/);
+  writeFileSync(threadsWorker, workerBytes);
   assert.throws(() => validateRuntimeAssets({ assetDirectory: assets, engine: config.engine, expectedSource: { ...expectedSource, commit: "c".repeat(40) } }), /provenance/);
   const wasm = valid.files.find((file) => file.name.endsWith(".wasm"));
   writeFileSync(path.join(assets, wasm.name), "tampered");
@@ -254,14 +353,23 @@ test("clean Git object から決定的 tarball を作り repo 外 consumer で T
       validateNativeSourceClosure(path.join(extracted, "package/engine"));
       const inputs = JSON.parse(execFileSync("tar", ["-xOzf", path.join(first, item.file), "package/release-inputs.json"], { encoding: "utf8" }));
       assert.match(inputs.commands.wasm, /--config engine\/\.cargo\/config\.toml/u);
+      assert.match(inputs.commands.wasmThreads, /^RUSTC_BOOTSTRAP=1 RUSTFLAGS="-C target-feature=\+atomics,\+bulk-memory,\+mutable-globals,\+simd128 .*--max-memory=4294967296.*" cargo build .*--features threads -Z build-std=panic_abort,std$/u);
     }
     if (item.id === "develop-engine-runtime") {
       const packageJson = JSON.parse(execFileSync("tar", ["-xOzf", path.join(first, item.file), "package/package.json"], { encoding: "utf8" }));
       assert.equal(packageJson.type, "module");
+      for (const name of Object.values(threadsRuntimeFileNames(fixture.config.engine.crateVersion))) assert.ok(entries.includes(`package/develop-engine/${fixture.config.engine.version}/${name}`), name);
     }
   }
   const manifestPath = path.join(first, one.manifestName);
   assert.deepEqual(verifyReleaseManifestFiles(manifestPath).packages, one.manifest.packages);
+  // Mac の candidate が同梱する runtimeFiles は 1 本だけ。スレッドの版は threads に分ける。
+  assert.equal(one.manifest.engine.runtimeFiles.length, 3);
+  assert.ok(one.manifest.engine.runtimeFiles.every(({ name }) => !name.includes("threads")));
+  assert.deepEqual(one.manifest.engine.threads.runtimeFiles.map(({ name }) => name).sort(), Object.values(threadsRuntimeFileNames(fixture.config.engine.crateVersion)).sort());
+  const beforeThreads = structuredClone(one.manifest);
+  delete beforeThreads.engine.threads;
+  assert.equal(validateReleaseManifest(beforeThreads, fixture.source.commit).engine.threads, undefined);
   const historicalManifest = structuredClone(one.manifest);
   historicalManifest.repository = "niho-coliving/niho-photo";
   assert.equal(validateReleaseManifest(historicalManifest, fixture.source.commit).repository, "niho-coliving/niho-photo");
@@ -302,6 +410,11 @@ test("clean Git object から決定的 tarball を作り repo 外 consumer で T
     ["missing-owned-source", (value) => { delete value.sourceOwnership; }],
     ["changed-owned-source", (value) => { value.sourceOwnership.paths[0].sha256 = "c".repeat(64); }],
     ["node-contract-disabled", (value) => { value.recipeCompatibility.nodeRuntimeValidator = false; }],
+    ["threads-empty", (value) => { value.engine.threads.runtimeFiles = []; }],
+    ["threads-null", (value) => { value.engine.threads = null; }],
+    ["threads-duplicate-single", (value) => { value.engine.threads.runtimeFiles[0] = { ...value.engine.runtimeFiles[0] }; }],
+    ["threads-bad-integrity", (value) => { value.engine.threads.runtimeFiles[0].integrity = "sha256-invalid"; }],
+    ["threads-extra-key", (value) => { value.engine.threads.files = {}; }],
   ]) {
     const changed = structuredClone(one.manifest);
     mutate(changed);

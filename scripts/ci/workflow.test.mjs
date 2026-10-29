@@ -56,6 +56,7 @@ for (const [name, mutate] of [
   ["unreviewed advisory exception", (w) => { w.jobs.dependencies.steps[1].with["allow-ghsas"] += ",GHSA-0000-0000-0000"; }],
   ["weaker vulnerability threshold", (w) => { w.jobs.dependencies.steps[1].with["fail-on-severity"] = "high"; }],
   ["SDK consumer smoke omitted", (w) => { w.jobs["photo-editing"].steps = w.jobs["photo-editing"].steps.filter((step) => step.run !== "npm run sdk:test"); }],
+  ["SDK rust-src omitted", (w) => { const step = w.jobs["photo-sdk"].steps.find((item) => item.name === "固定Rust/WASM toolchainを準備"); step.run = step.run.replace(" --component rust-src", ""); }],
   ["SDK real engine smoke omitted", (w) => { w.jobs["photo-sdk"].steps.find((step) => step.name === "実WASM・pack・repo外consumerを検証").run = "npm run sdk:smoke"; }],
   ["candidate proof skipped", (w) => { w.jobs["photo-candidate"].if = "false"; }],
   ["candidate fixture omitted", (w) => { w.jobs["photo-candidate"].steps = w.jobs["photo-candidate"].steps.filter((step) => step.name !== "candidate data fixtureを検証"); }],

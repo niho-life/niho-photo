@@ -83,7 +83,7 @@
         },
         {
           "name": "固定Rust/WASM toolchainを準備",
-          "run": "rustup toolchain install 1.98.1 --profile minimal --target wasm32-unknown-unknown\ncargo +1.98.1 install wasm-bindgen-cli --version 0.2.129 --locked"
+          "run": "rustup toolchain install 1.98.1 --profile minimal --target wasm32-unknown-unknown --component rust-src\ncargo +1.98.1 install wasm-bindgen-cli --version 0.2.129 --locked"
         },
         {
           "id": "sdk",

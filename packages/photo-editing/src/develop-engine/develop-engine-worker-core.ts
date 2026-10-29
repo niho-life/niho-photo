@@ -208,7 +208,7 @@ export type DevelopMaskSurfacePng = { id: string; png: ArrayBuffer };
 
 export type DevelopEngineWorkerResponse =
   | { type: "perf"; id: 0; record: DevelopEnginePerfRecord }
-  | ({ type: "ready"; id: number; version: string; runtime: DevelopEngineRuntime } & DevelopEngineWorkerFeatures)
+  | ({ type: "ready"; id: number; version: string; runtime: DevelopEngineRuntime; wasmThreads?: number } & DevelopEngineWorkerFeatures)
   | { type: "unavailable"; id: number; reason: string }
   | { type: "opened"; id: number; width: number; height: number }
   | { type: "frame"; id: number; width: number; height: number; rgba: ArrayBuffer }
@@ -244,6 +244,8 @@ export type DevelopEngineWorkerDeps = {
   createNativeGlue?: () => unknown;
   /** native の通信・handle 失効を表す error の判定（core を transport 実装から分離し、偽 glue で試験できるようにする）。 */
   isNativeUnavailableError?: (error: unknown) => boolean;
+  /** Worker の実行環境。分離とブラウザを確認した場合だけスレッド版を試す。 */
+  threadsEnvironment?: () => { isolated: boolean; hardwareConcurrency: number; userAgent: string };
   /** オプトイン診断だけで使う時計と、安全な定型フィールドだけを受け取るログ口。 */
   now?: () => number;
   logPerf?: (record: DevelopEnginePerfRecord) => void;
@@ -264,7 +266,7 @@ export type DevelopEngineWorkerDeps = {
   createAnalysisHelper?: (receive: (response: DevelopAnalysisHelperResponse | null) => void) => DevelopAnalysisHelper | null;
 };
 
-export type DevelopEngineRuntime = "native" | "wasm";
+export type DevelopEngineRuntime = "native" | "wasm" | "wasm-threads";
 
 export type DevelopEnginePerfRecord = {
   stage:
@@ -861,6 +863,7 @@ export function createDevelopEngineWorkerHandler(
   let glue: DevelopGlue | null = null;
   let version = "";
   let runtime: DevelopEngineRuntime = "wasm";
+  let wasmThreads = 1;
   let activeManifestUrl: string | null = null;
   let nativeReleaseClient: (() => unknown) | null = null;
   // 起こした wasm が効果のある設定（v: 3）を読めるか（起こしたときに 1 回だけ確かめる）
@@ -1394,6 +1397,7 @@ export function createDevelopEngineWorkerHandler(
       id,
       version,
       runtime,
+      ...(wasmThreads > 1 ? { wasmThreads } : {}),
       ...(glue ? glueFeatures(glue) : {}),
       ...(effects ? { effects: true as const } : {}),
       ...(colorPoints ? { colorPoints: true as const } : {}),
@@ -1427,7 +1431,7 @@ export function createDevelopEngineWorkerHandler(
     helperManifestUrl = manifestUrl;
   };
 
-  const loadWasm = async (manifestUrl: string): Promise<void> => {
+  const loadWasm = async (manifestUrl: string, allowThreads = true): Promise<void> => {
     const manifest = await measureAsync("manifestFetch", async () => {
       const response = await deps.fetch(manifestUrl, { cache: "no-cache" });
       if (!response.ok) throw new Error(`develop engine manifest ${response.status}`);
@@ -1435,6 +1439,41 @@ export function createDevelopEngineWorkerHandler(
       if (!parsed) throw new Error("develop engine manifest is invalid");
       return parsed;
     });
+    const environment = deps.threadsEnvironment?.();
+    // Safari と iOS のブラウザは WebKit の Worker pool が遅くなり続ける計測結果がある（#148）。
+    const webkit = environment && (/iPhone|iPad|iPod/i.test(environment.userAgent) ||
+      (/Safari/i.test(environment.userAgent) && !/Chrome|Chromium|Edg/i.test(environment.userAgent)));
+    const cores = environment?.hardwareConcurrency ?? 0;
+    const threadedFiles = manifest.threads;
+    if (allowThreads && threadedFiles && environment?.isolated && !webkit && Number.isFinite(cores) && cores >= 4) {
+      const count = Math.min(8, Math.floor(cores));
+      try {
+        const module = await measureAsync("glueImport", () => deps.importModule(threadedFiles.jsUrl));
+        const threaded = readGlue(module);
+        if (!threaded || !isRecord(module) || typeof module.initThreadPool !== "function") {
+          throw new Error("threaded develop engine glue is invalid");
+        }
+        await measureAsync("wasmInit", async () => {
+          const output = await threaded.init({ module_or_path: threadedFiles.wasmUrl });
+          let timer: ReturnType<typeof setTimeout> | undefined;
+          try {
+            await Promise.race([
+              (module.initThreadPool as (threads: number) => Promise<unknown>)(count),
+              // Client 全体の初期化期限は20秒。単一版を再読込する時間を残す。
+              new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("thread pool timed out")), 5_000); }),
+            ]);
+          } finally {
+            if (timer) clearTimeout(timer);
+          }
+          wasmMemory = () => readMemoryBuffer(output);
+        });
+        wasmThreads = count;
+        activateGlue(threaded, manifestUrl, "wasm-threads", manifest.version);
+        return;
+      } catch {
+        // 配布物の不整合、メモリ不足、pool 起動失敗でも単一 wasm の画素を使う。
+      }
+    }
     const loaded = await measureAsync("glueImport", async () => {
       const parsed = readGlue(await deps.importModule(manifest.jsUrl));
       if (!parsed) throw new Error("develop engine glue is invalid");
@@ -1444,6 +1483,7 @@ export function createDevelopEngineWorkerHandler(
       const output = await loaded.init({ module_or_path: manifest.wasmUrl });
       wasmMemory = () => readMemoryBuffer(output);
     });
+    wasmThreads = 1;
     activateGlue(loaded, manifestUrl, "wasm", manifest.version);
   };
 
@@ -1470,6 +1510,7 @@ export function createDevelopEngineWorkerHandler(
         : null;
     await loaded.init({ module_or_path: manifestUrl });
     wasmMemory = () => null;
+    wasmThreads = 1;
     activateGlue(loaded, manifestUrl, "native", "");
   };
 
@@ -1495,7 +1536,7 @@ export function createDevelopEngineWorkerHandler(
           await loadNative(manifestUrl);
         } catch {
           releaseNativeClient();
-          await loadWasm(manifestUrl);
+          await loadWasm(manifestUrl, false);
         }
       } else {
         await loadWasm(manifestUrl);
@@ -1550,7 +1591,7 @@ export function createDevelopEngineWorkerHandler(
     glue = null;
     releaseNativeClient();
 
-    await loadWasm(manifestUrl);
+    await loadWasm(manifestUrl, false);
     if (!input) {
       currentOpenInput = null;
       return;
