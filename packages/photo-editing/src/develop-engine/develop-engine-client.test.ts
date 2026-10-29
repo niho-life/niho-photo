@@ -1183,6 +1183,7 @@ describe("createDevelopEngine", () => {
 
       const records = info.mock.calls.filter(([tag]) => tag === "[photo-develop-perf]").map(([, record]) => record as Record<string, unknown>);
       expect(records).toEqual([
+        { stage: "runtime", runtime: "wasm" },
         { stage: "renderRequest", priority: "final", queuedMs: expect.any(Number), roundTripMs: expect.any(Number), status: "ok" },
         { stage: "presetThumbnailRequest", priority: "preview", queuedMs: expect.any(Number), roundTripMs: expect.any(Number), status: "error" },
       ]);
@@ -1192,7 +1193,7 @@ describe("createDevelopEngine", () => {
       const plain = quiet.render({}, { maxDimension: 1280, interactive: false });
       quietWorker.respond(frameResponse(quietWorker.lastRequest("render").id, 1));
       await plain;
-      expect(info.mock.calls.filter(([tag]) => tag === "[photo-develop-perf]")).toHaveLength(2);
+      expect(info.mock.calls.filter(([tag]) => tag === "[photo-develop-perf]")).toHaveLength(3);
     } finally {
       info.mockRestore();
     }

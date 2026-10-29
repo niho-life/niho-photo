@@ -297,7 +297,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine-client.test.ts",
         "sha256": "ab57eb9cc53aee5fc1ca937830d4eb7c979bf9da92b32c220bdeab772e8db065"
       },
-      "outputSha256": "e242b3e0b5db170f22d54736b52a0216c01bf0b93de058fc27072fbaad8ae48a",
+      "outputSha256": "e6e516b83a7c711ee779949c13ab542cc2c88e95082ab4df1a30c4ff5dafb628",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -316,7 +316,8 @@
         "PR #96統合でcrate 0.24・v8対応",
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
         "見本を編集の描画の後ろへ回す（#126）の順番と診断の記録を検査",
-        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。"
+        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
+        "Issue #152 の runtime 診断を既存の描画時間テストの期待値へ追加。"
       ]
     },
     {
