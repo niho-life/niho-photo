@@ -11805,6 +11805,31 @@
       "origin": "公開Issue #152 のため新規作成。合成 PNG で camera の画面から露光・プリセット・native runtime を確認する E2E。外部の画像・実写真を含まない。"
     },
     {
+      "path": "packages/develop-engine/tools/sky-mask-train/README.md",
+      "sha256": "886f691d367227e8e68b5ea8ab65d7434a548606a052b19951551fb8eb3b526b",
+      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。 変更理由: 学習時に露出メタデータ件数を照合し、スナップショットの欠落を検出する。 変更理由: 件数照合が有効な ev100 を数えることを明記。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-train/requirements.txt",
+      "sha256": "a719025c8c804eb77263c8acce6735908e3671c9e1aee844d5da639da752b5f2",
+      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-train/sky_math.py",
+      "sha256": "7502027cb9f9349e20d5396714b36bcd6c8f6592a030ef3502497252bd8c9088",
+      "origin": "Issue #158 で NIHO が作成した非公開研究コードを公開用に整理。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-train/train_sky.py",
+      "sha256": "66e9062e6ff309fc1fcc2e3808b07e50b3d0201aed1f17e943bbe6c33fd9ecbe",
+      "origin": "Issue #158 で NIHO が作成した非公開研究コードを公開用に整理。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。 変更理由: 学習時に露出メタデータ件数を照合し、スナップショットの欠落を検出する。\n変更理由: 露出増強を線形光で計算し、無効な露出値を除外する"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-train/evaluate.py",
+      "sha256": "a6ec276743c5543f4a641a6f20b6f04e018f3240a0fdec2f4e546af33e406d38",
+      "origin": "Issue #158 で NIHO が作成した非公開研究コードを公開用に整理。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。 変更理由: 空なし写真での誤検出件数を評価出力へ明示。"
+    },
+    {
       "path": "packages/develop-engine/crates/niho-develop/examples/stage_timing.rs",
       "sha256": "b14fddd5f30c2e240a9b45fb0451d349d2e51acc8acb884318fb7ab25cf40445",
       "origin": "公開 Issue #150 のため新規作成。現像段ごとの時間を合成画像で計測する例。実写真や第三者のコードを含まない。\n変更理由: Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
@@ -11863,6 +11888,7 @@
       "path": "scripts/sdk/verify-release-artifact.mjs",
       "sha256": "600cf2647380a1e8670fa9641cbbb38f34664330ec53269f958627a2026d2667",
       "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/verify-release-artifact.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
+
     }
   ],
   "excludedSources": [
