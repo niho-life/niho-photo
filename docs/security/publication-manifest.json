@@ -11768,6 +11768,31 @@
       "path": "apps/camera/scripts/e2e/native-develop-ui.sh",
       "sha256": "073d18a160c00daf09906ad677b47a19317506edef76de15443bb8df1c64bdbf",
       "origin": "公開Issue #152 のため新規作成。合成 PNG で camera の画面から露光・プリセット・native runtime を確認する E2E。外部の画像・実写真を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-train/README.md",
+      "sha256": "bd8973307e23ebcef5490b64168409561391e7b7f043fe08fbc1c1baee244262",
+      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-train/requirements.txt",
+      "sha256": "a719025c8c804eb77263c8acce6735908e3671c9e1aee844d5da639da752b5f2",
+      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-train/sky_math.py",
+      "sha256": "7502027cb9f9349e20d5396714b36bcd6c8f6592a030ef3502497252bd8c9088",
+      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-train/train_sky.py",
+      "sha256": "f444f19af77a71790cc31a490b28dcf71321aff06a12590afb6b4c3bdd448ec4",
+      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-train/evaluate.py",
+      "sha256": "3ba87fc230e16b01502a6c52633bc24b04bd09213a12c1dec4fc8cac169e77ef",
+      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。"
     }
   ],
   "excludedSources": [
