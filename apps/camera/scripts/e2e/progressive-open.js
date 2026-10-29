@@ -110,7 +110,9 @@
   setInterval(() => {
     const recentEvents = events.slice(-16).map((event) => event.stage).join(",");
     const recentWorkerStages = perf.slice(-16).map((record) => record.stage).join(",");
-    location.href = `https://niho-e2e.invalid/trace?step=${encodeURIComponent(stage)}&events=${encodeURIComponent(recentEvents)}&worker=${encodeURIComponent(recentWorkerStages)}`;
+    const diagnostics = new URLSearchParams(location.search).get("photoDevelopPerf") === "1" &&
+      (location.pathname.endsWith("/photoEditing") || location.pathname === "/");
+    location.href = `https://niho-e2e.invalid/trace?step=${encodeURIComponent(stage)}&events=${encodeURIComponent(recentEvents)}&worker=${encodeURIComponent(recentWorkerStages)}&diag=${diagnostics ? 1 : 0}`;
   }, 2000);
   try {
     history.replaceState(null, "", "?photoDevelopPerf=1");
