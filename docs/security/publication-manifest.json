@@ -11621,7 +11621,7 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/sky.rs",
-      "sha256": "38aae088cd16d52177cca016fbbce2ed8bc5e56fb0e6e0052906ffcf81dadd25",
+      "sha256": "19c739774394bed18f7f03cdfcc977168f40ff1c53a759f49cc8fa3a69303c4b",
       "origin": "Issue #141 のため新規作成した、写真から空の範囲を推定してマスクの面にする NIHO の推定（#128 の候補 A を v1 として移植。解析 384px の種・空の色の場・領域の成長・guided filter）と、その合成画像の試験。外部画像・非公開コード・第三者の重みを含まない。"
     }
   ],

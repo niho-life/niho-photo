@@ -240,8 +240,8 @@ fn box_mean(p: &Plane, r: usize) -> Plane {
         let mut s: f64 = (-ri..=ri).map(|t| tmp[clamp(t, h) * w + x]).sum();
         for y in 0..h {
             out.v[y * w + x] = (s / (k * k)) as f32;
-            s += tmp[clamp(y as isize + ri + 1, h) * w + x]
-                - tmp[clamp(y as isize - ri, h) * w + x];
+            s +=
+                tmp[clamp(y as isize + ri + 1, h) * w + x] - tmp[clamp(y as isize - ri, h) * w + x];
         }
     }
     out
