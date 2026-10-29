@@ -12,6 +12,12 @@ cargo +1.98.1 build --locked --config packages/develop-engine/.cargo/config.toml
 python3 packages/develop-engine/tools/independent-profile/check.py
 ```
 
+並列（#148）: `niho-develop` の `threads` feature で、重い段を rayon の行・画素ごとに分けて描く（`src/par.rs`。native と、スレッドの wasm）。分けるのは行・画素だけで、足し合わせの順が変わる reduction は分けない。全 engine の代表の設定の RGBA の SHA-256 を `tests/render_identity.rs` に固定し、既定・`threads`（1 本と 8 本）・wasm32 で同じ bytes になることを公開 CI で見る。既定（feature なし）の build は今の 1 本の wasm のまま。
+
+```sh
+cargo +1.98.1 test --locked --manifest-path packages/develop-engine/Cargo.toml -p niho-develop --features threads --test render_identity
+```
+
 実RW2は `fixtures/public-raw/dc-s5-owner.rw2`。オーナー撮影の無人の教室・ストーブの写真を目視確認し、顔・人体の自動検出だけで採否を決めていない。RAWの圧縮画素、sensor寸法、crop、WB、black/whiteと原寸camera RGBを元の写真と照合した。GPS・serial・氏名・EXIF・MakerNotes・camera IFD・thumbnail・ICCを含めず、decodeに必要なタグと圧縮stripだけから再構築している。監査記録と512pxの元画素goldenを同梱し、Rustテストは環境変数なしで必ず走る。
 
 独立DCPは所有RAWと所有カメラJPEGの色の測定対から、外部カメラ行列を初期値に使わず解析的に推定した。写真単位で先に5学習/2検証へ分離し、検証2写真の輝度を揃えた色差は平均ΔE76 4.14/4.19、p95 13.34/13.61。これは色だけの参考評価で、トーン一致、絶対WB、チャート測色精度、他機種の品質を実証するものではない。公開RAW fixtureは学習側の写真であり、検証写真の画素画像は同梱しない。

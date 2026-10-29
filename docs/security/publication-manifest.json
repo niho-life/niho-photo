@@ -5115,7 +5115,7 @@
         "path": "packages/develop-engine/Cargo.lock",
         "sha256": "e7caae6825c3c4c50d7d593c35d7163de7d311357b81558d1ad1a009cbfafadc"
       },
-      "outputSha256": "6fdb5db2e783c1fa15b07e1d0215ba7a9c818214c4fee70fa8dc2fc0cff30ca4",
+      "outputSha256": "c0c120c635374d8e67d4211db61d1651c54178965654968df813a212b4923661",
       "modifications": [
         "新しい色相保持エンジンと新旧バイナリの能力境界・数値回帰を整合。",
         "現像workspaceだけを0.17.0へ更新し外部依存の固定版を維持。",
@@ -5137,7 +5137,8 @@
         "niho-photo#44 前半の crate 版 0.22.0 に合わせて workspace の 8 crate の版を更新した。",
         "PR #96統合でcrate 0.24・v8対応",
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
-        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ"
+        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
+        "#148: niho-develop の任意 threads feature に既存依存 rayon を追加。"
       ]
     },
     {
@@ -5994,9 +5995,10 @@
         "path": "packages/develop-engine/crates/niho-develop/Cargo.toml",
         "sha256": "8c9bf9ca391393173b7e7b743186804f670c401073ff003f74917d9fa4522960"
       },
-      "outputSha256": "17b58d1395ca5916f15a9270c42a62de6b374ec7c3f4ffeaef3b4111e4c74c39",
+      "outputSha256": "1b91e66366d941aa235571648ba5146b1e94793fc1b1fd80a0eaeed038332d2d",
       "modifications": [
-        "部分補正（マスク）#68: 面の PNG と sha256 のため png・sha2 を直接依存にする"
+        "部分補正（マスク）#68: 面の PNG と sha256 のため png・sha2 を直接依存にする",
+        "#148: 既定 off の threads feature と任意 rayon 依存を追加。"
       ]
     },
     {
@@ -6449,7 +6451,7 @@
         "path": "packages/develop-engine/crates/niho-develop/src/lib.rs",
         "sha256": "1591d49effaa779c8e23ad6877508ccf336565eec8336d5b4e6faa3b5d3846b0"
       },
-      "outputSha256": "aae32add27d0a50f6400e932bedb5f56cf59913a4720443159ca51c35b4d2345",
+      "outputSha256": "fe88d09a7c44048ffdae8d739b721cf4ab3268cb96642c2e87d54134fcd8b28e",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
@@ -6486,7 +6488,8 @@
         "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
         "niho-photo#132: 原寸の書き出しの native の読み込みの上限を 1 億画素に広げる（ブラウザの wasm は 4000 万画素のまま）。",
         "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。",
-        "niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。"
+        "niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。",
+        "#148: 行単位の並列化の共通 module を登録。"
       ]
     },
     {
@@ -6557,9 +6560,10 @@
         "path": "packages/develop-engine/crates/niho-develop/src/niho4_response.rs",
         "sha256": "9670309454ff32567bd0b4a3ed054f9350e5e80a0b310c49d5368c35308eee42"
       },
-      "outputSha256": "1d7868073cbd104ce8d512c819f6860d7c77a71e93f752a113c06f6096e3e12f",
+      "outputSha256": "51f61b7ce1d86b43076ebe015ba0a256b2f318310dd99c20c6ff6f948df0d908",
       "modifications": [
-        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ"
+        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
+        "#148: H/S の係数の面を行ごとに並列化し、画素の式と順を維持。"
       ]
     },
     {
@@ -6635,7 +6639,7 @@
         "path": "packages/develop-engine/crates/niho-develop/src/pipeline.rs",
         "sha256": "d982d76cf1b5d34526f700e5edfcef00ae8647d22b845c0f7234ed340ba9d641"
       },
-      "outputSha256": "e1d511a93dd7ca184ade151f23647198aa8d7c002e08e32b4e8c17d35f2c4642",
+      "outputSha256": "68ca8dbb2f1272ca6e42b5ab20550831afd001d778425b85d6a7935615441343",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
@@ -6663,7 +6667,8 @@
         "PR #74: #80 統合後に float-cube の変更を重ね、最終ハッシュを反映。",
         "PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。",
         "PR #90: local passのcache regression fixtureにsource key引数を追加し、#74の契約へ接続。",
-        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ"
+        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
+        "#148: 出力の色の段を行ごとに分け、画素の式と順を維持。"
       ]
     },
     {
@@ -9872,13 +9877,13 @@
     },
     {
       "path": "packages/develop-engine/LICENSES.md",
-      "sha256": "996f2410454e6955364921b113fb499f9d2c9031dd560235bcfe4b4fa0632b90",
-      "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。\n変更理由: 部分補正（マスク）#68: niho-develop が png・sha2 を直接使う用途を記録する"
+      "sha256": "206edb6e76cd95fee97030e9ca2475559fa42051e39888ca1f720306de9f3b87",
+      "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。\n変更理由: 部分補正（マスク）#68: niho-develop が png・sha2 を直接使う用途を記録する\n変更理由: #148: threads feature で使う rayon と依存の用途を明記。"
     },
     {
       "path": "packages/develop-engine/README.md",
-      "sha256": "ba4ce41eb73d20dad627324e50761144fd84c1fc103089a65b922e7ef78f4e28",
-      "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。\n変更理由: 公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。\n変更理由: Issue #29: niho-12を新規既定として案内し、忠実度に階調の段差と教師比較の数値を追記\n変更理由: PR #74: #80 統合後に float-cube の変更を重ね、最終ハッシュを反映。\n変更理由: PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。\n変更理由: Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ"
+      "sha256": "8459b9e258d2f4755f22fe5aba1962ba2e3d5865b654c629c73ed8e34ce1aa74",
+      "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。\n変更理由: 公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。\n変更理由: Issue #29: niho-12を新規既定として案内し、忠実度に階調の段差と教師比較の数値を追記\n変更理由: PR #74: #80 統合後に float-cube の変更を重ね、最終ハッシュを反映。\n変更理由: PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。\n変更理由: Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ\n変更理由: #148: 並列化の画素一致の規則と確認コマンドを追加。"
     },
     {
       "path": "packages/develop-engine/crates/niho-base-raw/README.md",
@@ -10332,8 +10337,8 @@
     },
     {
       "path": "scripts/ci/scopes.test.mjs",
-      "sha256": "52beac628eae414e2dfecc732fc545f83673ddb7e8ca03f55ab88ceeebd5ff1d",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: PR #81 のマスク描画を最新mainの変更と統合。\n変更理由: PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: Upright自動推定を作者更新後の遠近crate v0.23.0へ統合\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: Issue #112のSDK変更範囲とaggregateを回帰検証\n変更理由: Issue #113のcandidate selectorとrequired aggregate回帰を追加。\n変更理由: release evidence helper単独変更でもMac candidate proofが選択される回帰例を追加する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。\n変更理由: niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。"
+      "sha256": "23757b1b5f81acef9de2f2d5b4366f87f719070f77dacf9e885c46b9fca17d35",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: PR #81 のマスク描画を最新mainの変更と統合。\n変更理由: PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: Upright自動推定を作者更新後の遠近crate v0.23.0へ統合\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: Issue #112のSDK変更範囲とaggregateを回帰検証\n変更理由: Issue #113のcandidate selectorとrequired aggregate回帰を追加。\n変更理由: release evidence helper単独変更でもMac candidate proofが選択される回帰例を追加する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。\n変更理由: niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。\n変更理由: #148: threads feature と render_identity の公開CI選択を検証。"
     },
     {
       "path": "scripts/ci/workflow-lib.mjs",
@@ -11649,6 +11654,16 @@
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-analysis-helper.test.ts",
       "sha256": "2bf6d84ce5a00ef01d8f7fa465df59cb791dd817a33fd0aa41bc33afc913e40a",
       "origin": "公開 repo で新規作成（niho-photo#155）。描画の worker が先回りを補助の worker に頼み、取り込み、写真の切り替えで終わらせ、失敗で #129 の先回りへ戻る試験（偽の glue だけ）。外部コード・実写真を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/crates/niho-develop/src/par.rs",
+      "sha256": "6ad96c37f72b3bd74dbe94f412aa4d39b76a1db82888274e18a5186dd99ae8ec",
+      "origin": "公開Issue #148 のため新規作成。threads feature（rayon）で行・項目ごとに分けるだけの並列の道具（feature なしでは逐次のループ）。第三者ソース・非公開の情報を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/crates/niho-develop/tests/render_identity.rs",
+      "sha256": "09766a9474c33518a48af054ca2a2050743952c7cdce1c99536250a120d20b26",
+      "origin": "公開Issue #148 のため新規作成。全 engine の代表の設定の RGBA の SHA-256 を固定し、既定・threads（1 本と 8 本）・wasm32 で同じ bytes を見る test（数式で作った合成画像だけ。実写真・実 RAW なし）。"
     }
   ],
   "excludedSources": [

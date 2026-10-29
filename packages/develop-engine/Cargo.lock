@@ -958,6 +958,7 @@ dependencies = [
  "niho-camera-profile",
  "png",
  "quick-xml",
+ "rayon",
  "serde_json",
  "sha2",
  "wasm-bindgen-test",
