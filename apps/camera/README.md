@@ -41,7 +41,7 @@ Mac アプリの WKWebView は独自の scheme の画面を cross-origin isolati
 - native の glue（`packages/photo-editing/src/develop-engine/develop-engine-native-glue.ts`）は同期の XHR で `niho-develop://localhost/<method>` を呼びます。Tauri の scheme（`src-tauri/src/develop_engine_scheme.rs`）は main 窓だけに答え、知らない口は 404 です。画面の CSP の `connect-src` に `niho-develop:` があります。Worker が Mac アプリでこの glue を読む分岐は、ブラウザのスレッドの wasm の読み分け（#151）の後に足します
 - sidecar（`src-tauri/src/develop_engine_sidecar.rs`）は最初の要求で起動する長く生きる 1 プロセスで、`Developer` を handle で持ちます。落ちたら次の要求で起動し直し、画面の読み込み直しとアプリの終了で止めます。sidecar は受け取った bytes を描くだけで、ファイルを読み書きしません
 - 口と画素は wasm と同じです（どちらも `niho_develop::api` を呼ぶ）。sidecar が無い・`serve` を知らない古い版・版（`hello` の `crateVersion` と `engine`）が画面の `DEVELOP_ENGINE_CRATE_VERSION`・`DEVELOP_ENGINE_VERSION` と違う・起動に失敗したときは、今の wasm で描きます
-- 開発の debug build は `NIHO_DEVELOP_RENDER_PATH` で sidecar を差し替えられます。Mac アプリの中で native と wasm の画素と時間を比べる E2E は `scripts/e2e/native-develop.sh <作業フォルダ>`（Mac Studio で `studio-exec.sh run --class heavy` から。合成の写真だけを使います）
+- 開発の debug build は `NIHO_DEVELOP_RENDER_PATH` で sidecar を差し替えられます。Mac アプリの中で native と wasm の画素と時間を比べる E2E は `scripts/e2e/native-develop.sh <作業フォルダ>`、画面で合成 PNG の露光・プリセットを操作して `runtime: native` を確かめる E2E は続けて `scripts/e2e/native-develop-ui.sh <同じ作業フォルダ>`（Mac Studio で `studio-exec.sh run --class heavy` から）。
 
 ## 公式candidateのSDK runtime
 
