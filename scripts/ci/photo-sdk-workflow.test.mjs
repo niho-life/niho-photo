@@ -24,6 +24,7 @@ for (const [name, mutate] of [
   ["release overwrite", (value) => { value.jobs.publish.steps.find((step) => step.name === "新規tagとGitHub Releaseを作成").run += "\ngh release upload --clobber"; }],
   ["application latest overwritten", (value) => { value.jobs.publish.steps.find((step) => step.name === "新規tagとGitHub Releaseを作成").run = value.jobs.publish.steps.find((step) => step.name === "新規tagとGitHub Releaseを作成").run.replace("--latest=false", ""); }],
   ["receipt digest omitted", (value) => { delete value.jobs.publish.steps.find((step) => step.name === "mainのverifierで輸送内容を再検証").env.SDK_ARTIFACT_DIGEST; }],
+  ["rust-src omitted", (value) => { const step = value.jobs.build.steps.find((item) => item.name === "固定Rust/WASM toolchainを準備"); step.run = step.run.replace(" --component rust-src", ""); }],
   ["real engine smoke omitted", (value) => { value.jobs.build.steps.find((step) => step.name === "実WASMをbuildしてSDKを検証").run = "npm run sdk:smoke"; }],
 ]) test(`SDK release workflowの危険な変更を拒否: ${name}`, () => {
   const changed = structuredClone(workflow);

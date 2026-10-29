@@ -54,6 +54,7 @@ LibRawの行列表、旧DCP8件、旧spec4件、rawtoaces-data、外部ICC、Col
 | core-foundation-sys | 0.8.7 | MIT OR Apache-2.0 | MIT | niho-base-raw: 依存の依存 |
 | cpufeatures | 0.2.17 | MIT OR Apache-2.0 | MIT | niho-camera-profile: SHA-256 の土台（CPU 機能の判定） |
 | crc32fast | 1.5.2 | MIT OR Apache-2.0 | MIT | PNG の CRC |
+| crossbeam-channel | 0.5.17 | MIT OR Apache-2.0 | MIT | niho-develop-wasm（`threads`、#151）: wasm-bindgen-rayon の依存（rayon のスレッドを Web Worker へ渡す） |
 | crossbeam-deque | 0.8.8 | MIT OR Apache-2.0 | MIT | niho-base-raw・niho-develop（`threads`）: rayon の依存 |
 | crossbeam-epoch | 0.9.21 | MIT OR Apache-2.0 | MIT | niho-base-raw・niho-develop（`threads`）: rayon の依存 |
 | crossbeam-utils | 0.8.23 | MIT OR Apache-2.0 | MIT | niho-base-raw・niho-develop（`threads`）: rayon の依存 |
@@ -175,7 +176,10 @@ LibRawの行列表、旧DCP8件、旧spec4件、rawtoaces-data、外部ICC、Col
 | wasm-bindgen | 0.2.129 | MIT OR Apache-2.0 | MIT | wasm の bindings |
 | wasm-bindgen-macro | 0.2.129 | MIT OR Apache-2.0 | MIT | build 時のみ（proc-macro など） |
 | wasm-bindgen-macro-support | 0.2.129 | MIT OR Apache-2.0 | MIT | 依存の依存 |
+| wasm-bindgen-rayon | 1.3.0 | Apache-2.0 | Apache-2.0 | niho-develop-wasm（`threads`、#151）: スレッドの wasm の rayon を Web Worker で動かす（`initThreadPool`）。Worker の JS（`niho_develop_wasm_threads_worker-*.js`）を配布物に入れ、Apache-2.0 の告知をそのまま残す |
 | wasm-bindgen-shared | 0.2.129 | MIT OR Apache-2.0 | MIT | 依存の依存 |
+| wasm_sync | 0.1.2 | MIT OR Apache-2.0 | MIT | niho-develop-wasm（`threads`、#151）: rayon の依存（wasm のスレッドの待ち。待てない所では回して待つ） |
+| web-sys | 0.3.106 | MIT OR Apache-2.0 | MIT | niho-develop-wasm（`threads`、#151）: wasm_sync の依存（Worker の中かの判定） |
 | weezl | 0.1.12 | MIT OR Apache-2.0 | MIT | niho-base-raw: rawler の依存（LZW 圧縮） |
 | windows-core | 0.62.2 | MIT OR Apache-2.0 | MIT | niho-base-raw: macOS・Linux では build されない（Windows・Android などの依存） |
 | windows-implement | 0.60.2 | MIT OR Apache-2.0 | MIT | niho-base-raw: macOS・Linux では build されない（Windows・Android などの依存） |

@@ -1297,3 +1297,95 @@ describe("createDevelopEngineWorkerHandler", () => {
     ]);
   });
 });
+
+describe("threaded wasm selection", () => {
+  const threadsJs = `niho_develop_wasm_threads-${DEVELOP_ENGINE_CRATE_VERSION}.js`;
+  const threadsWasm = `niho_develop_wasm_threads_bg-${DEVELOP_ENGINE_CRATE_VERSION}.wasm`;
+  const manifest = {
+    ...MANIFEST,
+    threads: { files: { [threadsJs]: { sha256: "11", bytes: 1 }, [threadsWasm]: { sha256: "22", bytes: 1 } } },
+  };
+
+  it("isolated Chrome loads the threaded glue and reports the pool size", async () => {
+    const single = fakeGlue();
+    const threaded = fakeGlue();
+    const initThreadPool = vi.fn(async (_count: number) => {});
+    const { handler, deps, posted } = setup({ manifest });
+    deps.threadsEnvironment = () => ({ isolated: true, hardwareConcurrency: 8, userAgent: "Chrome/120 Safari/537" });
+    deps.importModule = vi.fn(async (url) => url.endsWith(threadsJs) ? { ...threaded.module, initThreadPool } : single.module);
+
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+
+    expect(deps.importModule).toHaveBeenCalledTimes(1);
+    expect(deps.importModule).toHaveBeenCalledWith(`https://photo.example.test/develop-engine/${DEVELOP_ENGINE_VERSION}/${threadsJs}`);
+    expect(threaded.init).toHaveBeenCalledWith({ module_or_path: `https://photo.example.test/develop-engine/${DEVELOP_ENGINE_VERSION}/${threadsWasm}` });
+    expect(initThreadPool).toHaveBeenCalledExactlyOnceWith(8);
+    expect(posted[0]?.message).toMatchObject({ type: "ready", runtime: "wasm-threads", wasmThreads: 8 });
+  });
+
+  it.each([
+    [{ isolated: false, hardwareConcurrency: 8, userAgent: "Chrome/120 Safari/537" }, "no isolation"],
+    [{ isolated: true, hardwareConcurrency: 8, userAgent: "Safari/605" }, "Safari"],
+    [{ isolated: true, hardwareConcurrency: 8, userAgent: "iPhone CriOS/120" }, "iOS WebKit"],
+  ])("uses the single wasm in %s (%s)", async (environment) => {
+    const single = fakeGlue();
+    const { handler, deps, posted } = setup({ manifest, module: single.module });
+    deps.threadsEnvironment = () => environment;
+
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+
+    expect(deps.importModule).toHaveBeenCalledTimes(1);
+    expect(deps.importModule).toHaveBeenCalledWith(`https://photo.example.test/develop-engine/${DEVELOP_ENGINE_VERSION}/niho_develop_wasm-${DEVELOP_ENGINE_CRATE_VERSION}.js`);
+    expect(posted[0]?.message).toMatchObject({ type: "ready", runtime: "wasm" });
+  });
+
+  it("falls back to the single wasm when the thread pool cannot start", async () => {
+    const single = fakeGlue();
+    const threaded = fakeGlue();
+    const initThreadPool = vi.fn(async () => { throw new Error("shared memory unavailable"); });
+    const { handler, deps, posted } = setup({ manifest });
+    deps.threadsEnvironment = () => ({ isolated: true, hardwareConcurrency: 8, userAgent: "Chrome/120 Safari/537" });
+    deps.importModule = vi.fn(async (url) => url.endsWith(threadsJs) ? { ...threaded.module, initThreadPool } : single.module);
+
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+
+    expect(deps.importModule).toHaveBeenCalledTimes(2);
+    expect(single.init).toHaveBeenCalledOnce();
+    expect(posted[0]?.message).toMatchObject({ type: "ready", runtime: "wasm" });
+  });
+
+  it("recovers before the client deadline when the thread pool never answers", async () => {
+    vi.useFakeTimers();
+    try {
+      const single = fakeGlue();
+      const threaded = fakeGlue();
+      const { handler, deps, posted } = setup({ manifest });
+      deps.threadsEnvironment = () => ({ isolated: true, hardwareConcurrency: 8, userAgent: "Chrome/120 Safari/537" });
+      deps.importModule = vi.fn(async (url) => url.endsWith(threadsJs)
+        ? { ...threaded.module, initThreadPool: () => new Promise(() => {}) }
+        : single.module);
+
+      const pending = handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+      await vi.advanceTimersByTimeAsync(5_000);
+      await pending;
+
+      expect(single.init).toHaveBeenCalledOnce();
+      expect(posted[0]?.message).toMatchObject({ type: "ready", runtime: "wasm" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("keeps the Mac native fallback on the single wasm", async () => {
+    const single = fakeGlue();
+    const { handler, deps, posted } = setup({ manifest, module: single.module });
+    deps.threadsEnvironment = () => ({ isolated: true, hardwareConcurrency: 8, userAgent: "Chrome/120 Safari/537" });
+    deps.createNativeGlue = () => { throw new Error("native sidecar unavailable"); };
+
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL, preferNative: true });
+
+    expect(deps.importModule).toHaveBeenCalledTimes(1);
+    expect(deps.importModule).toHaveBeenCalledWith(`https://photo.example.test/develop-engine/${DEVELOP_ENGINE_VERSION}/niho_develop_wasm-${DEVELOP_ENGINE_CRATE_VERSION}.js`);
+    expect(posted[0]?.message).toMatchObject({ type: "ready", runtime: "wasm" });
+  });
+});

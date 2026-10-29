@@ -149,15 +149,29 @@ pub fn resample_window(
     filter: Filter,
     columns: std::ops::Range<usize>,
     rows: std::ops::Range<usize>,
-    mut row: impl FnMut(usize, usize, &mut [f32]),
+    row: impl FnMut(usize, usize, &mut [f32]),
 ) -> Vec<f32> {
-    let window_w = columns.len();
-    let mut out = vec![0.0f32; window_w * rows.len() * 3];
-    if window_w == 0 || rows.is_empty() {
+    let mut out = vec![0.0f32; columns.len() * rows.len() * 3];
+    if columns.is_empty() || rows.is_empty() {
         return out;
     }
     let h_taps = make_taps(in_w, out_w, filter);
     let v_taps = make_taps(in_h, out_h, filter);
+    window_into(&h_taps, &v_taps, columns, rows, row, &mut out);
+    out
+}
+
+/// [`resample_window`] with its taps, into `out` (`columns.len() x
+/// rows.len()` RGB, zeros).
+fn window_into(
+    h_taps: &Taps,
+    v_taps: &Taps,
+    columns: std::ops::Range<usize>,
+    rows: std::ops::Range<usize>,
+    mut row: impl FnMut(usize, usize, &mut [f32]),
+    out: &mut [f32],
+) {
+    let window_w = columns.len();
     let first_column = columns.clone().map(|x| h_taps.start[x]).min().unwrap_or(0);
     let end_column = columns
         .clone()
@@ -214,7 +228,6 @@ pub fn resample_window(
             }
         }
     }
-    out
 }
 
 /// Resamples an in-memory interleaved RGB image.
@@ -229,9 +242,28 @@ pub fn resample(
     if in_w == out_w && in_h == out_h {
         return src.to_vec();
     }
-    resample_rows(in_w, in_h, out_w, out_h, filter, |y, out| {
-        out.copy_from_slice(&src[y * in_w * 3..(y + 1) * in_w * 3]);
-    })
+    let mut out = vec![0.0f32; out_w * out_h * 3];
+    let h_taps = make_taps(in_w, out_w, filter);
+    let v_taps = make_taps(in_h, out_h, filter);
+    // Bands of output rows, each filtering the input rows its window needs
+    // (the same taps and order of the sums as one window over all rows,
+    // [`resample_window`]), so the bands may run on different threads
+    // (#150).
+    crate::par::for_each_band_mut(&mut out, out_w * 3, |first, band| {
+        let rows = first..first + band.len() / (out_w * 3);
+        window_into(
+            &h_taps,
+            &v_taps,
+            0..out_w,
+            rows,
+            |y, first_column, input| {
+                let start = (y * in_w + first_column) * 3;
+                input.copy_from_slice(&src[start..start + input.len()]);
+            },
+            band,
+        );
+    });
+    out
 }
 
 /// Core Image `CIImage.transformed(by: scale)` sampling (bilinear at the
