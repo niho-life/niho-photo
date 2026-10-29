@@ -332,7 +332,13 @@ async function serve({ isolated, engineFiles, dataFiles, url, chrome, timeoutMs 
     browser.kill();
     await new Promise((resolve) => (browser.exitCode !== null ? resolve() : browser.once("exit", resolve)));
     server.close();
-    rmSync(profile, { recursive: true, force: true });
+    // Chrome の親が終了しても子プロセスが数秒だけ profile を書き続けることがある。
+    // 計測結果を後片付けの競合で失わないよう、削除を再試行する。
+    try {
+      rmSync(profile, { recursive: true, force: true, maxRetries: 20, retryDelay: 100 });
+    } catch {
+      console.warn("一時 Chrome profile の削除に失敗しました。終了後に回収してください。");
+    }
   }
 }
 

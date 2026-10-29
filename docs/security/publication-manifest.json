@@ -11850,8 +11850,8 @@
     },
     {
       "path": "scripts/sdk/smoke-threads-browser.mjs",
-      "sha256": "1ac6faf896cc0fe5db6f0998fbe81f1fefc991e132a599e1b3a47333ed9c41d8",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/smoke-threads-browser.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
+      "sha256": "23807d648bef73415b208b3a9dc19fd97057280a72339c63fa0851d3ab773b89",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/smoke-threads-browser.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: Chrome子プロセスの終了待ちで試験結果を失わないよう一時profile削除を再試行"
     },
     {
       "path": "scripts/sdk/verify-release-artifact.mjs",
