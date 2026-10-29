@@ -9,6 +9,9 @@ use crate::spatial::{self, GainScale, Plane, Quality, Shift, SpatialParams};
 use std::fmt;
 use std::sync::{Arc, OnceLock, Weak};
 
+mod transfer;
+pub(crate) use transfer::{import_analysis, source_fingerprint, TransferError};
+
 const ANALYSIS_LONG_EDGE: usize = 750;
 const WORKING_COPY_MAX: f64 = 2.0;
 const GAMMA: f64 = 1.8;
@@ -410,6 +413,16 @@ pub fn prepare_analysis(
     )
 }
 
+impl AnalysisCache {
+    /// Whether [`prepare_analysis`] of `settings`, which this cache serves,
+    /// would only find what it makes: the response coefficients and, for
+    /// niho-7 / niho-11, the NIHO 7 highlight maps are made.
+    pub(crate) fn holds(&self, settings: &DevelopSettings) -> bool {
+        self.coefficients.get().is_some()
+            && (!uses_niho7_engine(settings) || self.niho7_highlights.get().is_some())
+    }
+}
+
 /// Prepares a signed RAW master from the full CNR/analysis cache. `target`
 /// reduces that CNR-complete source before the display-only controls; `None`
 /// preserves the frozen full-source preparation order.
@@ -779,7 +792,23 @@ fn analysis_copy(
         .iter()
         .map(|value| quantize_analysis_sample(*value, exposure, encoder, decode))
         .collect();
-    let (out_width, out_height) = if width >= height {
+    let (out_width, out_height) = analysis_size(width, height);
+    let output = resize::resample(
+        &quantized,
+        width,
+        height,
+        out_width,
+        out_height,
+        Filter::Area,
+    );
+    (output, out_width, out_height)
+}
+
+/// The size of the canonical analysis copy (and so of the response
+/// coefficients and the NIHO 7 highlight maps) of a `width` x `height`
+/// source: its long edge reduced to [`ANALYSIS_LONG_EDGE`].
+fn analysis_size(width: usize, height: usize) -> (usize, usize) {
+    if width >= height {
         (
             ANALYSIS_LONG_EDGE.min(width),
             ((height as f64 * ANALYSIS_LONG_EDGE as f64 / width as f64).round() as usize)
@@ -793,16 +822,7 @@ fn analysis_copy(
                 .min(width),
             ANALYSIS_LONG_EDGE.min(height),
         )
-    };
-    let output = resize::resample(
-        &quantized,
-        width,
-        height,
-        out_width,
-        out_height,
-        Filter::Area,
-    );
-    (output, out_width, out_height)
+    }
 }
 
 #[inline]

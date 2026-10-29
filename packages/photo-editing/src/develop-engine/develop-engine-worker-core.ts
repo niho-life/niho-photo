@@ -1,3 +1,4 @@
+import type { DevelopAnalysisHelper, DevelopAnalysisHelperResponse } from "./develop-engine-analysis-worker-core";
 import { parseDevelopEngineManifest } from "./develop-engine-manifest";
 
 /**
@@ -17,8 +18,16 @@ import { parseDevelopEngineManifest } from "./develop-engine-manifest";
  *   画素は同じ（engine の cache は鍵が同じときだけ使う）
  * - 解析を先に作る（#129）: 開いている写真を丁寧に（final）描いたら、その設定と同梱のプリセットを当てた設定で H/S が読む解析
  *   （signed RAW の CNR の元・応答の係数・niho-7 の面）のうちまだ作っていないものを、通常の要求が {@link ANALYSIS_AHEAD_QUIET_MS}
- *   来なかったら 1 件ずつ `Developer.prepareAnalysis` で作る（今の写真の CNR と、違う CNR の 1 つまで）。通常の要求が来たら次の
- *   1 件を始めない（動いている 1 件は止められない）。写真を替えると捨てる。口の無い glue では何もしない。描く画素は同じ
+ *   来なかったら 1 件ずつ作る（今の写真の CNR と、違う CNR の 1 つまで）。通常の要求が来たら次の 1 件を始めない。写真を替えると
+ *   捨てる。口の無い glue では何もしない。描く画素は同じ
+ * - 先回りは補助の worker で作る（#155）: 補助の worker を作れて（`createAnalysisHelper`）、glue に `exportAnalysis` /
+ *   `importAnalysis` があれば、signed RAW の作業コピーを開いた入力（PNG とメタデータ）の写しを先回りが残っている間だけ持ち、
+ *   最初の 1 件で補助の worker を作って渡す（写しは transfer）。補助の worker は同じ wasm で同じ写真を開いて解析を版付きの bytes に
+ *   して返し、この worker は同じ写真のままなら `importAnalysis` で取り込むだけ（コピー。列をふさぐのはその間だけで、補助の worker が
+ *   計算している間の描画は待たない）。すでに持っている解析（`holdsAnalysis`）は作らない。補助の worker は先回りが尽きた・写真を
+ *   替えた・閉じたら終わらせ（遅れて届いた結果は捨てる）、この worker が終わるとブラウザが一緒に終わらせる。補助の worker が
+ *   作れない・失敗した・取り込めなかったら、その写真ではこの worker で `Developer.prepareAnalysis` で作る（#129 の先回り。動き出すと
+ *   止められない）
  * - `openWorkingCopy` は作業コピー（16bit PNG とメタデータの JSON。RAW など、移行元設計）を開いて持つ（`open` と同じく前の写真は
  *   手放す。作業コピーは長辺 2560px のまま持ち、描く大きさは `render` で決める）。`exportWorkingCopyJpeg` は持っている写真を
  *   変えずに、別の作業コピーを一時的に開いて丁寧に描き（final）、`OffscreenCanvas` で JPEG にする（sRGB・撮影情報なし）。
@@ -243,6 +252,11 @@ export type DevelopEngineWorkerDeps = {
    * 省略・null は写真を保たない（今までどおり手放す）
    */
   digest?: (bytes: ArrayBuffer) => Promise<string | null>;
+  /**
+   * 先回りの解析を作る補助の worker を作る（#155）。応答を `receive` に渡し、読み込めない・落ちたら null を渡す。省略（worker の中で
+   * `Worker` が使えない）・null を返したら、今までどおりこの worker で作る
+   */
+  createAnalysisHelper?: (receive: (response: DevelopAnalysisHelperResponse | null) => void) => DevelopAnalysisHelper | null;
 };
 
 export type DevelopEnginePerfRecord = {
@@ -259,7 +273,9 @@ export type DevelopEnginePerfRecord = {
     | "thumbnailSession"
     | "presetSettings"
     | "autoSettings"
-    | "prepareAnalysis";
+    | "prepareAnalysis"
+    /** 補助の worker が作った解析を取り込んだ（#155） */
+    | "importAnalysis";
   durationMs: number;
   wasmMemoryBytes: number | null;
   status: "ok" | "error";
@@ -286,6 +302,10 @@ type DevelopDeveloper = {
   prepareAnalysis?: (settingsJson: string) => unknown;
   /** 先に作った別の設定の解析を手放す（保つ写真のメモリを減らす。画素は同じ。#129 の glue から） */
   releaseAnalysisAhead?: () => unknown;
+  /** 補助の worker が作った解析の bytes を取り込む（コピー。画素は同じ。#155 の glue から。別の写真・壊れた bytes は throw） */
+  importAnalysis?: (bytes: Uint8Array) => unknown;
+  /** その設定の解析をもう全部持っている（先回りで作っても見つけるだけ。#155 の glue から） */
+  holdsAnalysis?: (settingsJson: string) => unknown;
 /** 面の受け渡し（M4 の glue から。無い glue もある） */
   setMaskSurface?: (surfaceId: string, png: Uint8Array) => unknown;
   dropMaskSurface?: (surfaceId: string) => unknown;
@@ -305,8 +325,9 @@ const PRESET_THUMBNAIL_SESSION_MAX_DIMENSION = 256;
 const HELD_PHOTO_LIMIT = 2;
 
 /**
- * 解析を先に作る（#129）のは、通常の要求が来なくなってからこれだけたってから。1 回は途中で止められない（signed RAW 2560px で
- * Studio の wasm 1.4〜2.4 秒）ので、操作の続いている間は始めない。
+ * 解析を先に作る（#129）のは、通常の要求が来なくなってからこれだけたってから。この worker で作る 1 回は途中で止められない
+ * （signed RAW 2560px で Studio の wasm 1.4〜2.4 秒）ので、操作の続いている間は始めない。補助の worker で作るとき（#155）も、
+ * 操作の間は CPU とメモリを描画に回すため同じく待つ。
  */
 const ANALYSIS_AHEAD_QUIET_MS = 500;
 
@@ -320,6 +341,23 @@ type KeptPhoto = {
   developer: DevelopDeveloper;
   analysisKey: string | null;
 };
+
+/** 動いている補助の worker（#155。開いている写真に 1 つ）と、結果を待っている 1 件（取り込みが終わるまで）。 */
+type AnalysisHelperState = {
+  developer: DevelopDeveloper;
+  helper: DevelopAnalysisHelper | null;
+  waiting: { id: number; key: string | null } | null;
+};
+
+/** 作業コピーのメタデータが signed RAW か（H/S の解析を先に作れるのはこれだけ。#155 の補助の worker はこのときだけ使う）。 */
+function isSignedRawWorkingCopy(metaJson: string): boolean {
+  try {
+    const meta: unknown = JSON.parse(metaJson);
+    return isRecord(meta) && meta.kind === "raw" && isRecord(meta.encoding) && meta.encoding.kind === "signed-gamma18-v1";
+  } catch {
+    return false;
+  }
+}
 
 /** 型ガードで確かめた glue（`import init, * as dev from "<js>"`）。 */
 type DevelopGlue = {
@@ -372,7 +410,9 @@ type DevelopGlue = {
   /** `maskSurfaceId(png)`（面の id = sha256） */
   maskSurfaceId: ((png: Uint8Array) => unknown) | null;
   /** `Developer.prototype` の `setMaskSurface`・`dropMaskSurface`・`exportJpeg` が揃っている */
-  surfaces: boolean;};
+  surfaces: boolean;
+  /** `Developer.prototype` の `exportAnalysis`・`importAnalysis` が揃っている（先回りを補助の worker で作れる。#155） */
+  analysisTransfer: boolean;};
 
 /** 幾何（切り抜き・回転。F3 移行元設計）の口。 */
 type DevelopGeometryGlue = {
@@ -439,6 +479,10 @@ const estimateUpright: unknown = isRecord(developerPrototype)
   const { encodeMaskSurface, maskSurfaceId } = module;
   const surfaceMethods = ["setMaskSurface", "dropMaskSurface", "exportJpeg"].every(
     (name) => isRecord(developerPrototype) && typeof Reflect.get(developerPrototype, name) === "function",
+  );
+  // 解析の受け渡しの口（無い glue では、先回りをこの worker で作る）
+  const analysisTransfer = ["exportAnalysis", "importAnalysis"].every(
+    (name) => isRecord(developerPrototype) && typeof Reflect.get(developerPrototype, name) === "function",
   );  const geometry: DevelopGeometryGlue | null =
     typeof imageSize === "function" &&
     typeof rasterDecodeSize === "function" &&
@@ -476,7 +520,8 @@ const estimateUpright: unknown = isRecord(developerPrototype)
     upright: typeof estimateUpright === "function",
 encodeMaskSurface: typeof encodeMaskSurface === "function" ? (encodeMaskSurface as DevelopGlue["encodeMaskSurface"]) : null,
     maskSurfaceId: typeof maskSurfaceId === "function" ? (maskSurfaceId as DevelopGlue["maskSurfaceId"]) : null,
-    surfaces: surfaceMethods,  };
+    surfaces: surfaceMethods,
+    analysisTransfer,  };
 }
 
 /** 面（ブラシ・被写体・空）の種類。面の口の揃わない glue では描けない扱いにする。 */
@@ -820,6 +865,13 @@ export function createDevelopEngineWorkerHandler(
   let analysisAhead: { developer: DevelopDeveloper; settingsJson: string } | null = null;
   let analysisTimer: ReturnType<typeof setTimeout> | null = null;
   const preparedAnalyses = new WeakMap<DevelopDeveloper, Set<string>>();
+  // 先回りを補助の worker で作る（#155）: 開いている写真を開いた入力の写し（補助の worker に渡すまで）、動いている補助の worker、
+  // 補助の worker で作れなかった写真（この worker で作る）、補助の worker に読ませる manifest
+  let analysisSource: { developer: DevelopDeveloper; png: ArrayBuffer; metaJson: string } | null = null;
+  let analysisHelper: AnalysisHelperState | null = null;
+  const helperFailed = new WeakSet<DevelopDeveloper>();
+  let helperManifestUrl: string | null = null;
+  let nextHelperJobId = 1;
   let handle: (message: DevelopEngineWorkerRequest) => Promise<void>;
 
   const recordPerf = (stage: DevelopEnginePerfRecord["stage"], started: number, status: DevelopEnginePerfRecord["status"]) => {
@@ -905,6 +957,130 @@ export function createDevelopEngineWorkerHandler(
   const dropAnalysisAhead = () => {
     analysisAhead = null;
     clearAnalysisTimer();
+    endAnalysisHelper();
+  };
+
+  /** 補助の worker を終わらせ、入力の写しを手放す（遅れて届いた結果は {@link receiveAnalysis} が捨てる）。 */
+  const endAnalysisHelper = () => {
+    analysisSource = null;
+    const current = analysisHelper;
+    analysisHelper = null;
+    try {
+      current?.helper?.terminate();
+    } catch {
+      // 終わらせられなくても、遅れて届いた結果は捨てる
+    }
+  };
+
+  /**
+   * 補助の worker で作れなかった（作れない・落ちた・取り込めない）: 終わらせ、その写真ではこの worker で作る。待っていた 1 件は
+   * この worker でもう 1 度だけ作る（そこで作れなければ #129 と同じく作り直さない）。
+   */
+  const failAnalysisHelper = (state: AnalysisHelperState) => {
+    if (analysisHelper !== state) return;
+    helperFailed.add(state.developer);
+    const key = state.waiting?.key;
+    if (key) preparedAnalyses.get(state.developer)?.delete(key);
+    state.waiting = null;
+    endAnalysisHelper();
+  };
+
+  /**
+   * 補助の worker の応答。終わらせた補助の worker・待っていない応答は捨てる。解析の bytes は、同じ写真のままなら列に積んで取り込む
+   * （コピーだけ）。取り込みが終わったら次の 1 件へ。
+   */
+  const receiveAnalysis = (state: AnalysisHelperState, response: DevelopAnalysisHelperResponse | null) => {
+    if (analysisHelper !== state) return;
+    const waiting = state.waiting;
+    if (response !== null && (!waiting || response.id !== waiting.id)) return;
+    if (response === null || response.type === "error") {
+      failAnalysisHelper(state);
+      scheduleAnalysisAhead();
+      return;
+    }
+    const bytes = response.bytes;
+    const next = chain
+      .then(() => {
+        // 写真を替えた・閉じたら取り込まない
+        if (analysisHelper !== state || state.waiting !== waiting || developer !== state.developer) return;
+        if (bytes !== null) {
+          try {
+            measure("importAnalysis", () => state.developer.importAnalysis?.(new Uint8Array(bytes)));
+          } catch {
+            failAnalysisHelper(state);
+            return;
+          }
+        }
+        state.waiting = null;
+      })
+      .catch(() => undefined);
+    chain = next;
+    void next.then(() => scheduleAnalysisAhead());
+  };
+
+  /**
+   * 先回りの 1 件を補助の worker に頼む。最初の 1 件で補助の worker を作り、入力の写しを渡す（transfer）。頼めたら true（この worker
+   * の列は結果を待たない）。補助の worker を使えない写真・作れなければ false（この worker で作る）。
+   */
+  const requestAnalysis = (
+    job: { developer: DevelopDeveloper; settingsJson: string },
+    settingsJson: string,
+    key: string | null,
+  ): boolean => {
+    if (helperFailed.has(job.developer)) return false;
+    let state = analysisHelper?.developer === job.developer ? analysisHelper : null;
+    if (!state) {
+      const source = analysisSource;
+      const create = deps.createAnalysisHelper;
+      if (!source || source.developer !== job.developer || !create || helperManifestUrl === null) return false;
+      endAnalysisHelper();
+      const created: AnalysisHelperState = { developer: job.developer, helper: null, waiting: null };
+      analysisHelper = created;
+      let started = false;
+      try {
+        created.helper = create((response) => receiveAnalysis(created, response));
+        created.helper?.post(
+          { type: "start", manifestUrl: helperManifestUrl, version, png: source.png, metaJson: source.metaJson },
+          [source.png],
+        );
+        started = created.helper !== null;
+      } catch {
+        started = false;
+      }
+      if (!started) {
+        // 作れなかった補助の worker は終わらせ、この写真ではこの worker で作る
+        failAnalysisHelper(created);
+        return false;
+      }
+      state = created;
+    }
+    const id = nextHelperJobId;
+    nextHelperJobId += 1;
+    try {
+      state.helper?.post({ type: "analysis", id, settingsJson }, []);
+    } catch {
+      failAnalysisHelper(state);
+      return false;
+    }
+    state.waiting = { id, key };
+    return true;
+  };
+
+  /** その設定の解析をもう全部持っているか（#155 の口。無い glue・読めなければ false＝作る）。 */
+  const holdsAnalysis = (target: DevelopDeveloper, settingsJson: string): boolean => {
+    try {
+      return target.holdsAnalysis?.(settingsJson) === true;
+    } catch {
+      return false;
+    }
+  };
+
+  /** 補助の worker に渡す入力の写しを持つ（#155。補助の worker を使えない環境・glue・写真では持たない）。 */
+  const holdAnalysisSource = (opened: DevelopDeveloper, png: ArrayBuffer, metaJson: string) => {
+    analysisSource =
+      deps.createAnalysisHelper && glue?.analysisTransfer && !helperFailed.has(opened) && isSignedRawWorkingCopy(metaJson)
+        ? { developer: opened, png, metaJson }
+        : null;
   };
 
   /**
@@ -928,20 +1104,24 @@ export function createDevelopEngineWorkerHandler(
     return null;
   };
 
-  /** 解析を先に作る 1 件を、通常の要求が {@link ANALYSIS_AHEAD_QUIET_MS} 来なかったら動かす（動かしたら次の 1 件を待つ）。 */
+  /**
+   * 解析を先に作る 1 件を、通常の要求が {@link ANALYSIS_AHEAD_QUIET_MS} 来なかったら動かす（動かしたら次の 1 件を待つ。補助の worker に
+   * 頼んだ 1 件は取り込むまで待つ）。
+   */
   const scheduleAnalysisAhead = () => {
-    if (!analysisAhead || analysisTimer !== null || normalPending > 0) return;
+    if (!analysisAhead || analysisTimer !== null || normalPending > 0 || analysisHelper?.waiting) return;
     analysisTimer = setTimeout(() => {
       analysisTimer = null;
       const job = analysisAhead;
-      if (!job || normalPending > 0) return;
+      if (!job || normalPending > 0 || analysisHelper?.waiting) return;
       const next = chain
         .then(() => {
           // 待つ間に通常の要求・写真の切り替えが来たら動かさない
-          if (analysisAhead !== job || normalPending > 0 || developer !== job.developer) return;
+          if (analysisAhead !== job || normalPending > 0 || developer !== job.developer || analysisHelper?.waiting) return;
           const settingsJson = nextAnalysisAhead(job);
           if (settingsJson === null) {
             analysisAhead = null;
+            endAnalysisHelper();
             return;
           }
           const key = analysisSettingsKeyFromJson(settingsJson);
@@ -952,6 +1132,9 @@ export function createDevelopEngineWorkerHandler(
           }
           // 作れなくても同じ解析を何度も試さない（描くときに作る。画素は同じ）
           if (key !== null) prepared.add(key);
+          // すでに持っている解析は作らない。補助の worker に頼めたら、この worker の列は待たない（#155）
+          if (holdsAnalysis(job.developer, settingsJson)) return;
+          if (requestAnalysis(job, settingsJson, key)) return;
           measure("prepareAnalysis", () => job.developer.prepareAnalysis?.(settingsJson));
         })
         .catch(() => undefined);
@@ -1138,6 +1321,7 @@ export function createDevelopEngineWorkerHandler(
       upright = perspective && loaded.upright;
       heal = acceptsHealSettings(loaded.validateSettings);
       lens = acceptsLensSettings(loaded.validateSettings);
+      helperManifestUrl = manifestUrl;
       postReady(id);
     } catch (error) {
       unavailableReason = errorMessage(error);
@@ -1219,6 +1403,7 @@ export function createDevelopEngineWorkerHandler(
             adoptDeveloper(next, key);
             return next;
           });
+          holdAnalysisSource(opened, message.png, message.metaJson);
           deps.post({ type: "opened", id, width: opened.width, height: opened.height });
           return;
         }
