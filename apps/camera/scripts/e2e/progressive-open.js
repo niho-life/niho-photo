@@ -188,7 +188,14 @@
     // 暫定画では canonicalReady も丁寧な画への差し替え。任意の計測を正規切替の待機へ直列に足さない。
     const finalPaint = waitFor(() => events.find((event) =>
       (event.stage === "finalRenderVisible" || event.stage === "canonicalReady") &&
-      event.at >= presetInputStartedAt), 5000).catch(() => null);
+      event.at >= presetInputStartedAt), 5000).then(async (event) => {
+        // canonicalReady は canvas への描画直後なので、実際の提示を2フレーム待ってから記録する。
+        if (event.stage === "canonicalReady") {
+          await afterPaint();
+          return performance.now() - presetInputStartedAt;
+        }
+        return event.at - presetInputStartedAt;
+      }).catch(() => null);
     observations.timeToEditableMs = Math.max(exposureAt, presetReadyAt) - t0;
     observations.inputAcceptedMs = acceptedMs;
     observations.exposurePaintMs = exposurePaintMs;
@@ -198,8 +205,7 @@
     stage = "canonical";
     await waitFor(() => events.some((event) => event.stage === "canonicalReady") ||
       (!events.some((event) => event.stage === "proxyReady") && events.some((event) => event.stage === "finalVisible")), 30000);
-    const finalVisible = await finalPaint;
-    const presetFinalPaintMs = finalVisible ? finalVisible.at - presetInputStartedAt : null;
+    const presetFinalPaintMs = await finalPaint;
     await delay(100);
     const retained = JSON.stringify(values) === JSON.stringify(sliderValues());
     if (!retained) throw new Error("settings-changed-on-handoff");
