@@ -107,7 +107,11 @@
   const report = (value) => { location.href = `https://niho-e2e.invalid/report?data=${encodeURIComponent(JSON.stringify(value))}`; };
   let stage = "boot";
   const observations = {};
-  setInterval(() => { location.href = `https://niho-e2e.invalid/trace?step=${encodeURIComponent(stage)}`; }, 2000);
+  setInterval(() => {
+    const recentEvents = events.slice(-16).map((event) => event.stage).join(",");
+    const recentWorkerStages = perf.slice(-16).map((record) => record.stage).join(",");
+    location.href = `https://niho-e2e.invalid/trace?step=${encodeURIComponent(stage)}&events=${encodeURIComponent(recentEvents)}&worker=${encodeURIComponent(recentWorkerStages)}`;
+  }, 2000);
   try {
     history.replaceState(null, "", "?photoDevelopPerf=1");
     localStorage.clear();
@@ -181,14 +185,10 @@
       }
     }
     if (presetAt === null) throw new Error("preset-frame-missing");
-    // 丁寧な画に差し替わるまで（先に粗い画を出す #127。粗い画が無ければ最初の変化と同じ）。測れなくても probe は止めない
-    let presetFinalPaintMs = null;
-    try {
-      const finalVisible = await waitFor(() => events.find((event) => event.stage === "finalRenderVisible" && event.at >= presetInputStartedAt), 30000);
-      presetFinalPaintMs = finalVisible.at - presetInputStartedAt;
-    } catch {
-      presetFinalPaintMs = null;
-    }
+    // 暫定画では canonicalReady も丁寧な画への差し替え。任意の計測を正規切替の待機へ直列に足さない。
+    const finalPaint = waitFor(() => events.find((event) =>
+      (event.stage === "finalRenderVisible" || event.stage === "canonicalReady") &&
+      event.at >= presetInputStartedAt), 5000).catch(() => null);
     observations.timeToEditableMs = Math.max(exposureAt, presetReadyAt) - t0;
     observations.inputAcceptedMs = acceptedMs;
     observations.exposurePaintMs = exposurePaintMs;
@@ -198,6 +198,8 @@
     stage = "canonical";
     await waitFor(() => events.some((event) => event.stage === "canonicalReady") ||
       (!events.some((event) => event.stage === "proxyReady") && events.some((event) => event.stage === "finalVisible")), 30000);
+    const finalVisible = await finalPaint;
+    const presetFinalPaintMs = finalVisible ? finalVisible.at - presetInputStartedAt : null;
     await delay(100);
     const retained = JSON.stringify(values) === JSON.stringify(sliderValues());
     if (!retained) throw new Error("settings-changed-on-handoff");
