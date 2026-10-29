@@ -4603,10 +4603,11 @@
         "path": "apps/camera/vite.config.ts",
         "sha256": "62c5c25b362597a29d835a80224bf660cfcc4942dacb17b1cf56116926d7fd88"
       },
-      "outputSha256": "7213e74e96f37e9019c4c7701637b2cced992c93333f96a07770e8510a78f4a4",
+      "outputSha256": "07a879025226f2ec940e5e9c1aa4b4d9dd818bfff57145b4a9ad037c22e8514d",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
-        "Issue #3のpublic OAuth/PKCE、ローカル専用UI、安全契約と公開依存を新規接続。実issuer・署名検証器が未契約のため本番接続は無効。"
+        "Issue #3のpublic OAuth/PKCE、ローカル専用UI、安全契約と公開依存を新規接続。実issuer・署名検証器が未契約のため本番接続は無効。",
+        "Issue #152 の camera 単体テストで localStorage を持つ固定の公開テスト origin を指定。"
       ]
     },
     {

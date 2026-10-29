@@ -52,6 +52,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    environmentOptions: { jsdom: { url: "https://photo.example.test/" } },
     include: ["src/**/*.test.{ts,tsx}", "scripts/**/*.test.mjs"],
   },
 });
