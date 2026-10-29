@@ -1597,8 +1597,8 @@ export function createDevelopEngineWorkerHandler(
             }
             frame ??= readFrame(opened.render(message.settingsJson, message.maxDimension, message.interactive));
             // 丁寧に描いた設定から、静かな間に H/S の解析を先に作る（#129。口の無い glue では何もしない）
-            if (!message.interactive && typeof developer.prepareAnalysis === "function") {
-              analysisAhead = { developer, settingsJson: message.settingsJson };
+            if (!message.interactive && typeof opened.prepareAnalysis === "function") {
+              analysisAhead = { developer: opened, settingsJson: message.settingsJson };
             }
             const nextAnalysisKey = analysisSettingsKeyFromJson(message.settingsJson);
             if (nextAnalysisKey !== null) {

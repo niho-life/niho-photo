@@ -477,9 +477,10 @@
         "Issue #151: Chrome 計測結果に基づき pool 上限を8本に調整",
         "Issue #151: Mac native の復旧は常に単一 wasm を選択",
         "PR #165 レビュー: pool 待ちを5秒にして単一 wasm 復旧時間を確保",
-        "プリセット初回の小さい現像sessionを使用し、Finalの描画を維持する"
+        "プリセット初回の小さい現像sessionを使用し、Finalの描画を維持する",
+        "小さいsession描画後の本体参照を型検証可能にする"
       ],
-      "outputSha256": "5d6f8801df72c1695fca3d301b6c12a2d723362afc94d1e7932650695936535c"
+      "outputSha256": "a9f8aac5e61513b6e677b6ee55f0ffaa5252681bfe42691b39e84f900ebc625c"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
