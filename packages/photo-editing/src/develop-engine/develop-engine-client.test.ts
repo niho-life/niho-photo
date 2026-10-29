@@ -54,7 +54,7 @@ async function flushPromises() {
 }
 
 async function readyEngine(
-  options: Pick<CreateDevelopEngineOptions, "encodeFrameJpeg" | "previewQuietMs" | "diagnostics"> & {
+  options: Pick<CreateDevelopEngineOptions, "encodeFrameJpeg" | "previewQuietMs" | "diagnostics" | "preferNative"> & {
     geometry?: boolean;
     features?: DevelopEngineWorkerFeatures;
   } = {},
@@ -68,11 +68,17 @@ async function readyEngine(
   });
   const ready = engine.ready();
   const init = worker.lastRequest("init");
-  expect(init).toEqual({ type: "init", id: init.id, manifestUrl: MANIFEST_URL, ...(engineOptions.diagnostics ? { diagnostics: true } : {}) });
+  expect(init).toEqual({
+    type: "init",
+    id: init.id,
+    manifestUrl: MANIFEST_URL,
+    ...(engineOptions.diagnostics ? { diagnostics: true } : {}),
+    ...(engineOptions.preferNative ? { preferNative: true } : {}),
+  });
   worker.respond(
     geometry
-      ? { type: "ready", id: init.id, version: "0.5.0", geometry: true, ...features }
-      : { type: "ready", id: init.id, version: "0.2.0", ...features },
+      ? { type: "ready", id: init.id, version: "0.5.0", runtime: "wasm", geometry: true, ...features }
+      : { type: "ready", id: init.id, version: "0.2.0", runtime: "wasm", ...features },
   );
   expect(await ready).toBe(true);
   return { worker, engine };
@@ -83,6 +89,17 @@ afterEach(() => {
 });
 
 describe("createDevelopEngine", () => {
+  it("native の希望は明示時だけ Worker init に渡す", async () => {
+    const { engine, worker } = await readyEngine({ preferNative: true });
+    expect(worker.lastRequest("init")).toMatchObject({ preferNative: true });
+    engine.dispose();
+    const close = worker.lastRequest("close");
+    expect(worker.terminated).toBe(false);
+    worker.respond({ type: "closed", id: close.id });
+    await flushPromises();
+    expect(worker.terminated).toBe(true);
+  });
+
   it("写真編集タブの正確な opt-in query だけを Worker init の診断フラグにする", async () => {
     expect(photoDevelopDiagnosticsEnabled({ pathname: "/host/spot/photoEditing", search: "?photoDevelopPerf=1" })).toBe(true);
     expect(photoDevelopDiagnosticsEnabled({ pathname: "/", search: "?photoDevelopPerf=1" })).toBe(true);
@@ -92,7 +109,7 @@ describe("createDevelopEngine", () => {
     const engine = createDevelopEngine({ createWorker: () => worker as unknown as Worker, manifestUrl: MANIFEST_URL, diagnostics: true });
     const ready = engine.ready();
     expect(worker.lastRequest("init")).toEqual({ type: "init", id: 1, manifestUrl: MANIFEST_URL, diagnostics: true });
-    worker.respond({ type: "ready", id: 1, version: "test" });
+    worker.respond({ type: "ready", id: 1, version: "test", runtime: "wasm" });
     expect(await ready).toBe(true);
     engine.dispose();
   });
@@ -106,8 +123,9 @@ describe("createDevelopEngine", () => {
       const record = { stage: "wasmInit" as const, durationMs: 12, wasmMemoryBytes: 65_536, status: "ok" as const };
       worker.respond({ type: "perf", id: 0, record });
       expect(info).toHaveBeenCalledWith("[photo-develop-perf]", record);
-      worker.respond({ type: "ready", id: worker.lastRequest("init").id, version: "test" });
+      worker.respond({ type: "ready", id: worker.lastRequest("init").id, version: "test", runtime: "native" });
       expect(await ready).toBe(true);
+      expect(info).toHaveBeenCalledWith("[photo-develop-perf]", { stage: "runtime", runtime: "native" });
       engine.dispose();
     } finally {
       info.mockRestore();
@@ -493,7 +511,7 @@ describe("createDevelopEngine", () => {
     const engine = createDevelopEngine({ createWorker, manifestUrl: MANIFEST_URL });
     const supported = engine.supportsGeometry();
     const init = worker.lastRequest("init");
-    worker.respond({ type: "ready", id: init.id, version: "0.5.0", geometry: true });
+    worker.respond({ type: "ready", id: init.id, version: "0.5.0", runtime: "wasm", geometry: true });
 
     expect(await supported).toBe(true);
     expect(await engine.supportsGeometry()).toBe(true);
@@ -529,7 +547,7 @@ describe("createDevelopEngine", () => {
     const supported = engine.supportsEffects();
     const init = worker.lastRequest("init");
     // 幾何の口の有無とは別に、wasm が効果のある設定（v: 3）を読めるかだけで決める
-    worker.respond({ type: "ready", id: init.id, version: "niho-develop 0.7.0 (engine niho-1)", effects: true });
+    worker.respond({ type: "ready", id: init.id, version: "niho-develop 0.7.0 (engine niho-1)", runtime: "wasm", effects: true });
 
     expect(await supported).toBe(true);
     expect(await engine.supportsEffects()).toBe(true);
@@ -546,6 +564,7 @@ describe("createDevelopEngine", () => {
       type: "ready",
       id: worker.lastRequest("init").id,
       version: "niho-develop 0.19.0 (engine niho-11)",
+      runtime: "wasm",
       colorPoints: true,
     });
 
@@ -648,6 +667,7 @@ describe("createDevelopEngine", () => {
       type: "ready",
       id: worker.lastRequest("init").id,
       version: "niho-develop 0.20.0 (engine niho-11)",
+      runtime: "wasm",
       geometry: true,
       perspective: true,
     });
@@ -664,7 +684,7 @@ describe("createDevelopEngine", () => {
     const worker = new FakeWorker();
     const engine = createDevelopEngine({ createWorker: () => worker as unknown as Worker, manifestUrl: MANIFEST_URL });
     const supported = engine.supportsPerspective();
-    worker.respond({ type: "ready", id: worker.lastRequest("init").id, version: "niho-develop 0.19.0 (engine niho-11)", geometry: true });
+    worker.respond({ type: "ready", id: worker.lastRequest("init").id, version: "niho-develop 0.19.0 (engine niho-11)", runtime: "wasm", geometry: true });
     expect(await supported).toBe(false);
     expect(await engine.supportsGeometry()).toBe(true);
   });
@@ -677,6 +697,7 @@ describe("createDevelopEngine", () => {
       type: "ready",
       id: worker.lastRequest("init").id,
       version: "niho-develop 0.22.0 (engine niho-11)",
+      runtime: "wasm",
       geometry: true,
       perspective: true,
       heal: true,
@@ -697,6 +718,7 @@ describe("createDevelopEngine", () => {
       type: "ready",
       id: worker.lastRequest("init").id,
       version: "niho-develop 0.23.0 (engine niho-13)",
+      runtime: "wasm",
       geometry: true,
       heal: true,
       lens: true,
@@ -711,7 +733,7 @@ describe("createDevelopEngine", () => {
     const worker = new FakeWorker();
     const engine = createDevelopEngine({ createWorker: () => worker as unknown as Worker, manifestUrl: MANIFEST_URL });
     const supported = engine.supportsLens();
-    worker.respond({ type: "ready", id: worker.lastRequest("init").id, version: "niho-develop 0.22.0 (engine niho-13)", heal: true });
+    worker.respond({ type: "ready", id: worker.lastRequest("init").id, version: "niho-develop 0.22.0 (engine niho-13)", runtime: "wasm", heal: true });
     expect(await supported).toBe(false);
     expect(await engine.supportsHeal()).toBe(true);
   });
@@ -720,7 +742,7 @@ describe("createDevelopEngine", () => {
     const worker = new FakeWorker();
     const engine = createDevelopEngine({ createWorker: () => worker as unknown as Worker, manifestUrl: MANIFEST_URL });
     const supported = engine.supportsHeal();
-    worker.respond({ type: "ready", id: worker.lastRequest("init").id, version: "niho-develop 0.21.0 (engine niho-11)", geometry: true, perspective: true });
+    worker.respond({ type: "ready", id: worker.lastRequest("init").id, version: "niho-develop 0.21.0 (engine niho-11)", runtime: "wasm", geometry: true, perspective: true });
     expect(await supported).toBe(false);
     expect(await engine.supportsPerspective()).toBe(true);
   });
@@ -781,7 +803,7 @@ describe("createDevelopEngine", () => {
       const worker = new FakeWorker();
       const engine = createDevelopEngine({ createWorker: () => worker as unknown as Worker, manifestUrl: MANIFEST_URL });
       const supported = engine.supportsEffects();
-      worker.respond({ type: "ready", id: worker.lastRequest("init").id, ...message });
+      worker.respond({ type: "ready", id: worker.lastRequest("init").id, runtime: "wasm", ...message });
       return { engine, worker, supported: await supported };
     };
     // 公開済みの wasm 0.6.0 は効果を描けるが v: 3 を断る。版が 0.5.0 以上でも、読めると言わない wasm には出さない
@@ -1161,6 +1183,7 @@ describe("createDevelopEngine", () => {
 
       const records = info.mock.calls.filter(([tag]) => tag === "[photo-develop-perf]").map(([, record]) => record as Record<string, unknown>);
       expect(records).toEqual([
+        { stage: "runtime", runtime: "wasm" },
         { stage: "renderRequest", priority: "final", queuedMs: expect.any(Number), roundTripMs: expect.any(Number), status: "ok" },
         { stage: "presetThumbnailRequest", priority: "preview", queuedMs: expect.any(Number), roundTripMs: expect.any(Number), status: "error" },
       ]);
@@ -1170,7 +1193,7 @@ describe("createDevelopEngine", () => {
       const plain = quiet.render({}, { maxDimension: 1280, interactive: false });
       quietWorker.respond(frameResponse(quietWorker.lastRequest("render").id, 1));
       await plain;
-      expect(info.mock.calls.filter(([tag]) => tag === "[photo-develop-perf]")).toHaveLength(2);
+      expect(info.mock.calls.filter(([tag]) => tag === "[photo-develop-perf]")).toHaveLength(3);
     } finally {
       info.mockRestore();
     }

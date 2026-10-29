@@ -383,6 +383,8 @@ export type PhotoLibraryRollout = {
 export type PhotoLibraryEngineAssets = {
   /** 版固定の manifest（`manifest-<crate 版>.json`）の URL。作れない環境（server など）では null */
   manifestUrl(): string | null;
+  /** camera の Worker だけが native を先に試す。省略時は従来どおり wasm。 */
+  preferNative?: boolean;
 };
 
 export type PhotoLibraryLimits = {

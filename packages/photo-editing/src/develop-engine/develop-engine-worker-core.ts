@@ -83,7 +83,7 @@ import { parseDevelopEngineManifest } from "./develop-engine-manifest";
  */
 
 export type DevelopEngineWorkerRequest =
-  | { type: "init"; id: number; manifestUrl: string; diagnostics?: boolean }
+  | { type: "init"; id: number; manifestUrl: string; diagnostics?: boolean; preferNative?: boolean }
   | { type: "open"; id: number; bytes: ArrayBuffer; workingMaxDimension: number }
   | { type: "render"; id: number; settingsJson: string; maxDimension: number; interactive: boolean }
   | { type: "sampleColor"; id: number; settingsJson: string; maxDimension: number; x: number; y: number }
@@ -207,7 +207,7 @@ export type DevelopMaskSurfacePng = { id: string; png: ArrayBuffer };
 
 export type DevelopEngineWorkerResponse =
   | { type: "perf"; id: 0; record: DevelopEnginePerfRecord }
-  | ({ type: "ready"; id: number; version: string } & DevelopEngineWorkerFeatures)
+  | ({ type: "ready"; id: number; version: string; runtime: DevelopEngineRuntime } & DevelopEngineWorkerFeatures)
   | { type: "unavailable"; id: number; reason: string }
   | { type: "opened"; id: number; width: number; height: number }
   | { type: "frame"; id: number; width: number; height: number; rgba: ArrayBuffer }
@@ -239,6 +239,10 @@ export type DevelopEngineWorkerDeps = {
   fetch: (url: string, init?: RequestInit) => Promise<Response>;
   importModule: (url: string) => Promise<unknown>;
   post: (message: DevelopEngineWorkerResponse, transfer?: Transferable[]) => void;
+  /** camera が明示したときだけ試す native glue。作れない・初期化できない場合は同じ Worker で wasm へ戻る。 */
+  createNativeGlue?: () => unknown;
+  /** native の通信・handle 失効を表す error の判定（core を transport 実装から分離し、偽 glue で試験できるようにする）。 */
+  isNativeUnavailableError?: (error: unknown) => boolean;
   /** オプトイン診断だけで使う時計と、安全な定型フィールドだけを受け取るログ口。 */
   now?: () => number;
   logPerf?: (record: DevelopEnginePerfRecord) => void;
@@ -258,6 +262,8 @@ export type DevelopEngineWorkerDeps = {
    */
   createAnalysisHelper?: (receive: (response: DevelopAnalysisHelperResponse | null) => void) => DevelopAnalysisHelper | null;
 };
+
+export type DevelopEngineRuntime = "native" | "wasm";
 
 export type DevelopEnginePerfRecord = {
   stage:
@@ -341,6 +347,11 @@ type KeptPhoto = {
   developer: DevelopDeveloper;
   analysisKey: string | null;
 };
+
+/** native が途中で使えなくなったとき、同じ写真を wasm で開き直すために保つ入力。 */
+type CurrentOpenInput =
+  | { kind: "raster"; bytes: ArrayBuffer; workingMaxDimension: number }
+  | { kind: "workingCopy"; png: ArrayBuffer; metaJson: string };
 
 /** 動いている補助の worker（#155。開いている写真に 1 つ）と、結果を待っている 1 件（取り込みが終わるまで）。 */
 type AnalysisHelperState = {
@@ -832,6 +843,9 @@ export function createDevelopEngineWorkerHandler(
   // 起こした glue（まだなら null）。起こせなかったら unavailable にして、以後は何も受けない
   let glue: DevelopGlue | null = null;
   let version = "";
+  let runtime: DevelopEngineRuntime = "wasm";
+  let activeManifestUrl: string | null = null;
+  let nativeReleaseClient: (() => unknown) | null = null;
   // 起こした wasm が効果のある設定（v: 3）を読めるか（起こしたときに 1 回だけ確かめる）
   let effects = false;
   let colorPoints = false;
@@ -854,6 +868,7 @@ export function createDevelopEngineWorkerHandler(
   let currentAnalysisKey: string | null = null;
   // 開いている写真の入力の鍵（鍵が無い写真は手放すときに保たない）と、開いていないが保っている写真（古い順）
   let currentKey: string | null = null;
+  let currentOpenInput: CurrentOpenInput | null = null;
   const kept: KeptPhoto[] = [];
   let chain: Promise<void> = Promise.resolve();
   let warmAuto: Extract<DevelopEngineWorkerRequest, { type: "warmAutoSettings" }> | null = null;
@@ -1271,6 +1286,7 @@ export function createDevelopEngineWorkerHandler(
       type: "ready",
       id,
       version,
+      runtime,
       ...(glue ? glueFeatures(glue) : {}),
       ...(effects ? { effects: true as const } : {}),
       ...(colorPoints ? { colorPoints: true as const } : {}),
@@ -1283,8 +1299,81 @@ export function createDevelopEngineWorkerHandler(
     });
   };
 
-  const init = async (id: number, manifestUrl: string, enableDiagnostics: boolean): Promise<void> => {
+  const activateGlue = (
+    loaded: DevelopGlue,
+    manifestUrl: string,
+    nextRuntime: DevelopEngineRuntime,
+    fallbackVersion: string,
+  ) => {
+    const reported = loaded.version();
+    glue = loaded;
+    version = typeof reported === "string" && reported ? reported : fallbackVersion;
+    runtime = nextRuntime;
+    effects = acceptsEffectSettings(loaded.validateSettings);
+    colorPoints = loaded.colorSampling && acceptsColorPointSettings(loaded.validateSettings);
+    detail = acceptsDetailSettings(loaded.validateSettings);
+    masks = readMaskCapabilities(loaded);
+    perspective = loaded.geometry !== null && acceptsPerspectiveSettings(loaded.validateSettings);
+    upright = perspective && loaded.upright;
+    heal = acceptsHealSettings(loaded.validateSettings);
+    lens = acceptsLensSettings(loaded.validateSettings);
+    helperManifestUrl = manifestUrl;
+  };
+
+  const loadWasm = async (manifestUrl: string): Promise<void> => {
+    const manifest = await measureAsync("manifestFetch", async () => {
+      const response = await deps.fetch(manifestUrl, { cache: "no-cache" });
+      if (!response.ok) throw new Error(`develop engine manifest ${response.status}`);
+      const parsed = parseDevelopEngineManifest(await response.json(), manifestUrl);
+      if (!parsed) throw new Error("develop engine manifest is invalid");
+      return parsed;
+    });
+    const loaded = await measureAsync("glueImport", async () => {
+      const parsed = readGlue(await deps.importModule(manifest.jsUrl));
+      if (!parsed) throw new Error("develop engine glue is invalid");
+      return parsed;
+    });
+    await measureAsync("wasmInit", async () => {
+      const output = await loaded.init({ module_or_path: manifest.wasmUrl });
+      wasmMemory = () => readMemoryBuffer(output);
+    });
+    activateGlue(loaded, manifestUrl, "wasm", manifest.version);
+  };
+
+  const flushNativeClient = () => {
+    try {
+      nativeReleaseClient?.();
+    } catch {
+      // sidecar が落ちた後の一括解放は失敗してよい。close / wasm への切替は続ける。
+    }
+  };
+
+  const releaseNativeClient = () => {
+    flushNativeClient();
+    nativeReleaseClient = null;
+  };
+
+  const loadNative = async (manifestUrl: string): Promise<void> => {
+    const module = deps.createNativeGlue?.();
+    const loaded = readGlue(module);
+    if (!loaded) throw new Error("native develop engine glue is invalid");
+    nativeReleaseClient =
+      isRecord(module) && typeof module.releaseClient === "function"
+        ? (module.releaseClient as () => unknown).bind(module)
+        : null;
+    await loaded.init({ module_or_path: manifestUrl });
+    wasmMemory = () => null;
+    activateGlue(loaded, manifestUrl, "native", "");
+  };
+
+  const init = async (
+    id: number,
+    manifestUrl: string,
+    enableDiagnostics: boolean,
+    preferNative: boolean,
+  ): Promise<void> => {
     diagnostics = enableDiagnostics;
+    activeManifestUrl = manifestUrl;
     if (glue) {
       postReady(id);
       return;
@@ -1294,34 +1383,16 @@ export function createDevelopEngineWorkerHandler(
       return;
     }
     try {
-      const manifest = await measureAsync("manifestFetch", async () => {
-        const response = await deps.fetch(manifestUrl, { cache: "no-cache" });
-        if (!response.ok) throw new Error(`develop engine manifest ${response.status}`);
-        const parsed = parseDevelopEngineManifest(await response.json(), manifestUrl);
-        if (!parsed) throw new Error("develop engine manifest is invalid");
-        return parsed;
-      });
-      const loaded = await measureAsync("glueImport", async () => {
-        const parsed = readGlue(await deps.importModule(manifest.jsUrl));
-        if (!parsed) throw new Error("develop engine glue is invalid");
-        return parsed;
-      });
-      await measureAsync("wasmInit", async () => {
-        const output = await loaded.init({ module_or_path: manifest.wasmUrl });
-        wasmMemory = () => readMemoryBuffer(output);
-      });
-      const reported = loaded.version();
-      glue = loaded;
-      version = typeof reported === "string" && reported ? reported : manifest.version;
-      effects = acceptsEffectSettings(loaded.validateSettings);
-      colorPoints = loaded.colorSampling && acceptsColorPointSettings(loaded.validateSettings);
-      detail = acceptsDetailSettings(loaded.validateSettings);
-      masks = readMaskCapabilities(loaded);
-      perspective = loaded.geometry !== null && acceptsPerspectiveSettings(loaded.validateSettings);
-      upright = perspective && loaded.upright;
-      heal = acceptsHealSettings(loaded.validateSettings);
-      lens = acceptsLensSettings(loaded.validateSettings);
-      helperManifestUrl = manifestUrl;
+      if (preferNative && deps.createNativeGlue) {
+        try {
+          await loadNative(manifestUrl);
+        } catch {
+          releaseNativeClient();
+          await loadWasm(manifestUrl);
+        }
+      } else {
+        await loadWasm(manifestUrl);
+      }
       postReady(id);
     } catch (error) {
       unavailableReason = errorMessage(error);
@@ -1348,6 +1419,57 @@ export function createDevelopEngineWorkerHandler(
     return opener(new Uint8Array(png), metaJson);
   };
 
+  /** native の現在状態を捨て、同じ入力・面を wasm の Developer に作り直す。 */
+  const fallbackToWasm = async (): Promise<void> => {
+    const manifestUrl = activeManifestUrl;
+    if (runtime !== "native" || !manifestUrl) throw new Error("develop engine cannot fall back to wasm");
+    const input = currentOpenInput;
+    const key = currentKey;
+    const analysisKey = currentAnalysisKey;
+    const surfaces = [...heldSurfaces].map(([surfaceId, png]) => [surfaceId, new Uint8Array(png)] as const);
+
+    dropAnalysisAhead();
+    releaseThumbnailSession();
+    heldSurfaces.clear();
+    thumbnailSurfaces.clear();
+    freeQuietly(developer);
+    developer = null;
+    for (const photo of kept.splice(0)) freeKept(photo);
+    currentKey = null;
+    currentAnalysisKey = null;
+    glue = null;
+    releaseNativeClient();
+
+    await loadWasm(manifestUrl);
+    if (!input) {
+      currentOpenInput = null;
+      return;
+    }
+    const reopened =
+      input.kind === "raster"
+        ? new (requireGlue().Developer)(new Uint8Array(input.bytes), input.workingMaxDimension)
+        : openWorkingCopy(input.png, input.metaJson);
+    adoptDeveloper(reopened, key);
+    currentAnalysisKey = analysisKey;
+    if (input.kind === "workingCopy") holdAnalysisSource(reopened, input.png, input.metaJson);
+    for (const [surfaceId, png] of surfaces) {
+      if (typeof reopened.setMaskSurface !== "function") throw new Error("develop engine cannot restore mask surfaces");
+      reopened.setMaskSurface(surfaceId, png);
+      heldSurfaces.set(surfaceId, png);
+    }
+    currentOpenInput = null;
+  };
+
+  const canRetryAfterNativeFailure = (message: DevelopEngineWorkerRequest): boolean =>
+    ![
+      "init",
+      "close",
+      "dropMaskSurface",
+      "warmAutoSettings",
+      "promoteAutoSettings",
+      "cancelAutoSettings",
+    ].includes(message.type);
+
   /**
    * 持っている写真は変えず、別の作業コピーを一時的に開いて丁寧に描き（final）、手放す。画素は手放す前に transfer できる
    * ArrayBuffer にする。
@@ -1373,12 +1495,11 @@ export function createDevelopEngineWorkerHandler(
     }
   };
 
-  handle = async (message: DevelopEngineWorkerRequest): Promise<void> => {
+  const processMessage = async (message: DevelopEngineWorkerRequest): Promise<void> => {
     const id = message.id;
-    try {
-      switch (message.type) {
+    switch (message.type) {
         case "init":
-          await init(id, message.manifestUrl, message.diagnostics === true);
+          await init(id, message.manifestUrl, message.diagnostics === true, message.preferNative === true);
           return;
         case "open": {
           dropAnalysisAhead();
@@ -1390,6 +1511,10 @@ export function createDevelopEngineWorkerHandler(
             adoptDeveloper(next, key);
             return next;
           });
+          currentOpenInput =
+            runtime === "native"
+              ? { kind: "raster", bytes: message.bytes.slice(0), workingMaxDimension: message.workingMaxDimension }
+              : null;
           deps.post({ type: "opened", id, width: opened.width, height: opened.height });
           return;
         }
@@ -1403,6 +1528,10 @@ export function createDevelopEngineWorkerHandler(
             adoptDeveloper(next, key);
             return next;
           });
+          currentOpenInput =
+            runtime === "native"
+              ? { kind: "workingCopy", png: message.png.slice(0), metaJson: message.metaJson }
+              : null;
           holdAnalysisSource(opened, message.png, message.metaJson);
           deps.post({ type: "opened", id, width: opened.width, height: opened.height });
           return;
@@ -1686,13 +1815,37 @@ case "setMaskSurface": {
           requireGlue();
           dropAnalysisAhead();
           releaseDeveloper();
+          if (runtime === "native") {
+            for (const photo of kept.splice(0)) freeKept(photo);
+            flushNativeClient();
+          }
+          currentOpenInput = null;
           deps.post({ type: "closed", id });
           return;
         default:
           throw new Error("unknown develop engine request");
-      }
+    }
+  };
+
+  handle = async (message: DevelopEngineWorkerRequest): Promise<void> => {
+    try {
+      await processMessage(message);
     } catch (error) {
-      deps.post({ type: "error", id, message: errorMessage(error) });
+      if (
+        runtime === "native" &&
+        deps.isNativeUnavailableError?.(error) === true
+      ) {
+        try {
+          await fallbackToWasm();
+          if (canRetryAfterNativeFailure(message)) {
+            await processMessage(message);
+            return;
+          }
+        } catch (fallbackError) {
+          error = fallbackError;
+        }
+      }
+      deps.post({ type: "error", id: message.id, message: errorMessage(error) });
     }
   };
 

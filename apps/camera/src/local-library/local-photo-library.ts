@@ -742,6 +742,7 @@ export function createLocalPhotoLibrary(commands: CameraCommands, options: Local
     },
     rollout: async () => ({ crop: true, mobileEditing: false }),
     engineAssets: {
+      preferNative: true,
       // 段 2 の wasm は画面に同梱（scripts/stage-develop-engine.mjs）。niho.life から取らない（決まりごと 4）
       manifestUrl: () => {
         if (typeof window === "undefined") return null;

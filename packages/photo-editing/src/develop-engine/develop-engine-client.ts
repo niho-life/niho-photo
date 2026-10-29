@@ -355,6 +355,8 @@ export type DevelopEngine = {
 export type CreateDevelopEngineOptions = {
   createWorker?: () => Worker | null;
   manifestUrl?: string;
+  /** camera だけが指定する native 優先。使えなければ Worker 内で同じ wasm manifest へ戻る。 */
+  preferNative?: boolean;
   loadTimeoutMs?: number;
   /** 写真編集タブの ?photoDevelopPerf=1 だけで有効にする Worker 段階診断（明示値はテスト用）。 */
   diagnostics?: boolean;
@@ -538,6 +540,8 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
   const perfNow = (): number | null => (diagnosticsEnabled() ? performance.now() : null);
   let exportsInFlight = 0;
   let terminateWhenIdle = false;
+  let closeBeforeTerminate = false;
+  let finishDispose = () => terminate("disposed");
   // 幾何の口が wasm に揃っている（`ready` の応答で分かる）
   let geometrySupported = false;
   // 効果（白黒・周辺光量補正・粒子）を描ける版の crate（`ready` の応答の版で分かる）
@@ -865,6 +869,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
     if (response.id === initId) {
       initId = null;
       if (response.type === "ready") {
+        if (diagnosticsEnabled()) console.info("[photo-develop-perf]", { stage: "runtime", runtime: response.runtime });
         geometrySupported = response.geometry === true;
         effectsSupported = response.effects === true;
         colorPointsSupported = response.colorPoints === true;
@@ -923,7 +928,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
     else entry.resolve(response);
     if (isExportKind(entry.kind)) {
       exportsInFlight = Math.max(0, exportsInFlight - 1);
-      if (terminateWhenIdle && exportsInFlight === 0) terminate("disposed");
+      if (terminateWhenIdle && exportsInFlight === 0) finishDispose();
     }
   };
 
@@ -955,10 +960,24 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
     });
   };
 
+  finishDispose = () => {
+    if (options.preferNative !== true) {
+      terminate("disposed");
+      return;
+    }
+    if (closeBeforeTerminate || status !== "ready") return;
+    closeBeforeTerminate = true;
+    // native glue の client token に属する handle を Worker 側で解放してから止める。wasm-only の既存経路は即時終了のまま。
+    void request("close", (id) => ({ message: { type: "close", id } }), true).then(
+      () => terminate("disposed"),
+      () => terminate("disposed"),
+    );
+  };
+
   /** 書き出しを 1 つ数え終える（止める予定なら、最後の 1 つで止める）。 */
   const releaseExport = () => {
     exportsInFlight = Math.max(0, exportsInFlight - 1);
-    if (terminateWhenIdle && exportsInFlight === 0) terminate("disposed");
+    if (terminateWhenIdle && exportsInFlight === 0) finishDispose();
   };
 
   /**
@@ -1022,7 +1041,13 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
     initId = id;
     try {
       const diagnostics = diagnosticsEnabled();
-      post({ type: "init", id, manifestUrl, ...(diagnostics ? { diagnostics: true } : {}) });
+      post({
+        type: "init",
+        id,
+        manifestUrl,
+        ...(diagnostics ? { diagnostics: true } : {}),
+        ...(options.preferNative === true ? { preferNative: true } : {}),
+      });
     } catch {
       terminate("unavailable");
     }
@@ -1500,13 +1525,14 @@ async setMaskSurface(surfaceId, png) {
 
     dispose() {
       if (status === "disposed" || terminateWhenIdle) return;
-      if (status !== "ready" || exportsInFlight === 0) {
+      if (status !== "ready") {
         terminate("disposed");
         return;
       }
-      // 描き途中の JPEG（記事用の画像）を描き終えてから止める。待っている描画は null で終える
+      // 描き途中の JPEG（記事用の画像）を描き終えてから止める。native 希望なら最後に handle を解放する。
       terminateWhenIdle = true;
       dropRenders();
+      if (exportsInFlight === 0) finishDispose();
     },
   };
 }

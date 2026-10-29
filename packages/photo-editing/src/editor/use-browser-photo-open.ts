@@ -1482,6 +1482,7 @@ export function useBrowserPhotoOpen(params: {
 
           const canonicalEngine = createDevelopEngine({
             manifestUrl: library.engineAssets.manifestUrl() ?? undefined,
+            preferNative: library.engineAssets.preferNative === true,
             maskSurfaces: maskSurfaceSource,
           });
           const canonicalReady = await canonicalEngine.ready();
@@ -1618,6 +1619,7 @@ export function useBrowserPhotoOpen(params: {
     try {
       canonicalEngine = createDevelopEngine({
         manifestUrl: library.engineAssets.manifestUrl() ?? undefined,
+        preferNative: library.engineAssets.preferNative === true,
         maskSurfaces: maskSurfaceSource,
       });
       if (!(await canonicalEngine.ready()) || isStale()) {

@@ -112,7 +112,8 @@
     history.replaceState(null, "", "?photoDevelopPerf=1");
     localStorage.clear();
     stage = "add-folder";
-    const addMenu = await waitFor(() => [...document.querySelectorAll("button")].find((element) => element.textContent.trim() === "フォルダや写真を追加" && !element.disabled));
+    const addMenu = await waitFor(() => [...document.querySelectorAll("button")].find((element) =>
+      (element.textContent.trim() === "フォルダや写真を追加" || element.getAttribute("aria-label") === "フォルダや写真を追加") && !element.disabled));
     addMenu.click();
     const add = await waitFor(() => [...document.querySelectorAll('button, [role="menuitem"]') ]
       .find((element) => element.textContent.trim() === (config.addPhotos ? "写真を選ぶ" : "フォルダを追加") && !element.disabled));
@@ -204,6 +205,7 @@
     const selected = presetButtons().some((button, index) => index > 0 && button.getAttribute("aria-current") === "true" && button.textContent === chosenPreset);
     if (!selected) throw new Error("preset-selection-lost");
     report({ ok: true, case: config.label, mode: config.mode, iteration: config.iteration,
+      developRuntime: perf.find((entry) => entry.stage === "runtime")?.runtime ?? null,
       timeToEditableMs: Math.max(exposureAt, presetReadyAt) - t0,
       inputAcceptedMs: acceptedMs, exposurePaintMs, presetPaintMs,
       presetBreakdownMs: presetBreakdown(presetInputStartedAt, presetAt), presetFinalPaintMs,
@@ -213,6 +215,7 @@
       settingsRetained: retained, presetRetained: selected, nativeMeasurementStartedMs });
   } catch (error) {
     report({ ok: false, case: config.label, mode: config.mode, iteration: config.iteration, stage,
-      ...observations, reason: error instanceof Error && ["timeout", "preset-frame-missing", "settings-changed-on-handoff", "preset-selection-lost", "paint-not-presented"].includes(error.message) ? error.message : "ui-probe-failed", uiEventStages: events.map((event) => event.stage) });
+      ...observations, developRuntime: perf.find((entry) => entry.stage === "runtime")?.runtime ?? null,
+      reason: error instanceof Error && ["timeout", "preset-frame-missing", "settings-changed-on-handoff", "preset-selection-lost", "paint-not-presented"].includes(error.message) ? error.message : "ui-probe-failed", uiEventStages: events.map((event) => event.stage) });
   }
 })();
