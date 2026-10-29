@@ -1,4 +1,4 @@
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, type Mock, vi } from "vitest";
 
 import {
   createDevelopAnalysisWorkerHandler,
@@ -101,10 +101,11 @@ function transferGlue(options: { transfer?: boolean; holds?: (settingsJson: stri
   return { module, prepared, imported, developers };
 }
 
-type FakeHelper = DevelopAnalysisHelper & {
+type FakeHelper = {
   receive: (response: DevelopAnalysisHelperResponse | null) => void;
   posted: { message: DevelopAnalysisHelperRequest; transfer: Transferable[] }[];
-  terminate: ReturnType<typeof vi.fn>;
+  post: DevelopAnalysisHelper["post"];
+  terminate: Mock<() => void>;
 };
 
 /** 偽の補助の worker（`receive` で応答を返す）。`fail` なら作れない。 */
@@ -118,7 +119,7 @@ function fakeHelpers(options: { fail?: boolean } = {}) {
       post: (message, transfer) => {
         helper.posted.push({ message, transfer });
       },
-      terminate: vi.fn(),
+      terminate: vi.fn<() => void>(),
     };
     created.push(helper);
     return helper;
@@ -334,7 +335,7 @@ describe("先回りを補助の worker で作る（#155）", () => {
       }
     }
     const helperModule = { default: vi.fn(async () => ({})), version: () => VERSION, Developer: HelperDeveloper };
-    const terminate = vi.fn();
+    const terminate = vi.fn<() => void>();
     const createAnalysisHelper = vi.fn((receive: (response: DevelopAnalysisHelperResponse | null) => void) => {
       const handle = createDevelopAnalysisWorkerHandler({
         fetch: async () => new Response(JSON.stringify(MANIFEST), { status: 200 }),

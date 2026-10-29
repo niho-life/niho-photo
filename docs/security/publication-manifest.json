@@ -459,7 +459,7 @@
         "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。",
         "niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。"
       ],
-      "outputSha256": "918285f42d11816464a365fc452f7de7cc68038b7927a5242d00bffc7a8ba018"
+      "outputSha256": "bd1c0d83ac58c58ab177060e8ac5f08e5fcfd0102e47cc1c01fb42e244fa54c8"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -11645,7 +11645,7 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-analysis-helper.test.ts",
-      "sha256": "bcb8905816cc0fa7783f09b3f27f5b85f1aa4082846ccb9c771c7688d5e5e59b",
+      "sha256": "2bf6d84ce5a00ef01d8f7fa465df59cb791dd817a33fd0aa41bc33afc913e40a",
       "origin": "公開 repo で新規作成（niho-photo#155）。描画の worker が先回りを補助の worker に頼み、取り込み、写真の切り替えで終わらせ、失敗で #129 の先回りへ戻る試験（偽の glue だけ）。外部コード・実写真を含まない。"
     }
   ],

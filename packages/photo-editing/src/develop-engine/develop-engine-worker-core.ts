@@ -325,8 +325,9 @@ const PRESET_THUMBNAIL_SESSION_MAX_DIMENSION = 256;
 const HELD_PHOTO_LIMIT = 2;
 
 /**
- * 解析を先に作る（#129）のは、通常の要求が来なくなってからこれだけたってから。1 回は途中で止められない（signed RAW 2560px で
- * Studio の wasm 1.4〜2.4 秒）ので、操作の続いている間は始めない。
+ * 解析を先に作る（#129）のは、通常の要求が来なくなってからこれだけたってから。この worker で作る 1 回は途中で止められない
+ * （signed RAW 2560px で Studio の wasm 1.4〜2.4 秒）ので、操作の続いている間は始めない。補助の worker で作るとき（#155）も、
+ * 操作の間は CPU とメモリを描画に回すため同じく待つ。
  */
 const ANALYSIS_AHEAD_QUIET_MS = 500;
 
