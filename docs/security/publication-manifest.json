@@ -456,9 +456,10 @@
         "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
         "プリセットの当てはめと見本用 session の作成を診断の区間に記録（#126）",
-        "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。"
+        "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。",
+        "niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。"
       ],
-      "outputSha256": "d453014f19fa1cacff7b40decb194eb7d461451b4f2a559f4b6457cf8d93d6b9"
+      "outputSha256": "918285f42d11816464a365fc452f7de7cc68038b7927a5242d00bffc7a8ba018"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -468,11 +469,12 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
         "sha256": "fd4cedb6e946a8a19e0e5a07d205829ff1251cfd9dbb50aedcb391feb031ba64"
       },
-      "outputSha256": "b0df9e491918bb6f227c03895ba7f42b866a6e88c60f33039b5ca095ced5c61c",
+      "outputSha256": "29e436fab854954728604ed703ca39b8c9ff95ff5aed6bd7f571c2da77175ff7",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
-        "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。"
+        "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。",
+        "niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。"
       ]
     },
     {
@@ -11625,6 +11627,26 @@
       "path": "packages/develop-engine/crates/niho-develop/tests/analysis_transfer.rs",
       "sha256": "87022c94c973f190428c3a903a9e0b55550dfcd7c2313fb0d756e8aa826cada4",
       "origin": "公開 repo で新規作成（niho-photo#155）。取り込んだ解析で描く Final・Interactive が新しい Session と同じ byte になり、別の写真・壊れた bytes・版違いを断る Rust 回帰（native と wasm。合成画像だけ）。外部コード・実写真を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/develop-engine/develop-engine-analysis-worker-core.ts",
+      "sha256": "218d04c6f2aa8c8cff818936219118d8f75bfe0da5d2217c5954c414d0cbcd63",
+      "origin": "公開 repo で新規作成（niho-photo#155）。先回りの解析を作る補助の worker の中身（描画の worker と同じ manifest・glue で wasm を起こし、同じ作業コピーを開いて解析を版付きの bytes にして返す）。外部コード・実写真を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/develop-engine/develop-engine-analysis.worker.ts",
+      "sha256": "50177e455529d4ed326b56e127ba578adc424a9d1c23b923e97360c7f6f3fa5d",
+      "origin": "公開 repo で新規作成（niho-photo#155）。先回りの解析を作る補助の Web Worker の殻。外部コード・実写真を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/develop-engine/develop-engine-analysis-worker-core.test.ts",
+      "sha256": "11f2ec796341e7179fd5959c4aa31fc492f49c46d7be581b3a69e51932072544",
+      "origin": "公開 repo で新規作成（niho-photo#155）。補助の worker の中身が解析の bytes を返し、口の無い・版の違う glue を断る試験（偽の glue だけ）。外部コード・実写真を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-analysis-helper.test.ts",
+      "sha256": "bcb8905816cc0fa7783f09b3f27f5b85f1aa4082846ccb9c771c7688d5e5e59b",
+      "origin": "公開 repo で新規作成（niho-photo#155）。描画の worker が先回りを補助の worker に頼み、取り込み、写真の切り替えで終わらせ、失敗で #129 の先回りへ戻る試験（偽の glue だけ）。外部コード・実写真を含まない。"
     }
   ],
   "excludedSources": [
