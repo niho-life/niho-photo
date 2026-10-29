@@ -11716,8 +11716,8 @@
     },
     {
       "path": "apps/camera/scripts/e2e/native-develop-worker.js",
-      "sha256": "1fd7136f798a0951355bea4dd996c019b58e8cdac17c25dc22b890d9e9c692db",
-      "origin": "公開repoで新規作成（niho-photo#152）。E2E の Worker。合成の写真を native の sidecar（同期の XHR）と同梱の wasm で描き、画素の一致と時間を測る。"
+      "sha256": "32c7453f095846c7640c92d6dc813ba05467941959f2050e131ad4adf062d45b",
+      "origin": "公開repoで新規作成（niho-photo#152）。E2E の Worker。合成の写真を native の sidecar（同期の XHR）と同梱の wasm で描き、画素の一致と時間を測る。\n変更理由: PR #163 の sidecar 世代確認に合わせ E2E Worker に識別子を付与"
     },
     {
       "path": "apps/camera/src-tauri/src/develop_engine_scheme.rs",

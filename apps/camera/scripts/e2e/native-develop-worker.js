@@ -4,6 +4,7 @@
 const describe = (error) => String(error?.message ?? error);
 const median = (values) => values.slice().sort((a, b) => a - b)[Math.floor(values.length / 2)];
 const round = (value) => Math.round(value * 10) / 10;
+const CLIENT = "0123456789abcdef0123456789abcdef";
 
 function encodeBody(header, blobs = []) {
   const headerBytes = new TextEncoder().encode(JSON.stringify({ ...header, blobs: blobs.map((blob) => blob.byteLength) }));
@@ -51,6 +52,7 @@ function nativeCall(method, args = [], extra = {}) {
   const xhr = new XMLHttpRequest();
   xhr.open("POST", `niho-develop://localhost/${method}`, false);
   xhr.responseType = "arraybuffer";
+  xhr.setRequestHeader("X-Niho-Develop-Client", CLIENT);
   xhr.send(encodeBody({ args: encoded, ...extra }, blobs));
   if (xhr.status !== 200) throw new Error(`${method}: HTTP ${xhr.status}`);
   const reply = decodeBody(xhr.response);
@@ -124,8 +126,7 @@ self.onmessage = async (event) => {
       ...presets.map((preset) => [`preset:${preset.id}`, JSON.parse(wasm.applyPreset(preset.xmp, neutral, 1, null)).settings]),
     ].map(([label, settings]) => [label, typeof settings === "string" ? settings : JSON.stringify(settings)]);
 
-    const client = "e2e-probe";
-    const opened = timed(1, () => nativeCall("Developer.new", [photo, 2560], { client }));
+    const opened = timed(1, () => nativeCall("Developer.new", [photo, 2560], { client: CLIENT }));
     const wasmOpened = timed(1, () => new wasm.Developer(photo, 2560));
     out.open = { nativeMs: opened.medianMs, wasmMs: wasmOpened.medianMs };
     const handle = opened.result.handle;
@@ -151,7 +152,7 @@ self.onmessage = async (event) => {
     out.exportJpeg = { sameBytes: sameBytes(nativeJpeg.result, wasmJpeg.result), nativeMs: nativeJpeg.medianMs, wasmMs: wasmJpeg.medianMs };
     nativeCall("Developer.free", [], { handle });
     developer.free();
-    out.released = nativeCall("releaseClient", [], { client });
+    out.released = nativeCall("releaseClient", [], { client: CLIENT });
   } catch (error) {
     out.error = describe(error);
   }
