@@ -1354,6 +1354,28 @@ describe("threaded wasm selection", () => {
     expect(posted[0]?.message).toMatchObject({ type: "ready", runtime: "wasm" });
   });
 
+  it("recovers before the client deadline when the thread pool never answers", async () => {
+    vi.useFakeTimers();
+    try {
+      const single = fakeGlue();
+      const threaded = fakeGlue();
+      const { handler, deps, posted } = setup({ manifest });
+      deps.threadsEnvironment = () => ({ isolated: true, hardwareConcurrency: 8, userAgent: "Chrome/120 Safari/537" });
+      deps.importModule = vi.fn(async (url) => url.endsWith(threadsJs)
+        ? { ...threaded.module, initThreadPool: () => new Promise(() => {}) }
+        : single.module);
+
+      const pending = handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+      await vi.advanceTimersByTimeAsync(5_000);
+      await pending;
+
+      expect(single.init).toHaveBeenCalledOnce();
+      expect(posted[0]?.message).toMatchObject({ type: "ready", runtime: "wasm" });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("keeps the Mac native fallback on the single wasm", async () => {
     const single = fakeGlue();
     const { handler, deps, posted } = setup({ manifest, module: single.module });

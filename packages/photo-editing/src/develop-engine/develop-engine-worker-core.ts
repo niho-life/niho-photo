@@ -1352,7 +1352,8 @@ export function createDevelopEngineWorkerHandler(
           try {
             await Promise.race([
               (module.initThreadPool as (threads: number) => Promise<unknown>)(count),
-              new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("thread pool timed out")), 20_000); }),
+              // Client 全体の初期化期限は20秒。単一版を再読込する時間を残す。
+              new Promise<never>((_, reject) => { timer = setTimeout(() => reject(new Error("thread pool timed out")), 5_000); }),
             ]);
           } finally {
             if (timer) clearTimeout(timer);

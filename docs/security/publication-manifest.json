@@ -416,7 +416,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core.test.ts",
         "sha256": "eb20b196dd11f240e0944d79d51244a1951536f264a1aa7c1fcb06180f86d26b"
       },
-      "outputSha256": "81d53487276bbe5042dd38fdf2390452aff81f64530c13a097534b811a3f0334",
+      "outputSha256": "ae8f67656fd7c4e58387b5f569b4f073005cb642da828fa9df4928f01db68558",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -437,7 +437,8 @@
         "Issue #152 の native 復旧テストで偽 Developer の render 戻り型を明示する。",
         "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
         "Issue #151: 8本の Worker 選択を対象試験で固定",
-        "Issue #151: Mac native 復旧時にスレッドを選ばない対象試験を追加"
+        "Issue #151: Mac native 復旧時にスレッドを選ばない対象試験を追加",
+        "PR #165 レビュー: pool 無応答からの単一 wasm 復旧試験を追加"
       ]
     },
     {
@@ -471,9 +472,10 @@
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
         "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
         "Issue #151: Chrome 計測結果に基づき pool 上限を8本に調整",
-        "Issue #151: Mac native の復旧は常に単一 wasm を選択"
+        "Issue #151: Mac native の復旧は常に単一 wasm を選択",
+        "PR #165 レビュー: pool 待ちを5秒にして単一 wasm 復旧時間を確保"
       ],
-      "outputSha256": "43c87445e84b09e44617eecb9923040811b2fd44ca4d87a7fc05af7873b6e818"
+      "outputSha256": "c7b698791648aabba3a722c00eb1980c6c6031df8a12e21c790120f786ef4188"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
