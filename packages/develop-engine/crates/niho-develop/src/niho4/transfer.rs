@@ -5,17 +5,19 @@
 //! frames drawn from an analysis taken in are the bytes the session draws
 //! making it (`tests/analysis_transfer.rs`).
 //!
-//! Version 1. Numbers are little-endian; `f32` and `f64` are their bits.
+//! Version 2 (1 had no source fingerprint and is not read). Numbers are
+//! little-endian; `f32` and `f64` are their bits.
 //!
 //! | bytes | |
 //! |---|---|
 //! | 6 | `NIHOAN` |
-//! | 2 | version (`u16`, 1) |
+//! | 2 | version (`u16`, 2) |
 //! | 1 | camera: 0 Panasonic DC-S5, 1 Sony ZV-E10 II, 2 Sony FX30 |
 //! | 8 | effective color noise reduction (`f64`) |
 //! | 8 | luminance noise reduction (`f64`) |
 //! | 8 | baseline exposure (`f64`) |
 //! | 4 + 4 | source width, height (`u32`) |
+//! | 8 | fingerprint of the source pixels (`u64`, [`source_fingerprint`]) |
 //! | 1 (+ …) | CNR source: 0 the source itself (both amounts 0), 1 filtered, then width · height · 3 `f32` |
 //! | 1 (+ …) | coefficients: 0 none, 1 then width, height (`u32`, the analysis size) and five maps of width · height `f32` (highlight a, b, alpha, shadow a, b) |
 //! | 1 (+ …) | NIHO 7 highlight maps: 0 none, 1 residual (one map), 2 FX30 shoulder (a, b), 3 could not be made; the maps are of the coefficients' size |
@@ -29,7 +31,7 @@ use std::fmt;
 use std::sync::{Arc, OnceLock};
 
 const MAGIC: &[u8; 6] = b"NIHOAN";
-const VERSION: u16 = 1;
+const VERSION: u16 = 2;
 
 const CNR_ORIGINAL: u8 = 0;
 const CNR_FILTERED: u8 = 1;
@@ -56,7 +58,8 @@ pub(crate) enum TransferError {
     Amount,
     /// The session's photo is not a signed RAW working copy of a known camera.
     NotSignedRaw,
-    /// The analysis of another photo (camera, baseline exposure or size).
+    /// The analysis of another photo (camera, baseline exposure, size or
+    /// the source pixels' fingerprint).
     OtherPhoto,
     /// A section of another kind than its key allows.
     Section { section: &'static str, tag: u8 },
@@ -102,10 +105,42 @@ fn camera_from_code(code: u8) -> Option<Camera> {
     }
 }
 
+/// A fingerprint of the source pixels (their `f32` bits): bytes are taken
+/// in only by a session of the same photo, as two photos of one camera,
+/// baseline and size are not told apart by those (and with a noise
+/// reduction the other photo's filtered pixels would be drawn). Four
+/// multiply-xor lanes over the bits, then mixed with the length; about the
+/// cost of one pass over the source.
+pub(crate) fn source_fingerprint(data: &[f32]) -> u64 {
+    const PRIME: u64 = 0x0000_0100_0000_01b3;
+    let mut lanes: [u64; 4] = [
+        0xcbf2_9ce4_8422_2325,
+        0x9e37_79b9_7f4a_7c15,
+        0xc2b2_ae3d_27d4_eb4f,
+        0x1656_67b1_9e37_79f9,
+    ];
+    let chunks = data.chunks_exact(4);
+    let rest = chunks.remainder();
+    for chunk in chunks {
+        for (lane, value) in lanes.iter_mut().zip(chunk) {
+            *lane = (*lane ^ u64::from(value.to_bits())).wrapping_mul(PRIME);
+        }
+    }
+    for (lane, value) in lanes.iter_mut().zip(rest) {
+        *lane = (*lane ^ u64::from(value.to_bits())).wrapping_mul(PRIME);
+    }
+    let mut hash = (data.len() as u64).wrapping_mul(0x9e37_79b9_7f4a_7c15);
+    for lane in lanes {
+        hash = (hash ^ lane).wrapping_mul(PRIME).rotate_left(29);
+    }
+    hash
+}
+
 impl AnalysisCache {
-    /// This analysis as version 1 bytes (what it holds: a part not made yet
-    /// is written as none).
-    pub(crate) fn to_bytes(&self) -> Vec<u8> {
+    /// This analysis as version 2 bytes (what it holds: a part not made yet
+    /// is written as none). `fingerprint` is [`source_fingerprint`] of the
+    /// source it was made from.
+    pub(crate) fn to_bytes(&self, fingerprint: u64) -> Vec<u8> {
         let cnr = match self.cnr_source.as_ref() {
             CnrSource::Original => None,
             CnrSource::Filtered(data) => Some(data.as_slice()),
@@ -120,7 +155,7 @@ impl AnalysisCache {
                 _ => 0,
             };
         let mut out =
-            Vec::with_capacity(MAGIC.len() + 2 + 1 + 8 * 3 + 4 * 2 + 3 + 4 * 2 + floats * 4);
+            Vec::with_capacity(MAGIC.len() + 2 + 1 + 8 * 4 + 4 * 2 + 3 + 4 * 2 + floats * 4);
         out.extend_from_slice(MAGIC);
         out.extend_from_slice(&VERSION.to_le_bytes());
         out.push(camera_code(self.camera));
@@ -128,6 +163,7 @@ impl AnalysisCache {
         out.extend_from_slice(&self.luminance_nr_amount.to_bits().to_le_bytes());
         out.extend_from_slice(&self.baseline_ev_bits.to_le_bytes());
         put_size(&mut out, self.source_width, self.source_height);
+        out.extend_from_slice(&fingerprint.to_le_bytes());
         match cnr {
             None => out.push(CNR_ORIGINAL),
             Some(data) => {
@@ -198,14 +234,16 @@ impl AnalysisCache {
     }
 }
 
-/// Reads version 1 bytes as the analysis of `image` (the session's source,
-/// opened from `meta`): the bytes must be of this photo (camera, baseline
-/// exposure, size) and whole. Every length is checked before it is read,
+/// Reads version 2 bytes as the analysis of `image` (the session's source,
+/// opened from `meta`; `fingerprint` is [`source_fingerprint`] of its
+/// pixels): the bytes must be of this photo (camera, baseline exposure,
+/// size and the pixels' fingerprint) and whole. Every length is checked before it is read,
 /// so broken bytes are an error and never a panic.
 pub(crate) fn import_analysis(
     bytes: &[u8],
     image: &LinearImage,
     meta: &WorkingCopyMeta,
+    fingerprint: u64,
 ) -> Result<AnalysisCache, TransferError> {
     let mut reader = Reader { bytes };
     if reader.take(MAGIC.len())? != MAGIC {
@@ -224,6 +262,7 @@ pub(crate) fn import_analysis(
     }
     let baseline_ev_bits = u64::from_le_bytes(reader.array()?);
     let size = reader.size()?;
+    let source_fingerprint = u64::from_le_bytes(reader.array()?);
 
     let (
         Some(own_camera),
@@ -239,6 +278,7 @@ pub(crate) fn import_analysis(
     if analysis_camera != own_camera
         || baseline_ev_bits != baseline_ev.to_bits()
         || size != (image.width, image.height)
+        || source_fingerprint != fingerprint
     {
         return Err(TransferError::OtherPhoto);
     }

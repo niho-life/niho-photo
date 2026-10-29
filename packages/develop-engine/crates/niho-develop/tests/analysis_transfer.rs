@@ -59,7 +59,11 @@ struct Photo {
 
 impl Photo {
     fn new(camera: &str, baseline: f64, width: usize, height: usize) -> Self {
-        let (png, encoding) = encode_signed_working_copy(&linear(width, height)).unwrap();
+        Self::of_image(camera, baseline, &linear(width, height))
+    }
+
+    fn of_image(camera: &str, baseline: f64, image: &LinearImage) -> Self {
+        let (png, encoding) = encode_signed_working_copy(image).unwrap();
         let meta = format!(
             r#"{{"kind":"raw","baselineEV":{baseline},"asShotWhite":{{"x":0.3127,"y":0.329,"temperature":5500,"tint":4}},"asShotWhiteAdobe":null,"whiteBalanceTable":null,"dcpSha256":"{camera}","lookTableIncluded":false,"encoding":{{"kind":"signed-gamma18-v1","ceiling":{}}}}}"#,
             encoding.ceiling()
@@ -172,12 +176,16 @@ fn an_analysis_taken_in_draws_what_a_fresh_session_does() {
     }
 }
 
+/// Where the CNR source's kind is in the bytes (format version 2: after
+/// the source's size and the source fingerprint, `src/niho4/transfer.rs`).
+const CNR_SOURCE_AT: usize = 49;
+
 /// Where the coefficients' maps start in `bytes` and how many values each
-/// has (format version 1, `src/niho4/transfer.rs`).
+/// has (format version 2, `src/niho4/transfer.rs`).
 fn coefficient_maps(bytes: &[u8]) -> (usize, usize) {
     let u32_at = |at: usize| u32::from_le_bytes(bytes[at..at + 4].try_into().unwrap()) as usize;
     let (width, height) = (u32_at(33), u32_at(37));
-    let mut at = 41;
+    let mut at = CNR_SOURCE_AT;
     at += match bytes[at] {
         0 => 1,
         _ => 1 + width * height * 3 * 4,
@@ -239,8 +247,8 @@ fn the_frames_read_the_analysis_taken_in() {
     let settings = manual(25.0);
     let fresh = rgba(&mut photo.open(), &settings, Quality::Final);
     let mut changed = export(&photo, &settings);
-    assert_eq!(changed[41], 1, "filtered CNR source");
-    scale(&mut changed, 42, 96 * 72 * 3, 0.5);
+    assert_eq!(changed[CNR_SOURCE_AT], 1, "filtered CNR source");
+    scale(&mut changed, CNR_SOURCE_AT + 1, 96 * 72 * 3, 0.5);
     let mut taker = photo.open();
     assert!(taker.import_analysis(&changed).unwrap());
     assert!(rgba(&mut taker, &settings, Quality::Final) != fresh);
@@ -269,14 +277,15 @@ fn bytes_of_another_photo_or_broken_bytes_change_nothing() {
         ("one byte more", edited(&|copy| copy.push(0))),
         ("magic", edited(&|copy| copy[0] = b'X')),
         (
-            "version 2",
-            edited(&|copy| copy[6..8].copy_from_slice(&2u16.to_le_bytes())),
+            "version 1 (no source fingerprint)",
+            edited(&|copy| copy[6..8].copy_from_slice(&1u16.to_le_bytes())),
         ),
         ("unknown camera", edited(&|copy| copy[8] = 9)),
         (
             "CNR source of no noise reduction",
-            edited(&|copy| copy[41] = 0),
+            edited(&|copy| copy[CNR_SOURCE_AT] = 0),
         ),
+        ("another source fingerprint", edited(&|copy| copy[41] ^= 1)),
         ("another camera", export(&Photo::of(SONY_ZV), &settings)),
         (
             "another baseline",
@@ -285,6 +294,21 @@ fn bytes_of_another_photo_or_broken_bytes_change_nothing() {
         (
             "another size",
             export(&Photo::new(PANASONIC, BASELINE, 100, 72), &settings),
+        ),
+        // The same camera, baseline exposure and size, other pixels: with a
+        // noise reduction its filtered source would be drawn here.
+        (
+            "another photo of the same camera, baseline and size",
+            export(
+                &Photo::of_image(PANASONIC, BASELINE, &{
+                    let mut image = linear(96, 72);
+                    for value in image.data.iter_mut().step_by(7) {
+                        *value += 0.05;
+                    }
+                    image
+                }),
+                &settings,
+            ),
         ),
     ];
 

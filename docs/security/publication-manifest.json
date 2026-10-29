@@ -5192,7 +5192,7 @@
         "path": "packages/develop-engine/NIHO4.md",
         "sha256": "63afc71b12a489399c921895cec4b6aa7b8b404b1e6ad30366a60ab55c240fd8"
       },
-      "outputSha256": "ee0312855ee4c8240b88997d344fb9a474f1773c4e7ba47e09e8fa11fa1dcfce",
+      "outputSha256": "fc0d4329cf7b2352e21a52edae6d7f26306f5a8b243c1e15bf2826301ae88f8b",
       "modifications": [
         "公開SSOT向けに内部絶対path・private repository URL・行末を正規化。",
         "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。",
@@ -6449,7 +6449,7 @@
         "path": "packages/develop-engine/crates/niho-develop/src/lib.rs",
         "sha256": "1591d49effaa779c8e23ad6877508ccf336565eec8336d5b4e6faa3b5d3846b0"
       },
-      "outputSha256": "5a7af0060e22c7856ad4a7c3c356fa61587de1a2171ea4f25d614adab2a87bc3",
+      "outputSha256": "aae32add27d0a50f6400e932bedb5f56cf59913a4720443159ca51c35b4d2345",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
@@ -6538,7 +6538,7 @@
         "path": "packages/develop-engine/crates/niho-develop/src/niho4.rs",
         "sha256": "76c59b0f23b8b2a69d7c6b1602566fa222ee14d592ab7b42b6e37b5aba4ab319"
       },
-      "outputSha256": "d6b9266b636c6d80f22552ac939539b2abd1fdddb7bb0f98fe73b413ba67fb8b",
+      "outputSha256": "53d8ce5aadf020d303f3a08e8eeaea6c038aa87bf4efc66d92c7909ce2057f91",
       "modifications": [
         "Issue #28の色相安定engine追加と互換回帰を反映。",
         "新しい色相保持エンジンと新旧バイナリの能力境界・数値回帰を整合。",
@@ -11622,12 +11622,12 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/niho4/transfer.rs",
-      "sha256": "c776c67ebf8c2542404ee6a7ad3ed2ec5418db4fbfddf09891972b756532e077",
+      "sha256": "8825ed76223eae9f93e97cbae39d44d5f64352418caf2c8f14a56df4af86f758",
       "origin": "公開 repo で新規作成（niho-photo#155）。H/S の解析（CNR の元・応答の係数・niho-7 の面）を版付きの bytes に書き出し、同じ写真の Session へ取り込む形式（版 1）。外部コード・実写真を含まない。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/analysis_transfer.rs",
-      "sha256": "87022c94c973f190428c3a903a9e0b55550dfcd7c2313fb0d756e8aa826cada4",
+      "sha256": "d03a43d803e41dda788f4db45f90c9bc4a343f1990c1daab711d164944d9547c",
       "origin": "公開 repo で新規作成（niho-photo#155）。取り込んだ解析で描く Final・Interactive が新しい Session と同じ byte になり、別の写真・壊れた bytes・版違いを断る Rust 回帰（native と wasm。合成画像だけ）。外部コード・実写真を含まない。"
     },
     {

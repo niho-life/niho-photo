@@ -70,7 +70,11 @@ pub use settings::{DevelopSettings, SettingsError};
 pub use spatial::Quality;
 
 use head_wb::HeadWhiteBalance;
-use std::{collections::BTreeMap, fmt, sync::Arc};
+use std::{
+    collections::BTreeMap,
+    fmt,
+    sync::{Arc, Mutex},
+};
 
 /// Latest formula version this bundle can render. Settings constructors keep
 /// their own compatibility defaults; this advertises reader capability.
@@ -937,6 +941,9 @@ pub struct Session {
     /// The photo's chromatic aberration, shared with the sessions made
     /// from this one.
     lens: Arc<LensCache>,
+    /// [`niho4::source_fingerprint`] of the source the analysis is made
+    /// from, with the source's address and length (#155): counted once.
+    source_fingerprint: Mutex<Option<(usize, usize, u64)>>,
 }
 
 impl Session {
@@ -1014,6 +1021,7 @@ impl Session {
             healed: None,
             heal_plans: Arc::default(),
             lens,
+            source_fingerprint: Mutex::new(None),
         }
     }
 
@@ -1512,9 +1520,31 @@ impl Session {
         &mut self,
         settings: &DevelopSettings,
     ) -> Result<Option<Vec<u8>>, Error> {
-        Ok(self
-            .analysis_ahead(settings)?
-            .map(|analysis| analysis.to_bytes()))
+        let Some(analysis) = self.analysis_ahead(settings)? else {
+            return Ok(None);
+        };
+        let SessionSource::WorkingCopy { image, .. } = self.source.as_ref() else {
+            return Ok(None);
+        };
+        Ok(Some(analysis.to_bytes(self.source_fingerprint(image))))
+    }
+
+    /// [`niho4::source_fingerprint`] of `image` (this session's source):
+    /// counted once, again only when the source is another allocation.
+    fn source_fingerprint(&self, image: &LinearImage) -> u64 {
+        let key = (image.data.as_ptr() as usize, image.data.len());
+        let mut held = self
+            .source_fingerprint
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        match *held {
+            Some((ptr, len, fingerprint)) if (ptr, len) == key => fingerprint,
+            _ => {
+                let fingerprint = niho4::source_fingerprint(&image.data);
+                *held = Some((key.0, key.1, fingerprint));
+                fingerprint
+            }
+        }
     }
 
     /// Takes in the analysis [`Session::export_analysis`] wrote for this
@@ -1531,7 +1561,9 @@ impl Session {
         let SessionSource::WorkingCopy { image, meta } = self.source.as_ref() else {
             return Err(transfer_error(niho4::TransferError::NotSignedRaw));
         };
-        let imported = niho4::import_analysis(bytes, image, meta).map_err(transfer_error)?;
+        let fingerprint = self.source_fingerprint(image);
+        let imported =
+            niho4::import_analysis(bytes, image, meta, fingerprint).map_err(transfer_error)?;
         let held = [
             self.niho3.as_ref().map(|prepared| &prepared.analysis),
             self.niho3_ahead.as_ref(),

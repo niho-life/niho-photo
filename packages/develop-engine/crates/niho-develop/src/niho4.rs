@@ -10,7 +10,7 @@ use std::fmt;
 use std::sync::{Arc, OnceLock, Weak};
 
 mod transfer;
-pub(crate) use transfer::{import_analysis, TransferError};
+pub(crate) use transfer::{import_analysis, source_fingerprint, TransferError};
 
 const ANALYSIS_LONG_EDGE: usize = 750;
 const WORKING_COPY_MAX: f64 = 2.0;
