@@ -82,6 +82,28 @@ Wasm linear memory の高水位は、1 枚の Session で 260〜334MB、CNR 25 �
 
 Final の局所の段（`pipeline.rs` の `local_pass`）は、cube Q を通した 750px の統計から決まる `gain_scale`・`shift` が同じときだけ使い回します。色やトーンだけを変えても統計が変われば、局所の輝度の計算（`local_luminance`）の結果も変わるので、その計算は画素を変えずには省けません。省けるのは入力の対数輝度の面（色だけの変更では同じ）だけで、手を入れていません。
 
+## 先回りの解析を補助の worker で作る（#155）
+
+#129 の先回りは描画と同じ Worker の列で動き、動き出すと止められないので、その間の操作の描画が最大約 1.8 秒待ちました。今は解析を補助の worker で作り、描画の Worker は出来上がりの bytes を取り込むだけです（画素は変えません。engine は上げません）。解析を bytes にして受け渡す口は、解析の永続化（#155 の 3）の土台にもなります。
+
+- **解析を bytes で受け渡す口**: `Session::export_analysis`（wasm の `Developer.exportAnalysis`）は `prepare_analysis` と同じ条件で解析を用意してから、版付きの bytes にします。`Session::import_analysis`（`Developer.importAnalysis`）は、bytes がこの写真（camera・baseline・作業コピーの寸法）の解析かを確かめて「先に作った解析」として取り込みます。master や先に作った解析が同じ鍵（CNR・輝度 NR）なら、足りない係数・niho-7 の面だけを足します。別の写真・壊れた bytes・知らない版は誤りにして何も変えません（描くときに作る）。`Session::holds_analysis`（`Developer.holdsAnalysis`）は、その設定の解析をもう全部持っているかを答えます。
+- **形式（版 1、`src/niho4/transfer.rs`）**: 先頭の `NIHOAN` と u16 の版、鍵（camera・CNR・輝度 NR・baseline の f64 の bits・作業コピーの幅と高さ）、CNR の元（作業コピーそのもの／ノイズ軽減した f32 の配列）、応答の係数（長辺 750px の 5 面）、niho-7 の面（無し・残差・FX30 の肩・作れなかった）の順です。数は little-endian、f32 は bits のまま（圧縮しません）。読むときは長さを先に確かめ、余りがあっても誤りにします。中身の形を変えるときは版を上げ、知らない版は取り込まずに作り直します。
+- **Worker**: 描画の Worker は signed RAW の作業コピーを開いた入力（PNG とメタデータ）の写しを、先回りが残っている間だけ持ちます。最初の 1 件で補助の worker（`develop-engine-analysis.worker.ts`）を作って写しを渡し（transfer）、補助の worker は同じ manifest・同じ版の wasm で同じ写真を開いて、1 件ずつ解析の bytes を返します。描画の Worker は同じ写真のままなら列に `importAnalysis` を積むだけで、補助の worker が計算している間の描画は待ちません。もう持っている解析は頼みません。候補の選び方と 500ms の静かな間は #129 のままです。先回りが尽きた・写真を替えた・閉じたら補助の worker を terminate し（メモリも OS に返る）、遅れて届いた結果は捨てます。補助の worker を作れない環境（worker の中に `Worker` が無い）・失敗・取り込めないときは、その写真では #129 の先回りに戻ります。
+- **試験**: `tests/analysis_transfer.rs`（native と wasm、CI の wasm の一致試験の一覧に追加）で、別の Session が作った解析を取り込んだ Session の Final・Interactive が新しい Session と同じ byte になること（DC-S5 の残差・FX30 の肩、CNR 0・25・輝度 NR）、係数や CNR の元を書き換えた bytes では別の画になること（取り込んだ解析をそのまま使い、作り直していない）、別の camera・baseline・寸法・空・短い・長い・版違いの bytes は誤りで、その後も同じ byte で描けることを確かめます。Worker は `develop-engine-worker-core-analysis-helper.test.ts`・`develop-engine-analysis-worker-core.test.ts` です。
+
+#129 と同じ入力（公開 RW2 から作った 2560×1707 の signed 作業コピー相当、niho-11、Final 1280）を、Studio の Node の wasm（1 本のスレッド）で 6 回ずつ別 process で測った中央値です（ms）。取り込んだ後の Final の RGBA は、新しく開いた Developer と全条件で一致しました。
+
+| 段 | CNR 0（bluesky2） | CNR 25（colorful） |
+|---|---|---|
+| 補助の worker の `exportAnalysis`（解析を作って bytes にする。描画は待たない） | 1637 | 1939 |
+| bytes の大きさ | 9.0MB | 61.4MB |
+| 描画の Worker の `importAnalysis`（列をふさぐのはここだけ） | 2.0 | 13.0 |
+| 参考: この Worker で作る `prepareAnalysis`（#129。途中で止められない） | 1436 | 1930 |
+| 取り込んだ後の最初の Final | 2282 | 2457 |
+| 参考: 先回りなしの最初の Final | 3737 | 4414 |
+
+補助の worker は、このほかに wasm を起こして作業コピーを開きます（デコードは #129 の計測で 127ms）。Wasm linear memory の高水位は、補助の worker（開いて CNR 0 と 25 を書き出す）で 335MB、描画の Worker は丁寧に描いた後の 226MB から両方を取り込んで 335MB です（この Worker で両方を作ると 377MB）。補助の worker が動いている間は 2 つの wasm を合わせて持ち、先回りが尽きると terminate して OS に返します。メモリの予算は #155 の 1・2 で決め直します。Air 8GB の実 UI での受入は別に測ります。
+
 ## 根拠と検証
 
 - 内部固定記録 `round395-r394-interaction-freeze/freeze.json`: SHA-256 `01f10228a53475083bc4af205bcda5a20eab50d1a64b99fbc5a7eb302e5b2a2e`。
