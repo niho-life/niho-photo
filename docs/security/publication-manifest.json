@@ -9805,8 +9805,8 @@
     },
     {
       "path": "packages/develop-engine/README.md",
-      "sha256": "8459b9e258d2f4755f22fe5aba1962ba2e3d5865b654c629c73ed8e34ce1aa74",
-      "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。\n変更理由: 公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。\n変更理由: Issue #29: niho-12を新規既定として案内し、忠実度に階調の段差と教師比較の数値を追記\n変更理由: PR #74: #80 統合後に float-cube の変更を重ね、最終ハッシュを反映。\n変更理由: PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。\n変更理由: Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ\n変更理由: #148: niho-develop の threads feature（rayon）で出力の色の段と H/S のモデル推論を行ごとに並列にする土台。画素は変えない（tests/render_identity.rs で既定・threads・wasm32 の一致を見る）。"
+      "sha256": "22f4358ade2501b52eb34c39801f638f3a70e26c91f6fe03a60364626478070e",
+      "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。\n変更理由: 公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。\n変更理由: Issue #29: niho-12を新規既定として案内し、忠実度に階調の段差と教師比較の数値を追記\n変更理由: PR #74: #80 統合後に float-cube の変更を重ね、最終ハッシュを反映。\n変更理由: PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。\n変更理由: Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ\n変更理由: #148: niho-develop の threads feature（rayon）で出力の色の段と H/S のモデル推論を行ごとに並列にする土台。画素は変えない（tests/render_identity.rs で既定・threads・wasm32 の一致を見る）。\n変更理由: Issue #151: ブラウザのスレッドのwasmのbuild指定・manifestの形・Chromeでの確認手順を追記。"
     },
     {
       "path": "packages/develop-engine/crates/niho-base-raw/README.md",

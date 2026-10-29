@@ -18,6 +18,14 @@ python3 packages/develop-engine/tools/independent-profile/check.py
 cargo +1.98.1 test --locked --manifest-path packages/develop-engine/Cargo.toml -p niho-develop --features threads --test render_identity
 ```
 
+ブラウザのスレッドの wasm（#151）: SDK の engine runtime（`scripts/sdk/build-develop-engine-runtime.mjs`）は、1 本の wasm に加えて `niho-develop-wasm` の `threads` feature を共有メモリ（上限 4GiB）・`+atomics,+bulk-memory,+mutable-globals,+simd128`・`-Z build-std=panic_abort,std` で作る。toolchain は固定の 1.98.1 のまま `RUSTC_BOOTSTRAP=1` と `rust-src` を使う（1 本の wasm・native と同じコンパイラで浮動小数の codegen が同じ）。manifest の `files` は 1 本のまま、スレッドの版は `threads.files`（`niho_develop_wasm_threads-*`。wasm-bindgen-rayon の Worker の helper は `niho_develop_wasm_threads_worker-*.js` に平らにし、参照を版つきの名前へ書き換える）と `threads.build` に分ける。`crossOriginIsolated` の画面だけが読み、`initThreadPool(n)` を 1 回呼ぶ。Mac アプリには入れない（`runtimeFiles` の 1 本だけを同梱する）。Chrome headless（COOP / COEP のページ）で 1 本と同じ画・速さ・分離なしの動きを確かめる:
+
+```sh
+rustup component add rust-src --toolchain 1.98.1
+npm run sdk:build-engine-runtime -- --output <新規の directory>
+node scripts/sdk/smoke-threads-browser.mjs --runtime <その directory> --threads 4,8 --trials 5
+```
+
 実RW2は `fixtures/public-raw/dc-s5-owner.rw2`。オーナー撮影の無人の教室・ストーブの写真を目視確認し、顔・人体の自動検出だけで採否を決めていない。RAWの圧縮画素、sensor寸法、crop、WB、black/whiteと原寸camera RGBを元の写真と照合した。GPS・serial・氏名・EXIF・MakerNotes・camera IFD・thumbnail・ICCを含めず、decodeに必要なタグと圧縮stripだけから再構築している。監査記録と512pxの元画素goldenを同梱し、Rustテストは環境変数なしで必ず走る。
 
 独立DCPは所有RAWと所有カメラJPEGの色の測定対から、外部カメラ行列を初期値に使わず解析的に推定した。写真単位で先に5学習/2検証へ分離し、検証2写真の輝度を揃えた色差は平均ΔE76 4.14/4.19、p95 13.34/13.61。これは色だけの参考評価で、トーン一致、絶対WB、チャート測色精度、他機種の品質を実証するものではない。公開RAW fixtureは学習側の写真であり、検証写真の画素画像は同梱しない。
