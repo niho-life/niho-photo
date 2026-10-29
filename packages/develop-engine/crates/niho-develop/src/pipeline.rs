@@ -1171,72 +1171,90 @@ fn for_each_output_pixel(
     head: impl Fn([f32; 3]) -> [f32; 3],
     mut emit: impl FnMut([f32; 3], usize),
 ) {
+    for y in 0..pixels.output.height {
+        output_row(&pixels, y, &head, &mut emit);
+    }
+}
+
+/// Row `y` of [`for_each_output_pixel`]. Rows read only their own source
+/// pixels, so they may run on different threads (#148).
+#[inline(always)]
+fn output_row(
+    pixels: &OutputPixels<'_, '_>,
+    y: usize,
+    head: &impl Fn([f32; 3]) -> [f32; 3],
+    emit: &mut impl FnMut([f32; 3], usize),
+) {
     let OutputPixels {
         src,
         src_width,
         output,
         local,
         vignette,
-    } = pixels;
-    for y in 0..output.height {
-        let start = (output.y + y) * src_width + output.x;
-        let end = start + output.width;
-        let output_start = y * output.width;
-        let output_end = output_start + output.width;
-        let pixels = src[start * 3..end * 3]
-            .chunks_exact(3)
-            .enumerate()
-            .map(|(x, px)| (start + x, output_start + x, px));
-        match (local, vignette) {
-            (Some(ratio), Some(vignette)) => {
-                for ((_, output_i, px), (ratio, rho)) in pixels.zip(
-                    ratio.data[start..end]
-                        .iter()
-                        .zip(vignette.radius()[output_start..output_end].iter()),
-                ) {
-                    let v = head([px[0], px[1], px[2]]);
-                    emit(
-                        linear_spatial_pixel(v, Some(*ratio), Some((vignette, *rho))),
-                        output_i,
-                    );
-                }
+    } = *pixels;
+    let start = (output.y + y) * src_width + output.x;
+    let end = start + output.width;
+    let output_start = y * output.width;
+    let output_end = output_start + output.width;
+    let pixels = src[start * 3..end * 3]
+        .chunks_exact(3)
+        .enumerate()
+        .map(|(x, px)| (start + x, output_start + x, px));
+    match (local, vignette) {
+        (Some(ratio), Some(vignette)) => {
+            for ((_, output_i, px), (ratio, rho)) in pixels.zip(
+                ratio.data[start..end]
+                    .iter()
+                    .zip(vignette.radius()[output_start..output_end].iter()),
+            ) {
+                let v = head([px[0], px[1], px[2]]);
+                emit(
+                    linear_spatial_pixel(v, Some(*ratio), Some((vignette, *rho))),
+                    output_i,
+                );
             }
-            (Some(ratio), None) => {
-                for ((_, output_i, px), ratio) in pixels.zip(ratio.data[start..end].iter()) {
-                    let v = head([px[0], px[1], px[2]]);
-                    emit(linear_spatial_pixel(v, Some(*ratio), None), output_i);
-                }
+        }
+        (Some(ratio), None) => {
+            for ((_, output_i, px), ratio) in pixels.zip(ratio.data[start..end].iter()) {
+                let v = head([px[0], px[1], px[2]]);
+                emit(linear_spatial_pixel(v, Some(*ratio), None), output_i);
             }
-            (None, Some(vignette)) => {
-                for ((_, output_i, px), rho) in
-                    pixels.zip(vignette.radius()[output_start..output_end].iter())
-                {
-                    let v = head([px[0], px[1], px[2]]);
-                    emit(
-                        linear_spatial_pixel(v, None, Some((vignette, *rho))),
-                        output_i,
-                    );
-                }
+        }
+        (None, Some(vignette)) => {
+            for ((_, output_i, px), rho) in
+                pixels.zip(vignette.radius()[output_start..output_end].iter())
+            {
+                let v = head([px[0], px[1], px[2]]);
+                emit(
+                    linear_spatial_pixel(v, None, Some((vignette, *rho))),
+                    output_i,
+                );
             }
-            (None, None) => {
-                for (_, output_i, px) in pixels {
-                    emit(head([px[0], px[1], px[2]]), output_i);
-                }
+        }
+        (None, None) => {
+            for (_, output_i, px) in pixels {
+                emit(head([px[0], px[1], px[2]]), output_i);
             }
         }
     }
 }
 
-/// [`for_each_output_pixel`] writing row-major RGBA.
+/// [`for_each_output_pixel`] writing row-major RGBA, row by row on
+/// [`crate::par`] (each pixel as in the sequential loop).
 #[inline(always)]
 fn fill_rgba(
     rgba: &mut [u8],
     pixels: OutputPixels<'_, '_>,
-    head: impl Fn([f32; 3]) -> [f32; 3],
-    emit: impl Fn(&mut [u8], [f32; 3], usize),
+    head: impl Fn([f32; 3]) -> [f32; 3] + Sync + Send,
+    emit: impl Fn(&mut [u8], [f32; 3], usize) + Sync + Send,
 ) {
-    for_each_output_pixel(pixels, head, |value, index| {
-        emit(&mut rgba[index * 4..index * 4 + 4], value, index);
+    let width = pixels.output.width;
+    crate::par::for_each_row_mut(rgba, width * 4, |y, row| {
+        let first = y * width;
+        output_row(&pixels, y, &head, &mut |value, index| {
+            let at = (index - first) * 4;
+            emit(&mut row[at..at + 4], value, index);
+        });
     });
 }
 

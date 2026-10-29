@@ -39,6 +39,7 @@ mod niho4_response;
 pub mod niho6;
 pub mod niho6_response;
 pub mod output;
+mod par;
 pub mod perspective;
 pub mod pipeline;
 pub mod raw_chroma;

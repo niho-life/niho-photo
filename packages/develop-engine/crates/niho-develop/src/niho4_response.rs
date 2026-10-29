@@ -179,20 +179,34 @@ pub fn coefficient_maps(
     let highlight_fixed = highlight_model.fixed_feature_products(&features[0]);
     let shadow_fixed = shadow_model.fixed_feature_products(&features[0]);
 
-    let mut highlight_a = Vec::with_capacity(pixels);
-    let mut highlight_b = Vec::with_capacity(pixels);
-    let mut highlight_alpha = Vec::with_capacity(pixels);
-    let mut shadow_a = Vec::with_capacity(pixels);
-    let mut shadow_b = Vec::with_capacity(pixels);
-    for feature in &features {
-        let [ha, hb, alpha] = highlight_model.infer_with_fixed(feature, &highlight_fixed);
-        let [sa, sb, _] = shadow_model.infer_with_fixed(feature, &shadow_fixed);
-        highlight_a.push(ha as f32);
-        highlight_b.push(hb as f32);
-        highlight_alpha.push(alpha as f32);
-        shadow_a.push(sa as f32);
-        shadow_b.push(sb as f32);
-    }
+    let mut highlight_a = vec![0.0; pixels];
+    let mut highlight_b = vec![0.0; pixels];
+    let mut highlight_alpha = vec![0.0; pixels];
+    let mut shadow_a = vec![0.0; pixels];
+    let mut shadow_b = vec![0.0; pixels];
+    // Each pixel reads only its own features, so rows may run on different
+    // threads (#148).
+    crate::par::for_each_rows_mut(
+        [
+            &mut highlight_a[..],
+            &mut highlight_b[..],
+            &mut highlight_alpha[..],
+            &mut shadow_a[..],
+            &mut shadow_b[..],
+        ],
+        width,
+        |y, [ha, hb, alpha, sa, sb]| {
+            for (x, feature) in features[y * width..y * width + ha.len()].iter().enumerate() {
+                let [h0, h1, h2] = highlight_model.infer_with_fixed(feature, &highlight_fixed);
+                let [s0, s1, _] = shadow_model.infer_with_fixed(feature, &shadow_fixed);
+                ha[x] = h0 as f32;
+                hb[x] = h1 as f32;
+                alpha[x] = h2 as f32;
+                sa[x] = s0 as f32;
+                sb[x] = s1 as f32;
+            }
+        },
+    );
     Ok(CoefficientMaps {
         camera,
         width,
