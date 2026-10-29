@@ -59,7 +59,7 @@ import { parseDevelopEngineManifest } from "./develop-engine-manifest";
  *   そのまま返す（描画と同じ列で順に処理する単発の問い合わせ。`sampleColor` と同じ）。`Developer` に口があり遠近も描けるとき
  *   だけ `ready` に `upright: true` を付け、無い glue・写真を開いていなければ error
  * - プリセットの適用量・書き出し・見本（F2a 移行元設計 の口。crate 0.5.0 から）: `applyPreset`（開いている写真の撮影時の白
- *   `asShotWhite()` を渡す）・`settingsToXmp`・`renderPresetThumbnail`（開いている写真の `thumbnail(256)` の別の session を初回に
+ *   `asShotWhite()` を渡す）・`settingsToXmp`・`renderPresetThumbnail`（開いている写真の `thumbnail(512)` の別の session を初回に
  *   作って持ち、丁寧に〔final〕描く。親のengine/CNR設定が変わったら手放し、次回に現在の解析から作り直す。写真を手放すと一緒に手放す）。口が glue にあれば `ready` に `presetAmount` /
  *   `settingsToXmp` / `presetThumbnails` の true を付け、無い glue では要求は error（ほかは使える）
  * - 開いている写真なしのプリセット（一覧の一括。F5a-2 移行元設計）: `applyPreset` に `asShotMetaJson` が付いていれば、開いている
@@ -85,7 +85,7 @@ import { parseDevelopEngineManifest } from "./develop-engine-manifest";
 export type DevelopEngineWorkerRequest =
   | { type: "init"; id: number; manifestUrl: string; diagnostics?: boolean; preferNative?: boolean }
   | { type: "open"; id: number; bytes: ArrayBuffer; workingMaxDimension: number }
-  | { type: "render"; id: number; settingsJson: string; maxDimension: number; interactive: boolean }
+  | { type: "render"; id: number; settingsJson: string; maxDimension: number; interactive: boolean; fastPresetPreview?: boolean }
   | { type: "sampleColor"; id: number; settingsJson: string; maxDimension: number; x: number; y: number }
   | { type: "maskPlane"; id: number; settingsJson: string; maskId: string; maxDimension: number }
 /** Upright の推定（`mode`: 1 自動・2 水平・3 垂直・4 フル） */
@@ -324,7 +324,7 @@ type DevelopDeveloper = {
 const ONE_SHOT_DECODE_CAP = 4096;
 
 /** 見本用の session の長辺（見本 1 枚は、これを行の大きさに縮めて描く）。 */
-const PRESET_THUMBNAIL_SESSION_MAX_DIMENSION = 256;
+const PRESET_THUMBNAIL_SESSION_MAX_DIMENSION = 512;
 
 /**
  * 1 つの Worker が持つ写真の `Developer` の数（開いている 1 枚と、直前に開いていた 1 枚。#129）。新しい写真をデコードする前に、
@@ -1580,8 +1580,22 @@ export function createDevelopEngineWorkerHandler(
         case "render": {
           const { frame, rgba } = measure(message.interactive ? "renderInteractive" : "renderFinal", () => {
             requireGlue();
-            if (!developer) throw new Error("no photo is open");
-            const frame = readFrame(developer.render(message.settingsJson, message.maxDimension, message.interactive));
+            const opened = developer;
+            if (!opened) throw new Error("no photo is open");
+            let frame: RenderedFrame | null = null;
+            if (message.fastPresetPreview && message.interactive && typeof opened.thumbnail === "function") {
+              try {
+                const makeThumbnail = opened.thumbnail.bind(opened);
+                if (!thumbnailSession) {
+                  thumbnailSession = measure("thumbnailSession", () => makeThumbnail(PRESET_THUMBNAIL_SESSION_MAX_DIMENSION));
+                }
+                syncThumbnailSurfaces(thumbnailSession);
+                frame = readFrame(thumbnailSession.render(message.settingsJson, message.maxDimension, true));
+              } catch {
+                releaseThumbnailSession();
+              }
+            }
+            frame ??= readFrame(opened.render(message.settingsJson, message.maxDimension, message.interactive));
             // 丁寧に描いた設定から、静かな間に H/S の解析を先に作る（#129。口の無い glue では何もしない）
             if (!message.interactive && typeof developer.prepareAnalysis === "function") {
               analysisAhead = { developer, settingsJson: message.settingsJson };

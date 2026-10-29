@@ -1221,6 +1221,7 @@ describe("useBrowserPhotoOpen の描いた順（つまみを動かしている�
     await settleUntil(() => current.presets.appliedPresetKey === bright.key && held.length === 6, "preset applied");
     expect(held[5]!.options.interactive).toBe(true);
     expect(held[5]!.options.maxDimension).toBe(640);
+    expect(held[5]!.options.fastPresetPreview).toBe(true);
     await run(() => held[5]!.result.resolve(frame(105)));
     await settleUntil(() => held.length === 7, "applied final requested");
     expect(held[6]!.options.interactive).toBe(false);

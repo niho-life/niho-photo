@@ -126,6 +126,8 @@ export type DevelopRenderPriority = "drag" | "final" | "preview" | "background";
 export type DevelopRenderOptions = {
   maxDimension: number;
   interactive: boolean;
+  /** プリセットの一時的な最初の画だけ、小さい見本用 session で先に描く。 */
+  fastPresetPreview?: boolean;
   /** 省略時は `interactive ? "drag" : "final"` */
   priority?: DevelopRenderPriority;
 };
@@ -420,6 +422,7 @@ type RenderRequest = {
   settingsJson: string;
   maxDimension: number;
   interactive: boolean;
+  fastPresetPreview?: boolean;
   /** 描くのに要る面（待っている間は手放さない） */
   needs: DevelopMaskSurfaceNeed[];
   priority: DevelopRenderPriority;
@@ -793,6 +796,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
               settingsJson: request.settingsJson,
               maxDimension: request.maxDimension,
               interactive: request.interactive,
+              fastPresetPreview: request.fastPresetPreview,
             },
       );
     } catch (error) {
@@ -1286,6 +1290,7 @@ async setMaskSurface(surfaceId, png) {
             settingsJson,
             maxDimension: renderOptions.maxDimension,
             interactive: renderOptions.interactive,
+            fastPresetPreview: renderOptions.fastPresetPreview,
             needs,
           },
           priority,

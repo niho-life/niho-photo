@@ -1059,7 +1059,7 @@ describe("createDevelopEngineWorkerHandler", () => {
     expect(glue.applyPreset).toHaveBeenCalledWith("<x:xmpmeta/>", "{}", 1, undefined);
   });
 
-  it("renderPresetThumbnail は開いている写真の thumbnail(256) を初回に作って持ち、丁寧に描く。写真を手放すと一緒に手放す", async () => {
+  it("renderPresetThumbnail は開いている写真の thumbnail(512) を初回に作って持ち、丁寧に描く。写真を手放すと一緒に手放す", async () => {
     const glue = presetGlue();
     const { handler, posted } = setup({ module: glue.module });
     await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
@@ -1075,7 +1075,7 @@ describe("createDevelopEngineWorkerHandler", () => {
     const photo = glue.developers[0];
     expect(glue.thumbnails).toHaveLength(1);
     const thumbnail = glue.thumbnails[0];
-    expect(thumbnail?.maxDimension).toBe(256);
+    expect(thumbnail?.maxDimension).toBe(512);
     expect(thumbnail?.session.renders).toEqual([
       { settingsJson: '{"contrast":12}', maxDimension: 96, interactive: false },
       { settingsJson: '{"contrast":-8}', maxDimension: 96, interactive: false },
@@ -1095,6 +1095,26 @@ describe("createDevelopEngineWorkerHandler", () => {
     expect(glue.thumbnails[1]?.session.freed).toHaveBeenCalledOnce();
     await handler({ type: "renderPresetThumbnail", id: 10, settingsJson: "{}", maxDimension: 96 });
     expect(posted.at(-1)?.message).toMatchObject({ type: "error", id: 10 });
+  });
+
+  it("プリセットの最初の一時画だけ小さい session で描き、Final は本体で描く", async () => {
+    const glue = presetGlue();
+    const { handler } = setup({ module: glue.module });
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await handler({ type: "open", id: 2, bytes: new ArrayBuffer(4), workingMaxDimension: 1280 });
+    await handler({ type: "render", id: 3, settingsJson: '{"contrast":12}', maxDimension: 640, interactive: true, fastPresetPreview: true });
+    await handler({ type: "renderPresetThumbnail", id: 4, settingsJson: '{"contrast":12}', maxDimension: 96 });
+    await handler({ type: "render", id: 5, settingsJson: '{"contrast":12}', maxDimension: 1280, interactive: false });
+
+    expect(glue.thumbnails).toHaveLength(1);
+    expect(glue.thumbnails[0]?.maxDimension).toBe(512);
+    expect(glue.thumbnails[0]?.session.renders).toEqual([
+      { settingsJson: '{"contrast":12}', maxDimension: 640, interactive: true },
+      { settingsJson: '{"contrast":12}', maxDimension: 96, interactive: false },
+    ]);
+    expect(glue.developers[0]?.renders).toEqual([
+      { settingsJson: '{"contrast":12}', maxDimension: 1280, interactive: false },
+    ]);
   });
 
   it("本体のengine/CNR設定が変わったら見本sessionを手放し、次回は現在の解析から作り直す", async () => {

@@ -816,7 +816,7 @@ export function useBrowserPhotoOpen(params: {
       const coarseMaxDimension = DEVELOP_COLOR_POINT_DRAG_MAX_DIMENSION;
       // 押した結果の粗い画は丁寧な画と同じ流れ（丁寧な画の要求で消さない）。仮の表示は前の仮の表示の画を描かない
       const coarseSequence = requestPaint(order, stream, appliedPreset);
-      coarse = engine.render(shownSettings, { maxDimension: coarseMaxDimension, interactive: true }).then(
+      coarse = engine.render(shownSettings, { maxDimension: coarseMaxDimension, interactive: true, fastPresetPreview: true }).then(
         (frame) => {
           if (!frame) return;
           if (engineRef.current !== engine || order.generation !== paintGeneration) return;

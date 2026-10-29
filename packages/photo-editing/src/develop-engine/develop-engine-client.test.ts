@@ -185,7 +185,7 @@ describe("createDevelopEngine", () => {
     worker.respond({ type: "opened", id: open.id, width: 1280, height: 853 });
     expect(await opened).toEqual({ width: 1280, height: 853 });
 
-    const first = engine.render({ exposure: 1 }, { maxDimension: 1280, interactive: true });
+    const first = engine.render({ exposure: 1 }, { maxDimension: 1280, interactive: true, fastPresetPreview: true });
     const second = engine.render({ exposure: 2 }, { maxDimension: 1280, interactive: true });
     const third = engine.render({ exposure: 3 }, { maxDimension: 1280, interactive: false });
 
@@ -193,7 +193,7 @@ describe("createDevelopEngine", () => {
     expect(worker.requests("render")).toHaveLength(1);
     expect(await second).toBeNull();
     const firstRequest = worker.lastRequest("render");
-    expect(firstRequest).toMatchObject({ settingsJson: '{"exposure":1}', maxDimension: 1280, interactive: true });
+    expect(firstRequest).toMatchObject({ settingsJson: '{"exposure":1}', maxDimension: 1280, interactive: true, fastPresetPreview: true });
 
     worker.respond(frameResponse(firstRequest.id, 1));
     const firstFrame = await first;
