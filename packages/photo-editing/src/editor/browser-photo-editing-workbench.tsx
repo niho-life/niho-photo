@@ -448,7 +448,9 @@ export function BrowserPhotoEditingWorkbench(props: {
   const mobileEditingAllowed = props.mobileEditingAllowed === true;
   const editingAllowed = wide || mobileEditingAllowed;
   const mobileEditing = !wide && mobileEditingAllowed;
-  const developDeviceClass = host.isNativeViewport() ? "mobile" : host.isDesktopApp() || wide ? "pc" : "mobile";
+  // Worker の予算は init 時に決まるため、この編集面が開いている間は画面幅が変わっても端末区分を固定する。
+  const initialDevelopDeviceClass = host.isNativeViewport() ? "mobile" : host.isDesktopApp() || wide ? "pc" : "mobile";
+  const developDeviceClass = useRef<"pc" | "mobile">(initialDevelopDeviceClass).current;
   // 1 枚を全画面の編集の層で出す（設定サブタブで面を隠している間は、層も出さない。層は document.body に出るので一緒には隠れない）
   const mobileLayer = mobileEditing && props.active;
   const rootRef = useRef<HTMLElement | null>(null);

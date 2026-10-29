@@ -1398,9 +1398,10 @@
         "niho-photo#134: ブラウザ・スマホの書き出しに「大きく」（JPEG / PNG は最大 4096px、RAW は 2560px）を足す。",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
         "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。",
-        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加"
+        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
+        "画面幅変更後も編集面の端末メモリ区分を固定する（#155 レビュー）"
       ],
-      "outputSha256": "46b3d757c23242873088858861732db9f7134119b762fdb3ed6b7378d12b386f"
+      "outputSha256": "46679373b77f16f45162d41f7e89797fef6c69a3ce4dcd90e88c35a262a71fe9"
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-adjustment-controls-effects.test.tsx",
@@ -11283,8 +11284,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-editing-workbench-flags.test.tsx",
-      "sha256": "b727c9afecd7d475b2ba1a7b471d08a5dde386506004be10ec8d41adec7f9c16",
-      "origin": "niho-photo#47 のため新規作成。編集面の選別の結合の test（偽の写真の出どころ・合成の行だけを使用）。\n変更理由: PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。"
+      "sha256": "1c425d408b791b617ffc01c8d1656fe026e68b8e79b0773c9e4f693bdcb943af",
+      "origin": "niho-photo#47 のため新規作成。編集面の選別の結合の test（偽の写真の出どころ・合成の行だけを使用）。\n変更理由: PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。\n変更理由: 画面幅をまたぐ端末区分の回帰試験を追加（#155 レビュー）"
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-flag-keys.test.tsx",
