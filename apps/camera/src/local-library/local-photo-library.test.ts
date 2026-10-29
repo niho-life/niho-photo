@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 import { BrowserPhotoSourceError } from "niho-photo-editing/browser-photo-source";
 import { developEngineManifestPath } from "niho-photo-editing/develop-engine/develop-engine-manifest";
@@ -25,6 +25,8 @@ import {
 /**
  * この Mac の `PhotoLibrary`（契約の型への対応）を、偽の native（invoke）で確かめる。native の口の形は commands.test.ts。
  */
+
+afterEach(() => vi.unstubAllGlobals());
 
 type Call = [command: string, request: Record<string, unknown> | undefined];
 
@@ -769,6 +771,13 @@ describe("working copies", () => {
   });
 
   it("loads a real-size provisional preview, deduplicates it, and keeps a hash-bound settings-only draft", async () => {
+    // Node 26 は --localstorage-file の指定が無いと global localStorage を undefined にする。
+    const stored = new Map<string, string>();
+    vi.stubGlobal("localStorage", {
+      getItem: (key: string) => stored.get(key) ?? null,
+      setItem: (key: string, value: string) => { stored.set(key, value); },
+      removeItem: (key: string) => { stored.delete(key); },
+    });
     const fake = fakeNative();
     await expect(
       fake.library.loadInteractivePreview!("e-raw", { signal: signal(), maxDimension: 256 }),
