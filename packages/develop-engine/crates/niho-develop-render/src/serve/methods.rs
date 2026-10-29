@@ -193,7 +193,7 @@ pub fn hello() -> Value {
         "crateVersion": niho_develop::CRATE_VERSION,
         "engine": niho_develop::ENGINE_VERSION,
         "threads": api::thread_count(),
-        "methods": METHODS,
+        "methods": METHODS.as_slice(),
     })
 }
 
@@ -413,10 +413,10 @@ fn call(state: &State, method: &str, request: &Request<'_>) -> Result<Reply, Fai
         "Developer.exportAnalysis" => {
             args.expect(1, 1)?;
             let developer = state.developer(method, request.handle)?;
-            match lock(&developer)?
+            let exported = lock(&developer)?
                 .export_analysis(args.str(0)?)
-                .map_err(Fail::call)?
-            {
+                .map_err(Fail::call)?;
+            match exported {
                 Some(bytes) => Reply::bytes(bytes),
                 None => Reply::ok(Value::Null),
             }

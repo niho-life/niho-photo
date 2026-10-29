@@ -11731,8 +11731,8 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop-render/src/serve/methods.rs",
-      "sha256": "72db558c5ffd540337dad12221c6b601fbef0692d7983774d64dd331e63e9595",
-      "origin": "公開Issue #152 のため新規作成。wasm と共通の API を呼ぶ native serve のメソッド。"
+      "sha256": "a0c6376c7d437877e5c666635226b86b30c5a826b93d23d04f90e704e76fa188",
+      "origin": "公開Issue #152 のため新規作成。wasm と共通の API を呼ぶ native serve のメソッド。\n変更理由: Issue #152 の Studio コンパイルで検出した配列 JSON 化と借用期間を修正。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop-render/src/serve/request.rs",
