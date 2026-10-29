@@ -418,7 +418,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core.test.ts",
         "sha256": "eb20b196dd11f240e0944d79d51244a1951536f264a1aa7c1fcb06180f86d26b"
       },
-      "outputSha256": "7b5a82d23a99ce196285646d75cf9982e983bda178601d71c83a43959c5061ee",
+      "outputSha256": "cf1e3887520019ab47ac7b5cb546f80f4554941c9ba70b1297e6df65c784ecf6",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -441,7 +441,8 @@
         "Issue #151: 8本の Worker 選択を対象試験で固定",
         "Issue #151: Mac native 復旧時にスレッドを選ばない対象試験を追加",
         "PR #165 レビュー: pool 無応答からの単一 wasm 復旧試験を追加",
-        "プリセット初回の小さい現像sessionを使用し、Finalの描画を維持する"
+        "プリセット初回の小さい現像sessionを使用し、Finalの描画を維持する",
+        "一時表示用session寸法の契約テストを384pxに更新"
       ]
     },
     {
@@ -478,9 +479,10 @@
         "Issue #151: Mac native の復旧は常に単一 wasm を選択",
         "PR #165 レビュー: pool 待ちを5秒にして単一 wasm 復旧時間を確保",
         "プリセット初回の小さい現像sessionを使用し、Finalの描画を維持する",
-        "小さいsession描画後の本体参照を型検証可能にする"
+        "小さいsession描画後の本体参照を型検証可能にする",
+        "プリセットの一時表示を384pxの見本用sessionで描き、最終画素を維持したまま応答を短縮"
       ],
-      "outputSha256": "a9f8aac5e61513b6e677b6ee55f0ffaa5252681bfe42691b39e84f900ebc625c"
+      "outputSha256": "2364688b242c274763583116f19ded8882aaa7bd066a29f4e1e00dc7d0d84633"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",

@@ -1059,7 +1059,7 @@ describe("createDevelopEngineWorkerHandler", () => {
     expect(glue.applyPreset).toHaveBeenCalledWith("<x:xmpmeta/>", "{}", 1, undefined);
   });
 
-  it("renderPresetThumbnail は開いている写真の thumbnail(512) を初回に作って持ち、丁寧に描く。写真を手放すと一緒に手放す", async () => {
+  it("renderPresetThumbnail は開いている写真の thumbnail(384) を初回に作って持ち、丁寧に描く。写真を手放すと一緒に手放す", async () => {
     const glue = presetGlue();
     const { handler, posted } = setup({ module: glue.module });
     await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
@@ -1075,7 +1075,7 @@ describe("createDevelopEngineWorkerHandler", () => {
     const photo = glue.developers[0];
     expect(glue.thumbnails).toHaveLength(1);
     const thumbnail = glue.thumbnails[0];
-    expect(thumbnail?.maxDimension).toBe(512);
+    expect(thumbnail?.maxDimension).toBe(384);
     expect(thumbnail?.session.renders).toEqual([
       { settingsJson: '{"contrast":12}', maxDimension: 96, interactive: false },
       { settingsJson: '{"contrast":-8}', maxDimension: 96, interactive: false },
@@ -1107,7 +1107,7 @@ describe("createDevelopEngineWorkerHandler", () => {
     await handler({ type: "render", id: 5, settingsJson: '{"contrast":12}', maxDimension: 1280, interactive: false });
 
     expect(glue.thumbnails).toHaveLength(1);
-    expect(glue.thumbnails[0]?.maxDimension).toBe(512);
+    expect(glue.thumbnails[0]?.maxDimension).toBe(384);
     expect(glue.thumbnails[0]?.session.renders).toEqual([
       { settingsJson: '{"contrast":12}', maxDimension: 640, interactive: true },
       { settingsJson: '{"contrast":12}', maxDimension: 96, interactive: false },

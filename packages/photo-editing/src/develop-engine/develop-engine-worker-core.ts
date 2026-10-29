@@ -59,7 +59,7 @@ import { parseDevelopEngineManifest } from "./develop-engine-manifest";
  *   そのまま返す（描画と同じ列で順に処理する単発の問い合わせ。`sampleColor` と同じ）。`Developer` に口があり遠近も描けるとき
  *   だけ `ready` に `upright: true` を付け、無い glue・写真を開いていなければ error
  * - プリセットの適用量・書き出し・見本（F2a 移行元設計 の口。crate 0.5.0 から）: `applyPreset`（開いている写真の撮影時の白
- *   `asShotWhite()` を渡す）・`settingsToXmp`・`renderPresetThumbnail`（開いている写真の `thumbnail(512)` の別の session を初回に
+ *   `asShotWhite()` を渡す）・`settingsToXmp`・`renderPresetThumbnail`（開いている写真の `thumbnail(384)` の別の session を初回に
  *   作って持ち、丁寧に〔final〕描く。親のengine/CNR設定が変わったら手放し、次回に現在の解析から作り直す。写真を手放すと一緒に手放す）。口が glue にあれば `ready` に `presetAmount` /
  *   `settingsToXmp` / `presetThumbnails` の true を付け、無い glue では要求は error（ほかは使える）
  * - 開いている写真なしのプリセット（一覧の一括。F5a-2 移行元設計）: `applyPreset` に `asShotMetaJson` が付いていれば、開いている
@@ -324,7 +324,7 @@ type DevelopDeveloper = {
 const ONE_SHOT_DECODE_CAP = 4096;
 
 /** 見本用の session の長辺（見本 1 枚は、これを行の大きさに縮めて描く）。 */
-const PRESET_THUMBNAIL_SESSION_MAX_DIMENSION = 512;
+const PRESET_THUMBNAIL_SESSION_MAX_DIMENSION = 384;
 
 /**
  * 1 つの Worker が持つ写真の `Developer` の数（開いている 1 枚と、直前に開いていた 1 枚。#129）。新しい写真をデコードする前に、
