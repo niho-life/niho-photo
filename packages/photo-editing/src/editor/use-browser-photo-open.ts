@@ -55,6 +55,7 @@ import { compareBeforeDevelopSettings, healFrameDevelopSettings } from "../photo
 import { appDialog } from "niho-ui/app-dialog";
 
 import {
+  DEVELOP_COLOR_POINT_DRAG_MAX_DIMENSION,
   DEVELOP_PREVIEW_MAX_DIMENSION,
   DISCARD_DESCRIPTION,
   cloudKey,
@@ -811,7 +812,8 @@ export function useBrowserPhotoOpen(params: {
     const stream = streamOf(previewing ? "preview" : appliedPreset ? "applied" : "settings");
     let coarse: Promise<void> = Promise.resolve();
     if (coarseFirst) {
-      const coarseMaxDimension = developInteractiveMaxDimension(shownSettings);
+      // プリセットの最初の画は一時表示だけ。640px で先に応答し、続く Final は従来の 1280px のまま描く。
+      const coarseMaxDimension = DEVELOP_COLOR_POINT_DRAG_MAX_DIMENSION;
       // 押した結果の粗い画は丁寧な画と同じ流れ（丁寧な画の要求で消さない）。仮の表示は前の仮の表示の画を描かない
       const coarseSequence = requestPaint(order, stream, appliedPreset);
       coarse = engine.render(shownSettings, { maxDimension: coarseMaxDimension, interactive: true }).then(

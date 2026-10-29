@@ -1189,7 +1189,10 @@ describe("useBrowserPhotoOpen の描いた順（つまみを動かしている�
     await sleep(200);
     await settleUntil(() => held.length === 3, "dark preview requested");
     // 仮の表示は粗い画から
-    expect(held.slice(1).map(({ options }) => options.interactive)).toEqual([true, true]);
+    expect(held.slice(1).map(({ options }) => [options.maxDimension, options.interactive])).toEqual([
+      [640, true],
+      [640, true],
+    ]);
     await run(() => held[0]!.result.resolve(frame(101)));
     await run(() => held[1]!.result.resolve(frame(102)));
     expect(mainPaints().slice(before)).toEqual([]);
@@ -1198,6 +1201,7 @@ describe("useBrowserPhotoOpen の描いた順（つまみを動かしている�
     // 止まったままなら丁寧な画に差し替える
     await sleep(BROWSER_PRESET_PREVIEW_FINAL_DELAY_MS + 50);
     await settleUntil(() => held.length === 4, "dark final requested");
+    expect(held[3]!.options.maxDimension).toBe(1280);
     expect(held.map(({ settings, options }) => [settings.contrast ?? 0, options.interactive])).toEqual([
       [0, false],
       [40, true],
@@ -1216,9 +1220,11 @@ describe("useBrowserPhotoOpen の描いた順（つまみを動かしている�
     await run(() => current.presets.apply(bright));
     await settleUntil(() => current.presets.appliedPresetKey === bright.key && held.length === 6, "preset applied");
     expect(held[5]!.options.interactive).toBe(true);
+    expect(held[5]!.options.maxDimension).toBe(640);
     await run(() => held[5]!.result.resolve(frame(105)));
     await settleUntil(() => held.length === 7, "applied final requested");
     expect(held[6]!.options.interactive).toBe(false);
+    expect(held[6]!.options.maxDimension).toBe(1280);
     await run(() => held[6]!.result.resolve(frame(115)));
     expect(mainPaints().slice(before)).toEqual([103, 113, 104, 105, 115]);
 
