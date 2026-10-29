@@ -463,9 +463,11 @@
         "プリセットの当てはめと見本用 session の作成を診断の区間に記録（#126）",
         "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。",
         "niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。",
-        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。"
+        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
+        "Issue #155 bounded analysis bytes cache",
+        "Issue #155 review: validate held analysis per render and fit maximum compact bytes"
       ],
-      "outputSha256": "1218e94c4107a5d3a45427669db1e33f56de860ae83773a7141fae77af606c5a"
+      "outputSha256": "a7bd999a428ae37fe112ae1b23d89e36af6ab2e18fe030911ac20bca036106c7"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -6479,7 +6481,7 @@
         "path": "packages/develop-engine/crates/niho-develop/src/lib.rs",
         "sha256": "1591d49effaa779c8e23ad6877508ccf336565eec8336d5b4e6faa3b5d3846b0"
       },
-      "outputSha256": "13e91711f07d4c442b31c78857e9b3ea870b3950f4dd40d90d414e46abf0b1a2",
+      "outputSha256": "6701e6e814fe977b1ab54306cbd989b5137ca6140f80a11e8568f739e600595b",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
@@ -6518,7 +6520,8 @@
         "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。",
         "niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。",
         "#148: 行単位の並列化の共通 module を登録。",
-        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。"
+        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
+        "Issue #155 compact analysis transfer"
       ]
     },
     {
@@ -6570,7 +6573,7 @@
         "path": "packages/develop-engine/crates/niho-develop/src/niho4.rs",
         "sha256": "76c59b0f23b8b2a69d7c6b1602566fa222ee14d592ab7b42b6e37b5aba4ab319"
       },
-      "outputSha256": "53d8ce5aadf020d303f3a08e8eeaea6c038aa87bf4efc66d92c7909ce2057f91",
+      "outputSha256": "e1c436ee2edc7ce19ea36141dffc53c8484534fe02fa519e2b7a3e9a8498222d",
       "modifications": [
         "Issue #28の色相安定engine追加と互換回帰を反映。",
         "新しい色相保持エンジンと新旧バイナリの能力境界・数値回帰を整合。",
@@ -6578,7 +6581,8 @@
         "Issue #32 signed RAWのmaster準備にv5のカラー/輝度NRを入れcache keyへ含める",
         "Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。",
         "同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。",
-        "niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。"
+        "niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。",
+        "Issue #155 compact analysis transfer"
       ]
     },
     {
@@ -11656,13 +11660,13 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/niho4/transfer.rs",
-      "sha256": "8825ed76223eae9f93e97cbae39d44d5f64352418caf2c8f14a56df4af86f758",
-      "origin": "公開 repo で新規作成（niho-photo#155）。H/S の解析（CNR の元・応答の係数・niho-7 の面）を版付きの bytes に書き出し、同じ写真の Session へ取り込む形式（版 1）。外部コード・実写真を含まない。"
+      "sha256": "1c52b4c33665bdab1cbd5d6336a6a9fb545dae220ec2233155fa7132d3b660be",
+      "origin": "公開 repo で新規作成（niho-photo#155）。H/S の解析（CNR の元・応答の係数・niho-7 の面）を版付きの bytes に書き出し、同じ写真の Session へ取り込む形式（版 1）。外部コード・実写真を含まない。\n変更理由: Issue #155 compact analysis transfer"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/analysis_transfer.rs",
-      "sha256": "d03a43d803e41dda788f4db45f90c9bc4a343f1990c1daab711d164944d9547c",
-      "origin": "公開 repo で新規作成（niho-photo#155）。取り込んだ解析で描く Final・Interactive が新しい Session と同じ byte になり、別の写真・壊れた bytes・版違いを断る Rust 回帰（native と wasm。合成画像だけ）。外部コード・実写真を含まない。"
+      "sha256": "819225152632473f39269daac613b188f9823274cdf47d04f3e83f7d9e5b92d7",
+      "origin": "公開 repo で新規作成（niho-photo#155）。取り込んだ解析で描く Final・Interactive が新しい Session と同じ byte になり、別の写真・壊れた bytes・版違いを断る Rust 回帰（native と wasm。合成画像だけ）。外部コード・実写真を含まない。\n変更理由: Issue #155 compact analysis transfer tests"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-analysis-worker-core.ts",
@@ -11681,8 +11685,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-analysis-helper.test.ts",
-      "sha256": "2bf6d84ce5a00ef01d8f7fa465df59cb791dd817a33fd0aa41bc33afc913e40a",
-      "origin": "公開 repo で新規作成（niho-photo#155）。描画の worker が先回りを補助の worker に頼み、取り込み、写真の切り替えで終わらせ、失敗で #129 の先回りへ戻る試験（偽の glue だけ）。外部コード・実写真を含まない。"
+      "sha256": "52888b5cefb96530c1eb3b070e52adc465a672d373a3ed025b4a597e06ce958f",
+      "origin": "公開 repo で新規作成（niho-photo#155）。描画の worker が先回りを補助の worker に頼み、取り込み、写真の切り替えで終わらせ、失敗で #129 の先回りへ戻る試験（偽の glue だけ）。外部コード・実写真を含まない。\n変更理由: Issue #155 analysis cache eviction tests\n変更理由: Issue #155 review: A-B-A and repeated drag cache tests"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/par.rs",

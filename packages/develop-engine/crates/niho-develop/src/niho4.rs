@@ -155,6 +155,10 @@ impl AnalysisSeed {
 /// instead of a second full-size allocation preserves both the CNR contract
 /// and cache invalidation while the Session owns the source lifetime.
 enum CnrSource {
+    /// A compact transferred analysis keeps the expensive reduced
+    /// coefficients and NIHO 7 maps, but not this full-size source. It is
+    /// rebuilt only when a frame needs a master (or a missing map).
+    Missing,
     Original,
     Filtered(Vec<f32>),
 }
@@ -162,6 +166,7 @@ enum CnrSource {
 impl CnrSource {
     fn data<'a>(&'a self, original: &'a [f32]) -> &'a [f32] {
         match self {
+            Self::Missing => unreachable!("CNR source is hydrated before it is read"),
             Self::Original => original,
             Self::Filtered(data) => data,
         }
@@ -285,6 +290,7 @@ fn make_analysis(
     camera: Camera,
     cached_analysis: Option<AnalysisCache>,
     needs: AnalysisNeeds,
+    needs_cnr_source: bool,
 ) -> Result<AnalysisCache, PrepareError> {
     let baseline_ev = match meta {
         WorkingCopyMeta::Raw { baseline_ev, .. } => *baseline_ev,
@@ -292,7 +298,7 @@ fn make_analysis(
     };
     let cnr_amount = effective_cnr_amount(settings);
     let luminance_nr_amount = luminance_nr_amount(settings);
-    let analysis = if let Some(cached) = cached_analysis.filter(|cached| {
+    let mut analysis = if let Some(cached) = cached_analysis.filter(|cached| {
         cached.camera == camera
             && cached.cnr_amount == cnr_amount
             && cached.luminance_nr_amount == luminance_nr_amount
@@ -304,30 +310,7 @@ fn make_analysis(
     }) {
         cached
     } else {
-        let cnr_source = if cnr_amount == 0.0 && luminance_nr_amount == 0.0 {
-            crate::raw_chroma::validate(&image.data, image.width, image.height, cnr_amount)
-                .map_err(PrepareError::Chroma)?;
-            Arc::new(CnrSource::Original)
-        } else {
-            let chroma = if cnr_amount == 0.0 {
-                image.data.clone()
-            } else {
-                crate::detail::reduce_raw_chroma(&image.data, image.width, image.height, settings)
-                    .map_err(PrepareError::Chroma)?
-            };
-            Arc::new(CnrSource::Filtered(
-                crate::detail::reduce_noise(
-                    &chroma,
-                    image.width,
-                    image.height,
-                    image.width.max(image.height),
-                    crate::detail::SourceSpace::LinearProPhoto,
-                    settings.detail.unwrap_or_default(),
-                    None,
-                )
-                .map_err(PrepareError::Detail)?,
-            ))
-        };
+        let cnr_source = make_cnr_source(image, settings, cnr_amount, luminance_nr_amount)?;
         AnalysisCache {
             camera,
             cnr_amount,
@@ -343,6 +326,14 @@ fn make_analysis(
             preview_source: None,
         }
     };
+
+    let missing_coefficients = needs.coefficients && analysis.coefficients.get().is_none();
+    let missing_niho7 = needs.niho7_highlights && analysis.niho7_highlights.get().is_none();
+    if matches!(analysis.cnr_source.as_ref(), CnrSource::Missing)
+        && (needs_cnr_source || missing_coefficients || missing_niho7)
+    {
+        analysis.cnr_source = make_cnr_source(image, settings, cnr_amount, luminance_nr_amount)?;
+    }
 
     // Canonical analysis must finish before allocating the full prepared
     // master (or preview source), so its full-size quantized copy never
@@ -388,6 +379,37 @@ fn make_analysis(
     Ok(analysis)
 }
 
+fn make_cnr_source(
+    image: &LinearImage,
+    settings: &DevelopSettings,
+    cnr_amount: f64,
+    luminance_nr_amount: f64,
+) -> Result<Arc<CnrSource>, PrepareError> {
+    if cnr_amount == 0.0 && luminance_nr_amount == 0.0 {
+        crate::raw_chroma::validate(&image.data, image.width, image.height, cnr_amount)
+            .map_err(PrepareError::Chroma)?;
+        return Ok(Arc::new(CnrSource::Original));
+    }
+    let chroma = if cnr_amount == 0.0 {
+        image.data.clone()
+    } else {
+        crate::detail::reduce_raw_chroma(&image.data, image.width, image.height, settings)
+            .map_err(PrepareError::Chroma)?
+    };
+    Ok(Arc::new(CnrSource::Filtered(
+        crate::detail::reduce_noise(
+            &chroma,
+            image.width,
+            image.height,
+            image.width.max(image.height),
+            crate::detail::SourceSpace::LinearProPhoto,
+            settings.detail.unwrap_or_default(),
+            None,
+        )
+        .map_err(PrepareError::Detail)?,
+    )))
+}
+
 /// Makes ahead the response analysis frames of `settings`' engine and noise
 /// reduction read once they use Highlights or Shadows (#129: while the
 /// editor is idle), so the first such frame does not wait for it. It is the
@@ -410,6 +432,7 @@ pub fn prepare_analysis(
             coefficients: true,
             niho7_highlights: uses_niho7_engine(settings),
         },
+        false,
     )
 }
 
@@ -450,6 +473,7 @@ pub fn prepare(
         camera,
         cached_analysis,
         AnalysisNeeds::of(settings),
+        true,
     )?;
 
     // Detect on the immutable full-resolution signed CNR source before the
