@@ -37,3 +37,10 @@ PROBE_BIN_DIR=<写したフォルダ> sh apps/camera/tools/webview-isolation-pro
 ```
 
 最初の行は macOS・WebKit の版と機種、続く行がモードごとの結果です。GUI のログインが要ります（窓は小さく、数秒で閉じます）。
+
+## 結果（2026-10-31・#173）
+
+Mac Studio（macOS 26.5.2）・Mac mini M4・MacBook Air M2 / 8GB（macOS 27.0.1）の 3 台で、独自の scheme（`tauri-asset`・`custom`・
+`wk-custom`）は画面と Worker 3 種のどれも `SharedArrayBuffer` が無く、入れ子の Worker へ共有メモリを渡すと `DataCloneError` でした
+（macOS 27 では画面と URL の Worker の `crossOriginIsolated` だけ true）。`http` と `wk-http` だけが画面と Worker 3 種で分離し、
+`Atomics.wait` / `notify` が通りました。原因（WebKit の NetworkProcess だけが分離した process へ切り替える）と表は #173 のコメントにあります。

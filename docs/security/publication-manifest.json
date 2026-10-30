@@ -3698,7 +3698,7 @@
         "path": "apps/camera/README.md",
         "sha256": "d0e1f198e83893a73cd3d84122debf76ad9755e00a5fc5e1b69c242daec8d4eb"
       },
-      "outputSha256": "12ad3a8f969aa671635ff24954909a83423376df7b0c44a669dd8733233fab25",
+      "outputSha256": "9009fa5ec5950dde46be4a6cca106a85002a902589d326784a8d0716c502cbbf",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "フォルダと個別写真の利用方法、公開契約、および許可するネイティブコマンドを明記",
@@ -3709,7 +3709,8 @@
         "公式candidateのSDK専用asset providerと署名前の実bytes検証を文書化する",
         "niho-photo#152: Mac アプリの現像を native の sidecar（niho-develop-render serve）で描く口（niho-develop://・native の glue・E2E）を足す。",
         "niho-photo#152: Mac アプリの現像を native sidecar に接続",
-        "Issue #152 の native 現像の画素一致と UI 実操作 E2E の手順を追記。"
+        "Issue #152 の native 現像の画素一致と UI 実操作 E2E の手順を追記。",
+        "Mac WKWebView の独自 scheme で共有メモリが使えない原因（#173）と probe への案内を追記し、native の glue の読み分けの記述を実装に合わせた"
       ]
     },
     {
@@ -11921,7 +11922,7 @@
     },
     {
       "path": "apps/camera/tools/webview-isolation-probe/README.md",
-      "sha256": "d494e3f0783fa1123e9e30606324e926198d5cc587c27904bbf8f09d61eb18c0",
+      "sha256": "73e98b7e7582490b457bb2762d97e860c396d6a38d3ea76908570cbe60dd2cad",
       "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
     },
     {
