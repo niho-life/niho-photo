@@ -390,7 +390,7 @@ export const DEVELOP_ENGINE_LOAD_TIMEOUT_MS = 20_000;
 export const DEVELOP_REQUEST_SLOW_MS = 5_000;
 
 /** 答えを待たない・ほかの要求の id で送る知らせ（`requestSlow` の対象にしない）。 */
-const UNWATCHED_REQUESTS: ReadonlySet<DevelopEngineWorkerRequest["type"]> = new Set([
+const UNWATCHED_REQUESTS: ReadonlySet<DevelopEngineWorkerRequest["type"]> = new Set<DevelopEngineWorkerRequest["type"]>([
   "warmAutoSettings",
   "promoteAutoSettings",
   "cancelAutoSettings",
