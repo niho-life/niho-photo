@@ -30,8 +30,8 @@ export const ANALYSIS_AHEAD_BYTES_PER_PIXEL = 38;
 /** 見本の session（同梱のプリセットを全部描いた後。親の作業画素あたり）。実測 263MiB / 4.37MP = 63.1 → 64。 */
 export const THUMBNAIL_SESSION_BYTES_PER_PIXEL = 64;
 
-/** 補助の worker 1 つ（同じ写真を開いて解析を 1 件作る。作業画素あたり）。実測 198MiB / 4.37MP = 45.3 → 46。 */
-export const ANALYSIS_HELPER_BYTES_PER_PIXEL = 46;
+/** 補助の worker 1 つ（同じ写真を開いて解析を 1 件作る。作業画素あたり）。実測 198MiB（207.6MB）/ 4.37MP = 47.5 → 48。 */
+export const ANALYSIS_HELPER_BYTES_PER_PIXEL = 48;
 
 /** 写真を開いて丁寧に描いた後に持つ bytes の見積もり。 */
 export function developerMemoryBytes(width: number, height: number): number {

@@ -37,7 +37,7 @@ Studio（M1 Max）・Node 24・単一スレッドの wasm（crate 0.26.0）で�
 | 開いている写真・保っている写真 | 作業画素 × 36 bytes |
 | 先回りの解析1件 | 作業画素 × 38 bytes |
 | 見本の session | 親の作業画素 × 64 bytes |
-| 補助の worker | 作業画素 × 46 bytes |
+| 補助の worker | 作業画素 × 48 bytes |
 | 解析の compact bytes | 実際の byte 数（JS に置く） |
 | 書き出し1回 | 作業コピーは開く分（× 36）＋描く分。JPEG / PNG は描く分だけ |
 
