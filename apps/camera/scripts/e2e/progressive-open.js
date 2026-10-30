@@ -104,10 +104,19 @@
     };
     return Object.fromEntries(Object.entries(result).filter(([, value]) => finite(value)));
   };
-  const report = (value) => { location.href = `https://niho-e2e.invalid/report?data=${encodeURIComponent(JSON.stringify(value))}`; };
   let stage = "boot";
+  let traceTimer = null;
+  // 報告の遷移は、後から予約した trace の遷移に取り消され得る（WebKit は予約済みの遷移を新しい遷移で置き換える。#171 で
+  // 正規切替は済んでいたのに報告が届かず、外側の時間切れで失敗に数えられた）。trace を止めてから送り、閉じるまで送り直す
+  const report = (value) => {
+    stage = "report";
+    if (traceTimer !== null) clearInterval(traceTimer);
+    const url = `https://niho-e2e.invalid/report?data=${encodeURIComponent(JSON.stringify(value))}`;
+    location.href = url;
+    setInterval(() => { location.href = url; }, 1000);
+  };
   const observations = {};
-  setInterval(() => {
+  traceTimer = setInterval(() => {
     // 正規切替の各段（#171）は同じ trial を持つ。Worker の記録は engine 名と、答えの遅い要求の種類を添える
     const trial = events.findLast((event) => typeof event.trial === "string")?.trial ?? "";
     const recentEvents = events.slice(-16).map((event) => event.stage).join(",");
