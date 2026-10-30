@@ -11920,8 +11920,8 @@
     },
     {
       "path": "docs/features/develop-memory-budget.md",
-      "sha256": "4550d198bc06428bfe51a59891ba2ecea0b416ecabe9bdf02334e21fec63bd63",
-      "origin": "公開 Issue #155 のため追加。編集・見本・大きな書き出しが分け合う物理メモリ予算の実装・試験・計測・説明に使う公開リポジトリ内のコード（docs/features/develop-memory-budget.md）。実写真・非公開情報を含まない。"
+      "sha256": "6c18e01c40142641176c49bc1d4281d8fc7207e97f880a0a1a058613c7b5471e",
+      "origin": "公開 Issue #155 のため追加。編集・見本・大きな書き出しが分け合う物理メモリ予算の実装・試験・計測・説明に使う公開リポジトリ内のコード（docs/features/develop-memory-budget.md）。実写真・非公開情報を含まない。\n変更理由: Issue #155: 払った高水位の内に収まる書き出しは同じ Worker で描くことを書く"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-memory-budget.ts",
