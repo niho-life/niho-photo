@@ -11961,7 +11961,7 @@
     },
     {
       "path": "apps/camera/tools/webview-isolation-probe/tauri.conf.json",
-      "sha256": "bcf9245cbb8b2bbc7d25c3b6818f79b600408df7e5dbdf7e03faa053b909ccea",
+      "sha256": "d45ddfa61f2c1cbeea53b35dcdf0e46619fcea2ba0dcc51be04cc77a3100df1e",
       "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
     },
     {
