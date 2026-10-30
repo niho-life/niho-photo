@@ -107,6 +107,36 @@ pub struct RenderCapabilities {
   pub max_pixels: u64,
 }
 
+thread_local! {
+  /// このスレッドで作っている現像の入力の試行 ID（{@link with_log_trial} の間だけ）
+  static LOG_TRIAL: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
+}
+
+/// 試行 ID として受け取る値（画面の診断が作る 16 進。写真・パスを含まない）か。
+pub fn is_log_trial(value: &str) -> bool {
+  (8..=32).contains(&value.len())
+    && value
+      .bytes()
+      .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+}
+
+/// `run` の間、このスレッドの現像のログ（`photo_editing.*`）に試行 ID（`trial`）を添える（niho-photo#171。画面の段階 open の
+/// 記録と同じ ID で、producer・cache の区間を突き合わせる）。{@link is_log_trial} でない ID は添えない。
+pub fn with_log_trial<T>(trial: Option<&str>, run: impl FnOnce() -> T) -> T {
+  struct Restore(Option<String>);
+  impl Drop for Restore {
+    fn drop(&mut self) {
+      let previous = self.0.take();
+      LOG_TRIAL.with(|slot| *slot.borrow_mut() = previous);
+    }
+  }
+  let Some(trial) = trial.filter(|trial| is_log_trial(trial)) else {
+    return run();
+  };
+  let _restore = Restore(LOG_TRIAL.with(|slot| slot.replace(Some(trial.to_owned()))));
+  run()
+}
+
 /// {@link RenderCapabilities} の一覧の長さ・名前の長さの上限（壊れた出力を覚えない）。
 const RENDER_CAPABILITY_MAX_ITEMS: usize = 64;
 const RENDER_CAPABILITY_MAX_NAME: usize = 64;
@@ -2635,7 +2665,10 @@ impl PhotoDevelop {
     })
   }
 
-  fn log(&self, kind: &str, payload: Value) {
+  fn log(&self, kind: &str, mut payload: Value) {
+    if let (Some(trial), Value::Object(fields)) = (LOG_TRIAL.with(|slot| slot.borrow().clone()), &mut payload) {
+      fields.insert("trial".into(), Value::String(trial));
+    }
     (self.config.log)(&format!("photo_editing.{kind}"), payload);
   }
 

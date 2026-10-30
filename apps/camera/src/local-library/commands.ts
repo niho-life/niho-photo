@@ -239,12 +239,14 @@ export function createCameraCommands(invoke: Invoke = tauriInvoke) {
     /** 現像の入力（作業コピーが要れば作る。RAW は数秒かかる）。 */
     developSource: (
       photoId: string,
-      options: { forceWorkingCopy?: boolean; sourceContext?: PhotoLibraryDevelopSourceContext } = {},
+      options: { forceWorkingCopy?: boolean; sourceContext?: PhotoLibraryDevelopSourceContext; trialId?: string } = {},
     ) =>
       call<DevelopSource>("camera_develop_source", {
         photoId,
         ...(options.forceWorkingCopy ? { forceWorkingCopy: true } : {}),
         ...(options.sourceContext ? { sourceContext: options.sourceContext } : {}),
+        // 写真編集の診断の試行 ID（native の作業コピーのログに添える。#171）
+        ...(options.trialId ? { trialId: options.trialId } : {}),
       }),
     /** `developSource` の `token` のバイト列（1 回限り）。 */
     developSourceBytes: async (photoId: string, token: string) =>

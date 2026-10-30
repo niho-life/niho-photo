@@ -104,15 +104,27 @@
     };
     return Object.fromEntries(Object.entries(result).filter(([, value]) => finite(value)));
   };
-  const report = (value) => { location.href = `https://niho-e2e.invalid/report?data=${encodeURIComponent(JSON.stringify(value))}`; };
   let stage = "boot";
+  let traceTimer = null;
+  // 報告の遷移は、後から予約した trace の遷移に取り消され得る（WebKit は予約済みの遷移を新しい遷移で置き換える。#171 で
+  // 正規切替は済んでいたのに報告が届かず、外側の時間切れで失敗に数えられた）。trace を止めてから送り、閉じるまで送り直す
+  const report = (value) => {
+    stage = "report";
+    if (traceTimer !== null) clearInterval(traceTimer);
+    const url = `https://niho-e2e.invalid/report?data=${encodeURIComponent(JSON.stringify(value))}`;
+    location.href = url;
+    setInterval(() => { location.href = url; }, 1000);
+  };
   const observations = {};
-  setInterval(() => {
+  traceTimer = setInterval(() => {
+    // 正規切替の各段（#171）は同じ trial を持つ。Worker の記録は engine 名と、答えの遅い要求の種類を添える
+    const trial = events.findLast((event) => typeof event.trial === "string")?.trial ?? "";
     const recentEvents = events.slice(-16).map((event) => event.stage).join(",");
-    const recentWorkerStages = perf.slice(-16).map((record) => record.stage).join(",");
+    const recentWorkerStages = perf.slice(-16).map((record) =>
+      `${record.engine ? `${record.engine}:` : ""}${record.stage}${record.request ? `/${record.request}` : ""}`).join(",");
     const diagnostics = new URLSearchParams(location.search).get("photoDevelopPerf") === "1" &&
       (location.pathname.endsWith("/photoEditing") || location.pathname === "/");
-    location.href = `https://niho-e2e.invalid/trace?step=${encodeURIComponent(stage)}&events=${encodeURIComponent(recentEvents)}&worker=${encodeURIComponent(recentWorkerStages)}&diag=${diagnostics ? 1 : 0}`;
+    location.href = `https://niho-e2e.invalid/trace?step=${encodeURIComponent(stage)}&trial=${encodeURIComponent(trial)}&events=${encodeURIComponent(recentEvents)}&worker=${encodeURIComponent(recentWorkerStages)}&diag=${diagnostics ? 1 : 0}`;
   }, 2000);
   try {
     history.replaceState(null, "", "?photoDevelopPerf=1");
@@ -226,6 +238,12 @@
   } catch (error) {
     report({ ok: false, case: config.label, mode: config.mode, iteration: config.iteration, stage,
       ...observations, developRuntime: perf.find((entry) => entry.stage === "runtime")?.runtime ?? null,
-      reason: error instanceof Error && ["timeout", "preset-frame-missing", "settings-changed-on-handoff", "preset-selection-lost", "paint-not-presented"].includes(error.message) ? error.message : "ui-probe-failed", uiEventStages: events.map((event) => event.stage) });
+      reason: error instanceof Error && ["timeout", "preset-frame-missing", "settings-changed-on-handoff", "preset-selection-lost", "paint-not-presented"].includes(error.message) ? error.message : "ui-probe-failed", uiEventStages: events.map((event) => event.stage),
+      trial: events.findLast((event) => typeof event.trial === "string")?.trial ?? null,
+      // 正規切替の段（#171）と、答えの遅い Worker の要求。時刻は T0 からの ms
+      canonicalStages: events.filter((event) => typeof event.trial === "string")
+        .map((event) => ({ stage: event.stage, elapsedMs: event.elapsedMs, ...(event.reason ? { reason: event.reason } : {}) })),
+      slowWorkerRequests: perf.filter((record) => record.stage === "requestSlow" || record.stage === "requestAnswered")
+        .map((record) => ({ stage: record.stage, request: record.request, engine: record.engine ?? null, waitedMs: record.waitedMs })) });
   }
 })();

@@ -11,9 +11,10 @@ use crate::photos::{check_photo_id, photos, CameraPhotos};
 use crate::{app_log, dialog};
 use niho_desktop_photo::common::{code, new_opaque_id};
 use niho_desktop_photo::develop::{
-  develop_code, export_input_for, signed_raw_generation_from_var, DevelopConfig, DevelopError, DevelopSourceContext,
-  DevelopTimeouts, ExportInput, LocalRaster, Overwrite, PhotoDevelop, SidecarPaths, APPLE_RAW_LINEAR_NAME,
-  CACHE_DIR_NAME, CACHE_MAX_BYTES, CALIBRATION_RESOURCE_DIR, DEVELOP_RENDER_NAME, TOKEN_NOT_FOUND_MESSAGE,
+  develop_code, export_input_for, signed_raw_generation_from_var, with_log_trial, DevelopConfig, DevelopError,
+  DevelopSourceContext, DevelopTimeouts, ExportInput, LocalRaster, Overwrite, PhotoDevelop, SidecarPaths,
+  APPLE_RAW_LINEAR_NAME, CACHE_DIR_NAME, CACHE_MAX_BYTES, CALIBRATION_RESOURCE_DIR, DEVELOP_RENDER_NAME,
+  TOKEN_NOT_FOUND_MESSAGE,
 };
 use niho_desktop_photo::library::is_valid_id;
 use serde::Deserialize;
@@ -268,6 +269,10 @@ pub struct SourceRequest {
   pub force_working_copy: bool,
   #[serde(default)]
   pub source_context: Option<SourceContextRequest>,
+  /// 写真編集の診断（`?photoDevelopPerf=1`）の試行 ID。作業コピーを作る間の `photo_editing.*` のログに添える（niho-photo#171。
+  /// 形の違う値は添えない）
+  #[serde(default)]
+  pub trial_id: Option<String>,
 }
 
 #[derive(Debug, Clone, Deserialize)]
@@ -387,7 +392,9 @@ pub async fn camera_develop_source(app: tauri::AppHandle, request: Option<Value>
   run_blocking(move || {
     let context = stored_source_context(&photos, &request.photo_id)
       .or_else(|| request.source_context.map(DevelopSourceContext::from));
-    Ok(develop.source_with_options_context(photos.as_ref(), &request.photo_id, context, request.force_working_copy)?)
+    Ok(with_log_trial(request.trial_id.as_deref(), || {
+      develop.source_with_options_context(photos.as_ref(), &request.photo_id, context, request.force_working_copy)
+    })?)
   })
   .await
 }

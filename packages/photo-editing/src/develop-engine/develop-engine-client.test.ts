@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 import {
   DEVELOP_PREVIEW_QUIET_MS,
+  DEVELOP_REQUEST_SLOW_MS,
   DevelopEngineError,
   createDevelopEngine,
   photoDevelopDiagnosticsEnabled,
@@ -147,6 +148,60 @@ describe("createDevelopEngine", () => {
       expect(await ready).toBe(true);
       expect(info).toHaveBeenCalledWith("[photo-develop-perf]", { stage: "runtime", runtime: "native" });
       engine.dispose();
+    } finally {
+      info.mockRestore();
+    }
+  });
+
+  it("診断の間だけ、答えの遅い要求を種類と engine 名で出し、遅れて答えたら待った時間も出す（#171）", async () => {
+    vi.useFakeTimers({ toFake: ["setTimeout", "clearTimeout", "performance"] });
+    const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    const perf = () => info.mock.calls.filter(([tag]) => tag === "[photo-develop-perf]").map(([, record]) => record);
+    try {
+      const worker = new FakeWorker();
+      const engine = createDevelopEngine({
+        createWorker: () => worker as unknown as Worker,
+        manifestUrl: MANIFEST_URL,
+        diagnostics: true,
+        diagnosticsLabel: "canonical",
+      });
+      const ready = engine.ready();
+      worker.respond({ type: "ready", id: worker.lastRequest("init").id, version: "test", runtime: "native" });
+      expect(await ready).toBe(true);
+
+      const quick = engine.openWorkingCopy(new ArrayBuffer(8), "{}");
+      worker.respond({ type: "opened", id: worker.lastRequest("openWorkingCopy").id, width: 4, height: 2 });
+      await quick;
+      vi.advanceTimersByTime(DEVELOP_REQUEST_SLOW_MS * 2);
+      expect(perf()).toEqual([{ stage: "runtime", runtime: "native", engine: "canonical" }]);
+
+      const slow = engine.openWorkingCopy(new ArrayBuffer(8), "{}");
+      vi.advanceTimersByTime(DEVELOP_REQUEST_SLOW_MS - 1);
+      expect(perf()).toHaveLength(1);
+      vi.advanceTimersByTime(1);
+      expect(perf().at(-1)).toEqual({
+        stage: "requestSlow",
+        request: "openWorkingCopy",
+        waitedMs: DEVELOP_REQUEST_SLOW_MS,
+        engine: "canonical",
+      });
+      vi.advanceTimersByTime(2_000);
+      worker.respond({ type: "opened", id: worker.lastRequest("openWorkingCopy").id, width: 4, height: 2 });
+      await slow;
+      expect(perf().at(-1)).toEqual({
+        stage: "requestAnswered",
+        request: "openWorkingCopy",
+        waitedMs: DEVELOP_REQUEST_SLOW_MS + 2_000,
+        engine: "canonical",
+      });
+
+      // 止めたら出さない（答えないまま捨てた要求を遅いと数えない）
+      const dropped = engine.openWorkingCopy(new ArrayBuffer(8), "{}");
+      engine.dispose();
+      await expect(dropped).rejects.toBeInstanceOf(DevelopEngineError);
+      const before = perf().length;
+      vi.advanceTimersByTime(DEVELOP_REQUEST_SLOW_MS * 2);
+      expect(perf()).toHaveLength(before);
     } finally {
       info.mockRestore();
     }
