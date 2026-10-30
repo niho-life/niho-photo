@@ -33,7 +33,7 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
-from PIL import Image
+from PIL import Image, ImageDraw
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from sky_math import guided_filter, srgb_to_lab  # noqa: E402
@@ -150,6 +150,28 @@ def load_config(run: Path) -> dict:
     return cfg
 
 
+def draw_wires(img: Image.Image) -> Image.Image:
+    """Overhead wires: 1-6 sagging dark lines across the upper frame, 1-2 px at the model size.
+
+    Street photos have wires across the sky, and labels cut from segments leave a gap of
+    not-sky along each wire, so a model learns that sky crossed by lines is not sky. The
+    label is kept: a line this thin is below the label's resolution (half the model size).
+    """
+    w, h = img.size
+    over = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    draw = ImageDraw.Draw(over)
+    for _ in range(random.randint(1, 6)):
+        y0, y1 = random.uniform(0, 0.7 * h), random.uniform(0, 0.7 * h)
+        sag = random.uniform(0, 0.12 * h)
+        t = np.linspace(0, 1, 48)
+        xs = -0.1 * w + 1.2 * w * t
+        ys = y0 + (y1 - y0) * t + 4 * sag * t * (1 - t)
+        tone = random.randint(15, 90)
+        draw.line(list(zip(xs.tolist(), ys.tolist())), fill=(tone, tone, tone, random.randint(150, 255)),
+                  width=random.choice((1, 1, 2)))
+    return Image.alpha_composite(img.convert("RGBA"), over).convert("RGB")
+
+
 class Data(torch.utils.data.Dataset):
     def __init__(self, items: list[tuple[Path, Path]], train: bool, cfg: dict) -> None:
         self.items, self.train, self.cfg = items, train, cfg
@@ -174,6 +196,8 @@ class Data(torch.utils.data.Dataset):
                 img, label = img.transpose(Image.FLIP_LEFT_RIGHT), label.transpose(Image.FLIP_LEFT_RIGHT)
         mw, mh = model_size(*img.size, self.cfg["long"])
         img = img.resize((mw, mh), Image.BILINEAR)
+        if self.train and random.random() < self.cfg.get("wires", 0.0):
+            img = draw_wires(img)
         lab = np.asarray(label.resize((mw // 2, mh // 2), Image.BILINEAR), np.float32) / 255.0
         rgb = np.asarray(img).astype(np.float32)
         if self.train:
@@ -213,7 +237,9 @@ def cmd_train(args) -> None:
         resource.setrlimit(resource.RLIMIT_NOFILE, (want, hard))
     if not 384 <= args.long <= 512 or args.long % 32:
         raise ValueError("--long must be a multiple of 32 in 384..512")
-    cfg = {"long": args.long, "inputs": args.inputs}
+    if not 0 <= args.wire_aug <= 1:
+        raise ValueError("--wire-aug must be a probability")
+    cfg = {"long": args.long, "inputs": args.inputs, "wires": args.wire_aug}
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     items = []
@@ -390,6 +416,7 @@ def main() -> None:
     t.add_argument("--long", type=int, default=384, help="model long edge, multiple of 32 in 384..512")
     t.add_argument("--seed", type=int, default=0)
     t.add_argument("--sample-weights", type=Path, help="JSON object: image stem -> sampling weight (default 1)")
+    t.add_argument("--wire-aug", type=float, default=0.0, help="probability of drawing synthetic wires on a training photo")
     t.add_argument("--device", default="mps")
     t.add_argument("--validation-ids", type=Path, help="JSON array of image stems from distinct capture groups")
     t.add_argument("--expect-ev-count", type=int, help="expected number of photos with exposure sidecars; abort on mismatch")
