@@ -3698,7 +3698,7 @@
         "path": "apps/camera/README.md",
         "sha256": "d0e1f198e83893a73cd3d84122debf76ad9755e00a5fc5e1b69c242daec8d4eb"
       },
-      "outputSha256": "12ad3a8f969aa671635ff24954909a83423376df7b0c44a669dd8733233fab25",
+      "outputSha256": "9009fa5ec5950dde46be4a6cca106a85002a902589d326784a8d0716c502cbbf",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "フォルダと個別写真の利用方法、公開契約、および許可するネイティブコマンドを明記",
@@ -3709,7 +3709,8 @@
         "公式candidateのSDK専用asset providerと署名前の実bytes検証を文書化する",
         "niho-photo#152: Mac アプリの現像を native の sidecar（niho-develop-render serve）で描く口（niho-develop://・native の glue・E2E）を足す。",
         "niho-photo#152: Mac アプリの現像を native sidecar に接続",
-        "Issue #152 の native 現像の画素一致と UI 実操作 E2E の手順を追記。"
+        "Issue #152 の native 現像の画素一致と UI 実操作 E2E の手順を追記。",
+        "Mac WKWebView の独自 scheme で共有メモリが使えない原因（#173）と probe への案内を追記し、native の glue の読み分けの記述を実装に合わせた"
       ]
     },
     {
@@ -11908,6 +11909,66 @@
       "path": "scripts/sdk/verify-release-artifact.mjs",
       "sha256": "600cf2647380a1e8670fa9641cbbb38f34664330ec53269f958627a2026d2667",
       "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/verify-release-artifact.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
+    },
+    {
+      "path": "apps/camera/tools/webview-isolation-probe/Cargo.lock",
+      "sha256": "eec163683e4f22a779afcb1550ce84a42375f0cd6cd194bd451e25eea0945b73",
+      "origin": "Issue #173 の研究用。apps/camera/src-tauri/Cargo.lock を写し、cargo update --workspace で使わない crate を除いたもの（tauri 2.12.3・wry 0.57.0 の版はアプリと同じ）。"
+    },
+    {
+      "path": "apps/camera/tools/webview-isolation-probe/Cargo.toml",
+      "sha256": "c2c1f3c53b86bb79e16d06f2d06ed50153a4d8d73d244df526d9d651e6d8e2c4",
+      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
+    },
+    {
+      "path": "apps/camera/tools/webview-isolation-probe/README.md",
+      "sha256": "73e98b7e7582490b457bb2762d97e860c396d6a38d3ea76908570cbe60dd2cad",
+      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
+    },
+    {
+      "path": "apps/camera/tools/webview-isolation-probe/build.rs",
+      "sha256": "b01bb80b64916f502a3033afdb4567227ef2abcc3b938889f02283aefa780fbe",
+      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
+    },
+    {
+      "path": "apps/camera/tools/webview-isolation-probe/page/index.html",
+      "sha256": "93354d08ee74ba13923175fca631a7b4a93f3d357e23730bb8b9c16204f8e270",
+      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
+    },
+    {
+      "path": "apps/camera/tools/webview-isolation-probe/page/probe.js",
+      "sha256": "5e4528ac066985a279ebb810ef90b734ea0a88e9cb1a597c99e7c97866d19ceb",
+      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
+    },
+    {
+      "path": "apps/camera/tools/webview-isolation-probe/page/worker.js",
+      "sha256": "d91fd13fafecfe5e6897d58423a1b90ee72a7852c60b329126dd7305d5169b09",
+      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
+    },
+    {
+      "path": "apps/camera/tools/webview-isolation-probe/run.sh",
+      "sha256": "f4562c71a28bbe2b67a1f6bff9b9143ffcf9998968496bc573ccfbe58c92fb7b",
+      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
+    },
+    {
+      "path": "apps/camera/tools/webview-isolation-probe/rustfmt.toml",
+      "sha256": "9682e0b5639ac5872a6c026bc1a14f8a83243392603cad683c382d0b0fab6734",
+      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
+    },
+    {
+      "path": "apps/camera/tools/webview-isolation-probe/src/main.rs",
+      "sha256": "ea74b4747662c99e0beee8afb6e9f83a03776588f413edc898ba39aad67c7470",
+      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
+    },
+    {
+      "path": "apps/camera/tools/webview-isolation-probe/tauri.conf.json",
+      "sha256": "d45ddfa61f2c1cbeea53b35dcdf0e46619fcea2ba0dcc51be04cc77a3100df1e",
+      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
+    },
+    {
+      "path": "apps/camera/tools/webview-isolation-probe/wkwebview-probe.swift",
+      "sha256": "65032b1ead8d99bb7b33dc792e49b64ec0c81cea33a3217d513e940f53cbfdea",
+      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
     }
   ],
   "excludedSources": [
