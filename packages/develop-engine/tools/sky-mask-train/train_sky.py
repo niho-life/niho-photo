@@ -20,6 +20,7 @@ import argparse
 import json
 import math
 import random
+import resource
 import sys
 import time
 from pathlib import Path
@@ -126,8 +127,9 @@ class Data(torch.utils.data.Dataset):
 
     def __getitem__(self, i: int):
         img_path, label_path = self.items[i]
-        img = Image.open(img_path).convert("RGB")
-        label = Image.open(label_path).convert("L").resize(img.size, Image.BILINEAR)
+        with Image.open(img_path) as im, Image.open(label_path) as lb:
+            img = im.convert("RGB")
+            label = lb.convert("L").resize(img.size, Image.BILINEAR)
         ev = load_ev(img_path)
         w, h = img.size
         if self.train:
@@ -172,6 +174,11 @@ def collate(batch):
 
 
 def cmd_train(args) -> None:
+    # data loader workers hold pipes and shared memory; a 256-file soft limit stops long runs
+    soft, hard = resource.getrlimit(resource.RLIMIT_NOFILE)
+    want = 4096 if hard == resource.RLIM_INFINITY else min(4096, hard)
+    if soft != resource.RLIM_INFINITY and soft < want:
+        resource.setrlimit(resource.RLIMIT_NOFILE, (want, hard))
     if not 384 <= args.long <= 512 or args.long % 32:
         raise ValueError("--long must be a multiple of 32 in 384..512")
     cfg = {"long": args.long, "inputs": args.inputs}
@@ -212,7 +219,8 @@ def cmd_train(args) -> None:
     opt = torch.optim.AdamW(net.parameters(), lr=3e-3, weight_decay=1e-4)
     loader = torch.utils.data.DataLoader(Data(train, True, cfg), batch_size=16, shuffle=True, num_workers=6,
                                          collate_fn=collate, persistent_workers=True)
-    vloader = torch.utils.data.DataLoader(Data(val, False, cfg), batch_size=16, num_workers=4, collate_fn=collate)
+    vloader = torch.utils.data.DataLoader(Data(val, False, cfg), batch_size=16, num_workers=4, collate_fn=collate,
+                                          persistent_workers=True)
     steps = args.epochs * len(loader)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=3e-3, total_steps=steps, pct_start=0.1)
     args.out.mkdir(parents=True, exist_ok=True)
@@ -271,7 +279,8 @@ def cmd_predict(args) -> None:
     args.out.mkdir(parents=True, exist_ok=True)
     times = {}
     for path in sorted(args.input.glob("*.png")):
-        rgb = np.asarray(Image.open(path).convert("RGB"))
+        with Image.open(path) as im:
+            rgb = np.asarray(im.convert("RGB"))
         t = time.perf_counter()
         prob = predict_one(net, rgb, load_ev(path), dev, cfg)
         times[path.stem] = time.perf_counter() - t
