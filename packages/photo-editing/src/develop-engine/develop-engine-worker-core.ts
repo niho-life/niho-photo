@@ -1017,6 +1017,23 @@ function analysisSettingsKeyFromJson(settingsJson: string): string | null {
   return `${engine}:${colorNoiseReduction}:${String(luminanceNoiseReduction)}:${String(detailColor)}`;
 }
 
+/**
+ * Worker の中でスレッド版を試せる環境か（{@link DevelopEngineWorkerDeps.threadsEnvironment}）。`crossOriginIsolated` だけでは決めない:
+ * macOS 27 の WKWebView は独自の scheme の文書と Worker で COOP / COEP を見て true を返すが、process は分離しておらず
+ * `SharedArrayBuffer` を出さず、共有メモリを Worker へ渡せない（#173・#175）。
+ */
+export function readThreadsEnvironment(scope: {
+  crossOriginIsolated?: boolean;
+  SharedArrayBuffer?: unknown;
+  navigator: { hardwareConcurrency: number; userAgent: string };
+}): { isolated: boolean; hardwareConcurrency: number; userAgent: string } {
+  return {
+    isolated: scope.crossOriginIsolated === true && typeof scope.SharedArrayBuffer === "function",
+    hardwareConcurrency: scope.navigator.hardwareConcurrency,
+    userAgent: scope.navigator.userAgent,
+  };
+}
+
 export function createDevelopEngineWorkerHandler(
   deps: DevelopEngineWorkerDeps,
 ): (message: DevelopEngineWorkerRequest) => Promise<void> {
@@ -1803,9 +1820,10 @@ export function createDevelopEngineWorkerHandler(
       return parsed;
     });
     const environment = deps.threadsEnvironment?.();
-    // Safari と iOS のブラウザは WebKit の Worker pool が遅くなり続ける計測結果がある（#148）。
+    // Safari と iOS のブラウザは WebKit の Worker pool が遅くなり続ける計測結果がある（#148）。アプリ内の WKWebView（Mac・iPad の
+    // desktop 表示）は Safari の語を持たないので、Chrome 系でない AppleWebKit も WebKit とみなす（#175）。
     const webkit = environment && (/iPhone|iPad|iPod/i.test(environment.userAgent) ||
-      (/Safari/i.test(environment.userAgent) && !/Chrome|Chromium|Edg/i.test(environment.userAgent)));
+      (/Safari|AppleWebKit/i.test(environment.userAgent) && !/Chrome|Chromium|Edg/i.test(environment.userAgent)));
     const cores = environment?.hardwareConcurrency ?? 0;
     const threadedFiles = manifest.threads;
     if (allowThreads && threadedFiles && environment?.isolated && !webkit && Number.isFinite(cores) && cores >= 4) {

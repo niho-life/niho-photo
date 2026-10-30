@@ -421,7 +421,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core.test.ts",
         "sha256": "eb20b196dd11f240e0944d79d51244a1951536f264a1aa7c1fcb06180f86d26b"
       },
-      "outputSha256": "ae8f67656fd7c4e58387b5f569b4f073005cb642da828fa9df4928f01db68558",
+      "outputSha256": "9ff9ee6dd9a898ab2932f80c26560fd7f83cff5875bbcf87367ee07bcd183110",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -443,7 +443,8 @@
         "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
         "Issue #151: 8本の Worker 選択を対象試験で固定",
         "Issue #151: Mac native 復旧時にスレッドを選ばない対象試験を追加",
-        "PR #165 レビュー: pool 無応答からの単一 wasm 復旧試験を追加"
+        "PR #165 レビュー: pool 無応答からの単一 wasm 復旧試験を追加",
+        "WKWebView・Chrome 系の user agent と SharedArrayBuffer の無い分離の試験（#175）"
       ]
     },
     {
@@ -487,9 +488,10 @@
         "Issue #151 のスレッド版選択と #155 の cache 予算を同じ Worker に統合",
         "Issue #155: 解析再利用と共有メモリ予算の変更を統合",
         "Issue #155: 編集・見本・大きな書き出しが分け合う物理メモリ予算（実測の bytes と破棄の順・使い捨ての書き出し worker）",
-        "Issue #155: 切り抜いた JPEG / PNG の書き出しを、切り抜きが届くデコードの大きさで見積もる"
+        "Issue #155: 切り抜いた JPEG / PNG の書き出しを、切り抜きが届くデコードの大きさで見積もる",
+        "WKWebView を WebKit と判定し、SharedArrayBuffer の無い分離をスレッド版の対象にしない（#175）"
       ],
-      "outputSha256": "51e0d8f3e8f3961c469b5441a8629787a5991f0192e64f0d35860d6750d607af"
+      "outputSha256": "c1e385eeb92e7c9bee84a7b013bdde9673741a208f8bff400760548067bbcc60"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -499,7 +501,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
         "sha256": "fd4cedb6e946a8a19e0e5a07d205829ff1251cfd9dbb50aedcb391feb031ba64"
       },
-      "outputSha256": "40168a53569351fbbcf014f3281d12d6766b41ac7438e852136707f6b5bd441b",
+      "outputSha256": "7891694fb08784cf865f02335c4cf7323ab9b631727d6255a286890b7042fcfe",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -508,7 +510,8 @@
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
         "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
         "Issue #155: 解析再利用と共有メモリ予算の変更を統合",
-        "Issue #155: 編集・見本・大きな書き出しが分け合う物理メモリ予算（実測の bytes と破棄の順・使い捨ての書き出し worker）"
+        "Issue #155: 編集・見本・大きな書き出しが分け合う物理メモリ予算（実測の bytes と破棄の順・使い捨ての書き出し worker）",
+        "スレッド版の環境判定を readThreadsEnvironment に寄せる（#175）"
       ]
     },
     {
