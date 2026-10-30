@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import {
   createDevelopEngineWorkerHandler,
+  readThreadsEnvironment,
   type DevelopEngineWorkerDeps,
   type DevelopEngineWorkerResponse,
 } from "./develop-engine-worker-core";
@@ -1323,10 +1324,31 @@ describe("threaded wasm selection", () => {
     expect(posted[0]?.message).toMatchObject({ type: "ready", runtime: "wasm-threads", wasmThreads: 8 });
   });
 
+  // #173 の probe で読んだ実際の user agent（Mac の Tauri / WKWebView。iPad の desktop 表示のアプリ内 WebView も同じ形）
+  const wkWebView = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko)";
+
+  it.each([
+    ["desktop Chrome", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36"],
+    ["headless Chrome", "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/141.0.0.0 Safari/537.36"],
+    ["Edge", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/141.0.0.0 Safari/537.36 Edg/141.0.0.0"],
+  ])("keeps the threaded glue for isolated %s", async (_name, userAgent) => {
+    const threaded = fakeGlue();
+    const initThreadPool = vi.fn(async (_count: number) => {});
+    const { handler, deps, posted } = setup({ manifest });
+    deps.threadsEnvironment = () => ({ isolated: true, hardwareConcurrency: 8, userAgent });
+    deps.importModule = vi.fn(async () => ({ ...threaded.module, initThreadPool }));
+
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+
+    expect(initThreadPool).toHaveBeenCalledExactlyOnceWith(8);
+    expect(posted[0]?.message).toMatchObject({ type: "ready", runtime: "wasm-threads" });
+  });
+
   it.each([
     [{ isolated: false, hardwareConcurrency: 8, userAgent: "Chrome/120 Safari/537" }, "no isolation"],
     [{ isolated: true, hardwareConcurrency: 8, userAgent: "Safari/605" }, "Safari"],
     [{ isolated: true, hardwareConcurrency: 8, userAgent: "iPhone CriOS/120" }, "iOS WebKit"],
+    [{ isolated: true, hardwareConcurrency: 8, userAgent: wkWebView }, "WKWebView without the Safari token"],
   ])("uses the single wasm in %s (%s)", async (environment) => {
     const single = fakeGlue();
     const { handler, deps, posted } = setup({ manifest, module: single.module });
@@ -1374,6 +1396,22 @@ describe("threaded wasm selection", () => {
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it.each([
+    [true, function SharedArrayBuffer() {}, true],
+    // macOS 27 の WKWebView の独自の scheme: crossOriginIsolated は true でも SharedArrayBuffer が無い（#173）
+    [true, undefined, false],
+    [false, function SharedArrayBuffer() {}, false],
+    [undefined, undefined, false],
+  ])("treats crossOriginIsolated=%s with SharedArrayBuffer %s as isolated=%s", (crossOriginIsolated, sharedArrayBuffer, isolated) => {
+    const navigator = { hardwareConcurrency: 8, userAgent: wkWebView };
+
+    expect(readThreadsEnvironment({ crossOriginIsolated, SharedArrayBuffer: sharedArrayBuffer, navigator })).toEqual({
+      isolated,
+      hardwareConcurrency: 8,
+      userAgent: wkWebView,
+    });
   });
 
   it("keeps the Mac native fallback on the single wasm", async () => {

@@ -3,6 +3,7 @@ import { createBrowserDevelopAnalysisStore, createNativeDevelopAnalysisStore } f
 import { createNativeDevelopGlue, NativeDevelopUnavailableError } from "./develop-engine-native-glue";
 import {
   createDevelopEngineWorkerHandler,
+  readThreadsEnvironment,
   type DevelopEngineWorkerRequest,
   type DevelopEngineWorkerResponse,
 } from "./develop-engine-worker-core";
@@ -71,11 +72,7 @@ const nativeAnalysisStore = createNativeDevelopAnalysisStore();
 const handler = createDevelopEngineWorkerHandler({
   fetch: (url, init) => fetch(url, init),
   importModule: (url) => import(/* webpackIgnore: true */ /* turbopackIgnore: true */ url),
-  threadsEnvironment: () => ({
-    isolated: self.crossOriginIsolated === true,
-    hardwareConcurrency: navigator.hardwareConcurrency,
-    userAgent: navigator.userAgent,
-  }),
+  threadsEnvironment: () => readThreadsEnvironment(self),
   post: (message, transfer) => scope.postMessage(message, transfer ?? []),
   createNativeGlue: () => createNativeDevelopGlue(),
   isNativeUnavailableError: (error) => error instanceof NativeDevelopUnavailableError,

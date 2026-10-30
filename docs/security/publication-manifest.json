@@ -419,7 +419,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core.test.ts",
         "sha256": "eb20b196dd11f240e0944d79d51244a1951536f264a1aa7c1fcb06180f86d26b"
       },
-      "outputSha256": "ae8f67656fd7c4e58387b5f569b4f073005cb642da828fa9df4928f01db68558",
+      "outputSha256": "9ff9ee6dd9a898ab2932f80c26560fd7f83cff5875bbcf87367ee07bcd183110",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -441,7 +441,8 @@
         "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
         "Issue #151: 8本の Worker 選択を対象試験で固定",
         "Issue #151: Mac native 復旧時にスレッドを選ばない対象試験を追加",
-        "PR #165 レビュー: pool 無応答からの単一 wasm 復旧試験を追加"
+        "PR #165 レビュー: pool 無応答からの単一 wasm 復旧試験を追加",
+        "WKWebView・Chrome 系の user agent と SharedArrayBuffer の無い分離の試験（#175）"
       ]
     },
     {
@@ -483,9 +484,10 @@
         "Issue #155 親レビューに従い通常exportの解析cache保持・kept優先eviction・temporary全体retryへ修正",
         "Issue #151 と #155 の Worker 変更を main に統合し画素の契約を維持",
         "Issue #151 のスレッド版選択と #155 の cache 予算を同じ Worker に統合",
-        "Issue #155: 解析再利用と共有メモリ予算の変更を統合"
+        "Issue #155: 解析再利用と共有メモリ予算の変更を統合",
+        "WKWebView を WebKit と判定し、SharedArrayBuffer の無い分離をスレッド版の対象にしない（#175）"
       ],
-      "outputSha256": "dbdeae8b390349309b7e184d838e787f2b56958cd5a4ef312e7998abe2e68393"
+      "outputSha256": "7241681602cd6a6f4591affe1a40b242fdb2fe4c72c1354181f5a37a285af71b"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -495,7 +497,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
         "sha256": "fd4cedb6e946a8a19e0e5a07d205829ff1251cfd9dbb50aedcb391feb031ba64"
       },
-      "outputSha256": "950576e37a13b5a3c89763ab8a2ca010980e0d032376be81ef9b20935689e2b2",
+      "outputSha256": "79add895e0c2dec367a58b456cbd5429881ed1a01a394178aa38c5e37b831fa4",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -503,7 +505,8 @@
         "niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。",
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
         "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
-        "Issue #155: 解析再利用と共有メモリ予算の変更を統合"
+        "Issue #155: 解析再利用と共有メモリ予算の変更を統合",
+        "スレッド版の環境判定を readThreadsEnvironment に寄せる（#175）"
       ]
     },
     {
