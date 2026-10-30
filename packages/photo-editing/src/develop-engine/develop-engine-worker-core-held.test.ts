@@ -122,6 +122,16 @@ function setup(digest: DevelopEngineWorkerDeps["digest"] | null = textDigest) {
 const bytesOf = (text: string) => new Uint8Array([...text].map((char) => char.charCodeAt(0))).buffer;
 const open = (id: number, text: string, workingMaxDimension = 1280) =>
   ({ type: "open", id, bytes: bytesOf(text), workingMaxDimension }) as const;
+/** 作業コピーの PNG の頭（signature と IHDR の幅・高さ。#155 の見積もりが読む）に `text` を続けた bytes。 */
+const workingCopyPng = (width: number, height: number, text: string) => {
+  const bytes = new Uint8Array(24 + text.length);
+  bytes.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 13, 0x49, 0x48, 0x44, 0x52]);
+  const view = new DataView(bytes.buffer);
+  view.setUint32(16, width);
+  view.setUint32(20, height);
+  bytes.set([...text].map((char) => char.charCodeAt(0)), 24);
+  return bytes.buffer;
+};
 
 describe("Worker が同じ写真を保つ（#129）", () => {
   it("閉じた写真を保ち、同じ入力をもう一度開いたらデコードせずに使う（A → B → A）", async () => {
@@ -262,7 +272,7 @@ describe("Worker が同じ写真を保つ（#129）", () => {
     expect(posted.at(-1)?.message).toMatchObject({ type: "frame", id: 6 });
   });
 
-  it("大きい作業コピーの書き出し前に見本と kept を解放し、active と結果 bytes は保つ", async () => {
+  it("予算に収まらない作業コピーの書き出し前に見本と kept を解放し、active と結果 bytes は保つ", async () => {
     const { handler, posted, glue } = setup();
     await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
     await handler(open(2, "A"));
@@ -271,14 +281,17 @@ describe("Worker が同じ写真を保つ（#129）", () => {
     await handler({ type: "renderPresetThumbnail", id: 5, settingsJson: "{}", maxDimension: 96 });
     const active = glue.developers.find((entry) => entry.name === "B")!;
     const thumbnail = glue.thumbnails[0]!;
+    // 8000×6000 の作業コピーは開くだけで予算（PC 1GiB）を超える（#155。長辺ではなく bytes の見積もりで決める）
+    const png = workingCopyPng(8000, 6000, "X");
+    const name = String.fromCharCode(...new Uint8Array(png));
 
     await handler({
       type: "exportWorkingCopyJpeg",
       id: 6,
-      png: bytesOf("X"),
+      png,
       metaJson: "{}",
       settingsJson: "{}",
-      maxDimension: 2049,
+      maxDimension: 2560,
       quality: 90,
     });
 
@@ -288,8 +301,8 @@ describe("Worker が同じ写真を保つ（#129）", () => {
       "decode thumbnail of 256",
       "free thumbnail of 256",
       "free A",
-      "decode X",
-      "free X",
+      `decode ${name}`,
+      `free ${name}`,
     ]);
     expect(active.free).not.toHaveBeenCalled();
     expect(thumbnail.free).toHaveBeenCalledOnce();
