@@ -1,0 +1,19 @@
+# Research only (#173): Mac の Tauri WebView が cross-origin isolated になるかを、配り方ごとに確かめる小さなアプリ。
+# 配布物にも公開 CI にも入れない（public-ci.json の cargoManifests に載せない）。写真・IPC・ネットワークは使わない。
+# tauri と tauri-build は apps/camera/src-tauri と同じ要求と Cargo.lock の版（tauri 2.12.3・wry 0.57.0）にそろえる。
+[package]
+name = "webview-isolation-probe"
+version = "0.0.0"
+edition = "2021"
+license = "UNLICENSED"
+publish = false
+
+# apps/camera/src-tauri の workspace に入れない
+[workspace]
+
+[build-dependencies]
+tauri-build = { version = "2.6.2", features = [] }
+
+[dependencies]
+# custom-protocol: devUrl を使わず page/ を同梱して tauri://localhost から配る（本番の app と同じ）
+tauri = { version = "2.11.2", features = ["custom-protocol"] }
