@@ -465,6 +465,11 @@ export function useBrowserPhotoOpen(params: {
     });
   }, []);
   const recordProxyReady = useCallback((key: string) => recordOpenStage(key, "proxyReady"), [recordOpenStage]);
+  /** 開いている写真の診断の試行 ID（診断していなければ undefined）。 */
+  const diagnosticTrialOf = useCallback((key: string): string | undefined => {
+    const timeline = timelineRef.current;
+    return timeline?.key === key ? timeline.trial : undefined;
+  }, []);
   // S1 の canvas だけが「書き出していない補正」を持つ（wasm は自動保存するので破棄の確認を出さない）
   const dirty = opened?.mode !== "wasm" && settingsKey !== savedSettingsKey;
   const compareOriginalRef = useRef(compareOriginal);
@@ -1395,7 +1400,7 @@ export function useBrowserPhotoOpen(params: {
         if (workTarget) showWorkPreview();
         // 署名付き URL の取得と作業コピーの読み込みを、初回の Wasm 起動と重ねる。
         // 失敗は使用時に投げ直し、起動不可・写真切替時にも未処理の rejection を残さない。
-        const diagnosticTrial = timelineRef.current?.key === item.key ? timelineRef.current.trial : undefined;
+        const diagnosticTrial = diagnosticTrialOf(item.key);
         const pendingWork = workTarget && !developUnavailable
           ? library.ensureWorkingCopy(item.photo.id, {
               signal: workAbort.signal,
@@ -1596,6 +1601,7 @@ export function useBrowserPhotoOpen(params: {
       confirmSourceSwitch,
       developUnavailable,
       developSessionRef,
+      diagnosticTrialOf,
       leaveEditing,
       handoffCanonical,
       library,
