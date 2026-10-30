@@ -104,8 +104,9 @@ if (one) {
   const preset = (id) =>
     JSON.stringify(JSON.parse(pkg.applyPreset(presets.find((p) => p.id === id).xmp, baseJson, 1, asShot)).settings);
   const heavy = JSON.stringify(heavySettings(base));
-  const heavyRaster = JSON.stringify(heavySettings({ ...neutral, engine: "niho-14", look: "niho-standard-5" }));
-  const plainRaster = JSON.stringify({ ...neutral, engine: "niho-14", look: "niho-standard-5" });
+  // A JPEG opens on the neutral settings' engine and look.
+  const heavyRaster = JSON.stringify(heavySettings(neutral));
+  const plainRaster = JSON.stringify(neutral);
   for (const [name, json] of [["heavy", heavy], ["heavyRaster", heavyRaster]]) {
     const issues = JSON.parse(pkg.validateSettings(json));
     if (issues.length) throw new Error(`${name} settings: ${JSON.stringify(issues)}`);
