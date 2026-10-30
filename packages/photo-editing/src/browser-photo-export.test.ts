@@ -344,6 +344,8 @@ describe("大きさの「大きく」（niho-photo#134）", () => {
     // 24MP の JPEG を長辺 4096（4096×2731）で描いた実測: 補正が軽いと 213MB、全部使うと 1,284MB
     expect(browserPhotoExportLargeWasmBytes(light, { width: 4096, height: 2731 })).toBeGreaterThanOrEqual(213 * mib);
     expect(browserPhotoExportLargeWasmBytes(heavy, { width: 4096, height: 2731 })).toBeGreaterThanOrEqual(1284 * mib);
+    // #155: ノイズ軽減（輝度・カラー）も足すと、遠近で切り抜いた 4017×2678 で 1,616MiB
+    expect(browserPhotoExportLargeWasmBytes(heavy, { width: 4017, height: 2678 })).toBeGreaterThanOrEqual(1616 * mib);
     expect(BROWSER_PHOTO_EXPORT_LARGE_MOBILE_MAX_BYTES).toBe(512 * mib);
     // 寸法が分からなければ、長辺の上限の正方形（縦横比が分からない最大の画）で見積もる
     expect(isBrowserPhotoExportLargeWithinMobileMemory(light, null, false)).toBe(true);

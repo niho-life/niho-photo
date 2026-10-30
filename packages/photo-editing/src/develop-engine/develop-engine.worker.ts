@@ -1,8 +1,10 @@
 import type { DevelopAnalysisHelper, DevelopAnalysisHelperResponse } from "./develop-engine-analysis-worker-core";
 import { createBrowserDevelopAnalysisStore, createNativeDevelopAnalysisStore } from "./develop-engine-analysis-store";
 import { createNativeDevelopGlue, NativeDevelopUnavailableError } from "./develop-engine-native-glue";
+import { encodeJpegInWorker } from "./develop-engine-worker-encode-jpeg";
 import {
   createDevelopEngineWorkerHandler,
+  type DevelopEngineExportWorker,
   type DevelopEngineWorkerRequest,
   type DevelopEngineWorkerResponse,
 } from "./develop-engine-worker-core";
@@ -19,20 +21,6 @@ type DevelopEngineWorkerScope = {
 };
 
 const scope = self as unknown as DevelopEngineWorkerScope;
-
-/**
- * 作業コピーから描いた画素を Worker の中で JPEG にする（移行元設計。sRGB のまま・撮影情報なし）。`OffscreenCanvas` が無ければ null
- * （画素を返し、メインスレッドが canvas で JPEG にする）。
- */
-async function encodeJpeg(width: number, height: number, rgba: ArrayBuffer, quality: number): Promise<ArrayBuffer | null> {
-  if (typeof OffscreenCanvas === "undefined") return null;
-  const canvas = new OffscreenCanvas(width, height);
-  const context = canvas.getContext("2d");
-  if (!context) return null;
-  context.putImageData(new ImageData(new Uint8ClampedArray(rgba), width, height), 0, 0);
-  const blob = await canvas.convertToBlob({ type: "image/jpeg", quality: quality / 100 });
-  return blob.arrayBuffer();
-}
 
 /**
  * 開く入力の bytes の SHA-256（#129。同じ写真を開き直したときに保っている写真を使い回す鍵）。`crypto.subtle` が無い（安全でない
@@ -65,6 +53,26 @@ function createAnalysisHelper(receive: (response: DevelopAnalysisHelperResponse 
   }
 }
 
+/**
+ * 予算に収まらない書き出しを描く使い捨ての worker（#155）をこの worker の中に作る。応答を `receive` に渡し、読み込めない・落ちたら
+ * null を渡す。作れなければ null（持つ物を手放してこの worker で描く）。殻は別のファイル（自分自身を入れ子に起こすと bundler が
+ * 循環させるおそれがある）。
+ */
+function createExportWorker(receive: (response: DevelopEngineWorkerResponse | null) => void): DevelopEngineExportWorker | null {
+  try {
+    const worker = new Worker(new URL("./develop-engine-export.worker.ts", import.meta.url), { type: "module" });
+    worker.addEventListener("message", (event: MessageEvent<DevelopEngineWorkerResponse>) => receive(event.data));
+    worker.addEventListener("error", () => receive(null));
+    worker.addEventListener("messageerror", () => receive(null));
+    return {
+      post: (message, transfer) => worker.postMessage(message, transfer),
+      terminate: () => worker.terminate(),
+    };
+  } catch {
+    return null;
+  }
+}
+
 const analysisStore = createBrowserDevelopAnalysisStore();
 const nativeAnalysisStore = createNativeDevelopAnalysisStore();
 
@@ -82,12 +90,12 @@ const handler = createDevelopEngineWorkerHandler({
   // Chrome のメイン画面からも Worker の時間と Wasm 容量を読めるようにする。
   // 診断フラグがないと handler はこの口を呼ばない。
   logPerf: (record) => scope.postMessage({ type: "perf", id: 0, record }, []),
-  encodeJpeg,
+  encodeJpeg: encodeJpegInWorker,
   digest,
   ...(analysisStore ? { analysisStore } : {}),
   ...(nativeAnalysisStore ? { nativeAnalysisStore } : {}),
-  // worker の中で Worker を使えない環境（古い WebKit など）は今までどおり描画の worker で先回りを作る
-  ...(typeof Worker === "function" ? { createAnalysisHelper } : {}),
+  // worker の中で Worker を使えない環境（古い WebKit など）は今までどおり描画の worker で先回りを作り、書き出しもここで描く
+  ...(typeof Worker === "function" ? { createAnalysisHelper, createExportWorker } : {}),
 });
 
 scope.addEventListener("message", (event) => {

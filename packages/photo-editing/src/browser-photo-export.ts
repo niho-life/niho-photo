@@ -6,6 +6,7 @@ import {
   BROWSER_PHOTO_EXPORT_LONG_EDGE,
   BROWSER_PHOTO_WORKING_COPY_LONG_EDGE,
 } from "./browser-photo-source";
+import { developRenderMemoryBytes } from "./develop-engine/develop-engine-memory-budget";
 import { hasDevelopHeal } from "./develop-engine/develop-heal";
 import { hasActiveDevelopLens } from "./develop-engine/develop-lens";
 import { isActiveDevelopMask, readDevelopMasks } from "./develop-engine/develop-masks";
@@ -102,28 +103,30 @@ export function browserPhotoExportChoice(
  */
 export const BROWSER_PHOTO_EXPORT_LARGE_MOBILE_MAX_BYTES = 512 * 1024 * 1024;
 /**
- * 「大きく」の書き出しの wasm のメモリの、書き出す画の 1 画素あたりの bytes。補正の無い描画と、補正ごとの足し（Studio・Node の実測:
- * 24MP の JPEG を長辺 4096〔4096×2731〕で描いて、露光量・コントラストだけで 213MB、マスク 3 枚・修復・レンズ・遠近・ディテールで
- * 1,284MB。補正ごとの割り振りは Mac の原寸の実測〔niho-photo#132〕の比。どちらの実測も下回らない）。
+ * 「大きく」の書き出しの wasm のメモリの見積もり（bytes）。`size` は書き出す画の寸法。マスクは画を変えるものを 8 枚まで数える。
+ * 1 画素あたりの係数は Worker の予算と同じ（`develop-engine-memory-budget.ts`。#134 の実測に #155 のノイズ軽減の分を足した）。
  */
-const LARGE_WASM_BYTES_PER_PIXEL = 21;
-const LARGE_WASM_MASK_BYTES_PER_PIXEL = 10;
-const LARGE_WASM_DETAIL_BYTES_PER_PIXEL = 30;
-const LARGE_WASM_GEOMETRY_BYTES_PER_PIXEL = 15;
-const LARGE_WASM_HEAL_BYTES_PER_PIXEL = 11;
-const LARGE_WASM_LENS_BYTES_PER_PIXEL = 15;
-
-/** 「大きく」の書き出しの wasm のメモリの見積もり（bytes）。`size` は書き出す画の寸法。マスクは画を変えるものを 8 枚まで数える。 */
 export function browserPhotoExportLargeWasmBytes(settings: unknown, size: { width: number; height: number }): number {
-  const masks = Math.min(8, readDevelopMasks(settings).filter(isActiveDevelopMask).length);
   const detail =
-    typeof settings === "object" && settings !== null && (settings as { detail?: unknown }).detail != null;
-  let perPixel = LARGE_WASM_BYTES_PER_PIXEL + LARGE_WASM_MASK_BYTES_PER_PIXEL * masks;
-  if (detail) perPixel += LARGE_WASM_DETAIL_BYTES_PER_PIXEL;
-  if (hasDevelopGeometry(settings)) perPixel += LARGE_WASM_GEOMETRY_BYTES_PER_PIXEL;
-  if (hasDevelopHeal(settings)) perPixel += LARGE_WASM_HEAL_BYTES_PER_PIXEL;
-  if (hasActiveDevelopLens(settings)) perPixel += LARGE_WASM_LENS_BYTES_PER_PIXEL;
-  return perPixel * Math.max(0, size.width) * Math.max(0, size.height);
+    typeof settings === "object" && settings !== null ? (settings as { detail?: unknown }).detail : undefined;
+  const detailRecord = typeof detail === "object" && detail !== null ? (detail as Record<string, unknown>) : null;
+  const colorNoiseReduction =
+    typeof settings === "object" && settings !== null
+      ? (settings as { colorNoiseReduction?: unknown }).colorNoiseReduction
+      : undefined;
+  return developRenderMemoryBytes(
+    {
+      masks: readDevelopMasks(settings).filter(isActiveDevelopMask).length,
+      detail: detail != null,
+      noiseReduction: [colorNoiseReduction, detailRecord?.luminanceNoiseReduction, detailRecord?.colorNoiseReduction].some(
+        (value) => typeof value === "number" && value > 0,
+      ),
+      geometry: hasDevelopGeometry(settings),
+      heal: hasDevelopHeal(settings),
+      lens: hasActiveDevelopLens(settings),
+    },
+    size,
+  );
 }
 
 /**
