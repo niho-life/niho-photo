@@ -121,7 +121,10 @@ function budgetGlue(options: { memory?: WebAssembly.Memory; transfer?: boolean }
     convertEditSettings: vi.fn(),
     Developer: options.transfer ? TransferDeveloper : FakeDeveloper,
     imageSize: vi.fn(() => ({ width: 6000, height: 4000 })),
-    rasterDecodeSize: vi.fn(() => 4096),
+    // 切り抜かない書き出しと同じ（要求の長辺。0 は上限）。切り抜いた場合は試験ごとに大きい値を返す
+    rasterDecodeSize: vi.fn((_settingsJson: string, _width: number, _height: number, maxDimension: number, cap: number) =>
+      maxDimension > 0 ? Math.min(maxDimension, cap) : cap,
+    ),
     geometryOutputSize: vi.fn(() => ({ width: 1, height: 1 })),
     beforeSettings: vi.fn((settingsJson: string) => settingsJson),
   };
@@ -428,6 +431,24 @@ describe("Worker の物理メモリの予算（#155）", () => {
       expect(logPerf).toHaveBeenCalledWith(expect.objectContaining({ stage: "exportWorker", status: "error" }));
     },
   );
+
+  it("切り抜いた JPEG は切り抜きが届く大きさでデコードするので、見積もりもその大きさで数える", async () => {
+    const exportWorkers = fakeExportWorkers();
+    const { handler, posted, glue } = setup({ exportWorkers });
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await holdTwoPhotos(handler);
+
+    // 切り抜かない: 6000×4000 を補正全部入りで長辺 2048（421MiB）は、開いている写真と合わせて 1GiB に収まる → 同じ Worker
+    await handler(exportOneShot(20, 2048, FULL));
+    expect(exportWorkers.create).not.toHaveBeenCalled();
+
+    // 中央の半分を切り抜くと、長辺 2048 に届くよう 4096 でデコードする（1,685MiB）→ 使い捨ての worker
+    glue.module.rasterDecodeSize.mockReturnValueOnce(4096);
+    await handler(exportOneShot(21, 2048, FULL));
+    expect(glue.module.rasterDecodeSize).toHaveBeenLastCalledWith(FULL, 6000, 4000, 2048, 4096);
+    expect(exportWorkers.create).toHaveBeenCalledTimes(1);
+    expect(resultBytes(posted, 21)).toEqual(await referenceBytes(exportOneShot(21, 2048, FULL)));
+  });
 
   it("予算に収まる書き出しは同じ Worker で描き、2048 でも 4096 でも持つ物を手放さない", async () => {
     const exportWorkers = fakeExportWorkers();

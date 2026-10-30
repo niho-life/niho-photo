@@ -486,9 +486,10 @@
         "Issue #151 と #155 の Worker 変更を main に統合し画素の契約を維持",
         "Issue #151 のスレッド版選択と #155 の cache 予算を同じ Worker に統合",
         "Issue #155: 解析再利用と共有メモリ予算の変更を統合",
-        "Issue #155: 編集・見本・大きな書き出しが分け合う物理メモリ予算（実測の bytes と破棄の順・使い捨ての書き出し worker）"
+        "Issue #155: 編集・見本・大きな書き出しが分け合う物理メモリ予算（実測の bytes と破棄の順・使い捨ての書き出し worker）",
+        "Issue #155: 切り抜いた JPEG / PNG の書き出しを、切り抜きが届くデコードの大きさで見積もる"
       ],
-      "outputSha256": "9ee2dcea6c0c7e4bf77cdbfa8804f2b5fb24fb3f046c91c23cc6d1c7c8b2fd24"
+      "outputSha256": "51e0d8f3e8f3961c469b5441a8629787a5991f0192e64f0d35860d6750d607af"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -12001,7 +12002,7 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-memory-budget.test.ts",
-      "sha256": "553a3a1ed24e24e9d980575f674b74cfaa4e7432f3dd9d817e3be5617371853f",
+      "sha256": "3e1db53b2a58b53f4ad58876a9c057a8d16f4bdffdbac9f178464a1b02dd1875",
       "origin": "公開 Issue #155 のため追加。編集・見本・大きな書き出しが分け合う物理メモリ予算の実装・試験・計測・説明に使う公開リポジトリ内のコード（packages/photo-editing/src/develop-engine/develop-engine-worker-core-memory-budget.test.ts）。実写真・非公開情報を含まない。"
     },
     {

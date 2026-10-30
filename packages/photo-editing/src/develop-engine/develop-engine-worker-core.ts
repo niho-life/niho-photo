@@ -931,15 +931,39 @@ function workingCopyExportMemoryBytes(png: ArrayBuffer, settingsJson: string, ma
   return developExportMemoryBytes(load, { ...workingCopySize(png), workingCopy: true }, maxDimension);
 }
 
-/** JPEG / PNG の書き出し 1 回の見積もり（#155。原本の大きさが読めなければ、書き出しの長辺〔上限 4096〕の正方形）。 */
+/**
+ * JPEG / PNG の書き出しで原本をデコードする長辺（#155 の見積もり用）。切り抜くと、切り抜きが書き出しの大きさに届くよう大きく
+ * デコードして描く（`rasterDecodeSize`）。幾何の口が無ければ書き出しの長辺、原本の大きさや結果が読めなければデコードの上限
+ * （多めに倒す）。
+ */
+function oneShotDecodeDimension(
+  glue: DevelopGlue,
+  settingsJson: string,
+  source: { width: number; height: number } | null,
+  maxDimension: number,
+): number {
+  if (!glue.geometry) return maxDimension;
+  if (!source) return ONE_SHOT_DECODE_CAP;
+  try {
+    const value = glue.geometry.rasterDecodeSize(settingsJson, source.width, source.height, maxDimension, ONE_SHOT_DECODE_CAP);
+    return isPositiveInteger(value) ? value : ONE_SHOT_DECODE_CAP;
+  } catch {
+    return ONE_SHOT_DECODE_CAP;
+  }
+}
+
+/**
+ * JPEG / PNG の書き出し 1 回の見積もり（#155）。描く分は原本をデコードする大きさ（{@link oneShotDecodeDimension}）で数える。
+ * 原本の大きさが読めなければ、その長辺の正方形。
+ */
 function oneShotExportMemoryBytes(
   source: { width: number; height: number } | null,
   settingsJson: string,
-  maxDimension: number,
+  decodeDimension: number,
 ): number {
-  const fallback = maxDimension > 0 ? Math.min(maxDimension, ONE_SHOT_DECODE_CAP) : ONE_SHOT_DECODE_CAP;
+  const fallback = decodeDimension > 0 ? Math.min(decodeDimension, ONE_SHOT_DECODE_CAP) : ONE_SHOT_DECODE_CAP;
   const size = source ?? { width: fallback, height: fallback };
-  return developExportMemoryBytes(developRenderLoadFromJson(settingsJson), { ...size, workingCopy: false }, maxDimension);
+  return developExportMemoryBytes(developRenderLoadFromJson(settingsJson), { ...size, workingCopy: false }, decodeDimension);
 }
 
 function readMemoryBuffer(initOutput: unknown): ArrayBufferLike | null {
@@ -2267,7 +2291,8 @@ case "setMaskSurface": {
         case "exportJpeg": {
           const loaded = requireGlue();
           const sourceSize = sourceImageSize(loaded, message.bytes);
-          if (await placeExport(message, oneShotExportMemoryBytes(sourceSize, message.settingsJson, message.maxDimension))) {
+          const decodeDimension = oneShotDecodeDimension(loaded, message.settingsJson, sourceSize, message.maxDimension);
+          if (await placeExport(message, oneShotExportMemoryBytes(sourceSize, message.settingsJson, decodeDimension))) {
             return;
           }
           if (message.surfaces && message.surfaces.length > 0) {
