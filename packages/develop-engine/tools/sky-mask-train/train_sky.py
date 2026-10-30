@@ -49,9 +49,9 @@ def conv_bn(cin: int, cout: int, stride: int = 1) -> nn.Sequential:
 
 
 class SkyNet(nn.Module):
-    def __init__(self, inputs: str = "rgb-ev") -> None:
+    def __init__(self, inputs: str = "rgb-ev", channels: tuple[int, ...] = CH) -> None:
         super().__init__()
-        c1, c2, c3, c4 = CH
+        c1, c2, c3, c4 = channels
         self.stem = nn.Sequential(conv_bn(INPUTS[inputs], c1, 2), conv_bn(c1, c1))  # 1/2
         self.enc2 = nn.Sequential(conv_bn(c1, c2, 2), conv_bn(c2, c2))         # 1/4
         self.enc3 = nn.Sequential(conv_bn(c2, c3, 2), conv_bn(c3, c3))         # 1/8
@@ -239,7 +239,9 @@ def cmd_train(args) -> None:
         raise ValueError("--long must be a multiple of 32 in 384..512")
     if not 0 <= args.wire_aug <= 1:
         raise ValueError("--wire-aug must be a probability")
-    cfg = {"long": args.long, "inputs": args.inputs, "wires": args.wire_aug}
+    if len(args.channels) != 4 or any(c < 8 or c > 128 for c in args.channels):
+        raise ValueError("--channels takes 4 widths in 8..128")
+    cfg = {"long": args.long, "inputs": args.inputs, "wires": args.wire_aug, "channels": args.channels}
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     items = []
@@ -278,7 +280,7 @@ def cmd_train(args) -> None:
             raise ValueError("--sample-weights must map image stems to weights in (0, 100]")
         weights = [float(table.get(img.stem, 1.0)) for img, _ in train]
     dev = torch.device(args.device)
-    net = SkyNet(cfg["inputs"]).to(dev)
+    net = SkyNet(cfg["inputs"], tuple(cfg.get("channels", CH))).to(dev)
     print("parameters", sum(p.numel() for p in net.parameters()), "config", cfg)
     opt = torch.optim.AdamW(net.parameters(), lr=3e-3, weight_decay=1e-4)
     sampler = torch.utils.data.WeightedRandomSampler(weights, len(train)) if weights else None
@@ -342,7 +344,7 @@ def predict_one(net: SkyNet, rgb: np.ndarray, ev: float | None, dev, cfg: dict) 
 def cmd_predict(args) -> None:
     dev = torch.device(args.device)
     cfg = load_config(args.run)
-    net = SkyNet(cfg["inputs"]).to(dev)
+    net = SkyNet(cfg["inputs"], tuple(cfg.get("channels", CH))).to(dev)
     net.load_state_dict(torch.load(args.run / args.weights, map_location=dev))
     net.eval()
     args.out.mkdir(parents=True, exist_ok=True)
@@ -361,7 +363,7 @@ def cmd_predict(args) -> None:
 def cmd_export(args) -> None:
     """Fold BatchNorm into each convolution; write weights.f32 (little endian) + layout.json."""
     cfg = load_config(args.run)
-    net = SkyNet(cfg["inputs"])
+    net = SkyNet(cfg["inputs"], tuple(cfg.get("channels", CH)))
     net.load_state_dict(torch.load(args.run / args.weights, map_location="cpu"))
     net.eval()
     layers, blobs = [], []
@@ -393,7 +395,7 @@ def cmd_export(args) -> None:
     add("head", net.head, None, False)
     data = np.concatenate(blobs).astype("<f4")
     (args.run / "weights.f32").write_bytes(data.tobytes())
-    (args.run / "layout.json").write_text(json.dumps({"long": cfg["long"], "inputs": cfg["inputs"], "channels": CH, "floats": int(data.size),
+    (args.run / "layout.json").write_text(json.dumps({"long": cfg["long"], "inputs": cfg["inputs"], "channels": list(cfg.get("channels", CH)), "floats": int(data.size),
                                                       "layers": layers}, indent=1))
     read = {name: sha256(args.run / name) for name in (args.weights, "config.json", "run.json") if (args.run / name).exists()}
     (args.run / "export.json").write_text(json.dumps({
@@ -416,6 +418,7 @@ def main() -> None:
     t.add_argument("--long", type=int, default=384, help="model long edge, multiple of 32 in 384..512")
     t.add_argument("--seed", type=int, default=0)
     t.add_argument("--sample-weights", type=Path, help="JSON object: image stem -> sampling weight (default 1)")
+    t.add_argument("--channels", type=int, nargs=4, default=list(CH), help="widths of the 4 levels")
     t.add_argument("--wire-aug", type=float, default=0.0, help="probability of drawing synthetic wires on a training photo")
     t.add_argument("--device", default="mps")
     t.add_argument("--validation-ids", type=Path, help="JSON array of image stems from distinct capture groups")
