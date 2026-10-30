@@ -1,6 +1,16 @@
 import type { DevelopAnalysisHelper, DevelopAnalysisHelperResponse } from "./develop-engine-analysis-worker-core";
 import { parseDevelopEngineManifest } from "./develop-engine-manifest";
 import type { DevelopAnalysisStore } from "./develop-engine-analysis-store";
+import {
+  analysisAheadMemoryBytes,
+  analysisHelperMemoryBytes,
+  DEVELOP_MEMORY_BUDGET,
+  developerMemoryBytes,
+  developExportMemoryBytes,
+  developRenderLoadFromJson,
+  thumbnailSessionMemoryBytes,
+  type DevelopMemoryDeviceClass,
+} from "./develop-engine-memory-budget";
 
 /**
  * 段 2 の wasm を動かす Web Worker の中身（移行元設計。移行時の設計文書「段 2」）。テストできるよう、
@@ -13,7 +23,7 @@ import type { DevelopAnalysisStore } from "./develop-engine-analysis-store";
  * - `open` は 1 回デコードして持つ（`Developer`）。前の写真は手放す。`render` はそれで描き、`exportJpeg` は持っている写真を
  *   変えずに別の bytes から描く（記事用の画像・書き出し）
  * - 同じ写真の使い回し（#129）: `digest` があれば、開く入力（開き方と bytes の SHA-256）を鍵に、手放した写真（`open` /
- *   `openWorkingCopy` で替えた・`close` した）を開いている写真と合わせて {@link HELD_PHOTO_LIMIT} 枚まで保つ。同じ鍵をもう一度開くと
+ *   `openWorkingCopy` で替えた・`close` した）を開いている写真と合わせて予算の `heldPhotos` 枚まで保つ。同じ鍵をもう一度開くと
  *   デコード・解析・cube・master を作り直さずにそれを使う（面は外し、新しく開いたのと同じく面を持たずに始める）。保つ前に見本用の
  *   session と先に作った別の設定の解析は手放す（メモリ）。新しい写真をデコードする前に古いほうから手放す。保っている間も描いた
  *   画素は同じ（engine の cache は鍵が同じときだけ使う）
@@ -30,6 +40,16 @@ import type { DevelopAnalysisStore } from "./develop-engine-analysis-store";
  *   作れない・失敗した・取り込めなかったら、その写真ではこの worker で `Developer.prepareAnalysis` で作る（#129 の先回り。動き出すと
  *   止められない）。compact bytes は Developer と分けた bounded LRU に残し、Developer eviction 後も同じ写真・解析設定の描画直前に
  *   import する。不一致・壊れた bytes・未対応 glue は捨てて通常の再計算へ戻る
+ * - 物理メモリの予算（#155。`develop-engine-memory-budget.ts`）: 持つ物（開いている写真・保つ写真・見本の session・先回りの解析・
+ *   JS に置いた解析の bytes・動いている補助の worker）を bytes で見積もり、新しい写真をデコードする前・見本の session を作る前・
+ *   保つ写真や解析の bytes を足した後に、上限（`totalBytes - exportReserveBytes`。wasm の高水位が既に上がっていればそこまで）を
+ *   超える間だけ、見本の session → 開いている写真の先回りの解析 → 保つ写真（古い順）→ 解析の bytes（古い順）の順に手放す。
+ *   開いている写真は手放さない。補助の worker は高水位と合わせて `totalBytes` に収まるときだけ作り、この worker で先回りを作る・
+ *   補助の worker の結果を取り込むのは何も手放さずに収まるときだけにする
+ * - 書き出しの置き場所（#155）: 書き出し 1 回の見積もりが、wasm の高水位・開いている写真・解析の bytes と合わせて `totalBytes` を
+ *   超え、端末の予算が `overflow: "worker"`（PC）なら、使い捨ての worker（`createExportWorker`。`init` の `disposable: true` で
+ *   単一スレッドの wasm を起こす）で描いて終わらせる（持つ物は手放さない）。使い捨ての worker が作れない・起きない・失敗したら、
+ *   持つ物を全部手放してこの worker で描く。それ以外はこの worker で、収まるまで手放してから描く。どこで描いても画素は同じ
  * - `openWorkingCopy` は作業コピー（16bit PNG とメタデータの JSON。RAW など、移行元設計）を開いて持つ（`open` と同じく前の写真は
  *   手放す。作業コピーは長辺 2560px のまま持ち、描く大きさは `render` で決める）。`exportWorkingCopyJpeg` は持っている写真を
  *   変えずに、別の作業コピーを一時的に開いて丁寧に描き（final）、`OffscreenCanvas` で JPEG にする（sRGB・撮影情報なし）。
@@ -91,8 +111,13 @@ export type DevelopEngineWorkerRequest =
       manifestUrl: string;
       diagnostics?: boolean;
       preferNative?: boolean;
-      /** 同じ論理メモリ予算の端末別 profile。省略は既存互換の PC。 */
+      /** 物理メモリの予算の端末別 profile（#155）。省略は既存互換の PC。 */
       deviceClass?: DevelopEngineDeviceClass;
+      /**
+       * 大きな書き出しを 1 回だけ描く使い捨ての worker（#155）。`preferNative` を無視して単一スレッドの wasm を起こし、補助の
+       * worker・解析の保存先・使い捨ての worker を使わない
+       */
+      disposable?: boolean;
     }
   | { type: "open"; id: number; bytes: ArrayBuffer; workingMaxDimension: number }
   | { type: "render"; id: number; settingsJson: string; maxDimension: number; interactive: boolean }
@@ -277,12 +302,23 @@ export type DevelopEngineWorkerDeps = {
    * `Worker` が使えない）・null を返したら、今までどおりこの worker で作る
    */
   createAnalysisHelper?: (receive: (response: DevelopAnalysisHelperResponse | null) => void) => DevelopAnalysisHelper | null;
+  /**
+   * 予算に収まらない書き出しを描く使い捨ての worker を作る（#155。同じ Worker の中身を `disposable: true` で起こす）。応答を
+   * `receive` に渡し、読み込めない・落ちたら null を渡す。省略・null を返したら、持つ物を手放して同じ Worker で描く
+   */
+  createExportWorker?: (receive: (response: DevelopEngineWorkerResponse | null) => void) => DevelopEngineExportWorker | null;
+};
+
+/** 使い捨ての書き出しの worker（#155。1 回描いたら terminate する）。 */
+export type DevelopEngineExportWorker = {
+  post: (message: DevelopEngineWorkerRequest, transfer: Transferable[]) => void;
+  terminate: () => void;
 };
 
 export type DevelopEngineRuntime = "native" | "wasm" | "wasm-threads";
 
-/** Worker が cache の論理メモリ予算を選ぶ端末 class。client が明示して init に渡す。 */
-export type DevelopEngineDeviceClass = "pc" | "mobile";
+/** Worker が物理メモリの予算を選ぶ端末 class（#155）。client が明示して init に渡す。 */
+export type DevelopEngineDeviceClass = DevelopMemoryDeviceClass;
 
 export type DevelopEnginePerfRecord = {
   stage:
@@ -300,7 +336,9 @@ export type DevelopEnginePerfRecord = {
     | "autoSettings"
     | "prepareAnalysis"
     /** 補助の worker が作った解析を取り込んだ（#155） */
-    | "importAnalysis";
+    | "importAnalysis"
+    /** 使い捨ての worker で書き出した（起こしてから結果が届くまでの往復。#155） */
+    | "exportWorker";
   durationMs: number;
   wasmMemoryBytes: number | null;
   status: "ok" | "error";
@@ -346,10 +384,12 @@ const ONE_SHOT_DECODE_CAP = 4096;
 const PRESET_THUMBNAIL_SESSION_MAX_DIMENSION = 256;
 
 /**
- * 1 つの Worker が持つ写真の `Developer` の数（開いている 1 枚と、直前に開いていた 1 枚。#129）。新しい写真をデコードする前に、
- * 古いほうから手放してこの数に収める。
+ * 作業コピーの PNG から大きさを読めないときの見積もりの長辺（作業コピーは長辺 2560px で作る。#155 の見積もりを多めに倒す）。
  */
-const HELD_PHOTO_LIMIT = 2;
+const WORKING_COPY_FALLBACK_DIMENSION = 2560;
+
+/** 使い捨ての書き出しの worker が `ready` を返すまで待つ時間（Client 全体の初期化期限と同じ。#155）。 */
+const EXPORT_WORKER_READY_TIMEOUT_MS = 20_000;
 
 /**
  * Developer と分けて持つ compact 解析 bytes の上限。1 件が 16 MiB を超えたら保持せず、4 件・32 MiB のどちらかを超えたら
@@ -359,24 +399,6 @@ const HELD_PHOTO_LIMIT = 2;
 const ANALYSIS_BYTES_ENTRY_LIMIT = 16 * 1024 * 1024;
 const ANALYSIS_BYTES_TOTAL_LIMIT = 32 * 1024 * 1024;
 const ANALYSIS_BYTES_COUNT_LIMIT = 4;
-
-/** この長辺を超える書き出しだけ、予約済みの一時 Developer を開く前に安価な cache を先に手放す。 */
-const LARGE_EXPORT_MAX_DIMENSION = 2048;
-
-/**
- * #155 第2段階の部分実装として、Worker の cache が分け合う論理メモリ予算。unit は実測 RSS や Wasm linear memory の byte 数では
- * なく、解放順を決めるための重み。物理メモリの hard limit、端末 RAM に応じた動的見積もり、プロセス RSS の減少保証ではない。
- * Developer の中身は入力・engine・runtime で変わるため精密な byte 数とは扱わない。compact 解析だけは保持 byte 数を 4 MiB ごとに
- * 1 unit として数える。Wasm memory の `byteLength` は allocator の高水位で、free 後にすぐ縮まらないため予算の現在量には使わない。
- *
- * PC 33 unit: active 8 + kept 8 + export reserve 8 + analysis 8 (32 MiB) + thumbnail 1。
- * mobile 21 unit: active 8 + export reserve 8 + analysis 4 (16 MiB) + thumbnail 1。次の active を確保する前に kept を捨てる。
- */
-const LOGICAL_MEMORY_UNIT_BYTES = 4 * 1024 * 1024;
-const DEVELOPER_MEMORY_UNITS = 8;
-const THUMBNAIL_MEMORY_UNITS = 1;
-const EXPORT_DEVELOPER_RESERVE_UNITS = DEVELOPER_MEMORY_UNITS;
-const LOGICAL_MEMORY_BUDGET: Readonly<Record<DevelopEngineDeviceClass, number>> = { pc: 33, mobile: 21 };
 
 /** wasm-bindgen / native が明示した allocation failure だけを 1 回再試行する。一般の RangeError や decode error は含めない。 */
 function isDevelopAllocationFailure(error: unknown): boolean {
@@ -417,12 +439,24 @@ type CurrentOpenInput =
   | { kind: "raster"; bytes: ArrayBuffer; workingMaxDimension: number }
   | { kind: "workingCopy"; png: ArrayBuffer; metaJson: string };
 
-/** 動いている補助の worker（#155。開いている写真に 1 つ）と、結果を待っている 1 件（取り込みが終わるまで）。 */
+/**
+ * 動いている補助の worker（#155。開いている写真に 1 つ）と、結果を待っている 1 件（取り込みが終わるまで）、作ったときの見積もり
+ * （写真の寸法の {@link analysisHelperMemoryBytes}）。
+ */
 type AnalysisHelperState = {
   developer: DevelopDeveloper;
   helper: DevelopAnalysisHelper | null;
   waiting: { id: number; key: string | null } | null;
+  memoryBytes: number;
 };
+
+/** 書き出しの要求（#155 の置き場所を決める）。 */
+type DevelopExportRequest = Extract<DevelopEngineWorkerRequest, { type: "exportJpeg" | "exportWorkingCopyJpeg" }>;
+
+/** 書き出しの結果（使い捨ての worker から受け取り、元の id に替えて送る）。 */
+type DevelopExportResult =
+  | { type: "jpeg"; bytes: ArrayBuffer }
+  | { type: "frame"; width: number; height: number; rgba: ArrayBuffer };
 
 /** 作業コピーのメタデータが signed RAW か（H/S の解析を先に作れるのはこれだけ。#155 の補助の worker はこのときだけ使う）。 */
 function isSignedRawWorkingCopy(metaJson: string): boolean {
@@ -850,6 +884,88 @@ function readSize(value: unknown): { width: number; height: number } {
   return { width, height };
 }
 
+/** 作業コピーの PNG の IHDR の幅・高さ（byte 16..23・big endian。#155 の見積もり用。読めなければ null）。 */
+function workingCopyPngSize(png: ArrayBuffer): { width: number; height: number } | null {
+  if (png.byteLength < 24) return null;
+  const view = new DataView(png);
+  // "IHDR"（byte 12..15）が先頭の chunk でなければ読まない
+  if (view.getUint32(12) !== 0x49484452) return null;
+  const width = view.getUint32(16);
+  const height = view.getUint32(20);
+  return width > 0 && height > 0 ? { width, height } : null;
+}
+
+/** JPEG / PNG の原本の向きを反映した大きさ（幾何の口の `imageSize`。#155 の見積もり用。口が無い・読めなければ null）。 */
+function sourceImageSize(glue: DevelopGlue, bytes: ArrayBuffer): { width: number; height: number } | null {
+  if (!glue.geometry) return null;
+  try {
+    return readSize(glue.geometry.imageSize(new Uint8Array(bytes)));
+  } catch {
+    return null;
+  }
+}
+
+/** 作業コピーの大きさ（PNG の IHDR。読めなければ長辺 2560px の正方形）。 */
+function workingCopySize(png: ArrayBuffer): { width: number; height: number } {
+  return workingCopyPngSize(png) ?? { width: WORKING_COPY_FALLBACK_DIMENSION, height: WORKING_COPY_FALLBACK_DIMENSION };
+}
+
+/**
+ * これから開く JPEG / PNG の見積もり（#155。デコードする前に空ける分）。作業サイズ（0 は一発の書き出しと同じ上限）の正方形で多めに
+ * 見積もる（大きさを読むと native では sidecar への往復が 1 回増えるので読まない。開いた後は実際の大きさで数える）。
+ */
+function rasterOpenMemoryBytes(workingMaxDimension: number): number {
+  const cap = workingMaxDimension > 0 ? workingMaxDimension : ONE_SHOT_DECODE_CAP;
+  return developerMemoryBytes(cap, cap);
+}
+
+/** これから開く作業コピーの見積もり（#155）。 */
+function workingCopyOpenMemoryBytes(png: ArrayBuffer): number {
+  const size = workingCopySize(png);
+  return developerMemoryBytes(size.width, size.height);
+}
+
+/** 作業コピーの書き出し 1 回の見積もり（#155。開いて持つ分も入る）。 */
+function workingCopyExportMemoryBytes(png: ArrayBuffer, settingsJson: string, maxDimension: number): number {
+  const load = developRenderLoadFromJson(settingsJson);
+  return developExportMemoryBytes(load, { ...workingCopySize(png), workingCopy: true }, maxDimension);
+}
+
+/**
+ * JPEG / PNG の書き出しで原本をデコードする長辺（#155 の見積もり用）。切り抜くと、切り抜きが書き出しの大きさに届くよう大きく
+ * デコードして描く（`rasterDecodeSize`）。幾何の口が無ければ書き出しの長辺、原本の大きさや結果が読めなければデコードの上限
+ * （多めに倒す）。
+ */
+function oneShotDecodeDimension(
+  glue: DevelopGlue,
+  settingsJson: string,
+  source: { width: number; height: number } | null,
+  maxDimension: number,
+): number {
+  if (!glue.geometry) return maxDimension;
+  if (!source) return ONE_SHOT_DECODE_CAP;
+  try {
+    const value = glue.geometry.rasterDecodeSize(settingsJson, source.width, source.height, maxDimension, ONE_SHOT_DECODE_CAP);
+    return isPositiveInteger(value) ? value : ONE_SHOT_DECODE_CAP;
+  } catch {
+    return ONE_SHOT_DECODE_CAP;
+  }
+}
+
+/**
+ * JPEG / PNG の書き出し 1 回の見積もり（#155）。描く分は原本をデコードする大きさ（{@link oneShotDecodeDimension}）で数える。
+ * 原本の大きさが読めなければ、その長辺の正方形。
+ */
+function oneShotExportMemoryBytes(
+  source: { width: number; height: number } | null,
+  settingsJson: string,
+  decodeDimension: number,
+): number {
+  const fallback = decodeDimension > 0 ? Math.min(decodeDimension, ONE_SHOT_DECODE_CAP) : ONE_SHOT_DECODE_CAP;
+  const size = source ?? { width: fallback, height: fallback };
+  return developExportMemoryBytes(developRenderLoadFromJson(settingsJson), { ...size, workingCopy: false }, decodeDimension);
+}
+
 function readMemoryBuffer(initOutput: unknown): ArrayBufferLike | null {
   if (!isRecord(initOutput)) return null;
   const memory = initOutput.memory;
@@ -924,10 +1040,13 @@ export function createDevelopEngineWorkerHandler(
   let wasmMemory: () => ArrayBufferLike | null = () => null;
   let diagnostics = false;
   let deviceClass: DevelopEngineDeviceClass = "pc";
+  // 大きな書き出しを 1 回だけ描く使い捨ての worker として起こされた（#155）
+  let disposable = false;
   let unavailableReason: string | null = null;
   let developer: DevelopDeveloper | null = null;
-  // 開いている写真の見本用の session（初めて見本を描くときに作る。写真を手放すと一緒に手放す）
+  // 開いている写真の見本用の session（初めて見本を描くときに作る。写真を手放すと一緒に手放す）と、作ったときの見積もり（#155）
   let thumbnailSession: DevelopDeveloper | null = null;
+  let thumbnailSessionBytes = 0;
   // 開いている写真の `Developer` に渡した面の PNG（見本用の session にも渡すため。写真を手放すと捨てる）と、見本用の session に渡した面
   const heldSurfaces = new Map<string, Uint8Array>();
   const thumbnailSurfaces = new Set<string>();
@@ -951,6 +1070,9 @@ export function createDevelopEngineWorkerHandler(
   let analysisAhead: { developer: DevelopDeveloper; settingsJson: string } | null = null;
   let analysisTimer: ReturnType<typeof setTimeout> | null = null;
   const preparedAnalyses = new WeakMap<DevelopDeveloper, Set<string>>();
+  // 先に作った別の設定の解析を持っている（かもしれない）写真（#155 の見積もり。この worker の `prepareAnalysis`・補助の worker の
+  // 結果の取り込み・描く解析の鍵の替わり〔Session は前の解析を 1 件横に置く〕で入れ、`releaseAnalysisAhead`・free で外す）
+  const analysisAheadHeld = new WeakSet<DevelopDeveloper>();
   // 先回りを補助の worker で作る（#155）: 開いている写真を開いた入力の写し（補助の worker に渡すまで）、動いている補助の worker、
   // 補助の worker で作れなかった写真（この worker で作る）、補助の worker に読ませる manifest
   let analysisSource: { developer: DevelopDeveloper; png: ArrayBuffer; metaJson: string } | null = null;
@@ -964,8 +1086,11 @@ export function createDevelopEngineWorkerHandler(
   const analysisBytesId = (photoKey: string, analysisKey: string): string =>
     JSON.stringify([version, photoKey, analysisKey]);
 
-  const activeAnalysisStore = (): DevelopAnalysisStore | undefined =>
-    runtime === "native" ? deps.nativeAnalysisStore ?? deps.analysisStore : deps.analysisStore;
+  const activeAnalysisStore = (): DevelopAnalysisStore | undefined => {
+    // 使い捨ての worker は解析を作らないので保存先も使わない（#155）
+    if (disposable) return undefined;
+    return runtime === "native" ? deps.nativeAnalysisStore ?? deps.analysisStore : deps.analysisStore;
+  };
 
   /** meta JSON を保存先の鍵に置かない。入力・版・解析条件をまとめて SHA-256 にする。 */
   const persistentAnalysisId = async (photoKey: string, analysisKey: string): Promise<string | null> => {
@@ -1191,7 +1316,7 @@ export function createDevelopEngineWorkerHandler(
 
   /**
    * 補助の worker の応答。終わらせた補助の worker・待っていない応答は捨てる。解析の bytes は、同じ写真のままなら列に積んで取り込む
-   * （コピーだけ）。取り込みが終わったら次の 1 件へ。
+   * （コピーだけ。何も手放さずに予算に収まらなければ取り込まず、解析の bytes に置くだけ。#155）。取り込みが終わったら次の 1 件へ。
    */
   const receiveAnalysis = (state: AnalysisHelperState, response: DevelopAnalysisHelperResponse | null) => {
     if (analysisHelper !== state) return;
@@ -1211,7 +1336,10 @@ export function createDevelopEngineWorkerHandler(
           try {
             const importer = state.developer.importAnalysis;
             if (typeof importer !== "function") throw new Error("develop engine cannot import analysis");
-            measure("importAnalysis", () => importer.call(state.developer, new Uint8Array(bytes)));
+            if (fitsAnalysisAhead(state.developer)) {
+              measure("importAnalysis", () => importer.call(state.developer, new Uint8Array(bytes)));
+              analysisAheadHeld.add(state.developer);
+            }
             cacheAnalysisBytes(currentKey, waiting?.key ?? null, bytes);
           } catch {
             failAnalysisHelper(state);
@@ -1227,7 +1355,8 @@ export function createDevelopEngineWorkerHandler(
 
   /**
    * 先回りの 1 件を補助の worker に頼む。最初の 1 件で補助の worker を作り、入力の写しを渡す（transfer）。頼めたら true（この worker
-   * の列は結果を待たない）。補助の worker を使えない写真・作れなければ false（この worker で作る）。
+   * の列は結果を待たない）。補助の worker を足すと予算の `totalBytes` を超えるときも、その 1 件は作らずに true（この worker で作ると
+   * 描画を止めるので作らない。#155）。補助の worker を使えない写真・作れなければ false（この worker で作る）。
    */
   const requestAnalysis = (
     job: { developer: DevelopDeveloper; settingsJson: string },
@@ -1240,8 +1369,10 @@ export function createDevelopEngineWorkerHandler(
       const source = analysisSource;
       const create = deps.createAnalysisHelper;
       if (!source || source.developer !== job.developer || !create || helperManifestUrl === null) return false;
+      const memoryBytes = analysisHelperMemoryBytes(job.developer.width, job.developer.height);
+      if (physicalBytes() + memoryBytes > memoryBudget().totalBytes) return true;
       endAnalysisHelper();
-      const created: AnalysisHelperState = { developer: job.developer, helper: null, waiting: null };
+      const created: AnalysisHelperState = { developer: job.developer, helper: null, waiting: null, memoryBytes };
       analysisHelper = created;
       let started = false;
       try {
@@ -1282,10 +1413,14 @@ export function createDevelopEngineWorkerHandler(
     }
   };
 
-  /** 補助の worker に渡す入力の写しを持つ（#155。補助の worker を使えない環境・glue・写真では持たない）。 */
+  /** 補助の worker に渡す入力の写しを持つ（#155。補助の worker を使えない環境・glue・写真、使い捨ての worker では持たない）。 */
   const holdAnalysisSource = (opened: DevelopDeveloper, png: ArrayBuffer, metaJson: string) => {
     analysisSource =
-      deps.createAnalysisHelper && glue?.analysisTransfer && !helperFailed.has(opened) && isSignedRawWorkingCopy(metaJson)
+      !disposable &&
+      deps.createAnalysisHelper &&
+      glue?.analysisTransfer &&
+      !helperFailed.has(opened) &&
+      isSignedRawWorkingCopy(metaJson)
         ? { developer: opened, png, metaJson }
         : null;
   };
@@ -1342,7 +1477,10 @@ export function createDevelopEngineWorkerHandler(
           // すでに持っている解析は作らない。補助の worker に頼めたら、この worker の列は待たない（#155）
           if (holdsAnalysis(job.developer, settingsJson)) return;
           if (requestAnalysis(job, settingsJson, key)) return;
+          // この worker で作るのは、何も手放さずに予算に収まるときだけ（#155）
+          if (!fitsAnalysisAhead(job.developer)) return;
           measure("prepareAnalysis", () => job.developer.prepareAnalysis?.(settingsJson));
+          analysisAheadHeld.add(job.developer);
           cacheAnalysisFromDeveloper(job.developer, currentKey, key, settingsJson);
         })
         .catch(() => undefined);
@@ -1352,6 +1490,7 @@ export function createDevelopEngineWorkerHandler(
   };
 
   const freeQuietly = (target: DevelopDeveloper | null) => {
+    if (target) analysisAheadHeld.delete(target);
     try {
       target?.free();
     } catch {
@@ -1362,6 +1501,7 @@ export function createDevelopEngineWorkerHandler(
   const releaseThumbnailSession = () => {
     const current = thumbnailSession;
     thumbnailSession = null;
+    thumbnailSessionBytes = 0;
     thumbnailSurfaces.clear();
     freeQuietly(current);
   };
@@ -1378,24 +1518,74 @@ export function createDevelopEngineWorkerHandler(
     analysisBytesTotal = 0;
   };
 
-  const logicalMemoryUnits = (additionalDeveloperUnits = 0): number =>
-    (developer ? DEVELOPER_MEMORY_UNITS : 0) +
-    kept.length * DEVELOPER_MEMORY_UNITS +
-    (thumbnailSession ? THUMBNAIL_MEMORY_UNITS : 0) +
-    Math.ceil(analysisBytesTotal / LOGICAL_MEMORY_UNIT_BYTES) +
-    // 大きい書き出しを始める前に cache を退避できるよう、一時 Developer 1 つ分は常に予約する。
-    EXPORT_DEVELOPER_RESERVE_UNITS +
-    additionalDeveloperUnits;
+  const memoryBudget = () => DEVELOP_MEMORY_BUDGET[deviceClass];
 
-  /** 安く作り直せる見本 → kept Developer → 高価な compact 解析の順で、現在表示中の Developer は守る。 */
-  function enforceMemoryBudget(additionalDeveloperUnits = 0): void {
+  /** wasm の linear memory の高水位（free しても縮まない。native は 0）。 */
+  const wasmHighWater = (): number => wasmMemory()?.byteLength ?? 0;
+
+  /** 写真 1 枚（開いている・保っている）が持つ bytes の見積もり（先に作った別の設定の解析を持っていればその分も）。 */
+  const photoMemoryBytes = (target: DevelopDeveloper): number =>
+    developerMemoryBytes(target.width, target.height) +
+    (analysisAheadHeld.has(target) ? analysisAheadMemoryBytes(target.width, target.height) : 0);
+
+  /** wasm（native は sidecar）の中に持つ物: 開いている写真・保つ写真・見本の session。 */
+  const wasmHeldBytes = (): number => {
+    let total = (developer ? photoMemoryBytes(developer) : 0) + thumbnailSessionBytes;
+    for (const photo of kept) total += photoMemoryBytes(photo.developer);
+    return total;
+  };
+
+  /**
+   * Worker が持つ物の見積もり（wasm の中の物・JS に置いた解析の bytes）。動いている補助の worker は一時的なので数えず、作るときと
+   * 書き出しの前に `totalBytes` に対して見る（数えると、補助の worker が動いている間は先回りの取り込みを見送ってしまう）。
+   */
+  const heldBytes = (): number => wasmHeldBytes() + analysisBytesTotal;
+
+  /** 動いている補助の worker の見積もり（無ければ 0）。 */
+  const helperBytes = (): number => analysisHelper?.memoryBytes ?? 0;
+
+  /**
+   * いま物理メモリに乗っている量の見積もり（wasm は高水位と持つ物の大きいほう。補助の worker は作り直すときに見るので含めない）。
+   */
+  const physicalBytes = (): number =>
+    (runtime === "native" ? wasmHeldBytes() : Math.max(wasmHighWater(), wasmHeldBytes())) + analysisBytesTotal;
+
+  /** 持つ物の上限（書き出しの空きを残す。wasm で高水位が既に上がっていれば、払った分は使う）。 */
+  const heldLimit = (): number => {
+    const budget = memoryBudget();
+    return Math.max(budget.totalBytes - budget.exportReserveBytes, wasmHighWater());
+  };
+
+  /** 開いている写真に別の設定の解析を 1 件足しても、何も手放さずに上限に収まるか（#155）。 */
+  const fitsAnalysisAhead = (target: DevelopDeveloper): boolean =>
+    heldBytes() + analysisAheadMemoryBytes(target.width, target.height) <= heldLimit();
+
+  /** 開いている写真の先に作った別の設定の解析を手放す（解析の bytes は残るので、次は取り込みで戻る）。 */
+  const releaseActiveAnalysisAhead = () => {
+    if (!developer) return;
+    analysisAheadHeld.delete(developer);
+    try {
+      developer.releaseAnalysisAhead?.();
+    } catch {
+      // 手放せなくても描く画素は同じ（メモリが減らないだけ）
+    }
+  };
+
+  /**
+   * 持つ物と `incoming`（これから足す物の見積もり）が `limit` を超える間、安く作り直せる見本 → 開いている写真の先回りの解析 →
+   * 保つ写真（古い順）→ 高価な解析の bytes（古い順）の順に手放す。開いている写真は手放さない（それでも超えるなら止める）。
+   */
+  function enforceMemoryBudget(incoming = 0, limit = heldLimit()): void {
     if (enforcingMemoryBudget) return;
     enforcingMemoryBudget = true;
     try {
-      const budget = LOGICAL_MEMORY_BUDGET[deviceClass];
-      while (logicalMemoryUnits(additionalDeveloperUnits) > budget) {
+      while (heldBytes() + incoming > limit) {
         if (thumbnailSession) {
           releaseThumbnailSession();
+          continue;
+        }
+        if (developer && analysisAheadHeld.has(developer)) {
+          releaseActiveAnalysisAhead();
           continue;
         }
         if (kept.length > 0) {
@@ -1408,7 +1598,7 @@ export function createDevelopEngineWorkerHandler(
           dropCachedAnalysis(oldestAnalysis);
           continue;
         }
-        // active Developer と export reserve は必須枠。推定 unit を hard allocation limit と誤用して現在表示を捨てない。
+        // 開いている写真は見積もりのために捨てない（足りなければ allocation failure の再試行に任せる）
         break;
       }
     } finally {
@@ -1420,6 +1610,7 @@ export function createDevelopEngineWorkerHandler(
   const releaseRecreatableMemory = () => {
     dropAnalysisAhead();
     releaseThumbnailSession();
+    if (developer) analysisAheadHeld.delete(developer);
     try {
       developer?.releaseAnalysisAhead?.();
     } catch {
@@ -1441,14 +1632,11 @@ export function createDevelopEngineWorkerHandler(
   };
 
   /**
-   * 2048px 以下は export reserve の範囲として cache を保つ。超える場合だけ、安価な thumbnail と kept Developer を一時 Developer より
-   * 先に手放す。kept が持つ解析は compact bytes へ移し、共有予算を超えるか allocation failure が起こるまでは捨てない。
+   * 同じ Worker で書き出しを描く前に、持つ物と書き出しの見積もりが `totalBytes`（wasm の高水位が上ならそこまで）を超える間だけ、
+   * 破棄の順で手放す（#155。長辺によらず、超えなければ大きくても手放さない）。
    */
-  const prepareTemporaryExport = (maxDimension: number) => {
-    if (maxDimension <= LARGE_EXPORT_MAX_DIMENSION) return;
-    releaseThumbnailSession();
-    for (const photo of kept.splice(0)) freeKept(photo);
-    enforceMemoryBudget();
+  const prepareTemporaryExport = (estimate: number) => {
+    enforceMemoryBudget(estimate + helperBytes(), Math.max(memoryBudget().totalBytes, wasmHighWater()));
   };
 
   /** 保っている写真を、開いている写真と合わせて `limit` 枚に収まるまで古いほうから手放す。 */
@@ -1469,7 +1657,7 @@ export function createDevelopEngineWorkerHandler(
   };
 
   /**
-   * 開いている写真を手放す。入力の鍵があれば面を外して保ち（{@link HELD_PHOTO_LIMIT} 枚を超えたら古いほうから手放す）、
+   * 開いている写真を手放す。入力の鍵があれば面を外して保ち（予算の `heldPhotos` 枚を超えたら古いほうから手放す）、
    * 無ければ見本用の session ごと free する。
    */
   const releaseDeveloper = () => {
@@ -1477,6 +1665,7 @@ export function createDevelopEngineWorkerHandler(
     if (current && currentKey !== null) {
       dropHeldSurfaces();
       releaseThumbnailSession();
+      analysisAheadHeld.delete(current);
       try {
         current.releaseAnalysisAhead?.();
       } catch {
@@ -1498,7 +1687,7 @@ export function createDevelopEngineWorkerHandler(
     currentKey = null;
     currentAnalysisKey = null;
     currentAnalysisSettingsJson = null;
-    trimKept(HELD_PHOTO_LIMIT);
+    trimKept(memoryBudget().heldPhotos);
     enforceMemoryBudget();
   };
 
@@ -1515,14 +1704,14 @@ export function createDevelopEngineWorkerHandler(
     const [photo] = index < 0 ? [] : kept.splice(index, 1);
     releaseDeveloper();
     if (!photo) {
-      trimKept(HELD_PHOTO_LIMIT - 1);
+      trimKept(memoryBudget().heldPhotos - 1);
       return false;
     }
     developer = photo.developer;
     currentKey = photo.key;
     currentAnalysisKey = photo.analysisKey;
     currentAnalysisSettingsJson = photo.analysisSettingsJson;
-    trimKept(HELD_PHOTO_LIMIT);
+    trimKept(memoryBudget().heldPhotos);
     return true;
   };
 
@@ -1694,9 +1883,11 @@ export function createDevelopEngineWorkerHandler(
     enableDiagnostics: boolean,
     preferNative: boolean,
     nextDeviceClass: DevelopEngineDeviceClass,
+    nextDisposable: boolean,
   ): Promise<void> => {
     diagnostics = enableDiagnostics;
     deviceClass = nextDeviceClass;
+    disposable = nextDisposable;
     enforceMemoryBudget();
     activeManifestUrl = manifestUrl;
     if (glue) {
@@ -1708,7 +1899,10 @@ export function createDevelopEngineWorkerHandler(
       return;
     }
     try {
-      if (preferNative && deps.createNativeGlue) {
+      if (disposable) {
+        // 使い捨ての worker は単一スレッドの wasm で描く（native の sidecar・thread pool を起こさない。#155）
+        await loadWasm(manifestUrl, false);
+      } else if (preferNative && deps.createNativeGlue) {
         try {
           await loadNative(manifestUrl);
         } catch {
@@ -1825,6 +2019,112 @@ export function createDevelopEngineWorkerHandler(
       }
     });
 
+  /**
+   * 使い捨ての worker で描くか（#155）: wasm で、開いている写真・解析の bytes・動いている補助の worker と書き出しを合わせると、
+   * `totalBytes`（高水位が既に上なら、払った高水位）を超えて高水位を上げてしまい、端末の予算が `overflow: "worker"`（PC）のとき。
+   * native・使い捨ての worker の中・作る口や manifest が無ければ、この worker で描く。
+   */
+  const exportNeedsWorker = (estimate: number): boolean => {
+    if (runtime === "native" || disposable || !deps.createExportWorker || activeManifestUrl === null) return false;
+    const budget = memoryBudget();
+    const minimumHeld =
+      (developer ? developerMemoryBytes(developer.width, developer.height) : 0) + analysisBytesTotal + helperBytes();
+    return budget.overflow === "worker" && minimumHeld + estimate > Math.max(budget.totalBytes, wasmHighWater());
+  };
+
+  /**
+   * 使い捨ての worker を起こして書き出しを 1 回描かせ、結果を受け取る（どの終わり方でも terminate する）。作れない・起きない
+   * （`unavailable`）・`error`・落ちた・`ready` が {@link EXPORT_WORKER_READY_TIMEOUT_MS} 来なければ throw。
+   */
+  const exportInWorker = async (message: DevelopExportRequest): Promise<DevelopExportResult> => {
+    const create = deps.createExportWorker;
+    const manifestUrl = activeManifestUrl;
+    if (!create || manifestUrl === null) throw new Error("develop engine cannot start an export worker");
+    // 応答は届いた順に 1 つずつ受け取る（待つ前に届いた応答は積んでおく）
+    const inbox: (DevelopEngineWorkerResponse | null)[] = [];
+    let deliver: ((response: DevelopEngineWorkerResponse | null) => void) | null = null;
+    const receive = (response: DevelopEngineWorkerResponse | null) => {
+      if (response?.type === "perf") return;
+      const waiting = deliver;
+      deliver = null;
+      if (waiting) waiting(response);
+      else inbox.push(response);
+    };
+    const nextResponse = (timeoutMs?: number) =>
+      new Promise<DevelopEngineWorkerResponse | null>((resolve) => {
+        if (inbox.length > 0) {
+          resolve(inbox.shift() ?? null);
+          return;
+        }
+        let timer: ReturnType<typeof setTimeout> | undefined;
+        deliver = (response) => {
+          if (timer !== undefined) clearTimeout(timer);
+          resolve(response);
+        };
+        if (timeoutMs !== undefined) {
+          timer = setTimeout(() => {
+            deliver = null;
+            resolve(null);
+          }, timeoutMs);
+        }
+      });
+    let worker: DevelopEngineExportWorker | null = null;
+    try {
+      worker = create(receive);
+      if (!worker) throw new Error("develop engine cannot start an export worker");
+      worker.post({ type: "init", id: 1, manifestUrl, disposable: true, deviceClass }, []);
+      const ready = await nextResponse(EXPORT_WORKER_READY_TIMEOUT_MS);
+      if (ready?.type !== "ready") throw new Error("develop engine export worker is unavailable");
+      // 入力は写しを transfer する（元は、使い捨ての worker で描けなかったときにこの worker で描くために残す）。面は structured clone
+      const request: DevelopExportRequest =
+        message.type === "exportJpeg"
+          ? { ...message, id: 2, bytes: message.bytes.slice(0) }
+          : { ...message, id: 2, png: message.png.slice(0) };
+      worker.post(request, [request.type === "exportJpeg" ? request.bytes : request.png]);
+      const response = await nextResponse();
+      if (response?.type === "jpeg" && response.id === 2) return { type: "jpeg", bytes: response.bytes };
+      if (response?.type === "frame" && response.id === 2) {
+        return { type: "frame", width: response.width, height: response.height, rgba: response.rgba };
+      }
+      throw new Error("develop engine export worker failed");
+    } finally {
+      try {
+        worker?.terminate();
+      } catch {
+        // 終わらせられなくても、結果は送る（描けなかったらこの worker で描く）
+      }
+    }
+  };
+
+  /**
+   * 書き出し 1 回の置き場所を決める（#155）。使い捨ての worker で描けたら、結果を元の id で送って true（持つ物は手放さない）。
+   * この worker で描くなら false: 持つ物と見積もりが予算に収まるまで手放す。使い捨ての worker で描けなかったら、持つ物を全部
+   * 手放す（allocation failure の再試行と同じ）。
+   */
+  const placeExport = async (message: DevelopExportRequest, estimate: number): Promise<boolean> => {
+    if (!exportNeedsWorker(estimate)) {
+      prepareTemporaryExport(estimate);
+      return false;
+    }
+    let result: DevelopExportResult | null = null;
+    try {
+      result = await measureAsync("exportWorker", () => exportInWorker(message));
+    } catch {
+      result = null;
+    }
+    if (!result) {
+      releaseRecreatableMemory();
+      return false;
+    }
+    if (result.type === "jpeg") {
+      deps.post({ type: "jpeg", id: message.id, bytes: result.bytes }, [result.bytes]);
+    } else {
+      const { width, height, rgba } = result;
+      deps.post({ type: "frame", id: message.id, width, height, rgba }, [rgba]);
+    }
+    return true;
+  };
+
   const processMessage = async (message: DevelopEngineWorkerRequest): Promise<void> => {
     const id = message.id;
     switch (message.type) {
@@ -1835,6 +2135,7 @@ export function createDevelopEngineWorkerHandler(
             message.diagnostics === true,
             message.preferNative === true,
             message.deviceClass === "mobile" ? "mobile" : "pc",
+            message.disposable === true,
           );
           return;
         case "open": {
@@ -1843,7 +2144,7 @@ export function createDevelopEngineWorkerHandler(
             const loaded = requireGlue();
             const key = await inputKey("open", message.bytes, String(message.workingMaxDimension));
             if (reuseDeveloper(key) && developer) return developer;
-            enforceMemoryBudget(DEVELOPER_MEMORY_UNITS);
+            enforceMemoryBudget(rasterOpenMemoryBytes(message.workingMaxDimension));
             const next = retryAllocationOnce(
               () => new loaded.Developer(new Uint8Array(message.bytes), message.workingMaxDimension),
             );
@@ -1863,7 +2164,7 @@ export function createDevelopEngineWorkerHandler(
             requireGlue();
             const key = await inputKey("openWorkingCopy", message.png, message.metaJson);
             if (reuseDeveloper(key) && developer) return developer;
-            enforceMemoryBudget(DEVELOPER_MEMORY_UNITS);
+            enforceMemoryBudget(workingCopyOpenMemoryBytes(message.png));
             const next = retryAllocationOnce(() => openWorkingCopy(message.png, message.metaJson));
             adoptDeveloper(next, key);
             return next;
@@ -1896,7 +2197,11 @@ export function createDevelopEngineWorkerHandler(
               analysisAhead = { developer: opened, settingsJson: message.settingsJson };
             }
             if (nextAnalysisKey !== null) {
-              if (currentAnalysisKey !== null && nextAnalysisKey !== currentAnalysisKey) releaseThumbnailSession();
+              if (currentAnalysisKey !== null && nextAnalysisKey !== currentAnalysisKey) {
+                releaseThumbnailSession();
+                // Session は前の解析を 1 件横に置く（#155 の見積もり）
+                analysisAheadHeld.add(opened);
+              }
               currentAnalysisKey = nextAnalysisKey;
               currentAnalysisSettingsJson = message.settingsJson;
             }
@@ -1984,14 +2289,18 @@ case "setMaskSurface": {
           deps.post({ type: "maskSurfaceEncoded", id, surfaceId, png }, [png]);          return;
         }
         case "exportJpeg": {
-          prepareTemporaryExport(message.maxDimension);
           const loaded = requireGlue();
+          const sourceSize = sourceImageSize(loaded, message.bytes);
+          const decodeDimension = oneShotDecodeDimension(loaded, message.settingsJson, sourceSize, message.maxDimension);
+          if (await placeExport(message, oneShotExportMemoryBytes(sourceSize, message.settingsJson, decodeDimension))) {
+            return;
+          }
           if (message.surfaces && message.surfaces.length > 0) {
             // 一発の書き出しは面を持たないので、同じ作業サイズの一時的な Developer に面を渡して描く（持っている写真は変えない）
             const input = new Uint8Array(message.bytes);
             let decodeSize = message.maxDimension;
             if (loaded.geometry) {
-              const size = readSize(loaded.geometry.imageSize(input));
+              const size = sourceSize ?? readSize(loaded.geometry.imageSize(input));
               const value = loaded.geometry.rasterDecodeSize(
                 message.settingsJson,
                 size.width,
@@ -2031,7 +2340,9 @@ case "setMaskSurface": {
           return;
         }
         case "exportWorkingCopyJpeg": {
-          prepareTemporaryExport(message.maxDimension);
+          requireGlue();
+          const estimate = workingCopyExportMemoryBytes(message.png, message.settingsJson, message.maxDimension);
+          if (await placeExport(message, estimate)) return;
           const { width, height, rgba } = renderWorkingCopyOnce(
             message.png,
             message.metaJson,
@@ -2143,11 +2454,13 @@ case "setMaskSurface": {
             if (!opened || typeof opened.thumbnail !== "function") throw new Error("no photo is open");
             if (!thumbnailSession) {
               const makeThumbnail = opened.thumbnail.bind(opened);
-              enforceMemoryBudget(THUMBNAIL_MEMORY_UNITS);
+              // 見本の session の見積もりは親の作業サイズで決まる（作る前に空け、session と一緒に覚える。#155）
+              const sessionBytes = thumbnailSessionMemoryBytes(opened.width, opened.height);
+              enforceMemoryBudget(sessionBytes);
               thumbnailSession = measure("thumbnailSession", () =>
                 retryAllocationOnce(() => makeThumbnail(PRESET_THUMBNAIL_SESSION_MAX_DIMENSION)),
               );
-              enforceMemoryBudget();
+              thumbnailSessionBytes = sessionBytes;
             }
             // 見本の session は面を持たずに始まる: 開いている写真に渡した面をそろえる（面のマスクも見本に描く）
             syncThumbnailSurfaces(thumbnailSession);
