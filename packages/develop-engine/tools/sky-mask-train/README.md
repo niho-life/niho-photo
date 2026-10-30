@@ -29,4 +29,4 @@ python train_sky.py export --run "$RUN"
 
 学習の設定は `RUN/config.json` に書き、`predict` と `export` はそこから読む（`config.json` のない古い run は長辺 384・`rgb-ev` として読む）。
 
-`export` は BatchNorm を畳み込んだ研究用の重みとレイアウトを非公開の `RUN` に書く。生成証跡として、`train` は `RUN/run.json`（命令、素材の digest＝画像ごとの入力とラベルの SHA-256 の一覧の hash、台帳・検証分割・抽出の重みの SHA-256、コードの hash、commit、最良 epoch と検証 IoU）を、`export` は `RUN/export.json`（読んだ重み・設定・`run.json` と、書いた `weights.f32`・`layout.json` の SHA-256）を残す。Rust/wasm へ渡すときは、この 2 つと非公開台帳を照合する。Rust/wasm 実装との一致、ボタンから結果までの実機時間、空なし写真の誤検出率を確認するまでは製品へ載せない。
+`export` は BatchNorm を畳み込んだ研究用の重みとレイアウトを非公開の `RUN` に書く。生成証跡として、`train` は `RUN/run.json`（命令、素材の digest＝画像ごとの入力とラベル（`rgb-ev` では露出の JSON も）の SHA-256 の一覧の hash、台帳・検証分割・抽出の重みの SHA-256、コードの hash、commit、最良 epoch と検証 IoU）を、`export` は `RUN/export.json`（読んだ重み・設定・`run.json` と、書いた `weights.f32`・`layout.json` の SHA-256）を残す。Rust/wasm へ渡すときは、この 2 つと非公開台帳を照合する。Rust/wasm 実装との一致、ボタンから結果までの実機時間、空なし写真の誤検出率を確認するまでは製品へ載せない。

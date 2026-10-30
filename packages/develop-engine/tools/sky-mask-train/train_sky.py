@@ -124,7 +124,16 @@ def sha256(path: Path) -> str:
 
 def provenance(args, cfg: dict, items: list, train: list, val: list) -> dict:
     here = Path(__file__).resolve().parent
-    pairs = "\n".join(f"{img.stem} {sha256(img)} {sha256(label)}" for img, label in items)
+
+    def row(img: Path, label: Path) -> str:
+        line = f"{img.stem} {sha256(img)} {sha256(label)}"
+        if cfg["inputs"] == "rgb-ev":
+            # the exposure sidecar is a model input too ("-" when the photo has none)
+            meta = img.with_suffix(".json")
+            line += f" {sha256(meta) if meta.exists() else '-'}"
+        return line
+
+    pairs = "\n".join(row(img, label) for img, label in items)
     optional = {"ledger": args.data / "ledger.jsonl", "validationIds": args.validation_ids, "sampleWeights": args.sample_weights}
     try:
         commit = subprocess.run(["git", "-C", str(here), "rev-parse", "HEAD"], capture_output=True, text=True,
@@ -134,7 +143,7 @@ def provenance(args, cfg: dict, items: list, train: list, val: list) -> dict:
     return {
         "command": sys.argv, "config": cfg, "seed": args.seed, "epochs": args.epochs,
         "images": len(items), "train": len(train), "validation": len(val),
-        # one line per image: stem, input hash, label hash
+        # one line per image: stem, input hash, label hash (+ exposure sidecar hash with rgb-ev)
         "dataSha256": hashlib.sha256(pairs.encode()).hexdigest(),
         **{f"{k}Sha256": sha256(v) for k, v in optional.items() if v and Path(v).exists()},
         "code": {name: sha256(here / name) for name in ("train_sky.py", "sky_math.py")},
