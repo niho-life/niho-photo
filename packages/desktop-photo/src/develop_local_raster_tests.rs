@@ -179,6 +179,48 @@ fn camera_makes_raster_working_copies_with_apple_raw_linear() {
 }
 
 #[test]
+fn a_trial_id_is_added_to_the_develop_logs_only_while_it_is_set() {
+  let harness = SidecarHarness::new("camera-source-trial");
+  let develop = camera_develop(&harness);
+  let heic = photo_file(&harness, "IMG_0002.HEIC", b"heic bytes");
+  let photos = FakePhotos::new(&[("p1", &heic)]);
+
+  with_log_trial(Some("0123abcd0123abcd"), || develop.source(&photos, "p1").unwrap());
+  let traced: Vec<String> = harness
+    .log_lines()
+    .into_iter()
+    .filter(|line| line.starts_with("photo_editing.develop_s"))
+    .collect();
+  assert!(
+    traced
+      .iter()
+      .any(|line| line.starts_with("photo_editing.develop_stage ")),
+    "{traced:?}"
+  );
+  assert!(
+    traced
+      .iter()
+      .any(|line| line.starts_with("photo_editing.develop_source ")),
+    "{traced:?}"
+  );
+  assert!(
+    traced.iter().all(|line| line.contains(r#""trial":"0123abcd0123abcd""#)),
+    "{traced:?}"
+  );
+
+  // 外したら付けない。形の違う ID（大文字・短い・長い・16 進でない）も付けない
+  let before = harness.log_lines().len();
+  develop.source(&photos, "p1").unwrap();
+  let long = "a".repeat(33);
+  for trial in ["0123ABCD0123ABCD", "0123abc", long.as_str(), "0123abcg0123abcd"] {
+    with_log_trial(Some(trial), || develop.source(&photos, "p1").unwrap());
+  }
+  let later = harness.log_lines();
+  assert!(later[before..].iter().all(|line| !line.contains("trial")), "{later:?}");
+  assert!(is_log_trial("0123abcd") && is_log_trial(&"f".repeat(32)));
+}
+
+#[test]
 fn a_jpeg_stays_the_original_unless_a_working_copy_is_forced() {
   let harness = SidecarHarness::new("camera-force-working-copy");
   let develop = camera_develop(&harness);

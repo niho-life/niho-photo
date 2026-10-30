@@ -61,7 +61,8 @@ export {
  *   {@link DEVELOP_PREVIEW_QUIET_MS} の間と、`yieldToEdit`（プリセットを押した・乗せた）から同じ時間は持ったまま待つ（見本 1 枚は
  *   Worker を数百 ms 占め、出した描画は横取りできないので、編集の描画を見本の後ろで待たせない。#126）
  * - 診断（`?photoDevelopPerf=1`）の間は、描画 1 つごとに枠での待ちと Worker との往復を `[photo-develop-perf]` に出す
- *   （{@link DevelopEngineRenderPerfRecord}。Worker の中の区間は Worker が出す）
+ *   （{@link DevelopEngineRenderPerfRecord}。Worker の中の区間は Worker が出す）。{@link DEVELOP_REQUEST_SLOW_MS} 答えない要求は
+ *   `requestSlow`、遅れて答えたら `requestAnswered`（`diagnosticsLabel` を `engine` として添える。#171）
  * - `exportJpeg`（記事用の画像・書き出し）と `convertEditSettings`（Photo Bench の補正の変換）は捨てずに順に処理する
  * - 作業コピー（RAW など、移行元設計）は `openWorkingCopy` で開いて持ち、`exportWorkingCopyJpeg` で持っている写真を変えずに JPEG に
  *   する（Worker の中で JPEG にできなければ、返ってきた画素をメインスレッドの canvas で JPEG にする）
@@ -363,6 +364,8 @@ export type CreateDevelopEngineOptions = {
   loadTimeoutMs?: number;
   /** 写真編集タブの ?photoDevelopPerf=1 だけで有効にする Worker 段階診断（明示値はテスト用）。 */
   diagnostics?: boolean;
+  /** 診断の記録（`[photo-develop-perf]`）に添えるこの engine の名前（段階 open の `canonical` など。#171。省略は添えない） */
+  diagnosticsLabel?: string;
   /** Worker が返した画素を JPEG にする（テストで差し替える。既定はメインスレッドの canvas） */
   encodeFrameJpeg?: (frame: DevelopFrame, quality: number) => Promise<Uint8Array<ArrayBuffer>>;
   /** 開いている写真の面（ブラシ・被写体・空）の PNG の読み口（写真の出どころの `loadMaskSurface`。省略 = 読めない） */
@@ -379,6 +382,19 @@ export function photoDevelopDiagnosticsEnabled(location: { pathname: string; sea
 
 /** wasm を起こすのを諦めるまでの時間。 */
 export const DEVELOP_ENGINE_LOAD_TIMEOUT_MS = 20_000;
+
+/**
+ * 診断（`?photoDevelopPerf=1`）の間、Worker がこれだけ答えない要求を `requestSlow` として出し、答えたら `requestAnswered` を出す
+ * （#171。止まった段を Worker・native の記録と突き合わせる）。止めたり打ち切ったりはしない。
+ */
+export const DEVELOP_REQUEST_SLOW_MS = 5_000;
+
+/** 答えを待たない・ほかの要求の id で送る知らせ（`requestSlow` の対象にしない）。 */
+const UNWATCHED_REQUESTS: ReadonlySet<DevelopEngineWorkerRequest["type"]> = new Set([
+  "warmAutoSettings",
+  "promoteAutoSettings",
+  "cancelAutoSettings",
+]);
 
 type Pending = {
   kind:
@@ -593,9 +609,37 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
   const unavailableError = () =>
     new DevelopEngineError(status === "disposed" ? "develop engine is disposed" : "develop engine is unavailable");
 
+  const engineLabel = options.diagnosticsLabel ? { engine: options.diagnosticsLabel } : {};
+  // 診断の間だけ: 出したまま答えの無い要求（id → 種類・出した時刻・時計）
+  const slowWatches = new Map<number, { request: string; sentAt: number; timer: ReturnType<typeof setTimeout> }>();
+  const watchRequest = (message: DevelopEngineWorkerRequest) => {
+    if (!diagnosticsEnabled() || UNWATCHED_REQUESTS.has(message.type)) return;
+    const { id, type } = message;
+    const timer = setTimeout(() => {
+      if (!slowWatches.has(id)) return;
+      console.info("[photo-develop-perf]", { stage: "requestSlow", request: type, waitedMs: DEVELOP_REQUEST_SLOW_MS, ...engineLabel });
+    }, DEVELOP_REQUEST_SLOW_MS);
+    slowWatches.set(id, { request: type, sentAt: performance.now(), timer });
+  };
+  const endWatch = (id: number) => {
+    const watch = slowWatches.get(id);
+    if (!watch) return;
+    clearTimeout(watch.timer);
+    slowWatches.delete(id);
+    const waitedMs = performance.now() - watch.sentAt;
+    if (waitedMs >= DEVELOP_REQUEST_SLOW_MS) {
+      console.info("[photo-develop-perf]", { stage: "requestAnswered", request: watch.request, waitedMs, ...engineLabel });
+    }
+  };
+  const clearWatches = () => {
+    for (const watch of slowWatches.values()) clearTimeout(watch.timer);
+    slowWatches.clear();
+  };
+
   const post = (message: DevelopEngineWorkerRequest, transfer: Transferable[] = []) => {
     if (!worker) throw unavailableError();
     worker.postMessage(message, transfer);
+    watchRequest(message);
   };
 
   /** 面の口のある wasm か（`ready` の応答の `masks.surfaces`）。 */
@@ -732,6 +776,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
     }
     settleReady?.(false);
     settleReady = null;
+    clearWatches();
     const error = unavailableError();
     for (const entry of pending.values()) entry.reject(error);
     pending.clear();
@@ -846,7 +891,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
       roundTripMs: Math.max(0, performance.now() - entry.sentAt),
       status,
     };
-    console.info("[photo-develop-perf]", record);
+    console.info("[photo-develop-perf]", { ...record, ...engineLabel });
   };
 
   /** 持っている写真が変わる（open / close）。出している描画の結果は捨て、「次」は null で終える。 */
@@ -865,14 +910,15 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
   const onResponse = (response: DevelopEngineWorkerResponse) => {
     if (response.type === "perf") {
       if (diagnosticsEnabled()) {
-        console.info("[photo-develop-perf]", response.record);
+        console.info("[photo-develop-perf]", { ...response.record, ...engineLabel });
       }
       return;
     }
+    endWatch(response.id);
     if (response.id === initId) {
       initId = null;
       if (response.type === "ready") {
-        if (diagnosticsEnabled()) console.info("[photo-develop-perf]", { stage: "runtime", runtime: response.runtime, ...(response.wasmThreads ? { threads: response.wasmThreads } : {}) });
+        if (diagnosticsEnabled()) console.info("[photo-develop-perf]", { stage: "runtime", runtime: response.runtime, ...(response.wasmThreads ? { threads: response.wasmThreads } : {}), ...engineLabel });
         geometrySupported = response.geometry === true;
         effectsSupported = response.effects === true;
         colorPointsSupported = response.colorPoints === true;

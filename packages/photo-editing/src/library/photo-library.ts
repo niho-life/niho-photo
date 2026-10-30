@@ -268,6 +268,8 @@ export type PhotoLibraryDevelopSourceContext = {
 
 export type PhotoLibraryWorkingCopyRequestOptions = PhotoLibraryRequestOptions & {
   sourceContext?: PhotoLibraryDevelopSourceContext;
+  /** 写真編集の診断（`?photoDevelopPerf=1`）の試行 ID（16 進）。作る側のログに添えてよい（#171。挙動は変えない） */
+  diagnosticTrial?: string;
 };
 
 /** 写真から作るマスクの面の種類（{@link PhotoLibrary.detectMaskSurface}）。 */

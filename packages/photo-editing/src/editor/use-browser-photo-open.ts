@@ -131,6 +131,17 @@ function paintable(order: PaintOrder, sequence: number): boolean {
   return sequence >= order.valid && sequence > order.painted;
 }
 
+/** 診断の試行 ID（16 桁の 16 進。1 回開くごとに作る。#171）。 */
+function newDiagnosticTrialId(): string {
+  const bytes = new Uint8Array(8);
+  if (globalThis.crypto?.getRandomValues) {
+    globalThis.crypto.getRandomValues(bytes);
+  } else {
+    for (let index = 0; index < bytes.length; index += 1) bytes[index] = Math.floor(Math.random() * 256);
+  }
+  return Array.from(bytes, (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+
 /**
  * 1 枚を開く（読み込みの世代・中止・作業コピーを待つ間の確かめ直し・URL で開く）と、開いた写真の描画・場所の切り替え。
  * 補正の状態（`developSettings`）と取り消しの履歴は `useBrowserPhotoEditSettings`、wasm の session と自動保存・離れるときの
@@ -377,6 +388,8 @@ export function useBrowserPhotoOpen(params: {
   const timelineRef = useRef<{
     key: string;
     generation: number;
+    /** 診断の試行 ID（#171。native・Worker の記録に同じ ID を添えて突き合わせる。写真・パスを含まない） */
+    trial: string;
     selectedAt: number;
     firstVisible: boolean;
     previewVisible: boolean;
@@ -387,6 +400,7 @@ export function useBrowserPhotoOpen(params: {
     timelineRef.current = {
       key,
       generation: ++timelineGenerationRef.current,
+      trial: newDiagnosticTrialId(),
       selectedAt,
       firstVisible: false,
       previewVisible: false,
@@ -436,14 +450,21 @@ export function useBrowserPhotoOpen(params: {
     openedRef.current = next;
     setOpened(next);
   }, [allItemsRef]);
-  const recordProxyReady = useCallback((key: string) => {
+  /**
+   * 段階 open の途中の段（診断の間だけ。`trial` で native の `photo_editing.*`・Worker の `[photo-develop-perf]` と突き合わせる。
+   * #171: 正規切替がどの await で止まったかを、probe の途中の記録から読めるようにする）。
+   */
+  const recordOpenStage = useCallback((key: string, stage: string, detail?: Record<string, string | number | boolean>) => {
     const timeline = timelineRef.current;
     if (timeline?.key !== key || !photoDevelopDiagnosticsEnabled()) return;
     console.info("[photo-develop-ui-perf]", {
-      stage: "proxyReady",
+      stage,
+      trial: timeline.trial,
       elapsedMs: Math.max(0, performance.now() - timeline.selectedAt),
+      ...detail,
     });
   }, []);
+  const recordProxyReady = useCallback((key: string) => recordOpenStage(key, "proxyReady"), [recordOpenStage]);
   // S1 の canvas だけが「書き出していない補正」を持つ（wasm は自動保存するので破棄の確認を出さない）
   const dirty = opened?.mode !== "wasm" && settingsKey !== savedSettingsKey;
   const compareOriginalRef = useRef(compareOriginal);
@@ -1093,9 +1114,10 @@ export function useBrowserPhotoOpen(params: {
   ): Promise<boolean> => {
     const provisional = openedRef.current;
     const candidateSession = result.session;
-    const discardCandidate = () => {
+    const discardCandidate = (at = "stale") => {
       candidateSession?.saver?.dispose();
       canonicalEngine.dispose();
+      recordOpenStage(item.key, "canonicalHandoffStopped", { at });
     };
     if (isStale() || provisional?.key !== item.key || provisional.input?.kind !== "provisional" || !result.session) {
       discardCandidate();
@@ -1103,7 +1125,7 @@ export function useBrowserPhotoOpen(params: {
     }
     const provisionalSession = developSessionRef.current;
     if (provisionalSession?.key !== item.key || provisionalSession.input.kind !== "provisional") {
-      discardCandidate();
+      discardCandidate("session");
       return false;
     }
     const provisionalContentSha256 = provisional.input.contentSha256;
@@ -1141,9 +1163,10 @@ export function useBrowserPhotoOpen(params: {
     try {
       flushedDraft = await provisionalSession.provisionalDraft?.flush() ?? null;
     } catch {
-      discardCandidate();
+      discardCandidate("draft");
       return false;
     }
+    recordOpenStage(item.key, "canonicalDraftFlushed");
     if (!isCurrentProvisional()) {
       discardCandidate();
       return false;
@@ -1157,6 +1180,7 @@ export function useBrowserPhotoOpen(params: {
       surfaceFallback = false;
       // metadataを替える前に、既に受け付けたpreset/量/hoverの結果を旧sessionへ反映する。
       await presets.waitForPending();
+      recordOpenStage(item.key, "canonicalPresetsSettled");
       if (!isCurrentProvisional()) { discardCandidate(); return false; }
       source = edit.settingsRef.current;
       display = currentDisplay(source);
@@ -1170,8 +1194,9 @@ export function useBrowserPhotoOpen(params: {
         surfaceFallback = fallback?.frame != null;
         return fallback?.frame ?? null;
       });
+      recordOpenStage(item.key, "canonicalRendered", { ok: rendered !== null });
       if (!rendered || !isCurrentProvisional()) {
-        discardCandidate();
+        discardCandidate(rendered ? "stale" : "render");
         return false;
       }
       frame = rendered;
@@ -1179,7 +1204,7 @@ export function useBrowserPhotoOpen(params: {
       try {
         latestDraft = await provisionalSession.provisionalDraft?.flush() ?? flushedDraft;
       } catch {
-        discardCandidate();
+        discardCandidate("draft");
         return false;
       }
       if (!isCurrentProvisional()) {
@@ -1267,15 +1292,9 @@ export function useBrowserPhotoOpen(params: {
     oldEngine?.dispose();
     setSourceError(null);
     setOpening(false);
-    const timeline = timelineRef.current;
-    if (timeline?.key === item.key && photoDevelopDiagnosticsEnabled()) {
-      console.info("[photo-develop-ui-perf]", {
-        stage: "canonicalReady",
-        elapsedMs: Math.max(0, performance.now() - timeline.selectedAt),
-      });
-    }
+    recordOpenStage(item.key, "canonicalReady");
     return true;
-  }, [beforeFrameRef, canvasRef, createSaver, developSessionRef, edit.settingsRef, engineRef, frameCacheRef, framePostProcessRef, latestAccessRef, library, onFramePaintedRef, presets, rebaseSettings, reportMaskSurfaceIssue, startSession, workingEpoch]);
+  }, [beforeFrameRef, canvasRef, createSaver, developSessionRef, edit.settingsRef, engineRef, frameCacheRef, framePostProcessRef, latestAccessRef, library, onFramePaintedRef, presets, rebaseSettings, recordOpenStage, reportMaskSurfaceIssue, startSession, workingEpoch]);
 
   /** 作業コピーを待っている写真の状態を変える（その写真を開いたまま待っているときだけ）。 */
   const setWorkWait = useCallback((key: string, work: WorkWait) => {
@@ -1376,16 +1395,25 @@ export function useBrowserPhotoOpen(params: {
         if (workTarget) showWorkPreview();
         // 署名付き URL の取得と作業コピーの読み込みを、初回の Wasm 起動と重ねる。
         // 失敗は使用時に投げ直し、起動不可・写真切替時にも未処理の rejection を残さない。
+        const diagnosticTrial = timelineRef.current?.key === item.key ? timelineRef.current.trial : undefined;
         const pendingWork = workTarget && !developUnavailable
           ? library.ensureWorkingCopy(item.photo.id, {
               signal: workAbort.signal,
               sourceContext: sourceContextFor(item.photo),
+              ...(diagnosticTrial ? { diagnosticTrial } : {}),
             }).then((result) => {
+              recordOpenStage(item.key, "workSourceReady", { kind: result.kind });
               const copy = result.kind === "ready"
                 ? library.loadWorkingCopy(item.photo.id, result.download, { signal: workAbort.signal })
                 : null;
-              void copy?.catch(() => undefined);
+              void copy?.then(
+                () => recordOpenStage(item.key, "workBytesReady", { ok: true }),
+                () => recordOpenStage(item.key, "workBytesReady", { ok: false }),
+              );
               return { result, copy };
+            }, (error: unknown) => {
+              recordOpenStage(item.key, "workSourceReady", { kind: "error" });
+              throw error;
             })
           : null;
         void pendingWork?.catch(() => undefined);
@@ -1426,7 +1454,8 @@ export function useBrowserPhotoOpen(params: {
           return isStale() ? "stale" : outcome;
         };
         if (workTarget && engine) {
-          const failCanonical = () => {
+          const failCanonical = (reason: string) => {
+            recordOpenStage(item.key, "canonicalFailed", { reason });
             const current = openedRef.current;
             if (current?.key === item.key && current.input?.kind === "provisional") {
               const next = { ...current, canonicalPending: false };
@@ -1487,11 +1516,13 @@ export function useBrowserPhotoOpen(params: {
             preferNative: library.engineAssets.preferNative === true,
             deviceClass: params.deviceClass,
             maskSurfaces: maskSurfaceSource,
+            diagnosticsLabel: "canonical",
           });
           const canonicalReady = await canonicalEngine.ready();
+          recordOpenStage(item.key, "canonicalEngineReady", { ready: canonicalReady });
           if (!canonicalReady || isStale()) {
             canonicalEngine.dispose();
-            if (!isStale()) failCanonical();
+            if (!isStale()) failCanonical("engine");
             return;
           }
           try {
@@ -1500,17 +1531,18 @@ export function useBrowserPhotoOpen(params: {
               canonicalEngine.dispose();
               return;
             }
+            recordOpenStage(item.key, "canonicalOpened", { kind: outcome.kind });
             if (outcome.kind === "opened" && outcome.result.session) {
               const handedOff = await handoffCanonical(item, outcome.result, canonicalEngine, isStale);
-              if (!handedOff && !isStale()) failCanonical();
+              if (!handedOff && !isStale()) failCanonical("handoff");
               return;
             }
             canonicalEngine.dispose();
             if (outcome.kind === "wait") openFlowRef.current.applyWorkOutcome(item.key, outcome);
-            failCanonical();
+            failCanonical(outcome.kind);
           } catch {
             canonicalEngine.dispose();
-            if (!isStale()) failCanonical();
+            if (!isStale()) failCanonical("error");
           }
           return;
         }
@@ -1574,6 +1606,7 @@ export function useBrowserPhotoOpen(params: {
       operationRef,
       params.deviceClass,
       readyDevelopEngine,
+      recordOpenStage,
       recordProxyReady,
       releaseOpened,
       setExportSheetOpen,
@@ -1626,6 +1659,7 @@ export function useBrowserPhotoOpen(params: {
         preferNative: library.engineAssets.preferNative === true,
         deviceClass: params.deviceClass,
         maskSurfaces: maskSurfaceSource,
+        diagnosticsLabel: "canonical",
       });
       if (!(await canonicalEngine.ready()) || isStale()) {
         canonicalEngine.dispose();

@@ -568,10 +568,11 @@ export function createLocalPhotoLibrary(commands: CameraCommands, options: Local
     };
   };
 
-  const developSourceOf = (handle: OpenHandle, requested?: PhotoLibraryDevelopSourceContext) =>
+  const developSourceOf = (handle: OpenHandle, requested?: PhotoLibraryDevelopSourceContext, trialId?: string) =>
     commands.developSource(handle.nativeId, {
       forceWorkingCopy: isDirectRasterExtension(fileExtensionOf(handle.fileName)),
       sourceContext: sourceContextFor(handle.saved, requested),
+      ...(trialId ? { trialId } : {}),
     });
 
   const remember = (token: string, bytes: Uint8Array) => {
@@ -879,7 +880,7 @@ export function createLocalPhotoLibrary(commands: CameraCommands, options: Local
       throwIfAborted(requestOptions?.signal);
       try {
         return await withHandle(photoId, async (handle) => {
-          const source = await developSourceOf(handle, requestOptions?.sourceContext);
+          const source = await developSourceOf(handle, requestOptions?.sourceContext, requestOptions?.diagnosticTrial);
           if (source.kind !== "workingCopy") return { kind: "notApplicable" };
           return { kind: "ready", download: await workingCopyDownload(handle, source) };
         });

@@ -353,9 +353,10 @@
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
         "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
         "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
-        "Issue #151 のスレッド版と #155 の論理予算を同じ client に統合"
+        "Issue #151 のスレッド版と #155 の論理予算を同じ client に統合",
+        "#171 正規切替の停止箇所を同じ試行IDで記録する診断"
       ],
-      "outputSha256": "a81896cec7c20604916b80b0eb386b1e11423ba8d6cbfc6370d3ef56072ceb01"
+      "outputSha256": "caf98911c25b5008bfcf9f019ad84e139ad68f001a61e1ffaadc94a81a6b1e9f"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-manifest.ts",
@@ -2126,9 +2127,10 @@
         "ドラッグ中の描画の順序管理の修正に伴う変更。",
         "プリセットを押した・乗せたときは先に粗い画を出してから丁寧な画に差し替え、乗せた丁寧な画を押したときに使い回す（#127）",
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
-        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加"
+        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
+        "#171 正規切替の停止箇所を同じ試行IDで記録する診断"
       ],
-      "outputSha256": "be8991309a95b0a7c5eef3f75e75dc8892d61217b32215e04f02284276c559b8"
+      "outputSha256": "dc32cdaf987a6ac559e56fcb3977baaac30f7a8a093f4f60d3f14d8403218a7c"
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-preset-support.ts",
@@ -2331,9 +2333,10 @@
         "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
         "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。",
-        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。"
+        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
+        "#171 正規切替の停止箇所を同じ試行IDで記録する診断"
       ],
-      "outputSha256": "57680f27fe3a423f15d747091df2015040c740845186617ed21211c0b88c7148"
+      "outputSha256": "8a9420c7fba72c17d61d8b453b2a94e1a9c54d5c1c725685b2353335b54fa38a"
     },
     {
       "path": "packages/photo-editing/src/photo-cloud-add-queue.ts",
@@ -4061,7 +4064,7 @@
         "path": "apps/camera/src-tauri/src/develop.rs",
         "sha256": "e8031f4461b78fd3a74d9011ace89081814e737868a33ee4e39f7b98e39bacb8"
       },
-      "outputSha256": "ba5e2949dda55fe382d72d0da950d027c960796c32d8dd7034b9c941db2f5708",
+      "outputSha256": "9f8e40ad62b6cece6636f8536ecd8cb90c16487c03fa79ebe1af88a14d1ce80e",
       "modifications": [
         "書き出しcommand境界の引数設計を明記し、Clippyの引数数lintを局所的に許容する。",
         "全open photoの原本をexport destinationから保護",
@@ -4071,7 +4074,8 @@
         "PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
         "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。",
-        "被写体のマスクの面 #135: camera_mask_surface_detect（作業画像に niho-camera-cutout surface を当て、写真の面の置き場へ保存）を足す。"
+        "被写体のマスクの面 #135: camera_mask_surface_detect（作業画像に niho-camera-cutout surface を当て、写真の面の置き場へ保存）を足す。",
+        "#171 正規切替の停止箇所を同じ試行IDで記録する診断"
       ]
     },
     {
@@ -4450,7 +4454,7 @@
         "path": "apps/camera/src/local-library/commands.ts",
         "sha256": "6aa0e7cc890a164709ed5274f020d5070d85b69e9b01f8562ae772a8ba2c57f1"
       },
-      "outputSha256": "e15eb08912f7b00d63a7bd7dd7e79eecf7ac8f9e1f53e03f581e844019d19324",
+      "outputSha256": "7a40918a1bfceff0d12ad111198646ade781a48bed6aaa080ad5fc7ee511ba53",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "個別写真の追加・件数・一覧・参照削除を不透明なentryIdの既存経路へ接続 / 選択写真一覧を専用IPC commandへ分離。",
@@ -4467,7 +4471,8 @@
         "PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。",
         "PR #98で選別フラグの保存経路とUIを更新する。",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
-        "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。"
+        "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。",
+        "#171 正規切替の停止箇所を同じ試行IDで記録する診断"
       ]
     },
     {
@@ -4573,9 +4578,10 @@
         "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
         "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。",
-        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。"
+        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
+        "#171 正規切替の停止箇所を同じ試行IDで記録する診断"
       ],
-      "outputSha256": "f456c2fca82700de1e84a162eea0a5e60cafbb261e14938dcc39a2031dcdcd06"
+      "outputSha256": "888cdee6deed81e8b5c704b8c6b17d129f96267c5bcf3a090f3526b86f946091"
     },
     {
       "path": "apps/camera/src/main.tsx",
@@ -4725,7 +4731,7 @@
         "path": "packages/desktop-photo/src/develop.rs",
         "sha256": "7f13c1e41e82bf4bc91bef5e4a8b61f092ab0b986a6a95c5559c2246bb74d864"
       },
-      "outputSha256": "af798f26b1d894ec9c24084fef372b009a713297e390181535cb7a8b8537486b",
+      "outputSha256": "087dfa8936a2941b192f2afe36c34f9ea984c1767620032501cb7e563d7dd283",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #5の共有入力能力レジストリ、段階別検証、公開回帰契約に合わせて更新。",
@@ -4741,7 +4747,8 @@
         "部分補正（マスク）#68: 描かれるマスクの面を置き場から読み --mask-surface で sidecar へ渡し、無ければ書き出す前に断る",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
         "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。",
-        "Issue #155: 解析再利用と共有メモリ予算の変更を統合"
+        "Issue #155: 解析再利用と共有メモリ予算の変更を統合",
+        "#171 正規切替の停止箇所を同じ試行IDで記録する診断"
       ]
     },
     {
@@ -4752,7 +4759,7 @@
         "path": "packages/desktop-photo/src/develop_local_raster_tests.rs",
         "sha256": "b45869e304ecb1bfa8cc4c3aea903fd7771f60c1b140f6f3c7be2f9f2b929bc2"
       },
-      "outputSha256": "8a9cbbd593db29b205541874f99166ddec93090c93d9d2e6bd3cdbc4387b6515",
+      "outputSha256": "6ee42e8ad467a8b11dabdf5bc884fa0ee8e6074a38bd20cc3d22799ca32f2395",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #5の共有入力能力レジストリ、段階別検証、公開回帰契約に合わせて更新。",
@@ -4765,7 +4772,8 @@
         "PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。",
         "部分補正（マスク）#68: 面のマスクの書き出しの引数と、面が無いときの失敗の回帰を足す",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
-        "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。"
+        "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。",
+        "#171 正規切替の停止箇所を同じ試行IDで記録する診断"
       ]
     },
     {
@@ -10361,8 +10369,8 @@
     },
     {
       "path": "apps/camera/scripts/e2e/progressive-open.js",
-      "sha256": "9aeda451869677413848fb5a4455acb57cf65a16c629b4895ecdec7c8f95fa7b",
-      "origin": "Issue #13のため独立作成した実UI検証probe。専用e2e bundleだけを操作し、実画像・元の名前・path・画像hashを公開出力しない。\n変更理由: 画像情報を含まないE2E待機段階traceを追加。\n変更理由: 画面未描画の失敗をpreset変化なしへ誤分類しない。\n変更理由: 通常の正規入力fallbackも実paintで完了と判定し、遅い測定値を除外しない。\n変更理由: warmを同一アプリ内の正規表示から一覧へ戻る再表示として計測しnativeの区間開始を渡す\n変更理由: 正規入力の遅い初回プリセット描画も3秒で除外せず30秒まで実測時間として保持する\n変更理由: 新しい右パネルでも補正とプリセットの面を実際に切り替え、入力可能時刻と値と選択の保持を検証する\n変更理由: プリセット更新の内訳（#126）: 押してから画が出るまでの区間を実UIで記録する\n変更理由: プリセットを押してから丁寧な画に差し替わるまで（#127）を記録する\n変更理由: 実UI probe #129: warm で一覧に戻ってから再表示するまでの間（--idle-ms、既定0は今までと同じ）を渡せるようにする。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: 既存写真がある画面でも E2E の追加ボタンを見つける\n変更理由: RAW受入プローブの正規切替と丁寧描画を並行して計測し診断イベントを記録する\n変更理由: 正規画の提示を2フレーム待ってから詳細描画時間として記録する\n変更理由: 丁寧描画を正規切替の30秒受入窓全体で観測して遅い成功を欠測にしない\n変更理由: 失敗時に診断フラグの有効状態だけをローカルtraceへ記録する"
+      "sha256": "e0db813d6281ec3a7f07b2a2b3860a6a4d3035cffd3f61f6e5a55c4e474e04e4",
+      "origin": "Issue #13のため独立作成した実UI検証probe。専用e2e bundleだけを操作し、実画像・元の名前・path・画像hashを公開出力しない。\n変更理由: 画像情報を含まないE2E待機段階traceを追加。\n変更理由: 画面未描画の失敗をpreset変化なしへ誤分類しない。\n変更理由: 通常の正規入力fallbackも実paintで完了と判定し、遅い測定値を除外しない。\n変更理由: warmを同一アプリ内の正規表示から一覧へ戻る再表示として計測しnativeの区間開始を渡す\n変更理由: 正規入力の遅い初回プリセット描画も3秒で除外せず30秒まで実測時間として保持する\n変更理由: 新しい右パネルでも補正とプリセットの面を実際に切り替え、入力可能時刻と値と選択の保持を検証する\n変更理由: プリセット更新の内訳（#126）: 押してから画が出るまでの区間を実UIで記録する\n変更理由: プリセットを押してから丁寧な画に差し替わるまで（#127）を記録する\n変更理由: 実UI probe #129: warm で一覧に戻ってから再表示するまでの間（--idle-ms、既定0は今までと同じ）を渡せるようにする。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: 既存写真がある画面でも E2E の追加ボタンを見つける\n変更理由: RAW受入プローブの正規切替と丁寧描画を並行して計測し診断イベントを記録する\n変更理由: 正規画の提示を2フレーム待ってから詳細描画時間として記録する\n変更理由: 丁寧描画を正規切替の30秒受入窓全体で観測して遅い成功を欠測にしない\n変更理由: 失敗時に診断フラグの有効状態だけをローカルtraceへ記録する\n変更理由: #171 正規切替の停止箇所を同じ試行IDで記録する診断"
     },
     {
       "path": "apps/camera/scripts/measure-progressive-open.mjs",
@@ -11781,8 +11789,8 @@
     },
     {
       "path": "apps/camera/src-tauri/src/develop_engine_sidecar.rs",
-      "sha256": "5308dfc75f1b1b4ed34c5acd10afcb5db812fc2ef13da195c8ce4728c67e9a9f",
-      "origin": "公開repoで新規作成（niho-photo#152）。同梱の niho-develop-render serve を 1 プロセス持ち、stdin / stdout の封で要求を多重化する（起動・hello・落ちたときの起動し直し・待ちの上限・終了）。偽の serve での試験を含む。外部のコード・実写真・非公開の情報を含まない。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正\n変更理由: CI の未使用警告を防ぎ旧入口をテスト時だけに限定"
+      "sha256": "9498e159ef751557d8b50dfe36368888e1a1d9059999ec2ae511ac5b1cf88714",
+      "origin": "公開repoで新規作成（niho-photo#152）。同梱の niho-develop-render serve を 1 プロセス持ち、stdin / stdout の封で要求を多重化する（起動・hello・落ちたときの起動し直し・待ちの上限・終了）。偽の serve での試験を含む。外部のコード・実写真・非公開の情報を含まない。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正\n変更理由: CI の未使用警告を防ぎ旧入口をテスト時だけに限定\n変更理由: #171 正規切替の停止箇所を同じ試行IDで記録する診断"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop-render/src/serve.rs",

@@ -8,7 +8,8 @@
 //!   （serve は要求を並行に処理し、応答の順は要求の順と違ってよい）
 //! - 落ちた（stdout の EOF・stdin に書けない）ら、待っている要求を全部失敗にし、次の要求で起動し直す（1 分に 3 回まで。超えたら
 //!   使えないまま）
-//! - 1 要求の待ちは 120 秒。超えたら sidecar を止める（同じ sidecar を待っているほかの要求も失敗する）
+//! - 1 要求の待ちは 120 秒。超えたら sidecar を止める（同じ sidecar を待っているほかの要求も失敗する）。5 秒を超えた要求は、
+//!   超えた時と答えた時に method の名前と待った時間だけを 1 行ずつ残す（niho-photo#171。止まった段を画面の記録と突き合わせる）
 //! - `stop()`: main 窓の読み込みとアプリの終了で sidecar を止める（Developer を全部手放す）。次の要求でまた起動する
 //! - 使えないときは短い英語の理由を返す（scheme が 503 の本文にする。画面は wasm へ落ちる）。ログ（`camera.log`）には起動・
 //!   `hello` の版・落ちた・起動し直しを 1 行ずつ残し、パスと写真の名前は残さない（子の stderr は読み捨て、行の数だけ残す）
@@ -76,6 +77,8 @@ pub struct Timeouts {
   pub hello: Duration,
   /// 1 要求の応答まで（超えたら sidecar を止める）
   pub request: Duration,
+  /// これを超えた要求をログに残す（止めない）
+  pub slow: Duration,
 }
 
 impl Default for Timeouts {
@@ -83,6 +86,7 @@ impl Default for Timeouts {
     Self {
       hello: Duration::from_secs(10),
       request: Duration::from_secs(120),
+      slow: Duration::from_secs(5),
     }
   }
 }
@@ -270,11 +274,19 @@ struct Session {
   /// `hello` が通ったら口の一覧（それまでは要求を受けない）
   methods: OnceLock<HashSet<String>>,
   next_id: AtomicU32,
+  /// {@link Timeouts::slow}
+  slow: Duration,
   log: LogFn,
 }
 
 impl Session {
-  fn new(writer: Box<dyn Write + Send>, process: Box<dyn Process>, log: LogFn, generation: u64) -> Arc<Self> {
+  fn new(
+    writer: Box<dyn Write + Send>,
+    process: Box<dyn Process>,
+    log: LogFn,
+    generation: u64,
+    slow: Duration,
+  ) -> Arc<Self> {
     Arc::new(Self {
       generation,
       writer: Mutex::new(writer),
@@ -282,6 +294,7 @@ impl Session {
       process: Mutex::new(Some(process)),
       methods: OnceLock::new(),
       next_id: AtomicU32::new(HELLO_ID + 1),
+      slow,
       log,
     })
   }
@@ -305,7 +318,8 @@ impl Session {
 
   /// 封を書いて、同じ id の応答を待つ。
   fn request(self: &Arc<Self>, id: u32, method: &str, body: &[u8], timeout: Duration) -> Reply {
-    let deadline = Instant::now() + timeout;
+    let started = Instant::now();
+    let deadline = started + timeout;
     let (sender, receiver) = mpsc::sync_channel(1);
     {
       let mut pending = lock(&self.pending);
@@ -318,9 +332,23 @@ impl Session {
     // pipe. A separate watchdog must own the deadline, not recv_timeout alone.
     let (cancel, canceled) = mpsc::channel::<()>();
     let session = Arc::clone(self);
+    let watched = method.to_owned();
     if std::thread::Builder::new()
       .name("niho-develop-serve-deadline".into())
       .spawn(move || {
+        let slow_at = started + session.slow;
+        if slow_at < deadline {
+          if !matches!(
+            canceled.recv_timeout(slow_at.saturating_duration_since(Instant::now())),
+            Err(RecvTimeoutError::Timeout)
+          ) {
+            return;
+          }
+          (session.log)(
+            "camera.develop_serve_slow",
+            json!({ "method": watched, "waitedMs": session.slow.as_millis() as u64 }),
+          );
+        }
         if matches!(
           canceled.recv_timeout(deadline.saturating_duration_since(Instant::now())),
           Err(RecvTimeoutError::Timeout)
@@ -346,6 +374,13 @@ impl Session {
       Err(RecvTimeoutError::Disconnected) => Err(EXITED),
     };
     let _ = cancel.send(());
+    let elapsed = started.elapsed();
+    if elapsed >= self.slow {
+      (self.log)(
+        "camera.develop_serve_answered",
+        json!({ "method": method, "elapsedMs": elapsed.as_millis() as u64, "ok": result.is_ok() }),
+      );
+    }
     result
   }
 
@@ -478,6 +513,7 @@ impl Engine {
         connection.process,
         self.log.clone(),
         state.next_generation,
+        self.timeouts.slow,
       );
       let reader_session = session.clone();
       let reader = connection.reader;
@@ -839,6 +875,7 @@ pub(crate) mod test_support {
     Timeouts {
       hello: Duration::from_secs(5),
       request: Duration::from_secs(5),
+      slow: Duration::from_secs(5),
     }
   }
 }
@@ -1105,6 +1142,7 @@ mod tests {
       Box::new(BlockedProcess(gate)),
       Arc::new(|_, _| {}),
       1,
+      Duration::from_secs(5),
     );
     let started = Instant::now();
     assert_eq!(
@@ -1172,6 +1210,7 @@ mod tests {
       Timeouts {
         hello: Duration::from_secs(5),
         request: Duration::from_millis(200),
+        slow: Duration::from_secs(5),
       },
     );
     assert_eq!(answered(&fake, "render", b"1"), b"render:1");
@@ -1183,6 +1222,43 @@ mod tests {
     );
     assert_eq!(answered(&fake, "render", b"2"), b"render:2");
     assert_eq!(fake.spawns(), 2);
+  }
+
+  #[test]
+  fn a_slow_request_is_logged_by_method_when_it_passes_the_mark_and_when_it_answers() {
+    let fake = Fake::new(
+      |_| {
+        Box::new(|id, method, _| match method {
+          HELLO => Some(vec![(id, hello_reply(PROTOCOL, &["late", "render"]))]),
+          "late" => {
+            std::thread::sleep(Duration::from_millis(300));
+            Some(vec![(id, b"late".to_vec())])
+          }
+          _ => Some(vec![(id, b"quick".to_vec())]),
+        })
+      },
+      Timeouts {
+        hello: Duration::from_secs(5),
+        request: Duration::from_secs(5),
+        slow: Duration::from_millis(100),
+      },
+    );
+    assert_eq!(answered(&fake, "render", b""), b"quick");
+    assert!(
+      fake.events("camera.develop_serve_slow").is_empty(),
+      "速い要求は残さない"
+    );
+    assert_eq!(answered(&fake, "late", b"photo"), b"late");
+    assert_eq!(
+      fake.events("camera.develop_serve_slow"),
+      [json!({ "method": "late", "waitedMs": 100 })]
+    );
+    let answered_events = fake.events("camera.develop_serve_answered");
+    assert_eq!(answered_events.len(), 1, "{answered_events:?}");
+    assert_eq!(answered_events[0]["method"], "late");
+    assert_eq!(answered_events[0]["ok"], true);
+    assert!(answered_events[0]["elapsedMs"].as_u64().unwrap() >= 300);
+    assert_eq!(fake.kills(), 0, "遅いだけでは止めない");
   }
 
   #[test]
@@ -1206,6 +1282,7 @@ mod tests {
       Timeouts {
         hello: Duration::from_millis(200),
         request: Duration::from_secs(5),
+        slow: Duration::from_secs(5),
       },
     );
     assert_eq!(
