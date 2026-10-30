@@ -4,6 +4,7 @@ import { createNativeDevelopGlue, NativeDevelopUnavailableError } from "./develo
 import { encodeJpegInWorker } from "./develop-engine-worker-encode-jpeg";
 import {
   createDevelopEngineWorkerHandler,
+  readThreadsEnvironment,
   type DevelopEngineExportWorker,
   type DevelopEngineWorkerRequest,
   type DevelopEngineWorkerResponse,
@@ -79,11 +80,7 @@ const nativeAnalysisStore = createNativeDevelopAnalysisStore();
 const handler = createDevelopEngineWorkerHandler({
   fetch: (url, init) => fetch(url, init),
   importModule: (url) => import(/* webpackIgnore: true */ /* turbopackIgnore: true */ url),
-  threadsEnvironment: () => ({
-    isolated: self.crossOriginIsolated === true,
-    hardwareConcurrency: navigator.hardwareConcurrency,
-    userAgent: navigator.userAgent,
-  }),
+  threadsEnvironment: () => readThreadsEnvironment(self),
   post: (message, transfer) => scope.postMessage(message, transfer ?? []),
   createNativeGlue: () => createNativeDevelopGlue(),
   isNativeUnavailableError: (error) => error instanceof NativeDevelopUnavailableError,
