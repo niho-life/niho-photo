@@ -297,7 +297,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine-client.test.ts",
         "sha256": "ab57eb9cc53aee5fc1ca937830d4eb7c979bf9da92b32c220bdeab772e8db065"
       },
-      "outputSha256": "0fb6a4ebeefdce798c44085b0c2a57e24d3c4cd29f0d844f0daf5c700a969c95",
+      "outputSha256": "619494114333c94acbbbae3899a8fb584fe6e5096b77518b2b70275c8abd0776",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -318,7 +318,8 @@
         "見本を編集の描画の後ろへ回す（#126）の順番と診断の記録を検査",
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
         "Issue #152 の runtime 診断を既存の描画時間テストの期待値へ追加。",
-        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加"
+        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
+        "#171 答えの遅い要求の診断の試験"
       ]
     },
     {
