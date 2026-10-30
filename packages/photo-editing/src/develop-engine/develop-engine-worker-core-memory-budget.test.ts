@@ -406,7 +406,9 @@ describe("Worker の物理メモリの予算（#155）", () => {
       await holdTwoPhotos(handler);
       const held = glue.events.length;
 
-      const done = handler(exportCopy(20, 2048));
+      // 開いている写真だけにしても払った高水位を超える書き出し（6000×4000・補正全部入り）
+      const big = () => exportCopy(20, 2560, FULL, workingCopyPng("X", 6000, 4000));
+      const done = handler(big());
       // `ready` が来ない worker は 20 秒で見切る
       if (mode === "silent") await vi.advanceTimersByTimeAsync(20_000);
       await done;
@@ -422,7 +424,7 @@ describe("Worker の物理メモリの予算（#155）", () => {
         "free X",
       ]);
       expect(glue.events).not.toContain("free B");
-      expect(resultBytes(posted, 20)).toEqual(await referenceBytes(exportCopy(20, 2048)));
+      expect(resultBytes(posted, 20)).toEqual(await referenceBytes(big()));
       expect(logPerf).toHaveBeenCalledWith(expect.objectContaining({ stage: "exportWorker", status: "error" }));
     },
   );

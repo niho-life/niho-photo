@@ -11935,8 +11935,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-memory-budget.test.ts",
-      "sha256": "ac32d055fa204879b9bbb707fed205b41927af8ab2325b194b6e30cf7dd07c4f",
-      "origin": "公開 Issue #155 のため追加。編集・見本・大きな書き出しが分け合う物理メモリ予算の実装・試験・計測・説明に使う公開リポジトリ内のコード（packages/photo-editing/src/develop-engine/develop-engine-worker-core-memory-budget.test.ts）。実写真・非公開情報を含まない。"
+      "sha256": "553a3a1ed24e24e9d980575f674b74cfaa4e7432f3dd9d817e3be5617371853f",
+      "origin": "公開 Issue #155 のため追加。編集・見本・大きな書き出しが分け合う物理メモリ予算の実装・試験・計測・説明に使う公開リポジトリ内のコード（packages/photo-editing/src/develop-engine/develop-engine-worker-core-memory-budget.test.ts）。実写真・非公開情報を含まない。\n変更理由: Issue #155: 使い捨ての worker の失敗時の試験を、払った高水位を超える書き出しで確かめる"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-export.worker.ts",
