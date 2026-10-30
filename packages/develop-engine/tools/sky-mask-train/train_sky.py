@@ -8,7 +8,9 @@ when photos with and without exposure have the same mix of sky and no-sky scenes
 flag alone predicts the label. Output: sky logits at 1/2 size. A small U-Net (stride-2 stem,
 4 levels, 3x3 convolutions + BatchNorm + ReLU) for a future wasm integration; the prediction
 helper snaps the upsampled map to the photo with a guided filter. `train` writes the input
-settings to `<run>/config.json`; `predict` and `export` read them from there.
+settings to `<run>/config.json`; `predict` and `export` read them from there. For the provenance
+of a model, `train` writes `<run>/run.json` (command, data and split digests, code hashes, commit,
+best epoch) and `export` writes `<run>/export.json` (hashes of what it wrote and what it read).
 
   python3 train_sky.py train  --data <dir with input/ label/> [--epochs 60] [--inputs rgb] [--long 512] --out <run dir>
   python3 train_sky.py predict --run <run dir> --input <dir of PNG (+ .json ev100)> --out <dir>
@@ -17,10 +19,12 @@ settings to `<run>/config.json`; `predict` and `export` read them from there.
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import random
 import resource
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -108,6 +112,34 @@ def load_ev(path: Path) -> float | None:
     except OverflowError:
         return None
     return ev if math.isfinite(ev) else None
+
+
+def sha256(path: Path) -> str:
+    h = hashlib.sha256()
+    with path.open("rb") as stream:
+        for chunk in iter(lambda: stream.read(1 << 20), b""):
+            h.update(chunk)
+    return h.hexdigest()
+
+
+def provenance(args, cfg: dict, items: list, train: list, val: list) -> dict:
+    here = Path(__file__).resolve().parent
+    pairs = "\n".join(f"{img.stem} {sha256(img)} {sha256(label)}" for img, label in items)
+    optional = {"ledger": args.data / "ledger.jsonl", "validationIds": args.validation_ids, "sampleWeights": args.sample_weights}
+    try:
+        commit = subprocess.run(["git", "-C", str(here), "rev-parse", "HEAD"], capture_output=True, text=True,
+                                check=True).stdout.strip()
+    except (OSError, subprocess.CalledProcessError):
+        commit = None
+    return {
+        "command": sys.argv, "config": cfg, "seed": args.seed, "epochs": args.epochs,
+        "images": len(items), "train": len(train), "validation": len(val),
+        # one line per image: stem, input hash, label hash
+        "dataSha256": hashlib.sha256(pairs.encode()).hexdigest(),
+        **{f"{k}Sha256": sha256(v) for k, v in optional.items() if v and Path(v).exists()},
+        "code": {name: sha256(here / name) for name in ("train_sky.py", "sky_math.py")},
+        "commit": commit, "torch": torch.__version__,
+    }
 
 
 def load_config(run: Path) -> dict:
@@ -213,18 +245,27 @@ def cmd_train(args) -> None:
     if not train or not val:
         raise ValueError("training and validation must each contain at least one image")
     print(f"train {len(train)} val {len(val)}")
+    weights = None
+    if args.sample_weights:
+        table = json.loads(args.sample_weights.read_text())
+        if not isinstance(table, dict) or any(type(v) not in (int, float) or not 0 < v <= 100 for v in table.values()):
+            raise ValueError("--sample-weights must map image stems to weights in (0, 100]")
+        weights = [float(table.get(img.stem, 1.0)) for img, _ in train]
     dev = torch.device(args.device)
     net = SkyNet(cfg["inputs"]).to(dev)
     print("parameters", sum(p.numel() for p in net.parameters()), "config", cfg)
     opt = torch.optim.AdamW(net.parameters(), lr=3e-3, weight_decay=1e-4)
-    loader = torch.utils.data.DataLoader(Data(train, True, cfg), batch_size=16, shuffle=True, num_workers=6,
-                                         collate_fn=collate, persistent_workers=True)
+    sampler = torch.utils.data.WeightedRandomSampler(weights, len(train)) if weights else None
+    loader = torch.utils.data.DataLoader(Data(train, True, cfg), batch_size=16, shuffle=sampler is None, sampler=sampler,
+                                         num_workers=6, collate_fn=collate, persistent_workers=True)
     vloader = torch.utils.data.DataLoader(Data(val, False, cfg), batch_size=16, num_workers=4, collate_fn=collate,
                                           persistent_workers=True)
     steps = args.epochs * len(loader)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, max_lr=3e-3, total_steps=steps, pct_start=0.1)
     args.out.mkdir(parents=True, exist_ok=True)
     (args.out / "config.json").write_text(json.dumps(cfg))
+    record = provenance(args, cfg, items, train, val)
+    (args.out / "run.json").write_text(json.dumps(record, indent=1))
     best = 1e9
     for epoch in range(args.epochs):
         net.train()
@@ -254,7 +295,9 @@ def cmd_train(args) -> None:
         if -viou < best:
             best = -viou
             torch.save(net.state_dict(), args.out / "best.pt")
+            record.update(bestEpoch=epoch + 1, bestValidationIoU=round(viou, 4))
     torch.save(net.state_dict(), args.out / "last.pt")
+    (args.out / "run.json").write_text(json.dumps(record, indent=1))
 
 
 def predict_one(net: SkyNet, rgb: np.ndarray, ev: float | None, dev, cfg: dict) -> np.ndarray:
@@ -326,6 +369,12 @@ def cmd_export(args) -> None:
     (args.run / "weights.f32").write_bytes(data.tobytes())
     (args.run / "layout.json").write_text(json.dumps({"long": cfg["long"], "inputs": cfg["inputs"], "channels": CH, "floats": int(data.size),
                                                       "layers": layers}, indent=1))
+    read = {name: sha256(args.run / name) for name in (args.weights, "config.json", "run.json") if (args.run / name).exists()}
+    (args.run / "export.json").write_text(json.dumps({
+        "read": read,
+        "wrote": {name: sha256(args.run / name) for name in ("weights.f32", "layout.json")},
+        "code": sha256(Path(__file__).resolve()),
+    }, indent=1))
     print(f"{len(layers)} layers, {data.size} floats ({data.nbytes} bytes)")
 
 
@@ -340,6 +389,7 @@ def main() -> None:
                    help="rgb-ev adds the exposure channels (needs exposure on sky and no-sky photos alike)")
     t.add_argument("--long", type=int, default=384, help="model long edge, multiple of 32 in 384..512")
     t.add_argument("--seed", type=int, default=0)
+    t.add_argument("--sample-weights", type=Path, help="JSON object: image stem -> sampling weight (default 1)")
     t.add_argument("--device", default="mps")
     t.add_argument("--validation-ids", type=Path, help="JSON array of image stems from distinct capture groups")
     t.add_argument("--expect-ev-count", type=int, help="expected number of photos with exposure sidecars; abort on mismatch")
