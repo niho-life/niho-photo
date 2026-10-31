@@ -251,7 +251,7 @@ pub const EXPECTED: [(&str, &str); 27] = [
     ),
     (
         "Developer.detectSky",
-        "06338b5c0b539a50847ba7fbeccf70c430369fc94859d4dda496993a804b464d",
+        "c791ba2806bf700571627f59cff91b9cff2764085fc5072cdaf5eb7ec2c6314c",
     ),
     ("Developer.detectSky.size", "160x120"),
     (
