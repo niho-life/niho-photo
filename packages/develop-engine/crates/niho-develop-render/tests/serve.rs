@@ -278,7 +278,7 @@ fn wasm_exports() -> Vec<String> {
 #[test]
 fn the_methods_are_the_wasm_exports() {
     let exports = wasm_exports();
-    assert_eq!(exports.len(), 39, "{exports:?}");
+    assert_eq!(exports.len(), 41, "{exports:?}");
     let mut expected: Vec<String> = exports;
     expected.extend(["Developer.free", "hello", "releaseClient"].map(String::from));
     expected.sort_unstable();
@@ -392,6 +392,17 @@ fn serve_gives_the_pinned_api_results() {
         "Developer.estimateUpright",
         f::sha256(upright.string().as_bytes()),
     ));
+    let (layout, weights) = f::sky_model();
+    let model = serve.call(
+        "setSkyModel",
+        json!({"args": [layout, {"blob": 0}]}),
+        &[&weights],
+    );
+    actual.push(("setSkyModel", model.string().to_string()));
+    let detected = serve.call("Developer.detectSky", on(json!([settings, null])), &[]);
+    let sky = detected.result();
+    actual.push(("Developer.detectSky", f::sha256(detected.blob(&sky["png"]))));
+    actual.push(("Developer.detectSky.size", size_text_of(sky)));
     let thumbnail = serve.call(
         "Developer.thumbnail",
         json!({"args": [f::THUMBNAIL_MAX_DIMENSION], "handle": handle, "client": "glue"}),
@@ -629,6 +640,26 @@ fn bad_requests_get_error_answers_and_serve_goes_on() {
             "mode must be 1 (auto), 2 (level), 3 (vertical) or 4 (full)",
             None
         )
+    );
+    let no_model = serve.call(
+        "Developer.detectSky",
+        json!({"args": [f::SETTINGS], "handle": handle}),
+        &[],
+    );
+    assert!(
+        no_model.error().0.starts_with("skyModelMissing"),
+        "{}",
+        no_model.text
+    );
+    let unreadable = serve.call(
+        "setSkyModel",
+        json!({"args": ["{}", {"blob": 0}]}),
+        &[&[0u8; 4]],
+    );
+    assert!(
+        unreadable.error().0.starts_with("sky model:"),
+        "{}",
+        unreadable.text
     );
     let missing = serve.call(
         "Developer.maskPlane",

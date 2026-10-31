@@ -54,6 +54,7 @@ pub mod relative_wb;
 pub mod research;
 pub mod resize;
 pub mod settings;
+pub mod sky;
 pub mod spatial;
 pub mod tone_ops;
 pub mod upright;
@@ -181,6 +182,9 @@ pub const MASK_SURFACE_INVALID: &str = "maskSurfaceInvalid";
 pub const MASK_SURFACE_MISMATCH: &str = "maskSurfaceMismatch";
 /// Stable code of [`Error::MaskNotFound`] (the start of its message).
 pub const MASK_NOT_FOUND: &str = "maskNotFound";
+/// Stable code (the start of its message) of `api::Developer::detect_sky`
+/// before `api::set_sky_model` gave the process a sky model.
+pub const SKY_MODEL_MISSING: &str = "skyModelMissing";
 
 impl From<DecodeError> for Error {
     fn from(e: DecodeError) -> Self {
