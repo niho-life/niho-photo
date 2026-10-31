@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { artifactName, assertPublicBytes, buildEnvironment, cargoComponents, contractFiles, createArtifactReceipt, createManifest, createSbom, guardBundle, hash, jsonBytes, lockfiles, npmComponents, validateManifest, validateSchema, workflowArtifactName } from "./release-evidence-lib.mjs";
+import { artifactName, assertPublicBytes, buildEnvironment, cargoComponents, contractFiles, createArtifactReceipt, createManifest, createSbom, guardBundle, hash, jsonBytes, lockfilePattern, lockfiles, npmComponents, validateManifest, validateSchema, workflowArtifactName } from "./release-evidence-lib.mjs";
 
 const root = new URL("../../", import.meta.url);
 const schema = JSON.parse(await readFile(new URL("docs/releases/manifest-v1.schema.json", root)));
@@ -100,6 +100,13 @@ test("CycloneDXは全lockのnpm/Cargo inventoryを重複なし・安定順で収
   assert.deepEqual(jsonBytes(createSbom(commit, Object.fromEntries(Object.entries(locks).reverse()))), jsonBytes(bom));
   assertPublicBytes(jsonBytes(bom));
   assert.throws(() => createSbom(commit, { ...locks, "unknown.lock": Buffer.from("") }));
+});
+
+test("収録するlockfileはrepoに入っている全lockfileと一致する（mainの成果物生成で初めて落ちないようにPRで検査）", () => {
+  const listed = spawnSync("git", ["ls-files", "-z"], { cwd: fileURLToPath(root), encoding: "utf8" });
+  assert.equal(listed.status, 0);
+  const committed = listed.stdout.split("\0").filter((file) => lockfilePattern.test(file)).sort();
+  assert.deepEqual(committed, lockfiles);
 });
 
 test("SBOMは未知registryと不正lockを拒否する", () => {

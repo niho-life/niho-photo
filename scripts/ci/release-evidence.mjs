@@ -3,7 +3,7 @@ import { appendFile, mkdir, mkdtemp, readFile, writeFile, readdir, rm } from "no
 import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
-import { artifactName, buildEnvironment, contractFiles, createManifest, createSbom, guardBundle, jsonBytes, lockfiles, validateManifest, assertPublicBytes, workflowArtifactName } from "./release-evidence-lib.mjs";
+import { artifactName, buildEnvironment, contractFiles, createManifest, createSbom, guardBundle, jsonBytes, lockfilePattern, lockfiles, validateManifest, assertPublicBytes, workflowArtifactName } from "./release-evidence-lib.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const run = (command, args, options = {}) => execFileSync(command, args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...options });
@@ -14,7 +14,7 @@ try {
   const name = artifactName(commit, process.arch);
   if (process.platform !== "darwin" || process.env.GITHUB_REPOSITORY !== "niho-life/niho-photo" || process.env.GITHUB_EVENT_NAME !== "push" || process.env.GITHUB_REF !== "refs/heads/main" || !/^[1-9][0-9]*$/.test(process.env.GITHUB_RUN_ID ?? "") || !/^[1-9][0-9]*$/.test(process.env.GITHUB_RUN_ATTEMPT ?? "")) throw new Error("公開main push専用です");
   if (run("git", ["rev-parse", "HEAD"]).trim() !== commit || run("git", ["status", "--porcelain", "--untracked-files=normal"]).trim()) throw new Error("exact SHAのclean checkoutが必要です");
-  const committedLocks = run("git", ["ls-files", "-z"]).split("\0").filter((file) => /(?:^|\/)(?:package-lock\.json|Cargo\.lock|yarn\.lock|pnpm-lock\.yaml|Package\.resolved)$/.test(file)).sort();
+  const committedLocks = run("git", ["ls-files", "-z"]).split("\0").filter((file) => lockfilePattern.test(file)).sort();
   if (JSON.stringify(committedLocks) !== JSON.stringify(lockfiles)) throw new Error("全lockfileの収録範囲を更新してください");
   stage = "toolchain/contract/lockfile";
   isolatedRoot = await mkdtemp(path.join(process.env.TMPDIR || tmpdir(), "niho-photo-public-build-"));
