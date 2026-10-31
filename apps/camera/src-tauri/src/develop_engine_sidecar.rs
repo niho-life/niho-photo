@@ -271,6 +271,8 @@ struct Session {
   writer: Mutex<Box<dyn Write + Send>>,
   pending: Mutex<Pending>,
   process: Mutex<Option<Box<dyn Process>>>,
+  /// 止める処理を 1 本ずつ通す（{@link Session::close}）
+  closing: Mutex<()>,
   /// `hello` が通ったら口の一覧（それまでは要求を受けない）
   methods: OnceLock<HashSet<String>>,
   next_id: AtomicU32,
@@ -292,6 +294,7 @@ impl Session {
       writer: Mutex::new(writer),
       pending: Mutex::new(Pending::default()),
       process: Mutex::new(Some(process)),
+      closing: Mutex::new(()),
       methods: OnceLock::new(),
       next_id: AtomicU32::new(HELLO_ID + 1),
       slow,
@@ -384,8 +387,11 @@ impl Session {
     result
   }
 
-  /// 子を止め、待っている要求を全部失敗にする（2 回目からは何もしない）。
+  /// 子を止め、待っている要求を全部失敗にする（2 回目からは何もしない）。同時に来たら、後の側は先の側が子を止めて
+  /// ログを書き終えるまで待ってから戻る（時間切れは見張りのスレッドと要求を出した側の両方が止めにいくので、
+  /// 時間切れを返した時点で前の子が片付いているようにする）。
   fn close(&self, why: Close) {
+    let _closing = lock(&self.closing);
     let waiters = {
       let mut pending = lock(&self.pending);
       if pending.closed {

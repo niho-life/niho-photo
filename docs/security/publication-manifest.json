@@ -11799,8 +11799,8 @@
     },
     {
       "path": "apps/camera/src-tauri/src/develop_engine_sidecar.rs",
-      "sha256": "9498e159ef751557d8b50dfe36368888e1a1d9059999ec2ae511ac5b1cf88714",
-      "origin": "公開repoで新規作成（niho-photo#152）。同梱の niho-develop-render serve を 1 プロセス持ち、stdin / stdout の封で要求を多重化する（起動・hello・落ちたときの起動し直し・待ちの上限・終了）。偽の serve での試験を含む。外部のコード・実写真・非公開の情報を含まない。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正\n変更理由: CI の未使用警告を防ぎ旧入口をテスト時だけに限定\n変更理由: #171 正規切替の停止箇所を同じ試行IDで記録する診断"
+      "sha256": "f678b748cc356d329944eb99e34a3a7dd8d80284bf5c342585461f353a6ba3cf",
+      "origin": "公開repoで新規作成（niho-photo#152）。同梱の niho-develop-render serve を 1 プロセス持ち、stdin / stdout の封で要求を多重化する（起動・hello・落ちたときの起動し直し・待ちの上限・終了）。偽の serve での試験を含む。外部のコード・実写真・非公開の情報を含まない。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正\n変更理由: CI の未使用警告を防ぎ旧入口をテスト時だけに限定\n変更理由: #171 正規切替の停止箇所を同じ試行IDで記録する診断\n変更理由: main の Public CI: sidecar の時間切れで、見張りと要求の側が同時に止めにいくと終了のログより先に戻る競合を直す"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop-render/src/serve.rs",
