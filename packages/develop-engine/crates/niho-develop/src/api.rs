@@ -25,12 +25,17 @@
 //! overlay. A Developer holds the surfaces of `brush` / `subject` / `sky`
 //! masks, and its JPEG / PNG exports use those surfaces.
 //! [`Developer::estimate_upright`] estimates Upright (the
-//! perspective that stands its lines upright). Heal marks
+//! perspective that stands its lines upright). [`Developer::detect_sky`]
+//! makes a `sky` mask's surface with the sky model [`set_sky_model`] gave
+//! the process (niho-photo#141). Heal marks
 //! (`developSettings.heal`, v 8) render through `render` and
 //! [`Developer::render`] like any other setting; a Developer keeps their
 //! plans across frames. The lens corrections (`developSettings.lens`, v 9)
 //! do too; a Developer estimates the photo's chromatic aberration once.
 
+use std::sync::{Arc, Mutex, PoisonError};
+
+use crate::sky::SkyModel;
 use crate::upright::UprightMode;
 use crate::{
     convert, exif, frame, xmp, DevelopSettings, Filter, LightroomWhite, Quality, RenderOptions,
@@ -110,9 +115,11 @@ pub fn thread_count() -> usize {
 
 /// What this build draws beyond what [`validate_settings`] reads, as JSON:
 /// `{"masks":{"kinds":["linear","radial","brush","subject","sky"],
-/// "max":8,"maskPlane":true,"surfaces":true}}` — local masks of those
-/// kinds render, at most `max` of them, `Developer.maskPlane` exists, and a
-/// Developer holds surfaces for `brush` / `subject` / `sky` masks.
+/// "max":8,"maskPlane":true,"surfaces":true,"skyDetection":true}}` — local
+/// masks of those kinds render, at most `max` of them, `Developer.maskPlane`
+/// exists, a Developer holds surfaces for `brush` / `subject` / `sky`
+/// masks, and `skyDetection`: [`Developer::detect_sky`] makes a `sky`
+/// mask's surface once [`set_sky_model`] gave a model.
 pub fn capabilities() -> String {
     serde_json::json!({
         "masks": {
@@ -120,9 +127,74 @@ pub fn capabilities() -> String {
             "max": crate::settings::MAX_LOCAL_MASKS,
             "maskPlane": true,
             "surfaces": true,
+            "skyDetection": true,
         }
     })
     .to_string()
+}
+
+/// The sky model of [`Developer::detect_sky`], one for the process (every
+/// Developer, every client of the sidecar).
+static SKY_MODEL: Mutex<Option<Arc<SkyModel>>> = Mutex::new(None);
+
+/// Gives the process the sky model (niho-photo#141,
+/// [`crate::sky::SkyModel::parse`]: `layout_json` is `train_sky.py
+/// export`'s `layout.json`, `weights` its `weights.f32`), replacing the one
+/// it had. Returns `{"long", "inputs", "channels"}` of the model as JSON.
+/// A model it cannot read is an error and leaves the one it had.
+pub fn set_sky_model(layout_json: &str, weights: &[u8]) -> Result<String, String> {
+    let model = SkyModel::parse(layout_json, weights)?;
+    let description = serde_json::json!({
+        "long": model.long_side(),
+        "inputs": model.inputs().name(),
+        "channels": model.widths(),
+    })
+    .to_string();
+    *SKY_MODEL.lock().unwrap_or_else(PoisonError::into_inner) = Some(Arc::new(model));
+    Ok(description)
+}
+
+fn sky_model() -> Option<Arc<SkyModel>> {
+    SKY_MODEL
+        .lock()
+        .unwrap_or_else(PoisonError::into_inner)
+        .clone()
+}
+
+/// Long side of the working image [`Developer::detect_sky`] finds the sky
+/// on, and of the surface it makes (a smaller photo keeps its size).
+pub const SKY_SURFACE_LONG_EDGE: u32 = 1024;
+
+/// The settings a working image renders with, the frame mask surfaces are
+/// made on: `"v": 1` with only these settings' `engine`, `look` and `base`
+/// (no adjustments, geometry, lens corrections, heal marks or masks; as the
+/// Mac's `mask_detection::working_image_settings`). Settings without an
+/// `engine` are an error.
+fn working_image_settings(settings_json: &str) -> Result<DevelopSettings, String> {
+    use serde_json::Value;
+    let given: Value = serde_json::from_str(settings_json).map_err(message)?;
+    let engine = given
+        .get("engine")
+        .and_then(Value::as_str)
+        .ok_or_else(|| "settings have no engine".to_string())?;
+    let mut settings = serde_json::json!({ "v": 1, "engine": engine });
+    if let Some(look) = given.get("look").and_then(Value::as_str) {
+        settings["look"] = serde_json::json!(look);
+    }
+    if let Some(base) = given.get("base") {
+        settings["base"] = base.clone();
+    }
+    crate::parse_settings(&settings.to_string()).map_err(message)
+}
+
+/// A `sky` mask's surface [`Developer::detect_sky`] made: the PNG
+/// ([`encode_mask_surface`]'s bytes, [`mask_surface_id`] names it) and its
+/// size (the working image's).
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct DetectedSky {
+    pub width: u32,
+    pub height: u32,
+    pub png: Vec<u8>,
 }
 
 /// The id of a mask surface PNG: the sha256 of its bytes (64 lowercase hex
@@ -628,6 +700,48 @@ impl Developer {
             .estimate_upright(&settings, mode)
             .to_value()
             .to_string())
+    }
+
+    /// "空" (niho-photo#141, `docs/local-adjustments.md` "空の検出"): this
+    /// photo's sky as a `sky` mask's surface, found by the process's sky
+    /// model ([`set_sky_model`], [`crate::sky::estimate_sky`]) on the
+    /// working image: the frame mask coordinates live in (no geometry, no
+    /// masks), rendered released with only these settings' `engine`, `look`
+    /// and `base` ([`working_image_settings`]) at a long side of
+    /// [`SKY_SURFACE_LONG_EDGE`]. `ev100` is the capture's exposure at ISO
+    /// 100, `None` when unknown (a model of `"rgb"` inputs does not read
+    /// it). `None` without sky. Fails with `skyModelMissing` before a model
+    /// is set, and on settings without an `engine`. The render touches the
+    /// drag frames' kept state like any other render (the next frame of the
+    /// photo's own settings renders afresh).
+    pub fn detect_sky(
+        &mut self,
+        settings_json: &str,
+        ev100: Option<f64>,
+    ) -> Result<Option<DetectedSky>, String> {
+        let model = sky_model().ok_or_else(|| {
+            format!(
+                "{}: no sky model is set (setSkyModel)",
+                crate::SKY_MODEL_MISSING
+            )
+        })?;
+        let settings = working_image_settings(settings_json)?;
+        let frame = self
+            .session
+            .render(&settings, SKY_SURFACE_LONG_EDGE as usize, Quality::Final)
+            .map_err(message)?;
+        let rgb: Vec<u8> = frame
+            .rgba
+            .chunks_exact(4)
+            .flat_map(|p| [p[0], p[1], p[2]])
+            .collect();
+        let Some(sky) = crate::sky::estimate_sky(&model, &rgb, frame.width, frame.height, ev100)
+        else {
+            return Ok(None);
+        };
+        let (width, height) = (sky.width, sky.height);
+        let png = encode_mask_surface(width, height, &sky.data)?;
+        Ok(Some(DetectedSky { width, height, png }))
     }
 }
 

@@ -18,11 +18,12 @@ use super::{panic_text, MAX_DEVELOPERS, PROTOCOL};
 /// by their JS names (a `Developer` method as `Developer.<name>`, its
 /// constructor as `Developer.new`, without the `width` / `height` getters,
 /// which the opening reply carries), then `hello` and `releaseClient`.
-pub const METHODS: [&str; 42] = [
+pub const METHODS: [&str; 44] = [
     "version",
     "capabilities",
     "maskSurfaceId",
     "encodeMaskSurface",
+    "setSkyModel",
     "render",
     "exportJpeg",
     "exportPng",
@@ -58,6 +59,7 @@ pub const METHODS: [&str; 42] = [
     "Developer.sampleColor",
     "Developer.autoSettings",
     "Developer.estimateUpright",
+    "Developer.detectSky",
     "Developer.free",
     "hello",
     "releaseClient",
@@ -260,6 +262,11 @@ fn call(state: &State, method: &str, request: &Request<'_>) -> Result<Reply, Fai
             let png = api::encode_mask_surface(args.u32(0)?, args.u32(1)?, args.blob(2)?)
                 .map_err(Fail::call)?;
             Reply::bytes(png)
+        }
+        "setSkyModel" => {
+            args.expect(2, 2)?;
+            let model = api::set_sky_model(args.str(0)?, args.blob(1)?).map_err(Fail::call)?;
+            Reply::text(model)
         }
         "render" => {
             args.expect(3, 4)?;
@@ -516,6 +523,21 @@ fn call(state: &State, method: &str, request: &Request<'_>) -> Result<Reply, Fai
                 .estimate_upright(settings, mode)
                 .map_err(Fail::call)?;
             Reply::text(result)
+        }
+        "Developer.detectSky" => {
+            args.expect(1, 2)?;
+            let (settings, ev100) = (args.str(0)?, args.opt_f64(1)?);
+            let developer = state.developer(method, request.handle)?;
+            let found = lock(&developer)?
+                .detect_sky(settings, ev100)
+                .map_err(Fail::call)?;
+            match found {
+                None => Reply::ok(Value::Null),
+                Some(sky) => Reply::ok_with(
+                    json!({"width": sky.width, "height": sky.height, "png": {"blob": 0}}),
+                    vec![sky.png],
+                ),
+            }
         }
         "Developer.free" => {
             args.expect(0, 0)?;

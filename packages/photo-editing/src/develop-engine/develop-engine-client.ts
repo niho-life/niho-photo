@@ -106,6 +106,9 @@ export {
  *   `exportJpeg` / `exportWorkingCopyJpeg` は描かれる面のマスクがあれば面を添えて出す（Worker が一時的な Developer で描く。読み口は
  *   `options.maskSurfaces`、無ければ覚えた PNG と開いている写真の読み口）。そのときも書き出しとして数え（`dispose` は描き終えるまで
  *   待つ）、面を読み終えてから Worker へ出す
+ * - 空の検出（`detectSky`。開いている写真の `Developer.detectSky`、niho-photo#141）は、口が wasm にあり面も受け渡せるとき
+ *   （`supportsSkyDetection()`）だけ使える。作った面の PNG は `encodeMaskSurface` と同じく覚える（次の描画は置き場を読まずにそれを
+ *   渡す）。`estimateUpright` と同じく捨てずに順に処理し、描画の枠には入らない
  */
 
 /** `applyPreset` の撮影時の白の出どころ（省くと開いている写真）。 */
@@ -118,6 +121,8 @@ export type DevelopFrame = { width: number; height: number; rgba: Uint8ClampedAr
 export type DevelopSampledColor = { lightness: number; chroma: number; hue: number };
 /** 1 枚のマスクの面（`width·height` byte。`round(重み / 65536 · 255)`、行優先、`invert` 込み、`enabled` に依らない）。 */
 export type DevelopMaskPlane = { width: number; height: number; data: Uint8Array<ArrayBuffer> };
+/** 写真から探した空の面（`png` は 8bit グレーの面の PNG、`id` はその sha256＝`surface.id`、寸法は `surface.width` / `height`）。 */
+export type DevelopDetectedSky = { id: string; width: number; height: number; png: Uint8Array<ArrayBuffer> };
 
 /**
  * 描画の優先度。`drag`（つまみを動かしている間の速い描き方）と `final`（離した後の丁寧な 1 枚）は編集の 1 枠、`preview`（一覧の
@@ -306,6 +311,17 @@ export type DevelopEngine = {
    */
   supportsUpright: () => Promise<boolean>;
   /**
+   * 持っている写真の空の面（niho-photo#141。`docs/local-adjustments.md`「空の検出」）: 今の設定の `engine`・`look`・`base` だけで
+   * 描いた作業画像（長辺 1024）から空を探し、面の PNG と id・寸法を返す（作った PNG は覚える）。空が無ければ null。`ev100` は撮影時の
+   * 露出（ISO 100 の EV。分からなければ null）。捨てずに順に処理し、描画の枠は使わない。口の無い wasm・写真を開いていなければ reject
+   */
+  detectSky?: (settings: object, ev100: number | null) => Promise<DevelopDetectedSky | null>;
+  /**
+   * `detectSky` を使える wasm か（起こした wasm の `Developer` に口があり、面も受け渡せる。起こす前・使えなければ false。throw しない）。
+   * テスト用の engine には無いことがある（無い＝使えない）
+   */
+  supportsSkyDetection?: () => boolean;
+  /**
    * 修復の印（`developSettings` v8 の `heal`。niho-photo#44）を読んで描ける wasm か（Worker が起こした wasm が `validateSettings` で
    * 小さな `v: 8` の設定を通すとき。crate 0.24.0 から。初回に wasm を起こす。使えなければ false。throw しない）。false の wasm は印の
    * ある設定を描かない（`unsupportedVersion`）ので、画面は修復の道具を出さない
@@ -411,6 +427,7 @@ type Pending = {
     | "autoSettings"
     | "sampleColor"
     | "estimateUpright"
+    | "detectSky"
     | "warmAutoSettings"
     | "imageSize"
     | "rasterDecodeSize"
@@ -585,6 +602,8 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
   let perspectiveSupported = false;
   // Upright の口が wasm の `Developer` にあり、遠近も描ける（`ready` の応答で分かる）
   let uprightSupported = false;
+  // 空の検出の口が wasm の `Developer` にあり、面も受け渡せる（`ready` の応答で分かる）
+  let skyDetectionSupported = false;
   // 修復の印（v8）を描ける wasm（`ready` の応答で分かる）
   let healSupported = false;
   // レンズ補正（v9）を描ける wasm（`ready` の応答で分かる）
@@ -925,6 +944,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
         detailSupported = response.detail === true;
         perspectiveSupported = response.perspective === true;
         uprightSupported = response.upright === true;
+        skyDetectionSupported = response.skyDetection === true;
         healSupported = response.heal === true;
         lensSupported = response.lens === true;
         presetAmountSupported = response.presetAmount === true;
@@ -1207,6 +1227,28 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
       const estimate = readDevelopUprightEstimate(response.resultJson);
       if (!estimate) throw new DevelopEngineError("develop engine returned an invalid upright estimate");
       return estimate;
+    },
+
+    supportsSkyDetection() {
+      return status === "ready" && !terminateWhenIdle && skyDetectionSupported;
+    },
+
+    async detectSky(settings, ev100) {
+      // 口の無い wasm には送らない
+      if (status === "ready" && !terminateWhenIdle && !skyDetectionSupported) {
+        throw new DevelopEngineError("develop engine cannot detect the sky");
+      }
+      const exposure = ev100 !== null && Number.isFinite(ev100) ? ev100 : null;
+      const response = await request("detectSky", (id) => ({
+        message: { type: "detectSky", id, settingsJson: JSON.stringify(settings), ev100: exposure },
+      }));
+      if (response.type !== "skyDetected") throw new DevelopEngineError("develop engine returned no sky surface");
+      if (!response.surface) return null;
+      const { surfaceId, width, height } = response.surface;
+      const png = new Uint8Array(response.surface.png);
+      // 次の描画は置き場を読み直さずにこの PNG を渡す（`encodeMaskSurface` と同じ）
+      surfaces.remember(surfaceId, png.slice());
+      return { id: surfaceId, width, height, png };
     },
 
 async setMaskSurface(surfaceId, png) {

@@ -1,12 +1,44 @@
 "use client";
 
 import { useId } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { queryOptions, useQuery, type QueryClient } from "@tanstack/react-query";
 
-import type { PhotoLibraryItem } from "../library/photo-library";
+import type { PhotoLibrary, PhotoLibraryItem, PhotoLibraryPhotoInfo } from "../library/photo-library";
 import { usePhotoLibrary } from "../library/photo-library-context";
-import { photoEditingInfoGroups, type PhotoEditingInfoGroup } from "../photo-editing-info";
+import { photoEditingInfoGroups, photoInfoEv100, type PhotoEditingInfoGroup } from "../photo-editing-info";
 import { photoEditingQueryKeys } from "../photo-editing-query-keys";
+
+/**
+ * 写真の情報の問い合わせ（{@link PhotoLibrary.info}）。右パネルの「情報」と空の検出の露出（niho-photo#141）が同じ鍵・同じ読み方を
+ * 使う（どちらかが読んだ値をもう一方が使う）。読めなければ写真の行の項目だけを出す（やり直して待たせない）。
+ */
+export function browserPhotoInfoQueryOptions(library: PhotoLibrary, photo: Pick<PhotoLibraryItem, "id" | "contentSha256">) {
+  return queryOptions({
+    queryKey: photoEditingQueryKeys.photoInfo(library.place, photo.id, photo.contentSha256),
+    queryFn: async ({ signal }): Promise<PhotoLibraryPhotoInfo | null> =>
+      library.info ? ((await library.info(photo.id, { signal })) ?? null) : null,
+    retry: false,
+  });
+}
+
+/**
+ * 空の検出の撮影時の露出（ISO 100 の EV。{@link photoInfoEv100}）。「情報」が読んだ値があればそれを、無ければ同じ問い合わせで読む。
+ * 情報を読めない置き場・読めない・失敗・値が足りなければ null（写真の中の相対の明るさで探す）。
+ */
+export async function readBrowserPhotoEv100(
+  queryClient: QueryClient,
+  library: PhotoLibrary,
+  photo: Pick<PhotoLibraryItem, "id" | "contentSha256">,
+): Promise<number | null> {
+  if (!library.info) return null;
+  const options = browserPhotoInfoQueryOptions(library, photo);
+  try {
+    const cached = queryClient.getQueryData(options.queryKey);
+    return photoInfoEv100(cached !== undefined ? cached : await queryClient.fetchQuery(options));
+  } catch {
+    return null;
+  }
+}
 
 /**
  * 情報の群（niho-photo#43）。群ごとに見出しと、ラベルと値の 2 列（`dl`）。読み上げはラベルと値を続けて読む（「ISO 400」）。長い値
@@ -53,13 +85,7 @@ export function BrowserPhotoEditingInfo(props: { photo: PhotoLibraryItem; infoAv
   const library = usePhotoLibrary();
   const { photo } = props;
   const reads = props.infoAvailable && library.info !== undefined;
-  const info = useQuery({
-    queryKey: photoEditingQueryKeys.photoInfo(library.place, photo.id, photo.contentSha256),
-    queryFn: async ({ signal }) => (library.info ? ((await library.info(photo.id, { signal })) ?? null) : null),
-    enabled: reads,
-    // 読めなければ写真の行の項目だけを出す（やり直して待たせない）
-    retry: false,
-  });
+  const info = useQuery({ ...browserPhotoInfoQueryOptions(library, photo), enabled: reads });
   if (reads && info.isPending) return <div aria-busy="true" className="min-h-8" />;
   // 読まない間は、同じ鍵に前に読んだ値が残っていても使わない
   return <PhotoEditingInfoList groups={photoEditingInfoGroups(photo, reads ? (info.data ?? null) : null)} />;
