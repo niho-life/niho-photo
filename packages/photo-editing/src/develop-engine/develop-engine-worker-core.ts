@@ -104,8 +104,10 @@ import {
  *   一時的な `Developer`（JPEG / PNG は一発の書き出しと同じ作業サイズ）に面を渡して描く（一発の描画は面を持たない）
  * - 空の検出（niho-photo#141。`docs/local-adjustments.md`「空の検出」）: `detectSky` は開いている写真の
  *   `Developer.detectSky(settingsJson, ev100)` で作業画像の空の面を作り、面の PNG（transfer）・id（`maskSurfaceId`）・寸法を返す
- *   （空が無ければ `surface: null`）。描画と同じ列で順に処理する単発の問い合わせ（`estimateUpright` と同じ）。`Developer` に口があり
- *   面を受け渡せて `sky` を描けるときだけ `ready` に `skyDetection: true` を付け、無い glue・写真を開いていなければ error
+ *   （空が無ければ `surface: null`）。描画と同じ列で順に処理する単発の問い合わせ（`estimateUpright` と同じ）。モデル（#158 の重み）は
+ *   manifest の `skyModel` の 2 つのファイルを初めての `detectSky` で読み、`setSkyModel` で glue に渡す（glue を替えたら渡し直し、
+ *   native の sidecar が持っていなければ 1 回だけ渡し直して探し直す）。`Developer` と `setSkyModel` の口があり、面を受け渡せて `sky` を
+ *   描け、manifest にモデルがあるときだけ `ready` に `skyDetection: true` を付け、無い glue・写真を開いていなければ error
  */
 
 export type DevelopEngineWorkerRequest =
@@ -351,7 +353,9 @@ export type DevelopEnginePerfRecord = {
     /** 補助の worker が作った解析を取り込んだ（#155） */
     | "importAnalysis"
     /** 使い捨ての worker で書き出した（起こしてから結果が届くまでの往復。#155） */
-    | "exportWorker";
+    | "exportWorker"
+    /** 空の検出のモデルを読んで glue に渡した（初めての「空」だけ。niho-photo#141） */
+    | "skyModelLoad";
   durationMs: number;
   wasmMemoryBytes: number | null;
   status: "ok" | "error";
@@ -529,8 +533,10 @@ type DevelopGlue = {
   maskPlane: boolean;
   /** `Developer.prototype.estimateUpright` がある（無い glue では Upright のボタンを出さない） */
   upright: boolean;
-  /** `Developer.prototype.detectSky` がある（無い glue では「空」を wasm で探せない） */
+  /** `Developer.prototype.detectSky` と `setSkyModel` がある（無い glue では「空」を wasm で探せない） */
   skyDetection: boolean;
+  /** `setSkyModel(layoutJson, weights)`（空の検出のモデルを渡す。niho-photo#141） */
+  setSkyModel: ((layoutJson: string, weights: Uint8Array) => unknown) | null;
 /** `encodeMaskSurface(width, height, data)`（面の PNG。無い glue では面を作れない） */
   encodeMaskSurface: ((width: number, height: number, data: Uint8Array) => unknown) | null;
   /** `maskSurfaceId(png)`（面の id = sha256） */
@@ -604,7 +610,7 @@ const estimateUpright: unknown = isRecord(developerPrototype)
   // 空の検出の口（無い glue でも、面は受け渡せる）
   const detectSky: unknown = isRecord(developerPrototype) ? Reflect.get(developerPrototype, "detectSky") : undefined;
 // 面の受け渡しの口（無い glue でも、線形・円形は描ける）
-  const { encodeMaskSurface, maskSurfaceId } = module;
+  const { encodeMaskSurface, maskSurfaceId, setSkyModel } = module;
   const surfaceMethods = ["setMaskSurface", "dropMaskSurface", "exportJpeg"].every(
     (name) => isRecord(developerPrototype) && typeof Reflect.get(developerPrototype, name) === "function",
   );
@@ -646,7 +652,8 @@ const estimateUpright: unknown = isRecord(developerPrototype)
     capabilities: typeof capabilities === "function" ? (capabilities as () => unknown) : null,
     maskPlane: typeof maskPlane === "function",
     upright: typeof estimateUpright === "function",
-    skyDetection: typeof detectSky === "function",
+    skyDetection: typeof detectSky === "function" && typeof setSkyModel === "function",
+    setSkyModel: typeof setSkyModel === "function" ? (setSkyModel as DevelopGlue["setSkyModel"]) : null,
 encodeMaskSurface: typeof encodeMaskSurface === "function" ? (encodeMaskSurface as DevelopGlue["encodeMaskSurface"]) : null,
     maskSurfaceId: typeof maskSurfaceId === "function" ? (maskSurfaceId as DevelopGlue["maskSurfaceId"]) : null,
     surfaces: surfaceMethods,
@@ -1085,6 +1092,10 @@ export function createDevelopEngineWorkerHandler(
   let upright = false;
   // 起こした wasm が空を探せるか（`Developer.detectSky` があり、面を受け渡せて `sky` を描ける）
   let skyDetection = false;
+  // 空の検出のモデルのファイル（wasm の manifest の `skyModel`。native の起動は manifest を読まないので、native では null）
+  let skyModelFiles: { layoutUrl: string; weightsUrl: string } | null = null;
+  // モデルを渡した glue と、渡し終える Promise（失敗したら次の `detectSky` で読み直す）
+  let skyModelGiven: { glue: DevelopGlue; ready: Promise<void> } | null = null;
   let heal = false;
   let lens = false;
   let wasmMemory: () => ArrayBufferLike | null = () => null;
@@ -1840,7 +1851,8 @@ export function createDevelopEngineWorkerHandler(
     masks = readMaskCapabilities(loaded);
     perspective = loaded.geometry !== null && acceptsPerspectiveSettings(loaded.validateSettings);
     upright = perspective && loaded.upright;
-    skyDetection = loaded.skyDetection && masks?.surfaces === true && masks.kinds.includes("sky");
+    skyDetection =
+      loaded.skyDetection && masks?.surfaces === true && masks.kinds.includes("sky") && skyModelFiles !== null;
     heal = acceptsHealSettings(loaded.validateSettings);
     lens = acceptsLensSettings(loaded.validateSettings);
     helperManifestUrl = manifestUrl;
@@ -1854,6 +1866,7 @@ export function createDevelopEngineWorkerHandler(
       if (!parsed) throw new Error("develop engine manifest is invalid");
       return parsed;
     });
+    skyModelFiles = manifest.skyModel;
     const environment = deps.threadsEnvironment?.();
     // Safari と iOS のブラウザは WebKit の Worker pool が遅くなり続ける計測結果がある（#148）。アプリ内の WKWebView（Mac・iPad の
     // desktop 表示）は Safari の語を持たないので、Chrome 系でない AppleWebKit も WebKit とみなす（#175）。
@@ -1903,6 +1916,35 @@ export function createDevelopEngineWorkerHandler(
     activateGlue(loaded, manifestUrl, "wasm", manifest.version);
   };
 
+  /**
+   * 空の検出のモデル（manifest の `skyModel`）を `loaded` に渡す。初めは 2 つのファイルを読み、同じ glue には 1 度だけ渡す。読めない・
+   * 渡せなければ reject し、次の呼び出しで読み直す。
+   */
+  const giveSkyModel = (loaded: DevelopGlue): Promise<void> => {
+    if (skyModelGiven?.glue === loaded) return skyModelGiven.ready;
+    const files = skyModelFiles;
+    const setSkyModel = loaded.setSkyModel;
+    if (!files || !setSkyModel) return Promise.reject(new Error("develop engine has no sky model"));
+    const read = async (url: string) => {
+      const response = await deps.fetch(url);
+      if (!response.ok) throw new Error(`develop engine sky model ${response.status}`);
+      return response;
+    };
+    const ready = measureAsync("skyModelLoad", async () => {
+      const [layout, weights] = await Promise.all([
+        read(files.layoutUrl).then((response) => response.text()),
+        read(files.weightsUrl).then((response) => response.arrayBuffer()),
+      ]);
+      setSkyModel(layout, new Uint8Array(weights));
+    });
+    const given = { glue: loaded, ready };
+    skyModelGiven = given;
+    ready.catch(() => {
+      if (skyModelGiven === given) skyModelGiven = null;
+    });
+    return ready;
+  };
+
   const flushNativeClient = () => {
     try {
       nativeReleaseClient?.();
@@ -1927,6 +1969,7 @@ export function createDevelopEngineWorkerHandler(
     await loaded.init({ module_or_path: manifestUrl });
     wasmMemory = () => null;
     wasmThreads = 1;
+    skyModelFiles = null;
     activateGlue(loaded, manifestUrl, "native", "");
   };
 
@@ -2313,6 +2356,7 @@ export function createDevelopEngineWorkerHandler(
           if (!skyDetection || typeof opened.detectSky !== "function" || !loaded.maskSurfaceId) {
             throw new Error("develop engine cannot detect the sky");
           }
+          await giveSkyModel(loaded);
           // wasm-bindgen の Option<f64> は undefined を None に読む
           const found = readDetectedSky(opened.detectSky(message.settingsJson, message.ev100 ?? undefined));
           if (!found) {
