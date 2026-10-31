@@ -494,8 +494,27 @@ def cmd_predict(args) -> None:
     print(f"{len(times)} -> {args.out}")
 
 
+def parity_inputs(long: int) -> list[np.ndarray]:
+    """Drawn (not photographed) uint8 inputs at the model size, landscape and portrait, for parity checks."""
+    rng = np.random.default_rng(0)
+    out = []
+    for w, h in ((long, long * 3 // 4 // 32 * 32), (long * 3 // 4 // 32 * 32, long)):
+        y = np.linspace(0, 1, h, dtype=np.float32)[:, None, None]
+        img = np.array([70, 130, 220], np.float32) * (1 - y) + np.array([190, 215, 245], np.float32) * y
+        img = np.broadcast_to(img, (h, w, 3)).copy()
+        yy, xx = np.mgrid[0:h, 0:w]
+        for _ in range(4):
+            cx, cy, r = rng.uniform(0, w), rng.uniform(0, 0.4 * h), rng.uniform(0.04, 0.1) * w
+            img[((xx - cx) / (2 * r)) ** 2 + ((yy - cy) / r) ** 2 < 1] = (245, 245, 248)
+        img[int(h * rng.uniform(0.55, 0.75)):] = (80, 95, 60)
+        img += rng.normal(0, 4, img.shape)
+        out.append(np.clip(img, 0, 255).astype(np.uint8))
+    return out
+
+
 def cmd_export(args) -> None:
-    """Fold BatchNorm into each convolution; write weights.f32 (little endian) + layout.json."""
+    """Fold BatchNorm into each convolution; write weights.f32 (little endian) + layout.json, and
+    parity fixtures (drawn inputs at the model size and PyTorch's logits) under fixtures/."""
     cfg = load_config(args.run)
     net = SkyNet(cfg["inputs"], tuple(cfg.get("channels", CH)))
     net.load_state_dict(torch.load(args.run / args.weights, map_location="cpu"))
@@ -531,10 +550,21 @@ def cmd_export(args) -> None:
     (args.run / "weights.f32").write_bytes(data.tobytes())
     (args.run / "layout.json").write_text(json.dumps({"long": cfg["long"], "inputs": cfg["inputs"], "channels": list(cfg.get("channels", CH)), "floats": int(data.size),
                                                       "layers": layers}, indent=1))
+    fixtures, wrote = [], ["weights.f32", "layout.json"]
+    (args.run / "fixtures").mkdir(exist_ok=True)
+    for k, rgb in enumerate(parity_inputs(cfg["long"])):
+        with torch.no_grad():
+            logits = net(torch.from_numpy(features(rgb, None, cfg["inputs"]))[None])[0, 0].numpy().astype("<f4")
+        stem = f"fixtures/parity-{k}"
+        (args.run / f"{stem}.input.u8").write_bytes(rgb.tobytes())
+        (args.run / f"{stem}.logits.f32").write_bytes(logits.tobytes())
+        fixtures.append({"stem": stem, "input": [rgb.shape[1], rgb.shape[0]], "logits": [logits.shape[1], logits.shape[0]]})
+        wrote += [f"{stem}.input.u8", f"{stem}.logits.f32"]
+    (args.run / "fixtures/fixtures.json").write_text(json.dumps(fixtures, indent=1))
     read = {name: sha256(args.run / name) for name in (args.weights, "config.json", "run.json") if (args.run / name).exists()}
     (args.run / "export.json").write_text(json.dumps({
         "read": read,
-        "wrote": {name: sha256(args.run / name) for name in ("weights.f32", "layout.json")},
+        "wrote": {name: sha256(args.run / name) for name in wrote},
         "code": sha256(Path(__file__).resolve()),
     }, indent=1))
     print(f"{len(layers)} layers, {data.size} floats ({data.nbytes} bytes)")

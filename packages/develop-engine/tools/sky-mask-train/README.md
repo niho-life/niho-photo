@@ -47,4 +47,6 @@ python train_sky.py export --run "$RUN"
 
 学習の設定は `RUN/config.json` に書き、`predict` と `export` はそこから読む（`config.json` のない古い run は長辺 384・`rgb-ev` として読む）。
 
-`export` は BatchNorm を畳み込んだ研究用の重みとレイアウトを非公開の `RUN` に書く。生成証跡として、`train` は `RUN/run.json`（命令、素材の digest＝画像ごとの入力とラベル（`rgb-ev` では露出の JSON も）の SHA-256 の一覧の hash、台帳・検証分割・抽出の重みの SHA-256、コードの hash、commit、最良 epoch と検証 IoU）を、`export` は `RUN/export.json`（読んだ重み・設定・`run.json` と、書いた `weights.f32`・`layout.json` の SHA-256）を残す。Rust/wasm へ渡すときは、この 2 つと非公開台帳を照合する。Rust/wasm 実装との一致、ボタンから結果までの実機時間、空なし写真の誤検出率を確認するまでは製品へ載せない。
+`export` は BatchNorm を畳み込んだ研究用の重みとレイアウトを非公開の `RUN` に書く。生成証跡として、`train` は `RUN/run.json`（命令、素材の digest＝画像ごとの入力とラベル（`rgb-ev` では露出の JSON も）の SHA-256 の一覧の hash、台帳・検証分割・抽出の重みの SHA-256、コードの hash、commit、最良 epoch と検証 IoU）を、`export` は `RUN/export.json`（読んだ重み・設定・`run.json` と、書いた `weights.f32`・`layout.json` の SHA-256）を残す。Rust/wasm へ渡すときは、この 2 つと非公開台帳を照合する。
+
+`export` は照合用の固定データも `RUN/fixtures/` に書く。描いた画像（写真ではない）をモデルの大きさで 2 枚作り、その入力と PyTorch のロジットを保存する。`reference_forward.py --run "$RUN"` は、`weights.f32` と `layout.json` だけから NumPy でロジットを計算し、固定データと照合する。ネットワークの構成は `reference_forward.py` の docstring にある。Rust/wasm 実装も、同じ固定データで一致を確かめる。Rust/wasm 実装との一致、ボタンから結果までの実機時間、空なし写真の誤検出率を確認するまでは製品へ載せない。
