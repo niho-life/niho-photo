@@ -814,6 +814,74 @@
       "reproducibility": "Production frozen coefficients and their exported source/protocol hashes are verified. Private training originals are not a dependency of public build/test.",
       "runtimeVerificationSource": "packages/develop-engine/crates/niho-develop/src/raw_highlight_shoulder.rs",
       "runtimeVerificationSourceSha256": "cb9fac45e4f4042995ae60d435a34194bb920253e587d922cbe830ba01eab6f7"
+    },
+    {
+      "path": "packages/develop-engine/crates/niho-develop/sky/weights.f32",
+      "sha256": "0458720a954bbe703e3a3b828ba3eb49b370d45267a0429f0404de61a8ca178f",
+      "sizeBytes": 3076036,
+      "decision": "公開可能",
+      "inputOwnership": "2,168 image/label pairs: 530 owner-shot photos (owner decision 2026-10-29 for #158) and 1,638 PD12M images whose license is CC0 1.0 (1,438) or Public Domain Mark 1.0 (200), fetched with the dataset's md5 and kept with url/license/sha256 in a private ledger. No real-user photos. The scored scenes of #128 and #141 and every owner photo taken on their capture days are excluded.",
+      "method": "Small U-Net trained from scratch by NIHO (no pretrained weights, no third-party model or weights). Labels: SAM2 (Apache-2.0) segment candidates chosen by colour rules and NIHO's own model, reviewed one by one by AI overlay (owner decision 2026-10-29), sky-coloured gaps added by label_fill.py and reviewed. BatchNorm folded into the convolutions by train_sky.py export.",
+      "documentation": "docs/local-adjustments.md",
+      "documentationSha256": "fa013c55cb836216b44d5a200725bfdce2e6d2a24ff0815586496061fc23f441",
+      "fitEvidence": [
+        {
+          "frozenRecord": "private #158 run e14-v2f-aug/run.json",
+          "sha256": "9c99b2726378394966cc55864991e493ca1f3567b43659cf01a8c006798618e8",
+          "inputAndFitHashes": {
+            "dataSha256": "f4f31a78c548ae7c1324036ae093be0ffaebda679f09a32f5edab0c59d446a02",
+            "ledgerSha256": "c3a974b95089dee91d249f81ddf396ed867c86af0ae914210d5a98b8b20ce839",
+            "validationIdsSha256": "ceceaf0df5526b4276652f1937e4df068c1a50f165128c2453078c99ec37ff1b",
+            "code.train_sky.py": "840f926bb6900a959a795874fa59c3ebb431684b68fbf8fc056dc191791a7838",
+            "code.sky_math.py": "7502027cb9f9349e20d5396714b36bcd6c8f6592a030ef3502497252bd8c9088"
+          }
+        }
+      ],
+      "embeddedInputAndFitHashes": {
+        "export.read.best.pt": "2d946483552d8128f51c2900745d1b8ca9a0a8bce8bfe0fbeaf84dccd951b2bb",
+        "export.read.config.json": "65a3a56d54d505925529aecc78a45cd2bd50c823f237cd97af1362f4c6cdcbd1",
+        "export.read.run.json": "9c99b2726378394966cc55864991e493ca1f3567b43659cf01a8c006798618e8",
+        "export.code": "b4278748fd3ec15073bb93b6a6991007d52c196ea0bee88b5dd9a705d2d9628d"
+      },
+      "availableFitOrExportTool": "packages/develop-engine/tools/sky-mask-train/train_sky.py",
+      "availableToolSha256": "1e3c7e45155e2d691972bee3b7aaeeeb7cda2472b1fd874141a6be58f4ad882d",
+      "reproducibility": "Trained at commit 02cb0b8bf577d0cbfdc7b35670aff534dd3f9a7f (kept by refs/pull/183/head; squash-merged as 9078e29 in #183) with train_sky.py train --epochs 40 --long 384 --wire-aug 0.5 --branch-aug 0.3 --window-aug 0.2 --channels 24 48 72 96 --seed 0 (best epoch 34), then export. The private photos, labels and ledger are not a dependency of public build/test. Frozen before one run on #141's 20 evaluation scenes (overall IoU 0.802, sunset 0.845, no-sky false sky 0/3).",
+      "runtimeVerificationSource": "packages/develop-engine/crates/niho-develop/src/sky.rs",
+      "runtimeVerificationSourceSha256": "2ea17e5623f79ff84f7e004df58a62710787626a774aadf8ec2d05f56f91f8ec"
+    },
+    {
+      "path": "packages/develop-engine/crates/niho-develop/sky/layout.json",
+      "sha256": "4c37a2ab3a9768fd551012419c4aa018ae6070e2c402846671848f413cb6b0a7",
+      "sizeBytes": 2030,
+      "decision": "公開可能",
+      "inputOwnership": "2,168 image/label pairs: 530 owner-shot photos (owner decision 2026-10-29 for #158) and 1,638 PD12M images whose license is CC0 1.0 (1,438) or Public Domain Mark 1.0 (200), fetched with the dataset's md5 and kept with url/license/sha256 in a private ledger. No real-user photos. The scored scenes of #128 and #141 and every owner photo taken on their capture days are excluded.",
+      "method": "Small U-Net trained from scratch by NIHO (no pretrained weights, no third-party model or weights). Labels: SAM2 (Apache-2.0) segment candidates chosen by colour rules and NIHO's own model, reviewed one by one by AI overlay (owner decision 2026-10-29), sky-coloured gaps added by label_fill.py and reviewed. BatchNorm folded into the convolutions by train_sky.py export.",
+      "documentation": "docs/local-adjustments.md",
+      "documentationSha256": "fa013c55cb836216b44d5a200725bfdce2e6d2a24ff0815586496061fc23f441",
+      "fitEvidence": [
+        {
+          "frozenRecord": "private #158 run e14-v2f-aug/run.json",
+          "sha256": "9c99b2726378394966cc55864991e493ca1f3567b43659cf01a8c006798618e8",
+          "inputAndFitHashes": {
+            "dataSha256": "f4f31a78c548ae7c1324036ae093be0ffaebda679f09a32f5edab0c59d446a02",
+            "ledgerSha256": "c3a974b95089dee91d249f81ddf396ed867c86af0ae914210d5a98b8b20ce839",
+            "validationIdsSha256": "ceceaf0df5526b4276652f1937e4df068c1a50f165128c2453078c99ec37ff1b",
+            "code.train_sky.py": "840f926bb6900a959a795874fa59c3ebb431684b68fbf8fc056dc191791a7838",
+            "code.sky_math.py": "7502027cb9f9349e20d5396714b36bcd6c8f6592a030ef3502497252bd8c9088"
+          }
+        }
+      ],
+      "embeddedInputAndFitHashes": {
+        "export.read.best.pt": "2d946483552d8128f51c2900745d1b8ca9a0a8bce8bfe0fbeaf84dccd951b2bb",
+        "export.read.config.json": "65a3a56d54d505925529aecc78a45cd2bd50c823f237cd97af1362f4c6cdcbd1",
+        "export.read.run.json": "9c99b2726378394966cc55864991e493ca1f3567b43659cf01a8c006798618e8",
+        "export.code": "b4278748fd3ec15073bb93b6a6991007d52c196ea0bee88b5dd9a705d2d9628d"
+      },
+      "availableFitOrExportTool": "packages/develop-engine/tools/sky-mask-train/train_sky.py",
+      "availableToolSha256": "1e3c7e45155e2d691972bee3b7aaeeeb7cda2472b1fd874141a6be58f4ad882d",
+      "reproducibility": "Trained at commit 02cb0b8bf577d0cbfdc7b35670aff534dd3f9a7f (kept by refs/pull/183/head; squash-merged as 9078e29 in #183) with train_sky.py train --epochs 40 --long 384 --wire-aug 0.5 --branch-aug 0.3 --window-aug 0.2 --channels 24 48 72 96 --seed 0 (best epoch 34), then export. The private photos, labels and ledger are not a dependency of public build/test. Frozen before one run on #141's 20 evaluation scenes (overall IoU 0.802, sunset 0.845, no-sky false sky 0/3).",
+      "runtimeVerificationSource": "packages/develop-engine/crates/niho-develop/src/sky.rs",
+      "runtimeVerificationSourceSha256": "2ea17e5623f79ff84f7e004df58a62710787626a774aadf8ec2d05f56f91f8ec"
     }
   ]
 }

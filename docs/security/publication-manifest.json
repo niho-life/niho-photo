@@ -370,7 +370,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine-manifest.ts",
         "sha256": "5df5cda8a061155a614d1e60a1c263e0764c83978708cfcc16959905387d5e4f"
       },
-      "outputSha256": "e7d5ca0d97d5da8aa2084f8c82770006797b68fec9e9b0e18547272757e5ea56",
+      "outputSha256": "bb4ff66157208ee1b3b127023ee4e6976e68586d9a6ec8432041575c9e6885c7",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -396,7 +396,8 @@
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
         "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
         "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
-        "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み"
+        "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み",
+        "#141 空の検出の口が増えた sidecar に合わせて crate を 0.27.0 にする"
       ]
     },
     {
@@ -494,9 +495,10 @@
         "Issue #155: 編集・見本・大きな書き出しが分け合う物理メモリ予算（実測の bytes と破棄の順・使い捨ての書き出し worker）",
         "Issue #155: 切り抜いた JPEG / PNG の書き出しを、切り抜きが届くデコードの大きさで見積もる",
         "WKWebView を WebKit と判定し、SharedArrayBuffer の無い分離をスレッド版の対象にしない（#175）",
-        "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み"
+        "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み",
+        "#141 Mac アプリの native でも同梱の manifest から空のモデルを読む"
       ],
-      "outputSha256": "cf921cfb19cd1e824bd17c9effa9974706f45eae89e1cad6cd2c527e71dd6e18"
+      "outputSha256": "7eb2f71aa94ef5c8bbb41554f7bbbac2eca6fa14343c42ab44ea04c731c7e6fe"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -3737,11 +3739,12 @@
         "path": "apps/camera/develop-sidecars.lock.json",
         "sha256": "3220ab6ce2a2330819e54aca55bf96464cb5cca4d9a5289784595ec1d70d60ff"
       },
-      "outputSha256": "2dbc30c0d476ae4d89944b070de467288a19a0f9a1bc322b555637adff85ea9d",
+      "outputSha256": "6387659b3cf454abee0771b1e688276a5cc1e7cf1c709db52481d798979cf798",
       "modifications": [
         "候補buildのrenderer版を公開SDK 0.25.0へ合わせ、共有source固定はSDK sourceOwnershipへ一本化。",
         "Issue #89: niho-14 の crate 0.26.0 に合わせ、Mac candidate の renderer lock を更新。",
-        "被写体のマスクの面 #135: 同梱の niho-camera-cutout の版を 0.3.0（surface）へ。"
+        "被写体のマスクの面 #135: 同梱の niho-camera-cutout の版を 0.3.0（surface）へ。",
+        "#141 空の検出の口が増えた sidecar に合わせて crate を 0.27.0 にする"
       ]
     },
     {
@@ -5190,7 +5193,7 @@
         "path": "packages/develop-engine/Cargo.lock",
         "sha256": "e7caae6825c3c4c50d7d593c35d7163de7d311357b81558d1ad1a009cbfafadc"
       },
-      "outputSha256": "46087a571cbcac7a95aee544e904b29089633272860bb613423a0a87ce9ccaa2",
+      "outputSha256": "b2a72affc6e9c1ac26299273203fe2af488d7699d2f4aee71d0e7111b4f8251b",
       "modifications": [
         "新しい色相保持エンジンと新旧バイナリの能力境界・数値回帰を整合。",
         "現像workspaceだけを0.17.0へ更新し外部依存の固定版を維持。",
@@ -5214,7 +5217,8 @@
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
         "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
         "#148: niho-develop の任意 threads feature に既存依存 rayon を追加。",
-        "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
+        "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
+        "#141 空の検出の口が増えた sidecar に合わせて crate を 0.27.0 にする"
       ]
     },
     {
@@ -5225,7 +5229,7 @@
         "path": "packages/develop-engine/Cargo.toml",
         "sha256": "274ef616c08b9ade52276b660ea12ce836bc08f97e67dedcf163f76114dd4ab0"
       },
-      "outputSha256": "9bf87e57a35d690fd9a3f79a4af21764ff04fda21fc13bed785f0ba2cd959800",
+      "outputSha256": "f29078275a38b177916b6f7ae485fd4079d22c9e9f3439a1be44382247e7aa84",
       "modifications": [
         "新しい色相保持エンジンと新旧バイナリの能力境界・数値回帰を整合。",
         "Issue #30 Oklch色ミキサーとengine 10/11対応を反映",
@@ -5245,7 +5249,8 @@
         "niho-photo#44 前半で修復（なぞって周囲から埋める）を足すため crate の版を 0.22.0 に上げた。",
         "PR #96統合でcrate 0.24・v8対応",
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
-        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ"
+        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
+        "#141 空の検出の口が増えた sidecar に合わせて crate を 0.27.0 にする"
       ]
     },
     {
@@ -10835,8 +10840,8 @@
     },
     {
       "path": "docs/color-grading.md",
-      "sha256": "41ab7eed61d2ce552122b2587bdcf6c139e5dd1a6f753e4b1981dc442c503b6f",
-      "origin": "niho-photo#39 の公開仕様だけから新規作成したカラーグレーディング（中間調・全体の輝度の近似式と正規化、XMP・プリセット・画面の契約、合成画像での実測）の文書。非公開形式や私有データを含まない。\n変更理由: niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。"
+      "sha256": "7ffb4556b4615dd4da88c22f16d4047b8732a9a713e73b64d336c3429d18afa1",
+      "origin": "niho-photo#39 の公開仕様だけから新規作成したカラーグレーディング（中間調・全体の輝度の近似式と正規化、XMP・プリセット・画面の契約、合成画像での実測）の文書。非公開形式や私有データを含まない。\n変更理由: niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。\n変更理由: #141 main の niho-develop-render の版を 0.27.0 に直す"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/color_grading.rs",
@@ -11195,8 +11200,8 @@
     },
     {
       "path": "docs/geometry-perspective.md",
-      "sha256": "d2129b9dc21dcbe0e3c7b3fe79f236e141a052fab7cf5e7ba0d4c38ba0e5bf13",
-      "origin": "niho-photo#46 の公開仕様だけから新規作成したジオメトリ（遠近の手動補正）の文書。保存形 v7、NIHO の近似モデルの式と定数、描画・余白を埋める・XMP・画面の契約。Lightroom の実測による校正は未実施と明記。非公開形式や私有データを含まない。\n変更理由: niho-photo#46 後半の Upright（推定の手順・公開面・画面・制限）を追記した。\n変更理由: Upright自動推定機能を現行main統合後のcrate v0.23.0へ追加\n変更理由: Upright後半のエンジン版を前半v0.22に続くv0.23と明記\n変更理由: Upright自動推定を作者更新後の遠近crate v0.23.0へ統合\n変更理由: 遠近のあるジオメトリでもマスクが同じ写像を使うことを 1 行足す（#31）。\n変更理由: niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。"
+      "sha256": "79a381daabb799e206d8d60270136b25d145e20fa9af88a2eefa062eb23187d8",
+      "origin": "niho-photo#46 の公開仕様だけから新規作成したジオメトリ（遠近の手動補正）の文書。保存形 v7、NIHO の近似モデルの式と定数、描画・余白を埋める・XMP・画面の契約。Lightroom の実測による校正は未実施と明記。非公開形式や私有データを含まない。\n変更理由: niho-photo#46 後半の Upright（推定の手順・公開面・画面・制限）を追記した。\n変更理由: Upright自動推定機能を現行main統合後のcrate v0.23.0へ追加\n変更理由: Upright後半のエンジン版を前半v0.22に続くv0.23と明記\n変更理由: Upright自動推定を作者更新後の遠近crate v0.23.0へ統合\n変更理由: 遠近のあるジオメトリでもマスクが同じ写像を使うことを 1 行足す（#31）。\n変更理由: niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。\n変更理由: #141 main の niho-develop-render の版を 0.27.0 に直す"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/upright.rs",
@@ -11225,8 +11230,8 @@
     },
     {
       "path": "docs/heal.md",
-      "origin": "niho-photo#44 前半のため新規作成。修復（なぞって周囲から埋める）の保存形（developSettings v8 の heal）・描く位置・埋め方（PatchMatch・周期・写す・色合わせ）・キャッシュ・公開面・合成画像での確認・制限の説明。\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #97の修復画面説明を最新エンジンと遠近対応に合わせて更新。\n変更理由: niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。\n変更理由: #133: 原寸（24MP・61MP）の修復の時間とメモリ、画面との差を記す。",
-      "sha256": "692f7cf4383537de50cb5bce5bdb4a1d02a46947917700f894a121da0413adda"
+      "origin": "niho-photo#44 前半のため新規作成。修復（なぞって周囲から埋める）の保存形（developSettings v8 の heal）・描く位置・埋め方（PatchMatch・周期・写す・色合わせ）・キャッシュ・公開面・合成画像での確認・制限の説明。\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #97の修復画面説明を最新エンジンと遠近対応に合わせて更新。\n変更理由: niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。\n変更理由: #133: 原寸（24MP・61MP）の修復の時間とメモリ、画面との差を記す。\n変更理由: #141 main の niho-develop-render の版を 0.27.0 に直す",
+      "sha256": "c1165097278e2358ce111733dba946f71f5c7e1550e47bbfab7a903b89f65746"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/heal.rs",
@@ -11395,8 +11400,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-surfaces.test.ts",
-      "sha256": "02db826aca1738dae55112e0e8a570000cba7bb143dab9264220ba00913722d4",
-      "origin": "Issue #68のため新規作成した、Workerの面の受け渡し（能力・渡す/手放す・見本・面の作成・一時的なDeveloperの書き出し）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: #141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み"
+      "sha256": "7e9611d696463155f414e68ce1cf6f1f0568fcb575b8d668db1a28bbc477cd9a",
+      "origin": "Issue #68のため新規作成した、Workerの面の受け渡し（能力・渡す/手放す・見本・面の作成・一時的なDeveloperの書き出し）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: #141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み\n変更理由: #141 native で空のモデルを渡す試験を足す"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-mask-brush.ts",
@@ -11475,8 +11480,8 @@
     },
     {
       "path": "docs/lens-adjustments.md",
-      "sha256": "d4de733546f8aad26e7f995a8f134bac5105e8b9c57d25813fea6123070a0182",
-      "origin": "niho-photo#45 のため新規作成。レンズ補正（手動の歪み・周辺光量、色収差・フリンジの除去。設定 v9）の仕様・式・検証結果の文書（合成画像の結果だけを記載）。\n変更理由: niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。\n変更理由: #133: フリンジの半径と色収差の解析画を原寸でも画面と同じにした式と、原寸の計測結果を記す。"
+      "sha256": "9d0295532bd7601ad5f998fd58e85ee75425c38ffbdfb0d73631e45ff4e8e80b",
+      "origin": "niho-photo#45 のため新規作成。レンズ補正（手動の歪み・周辺光量、色収差・フリンジの除去。設定 v9）の仕様・式・検証結果の文書（合成画像の結果だけを記載）。\n変更理由: niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。\n変更理由: #133: フリンジの半径と色収差の解析画を原寸でも画面と同じにした式と、原寸の計測結果を記す。\n変更理由: #141 main の niho-develop-render の版を 0.27.0 に直す"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/lens.rs",
@@ -11555,8 +11560,8 @@
     },
     {
       "path": "packages/develop-engine/NIHO14.md",
-      "sha256": "691c34d40f40691d57fa191bea71d0f70860503c8ea609e3d1b83b5019fdec8f",
-      "origin": "公開Issue #89 のため公開済み数式・既存primitiveから独立実装したengine・合成テスト・計測コード・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。"
+      "sha256": "ff9b20ccd88b24964bba71e00b46047fd7cef9cc12fa0898a82e296a3b52855b",
+      "origin": "公開Issue #89 のため公開済み数式・既存primitiveから独立実装したengine・合成テスト・計測コード・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。\n変更理由: #141 crate 0.27.0 の manifest の置き場を書く"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/examples/engine_digests.rs",
@@ -11570,8 +11575,8 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/niho14.rs",
-      "sha256": "1b02e6c12920705782cbb97262d9540e2d64b1f7de58d4bff2eabdcdf54abb79",
-      "origin": "公開Issue #89 のため公開済み数式・既存primitiveから独立実装したengine・合成テスト・計測コード・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。"
+      "sha256": "f42c6d243931037c2d8330b7687186810f2b0e7a8a8c0b0c32a8caa1bbd0060e",
+      "origin": "公開Issue #89 のため公開済み数式・既存primitiveから独立実装したengine・合成テスト・計測コード・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。\n変更理由: #141 空の検出の口が増えた sidecar に合わせて crate を 0.27.0 にする"
     },
     {
       "path": "packages/develop-engine/fixtures/color/review-2026-10-22/round89-analysis-breakdown.json",
@@ -11840,8 +11845,8 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/api_fixture/mod.rs",
-      "sha256": "68ccd6bc8fe4ef6fa67ac0e442674fcc8c3cc496430fa2be7218086c7df935a8",
-      "origin": "公開Issue #152 のため新規作成。共通 API 試験用の合成画像と設定。\n変更理由: #141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験"
+      "sha256": "73a1d34d6d42eb5b9ce06ab6a9c46f0a865c062766a6f3cb05665e18dcab57d1",
+      "origin": "公開Issue #152 のため新規作成。共通 API 試験用の合成画像と設定。\n変更理由: #141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験\n変更理由: #141 推論後の処理を足した detectSky の digest を固定し直す"
     },
     {
       "path": "apps/camera/scripts/e2e/native-develop-ui.sh",
@@ -11915,8 +11920,8 @@
     },
     {
       "path": "scripts/sdk/build-develop-engine-runtime.mjs",
-      "sha256": "382ad85a676e9770cb9d2b098b10901a93f99ec7a6f03b983e09181c4a83bfd7",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/build-develop-engine-runtime.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
+      "sha256": "bee0d81423a3b5c8d24665ed44b562216bffb3f860bdaa90c76878edd1b1787b",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/build-develop-engine-runtime.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: #141 空のモデルの層の見出しと重みを engine runtime の files に足す"
     },
     {
       "path": "scripts/sdk/release-set-lib.mjs",
@@ -11925,8 +11930,8 @@
     },
     {
       "path": "scripts/sdk/release-set.test.mjs",
-      "sha256": "fb3e17c38480dcdb7888b9c39ab24d083e0839f2cf54b8ff27deb173c72ded38",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set.test.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
+      "sha256": "3fab612651aac03e0a07b7171829a084df8b934bb2e4347078aa7d284f7cd2cd",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set.test.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: #141 空のモデルの runtime のファイル名と置き場の試験を足す"
     },
     {
       "path": "scripts/sdk/smoke-real-engine.mjs",
@@ -12040,13 +12045,23 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/sky.rs",
-      "sha256": "cd45661037a5fce5d158a1dc76ec778de539a81579149c320670995b0c26e9c3",
-      "origin": "Issue #141 のため新規作成した、空のマスクの面を作る推論。#158 で NIHO が所有写真から学習した小さい U-Net の重み（train_sky.py export の layout.json と weights.f32）を読み、PIL の BILINEAR・3x3 畳み込み・bilinear の decoder・guided filter で面にする。合成の小さい重みの試験を含む。学習済みの重み・写真・第三者のモデルやコードを含まない。"
+      "sha256": "2ea17e5623f79ff84f7e004df58a62710787626a774aadf8ec2d05f56f91f8ec",
+      "origin": "Issue #141 のため新規作成した、空のマスクの面を作る推論。#158 で NIHO が所有写真から学習した小さい U-Net の重み（train_sky.py export の layout.json と weights.f32）を読み、PIL の BILINEAR・3x3 畳み込み・bilinear の decoder・guided filter で面にする。合成の小さい重みの試験を含む。学習済みの重み・写真・第三者のモデルやコードを含まない。\n変更理由: #141 #158 の推論後の処理（二段の閾値・色による補い・小片の除去）を足す"
+    },
+    {
+      "path": "packages/develop-engine/crates/niho-develop/sky/layout.json",
+      "sha256": "4c37a2ab3a9768fd551012419c4aa018ae6070e2c402846671848f413cb6b0a7",
+      "origin": "Issue #158 で NIHO が最初から学習した空の U-Net の層の見出し（train_sky.py export の layout.json）。出所・生成記録・入力の hash は docs/legal/model-provenance.json。写真・正解マスク・個体情報を含まない。"
+    },
+    {
+      "path": "packages/develop-engine/crates/niho-develop/sky/weights.f32",
+      "sha256": "0458720a954bbe703e3a3b828ba3eb49b370d45267a0429f0404de61a8ca178f",
+      "origin": "Issue #158 で NIHO が所有写真と PD12M の CC0・PDM 画像から最初から学習した空の U-Net の重み（BatchNorm 畳み込み済み・little endian f32）。第三者の学習済みモデルは使わない。2026-11-01 owner が公開を承認。出所・生成記録・入力の hash は docs/legal/model-provenance.json と docs/legal/asset-inventory.csv。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/examples/sky_timing.rs",
-      "sha256": "44ece88abbaeb2b03a81d071e20ed8e3b6390f5823496faa4f1549cfcc80e26d",
-      "origin": "Issue #141 のため新規作成した、空の推論の native の時間と PyTorch の予測との一致を測る道具。重み・写真は実行時に引数で渡し、公開物に含めない。合成の写真だけを持つ。"
+      "sha256": "fc2d98b2967a11fdd40721f036d6fa5f7167a99f10eb199894b2f8908ae54d3d",
+      "origin": "Issue #141 のため新規作成した、空の推論の native の時間と PyTorch の予測との一致を測る道具。重み・写真は実行時に引数で渡し、公開物に含めない。合成の写真だけを持つ。\n変更理由: #141 推論後の処理まで含めて Python と照合する --refined を足す"
     },
     {
       "path": "packages/develop-engine/tools/sky-wasm-bench.mjs",
