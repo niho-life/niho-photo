@@ -27,7 +27,7 @@ GitHub Actionsへの認証済みupload/downloadとartifact ID・digestが輸送�
 `npm run release:evidence` は公開main pushのGitHub context、正確な `GITHUB_SHA == HEAD`、clean checkout、全lockfile集合を検査し、次を記録する。ローカルで署名済みappを誤って公開成果物にする入口としては使えない。
 
 - 40桁commit SHAと、そのcommitに対する `git rev-parse <commit>^{tree}`。
-- `package-lock.json` と、camera / desktop-account / desktop-photo / develop-engineの4つの `Cargo.lock` のSHA-256。lockfileの追加は収録範囲の明示更新が必要。
+- `package-lock.json` と、camera / cameraのWebView分離probe（`apps/camera/tools/webview-isolation-probe`。研究用の道具） / desktop-account / desktop-photo / develop-engineの5つの `Cargo.lock` のSHA-256。lockfileの追加は収録範囲（`scripts/ci/release-evidence-lib.mjs` の `lockfiles`）の明示更新が必要。PRの `node --test scripts/ci/*.test.mjs` が、repoに入っている全lockfileと収録範囲の一致を検査する。
 - Node、npm、rustc、cargo、Xcode、Tauri CLIの実行版。
 - app archiveとSBOMのbasename・SHA-256・byte数、ad-hoc署名、release mode、updater/公式更新無効、検査したappファイル数。
 - `niho.native-account` v2、cloud contract v1 / `@niho/cloud-contract` 1.0.0、対応JSONとpackage定義のSHA-256。`docs/security/cloud-contract-source.json` のSHA-256と、そこに固定された公開Docs source commit。
