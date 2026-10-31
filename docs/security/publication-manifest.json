@@ -11874,7 +11874,7 @@
     },
     {
       "path": "packages/develop-engine/tools/sky-mask-train/reference_forward.py",
-      "sha256": "d01097420471a1e34137ab3f0842de21c72660e98be6d9e79bbc195aa0e79757",
+      "sha256": "08b0b3a7a60c13b7fc777314e77efa0737ed266e27936db3478971ec88e4d50e",
       "origin": "Issue #158 で NIHO が作成した研究コード。書き出した重みと層の配置だけで空の U-Net を計算し、照合用の固定データと比べる汎用処理のみ。写真・正解マスク・学習済み重み・個体情報を含まない。"
     },
     {

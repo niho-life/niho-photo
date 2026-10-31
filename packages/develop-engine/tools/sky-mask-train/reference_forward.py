@@ -94,6 +94,8 @@ def main() -> None:
         lw, lh = fixture["logits"]
         expected = np.fromfile(args.run / f"{fixture['stem']}.logits.f32", "<f4").reshape(lh, lw)
         diff = float(np.abs(forward(weights, layout, x) - expected).max())
+        if not np.isfinite(diff):  # NaN would slip past max() and pass the check
+            diff = float("inf")
         worst = max(worst, diff)
         print(f"{fixture['stem']}: largest logit difference {diff:.2e}")
     print(f"worst {worst:.2e} ({'ok' if worst <= args.tolerance else 'over the tolerance'})")
