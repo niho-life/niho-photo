@@ -30,7 +30,7 @@ python label_fill.py --data "$DATA" --out "$FILLED" --delta 6
 
 ## 推論後の補い
 
-`predict --fill-delta D` は、予測した空（確率 0.5 以上）を土台に `label_fill.py` と同じ規則で空色の隙間を足す。`--min-area A` は、面積が写真の A に満たない空の小片を消す。モデルの出力は長辺 384 の半分の解像度なので、枝や電線の間の細かい空はモデルだけでは拾えない。写真自身の色で補うと拾える。#158 では、設定を調整用の 18 場面だけで決めた（`--fill-delta 8 --fill-reach 0.1 --min-area 0.001`）。学習外 30 場面では、全体 IoU が seed 違いの 2 つのモデルで 0.658→0.699 と 0.656→0.709 に上がった（電線・建物・枝の場面）。製品の推論（Rust/wasm）に入れるときは、この処理も同じ規則で実装し、出力の一致を確かめる。
+`predict --low L` は、確実な空（確率 0.5 以上）につながる弱い空（確率 L 以上）も空に含める。モデルの確率は窓越しや枝越しで 0.1〜0.4 にとどまることが多い。`--fill-delta D` は、その空を土台に `label_fill.py` と同じ規則で空色の隙間を足す。`--min-area A` は、面積が写真の A に満たない空の小片を消す。モデルの出力は長辺 384 の半分の解像度なので、枝や電線の間の細かい空はモデルだけでは拾えない。写真自身の色で補うと拾える。#158 では、設定を調整用の 18 場面だけで決めた（`--low 0.1 --fill-delta 8 --fill-reach 0.1 --min-area 0.001`）。学習外 30 場面では、補いだけで全体 IoU が 0.66 前後から 0.69〜0.71 に上がった（電線・建物・枝の場面）。`--low 0.1` を加えると 0.73 前後になった（窓・枝の場面）。製品の推論（Rust/wasm）に入れるときは、この処理も同じ規則で実装し、出力の一致を確かめる。
 
 ## 実行
 
@@ -38,7 +38,7 @@ python label_fill.py --data "$DATA" --out "$FILLED" --delta 6
 
 ```sh
 python train_sky.py train --data "$DATA" --validation-ids "$VALIDATION_IDS" --epochs 40 --out "$RUN"
-python train_sky.py predict --run "$RUN" --input "$HOLDOUT_INPUT" --out "$PREDICTIONS" --fill-delta 8 --min-area 0.001
+python train_sky.py predict --run "$RUN" --input "$HOLDOUT_INPUT" --out "$PREDICTIONS" --low 0.1 --fill-delta 8 --min-area 0.001
 python evaluate.py --work "$HOLDOUT" --scenes "$HOLDOUT/scenes.json" --method own="$PREDICTIONS"
 python train_sky.py export --run "$RUN"
 ```

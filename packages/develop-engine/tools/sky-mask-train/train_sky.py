@@ -11,11 +11,12 @@ helper snaps the upsampled map to the photo with a guided filter. `train` writes
 settings to `<run>/config.json`; `predict` and `export` read them from there. For the provenance
 of a model, `train` writes `<run>/run.json` (command, data and split digests, code hashes, commit,
 best epoch) and `export` writes `<run>/export.json` (hashes of what it wrote and what it read).
-`predict --fill-delta` adds the sky-coloured gaps next to the predicted sky (`label_fill.py`)
-and `--min-area` drops sky pieces smaller than that share of the photo.
+`predict --low` also keeps the weaker sky (probability >= low) connected to the sure sky (>= 0.5),
+`--fill-delta` adds the sky-coloured gaps next to the predicted sky (`label_fill.py`) and
+`--min-area` drops sky pieces smaller than that share of the photo.
 
   python3 train_sky.py train  --data <dir with input/ label/> [--epochs 60] [--inputs rgb] [--long 512] --out <run dir>
-  python3 train_sky.py predict --run <run dir> --input <dir of PNG (+ .json ev100)> --out <dir> [--fill-delta 8 --min-area 0.001]
+  python3 train_sky.py predict --run <run dir> --input <dir of PNG (+ .json ev100)> --out <dir> [--low 0.1 --fill-delta 8 --min-area 0.001]
   python3 train_sky.py export --run <run dir>     # BatchNorm folded, f32 LE weights + layout JSON
 """
 from __future__ import annotations
@@ -445,8 +446,15 @@ def predict_one(net: SkyNet, rgb: np.ndarray, ev: float | None, dev, cfg: dict) 
     return np.clip(guided_filter(guide, up.astype(np.float32), r, 1e-3), 0, 1)
 
 
-def refine(rgb: np.ndarray, prob: np.ndarray, fill_delta: float, fill_reach: float, min_area: float) -> np.ndarray:
-    """Add the sky-coloured gaps next to the predicted sky; drop sky pieces under `min_area` of the photo."""
+def refine(rgb: np.ndarray, prob: np.ndarray, low: float, fill_delta: float, fill_reach: float,
+           min_area: float) -> np.ndarray:
+    """Grow the sure sky into the connected weaker sky, add the sky-coloured gaps next to it and drop
+    sky pieces under `min_area` of the photo."""
+    if low < 0.5:
+        pieces, n = ndimage.label(prob >= low)
+        if n:
+            seeded = np.r_[False, ndimage.maximum(prob >= 0.5, pieces, np.arange(1, n + 1)) > 0]
+            prob = np.where(seeded[pieces] & (prob < 0.5), 0.5, prob)
     if fill_delta > 0:
         sky = prob >= 0.5
         if sky.mean() >= 0.02:
@@ -475,13 +483,14 @@ def cmd_predict(args) -> None:
         with Image.open(path) as im:
             rgb = np.asarray(im.convert("RGB"))
         t = time.perf_counter()
-        prob = refine(rgb, predict_one(net, rgb, load_ev(path), dev, cfg), args.fill_delta, args.fill_reach,
-                      args.min_area)
+        prob = refine(rgb, predict_one(net, rgb, load_ev(path), dev, cfg), args.low, args.fill_delta,
+                      args.fill_reach, args.min_area)
         times[path.stem] = time.perf_counter() - t
         Image.fromarray(np.round(prob * 255).astype(np.uint8), mode="L").save(args.out / path.name)
     (args.out / "timing.json").write_text(json.dumps(times, indent=1))
-    (args.out / "predict.json").write_text(json.dumps({"weights": args.weights, "fillDelta": args.fill_delta,
-                                                        "fillReach": args.fill_reach, "minArea": args.min_area}))
+    settings = {"weights": args.weights, "low": args.low, "fillDelta": args.fill_delta, "fillReach": args.fill_reach,
+                "minArea": args.min_area}
+    (args.out / "predict.json").write_text(json.dumps(settings))
     print(f"{len(times)} -> {args.out}")
 
 
@@ -556,6 +565,7 @@ def main() -> None:
     p.add_argument("--out", required=True, type=Path)
     p.add_argument("--weights", default="best.pt")
     p.add_argument("--device", default="mps")
+    p.add_argument("--low", type=float, default=0.5, help="keep weaker sky >= low connected to sure sky (0.5: off)")
     p.add_argument("--fill-delta", type=float, default=0.0, help="add sky-coloured gaps within this Lab distance (0: off)")
     p.add_argument("--fill-reach", type=float, default=0.1, help="isolated gaps lie this close to the sky (share of the long edge)")
     p.add_argument("--min-area", type=float, default=0.0, help="drop sky pieces smaller than this share of the photo")
