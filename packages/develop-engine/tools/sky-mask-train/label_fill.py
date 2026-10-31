@@ -72,12 +72,16 @@ def fill(rgb: np.ndarray, sky: np.ndarray, delta: float, rows: float, reach: flo
     mean = box(lightness, 4)
     std = np.sqrt(np.maximum(box(lightness * lightness, 4) - mean * mean, 0))
     add = np.zeros(n + 1, bool)
-    for k, sl in enumerate(ndimage.find_objects(pieces), start=1):
+    ring_px = 4
+    for k, (ys, xs) in enumerate(ndimage.find_objects(pieces), start=1):
         if touches[k - 1] and area[k - 1] < 0.05:
             add[k] = True
         elif area[k - 1] < 0.01 and near[k - 1]:
+            # widen the piece's box by the ring so the ring is not cut off at the box edge
+            sl = (slice(max(ys.start - ring_px, 0), min(ys.stop + ring_px, h)),
+                  slice(max(xs.start - ring_px, 0), min(xs.stop + ring_px, w)))
             piece = pieces[sl] == k
-            ring = ndimage.binary_dilation(piece, iterations=4) & ~piece
+            ring = ndimage.binary_dilation(piece, iterations=ring_px) & ~piece
             add[k] = bool(ring.any()) and std[sl][ring].mean() >= 6
     return sky | add[pieces]
 
