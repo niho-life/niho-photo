@@ -126,7 +126,7 @@ function surfaceGlue(
 function setup(
   module: unknown,
   encodeJpeg?: DevelopEngineWorkerDeps["encodeJpeg"],
-  options: { skyModel?: boolean; skyModelStatus?: () => number } = {},
+  options: { skyModel?: boolean; skyModelStatus?: () => number; native?: boolean } = {},
 ) {
   const posted: Posted[] = [];
   const deps: DevelopEngineWorkerDeps = {
@@ -138,6 +138,7 @@ function setup(
     importModule: vi.fn(async () => module),
     post: (message, transfer) => posted.push({ message, transfer }),
     encodeJpeg,
+    ...(options.native ? { createNativeGlue: () => module } : {}),
   };
   return { handler: createDevelopEngineWorkerHandler(deps), posted, deps };
 }
@@ -328,6 +329,24 @@ describe("Worker の空の検出（niho-photo#141）", () => {
     status = 200;
     await handler({ type: "detectSky", id: 4, settingsJson: "{}", ev100: null });
     expect(posted.at(-1)?.message).toMatchObject({ type: "skyDetected", id: 4 });
+  });
+
+  it("Mac アプリの native でも、同梱した manifest のモデルを sidecar に渡して空を探す（モデルが無ければ skyDetection を付けない）", async () => {
+    const detectSky = vi.fn((): unknown => found());
+    const glue = surfaceGlue({ detectSky });
+    const { handler, posted } = setup(glue.module, undefined, { native: true });
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL, preferNative: true });
+    expect(posted[0]?.message).toMatchObject({ type: "ready", runtime: "native", skyDetection: true });
+    await handler({ type: "open", id: 2, bytes: new ArrayBuffer(4), workingMaxDimension: 2560 });
+    await handler({ type: "detectSky", id: 3, settingsJson: "{}", ev100: null });
+    const setSkyModel = (glue.module as unknown as { setSkyModel: ReturnType<typeof vi.fn> }).setSkyModel;
+    expect(setSkyModel).toHaveBeenCalledWith('{"long":384}', new Uint8Array([1, 2, 3, 4]));
+    expect(posted.at(-1)?.message).toMatchObject({ type: "skyDetected", id: 3, surface: { surfaceId: ID } });
+
+    const without = setup(surfaceGlue({ detectSky }).module, undefined, { native: true, skyModel: false });
+    await without.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL, preferNative: true });
+    expect(without.posted[0]?.message).toMatchObject({ type: "ready", runtime: "native" });
+    expect("skyDetection" in without.posted[0]!.message).toBe(false);
   });
 
   it("口の無い glue では error（ほかの要求は使える）", async () => {

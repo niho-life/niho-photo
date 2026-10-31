@@ -109,7 +109,7 @@ Lightroom はスライダーの値から変換への式を公開しておらず�
 ## 制限
 
 - Lightroom の実測による校正は未実施（向き・大きさは上のモデルの選択。`horizontal` の正負、`aspect` の正負、`y` の正負は Lightroom と逆の可能性がある）。
-- Mac のネイティブ書き出しは同梱の `niho-develop-render`（`apps/camera/develop-sidecars.lock.json` の版。main は 0.26.0、配布中の Mac アプリは 0.16.0）で描く。v7 の設定を原寸へ渡すのは、renderer が `niho-develop-render capabilities` に答えて v7 を読めると言うときだけ（#131）。答えない古い renderer では原寸のカードを押せず、更新の案内を出す。
+- Mac のネイティブ書き出しは同梱の `niho-develop-render`（`apps/camera/develop-sidecars.lock.json` の版。main は 0.27.0、配布中の Mac アプリは 0.16.0）で描く。v7 の設定を原寸へ渡すのは、renderer が `niho-develop-render capabilities` に答えて v7 を読めると言うときだけ（#131）。答えない古い renderer では原寸のカードを押せず、更新の案内を出す。
 - 補正後のプレビューが無い写真の一覧のタイルは、遠近を CSS で再現しないので幾何を当てない（補正前のまま）。
 - スマホの切り抜きの道具には節を出さない。
 - Upright の推定は合成画像（既知の射影を当てた建物風の画像・線の無い画像）でだけ確かめた。実写真での精度（レンズの歪みで曲がった線・複数の面の横の線・木や人物の多い写真）は未確認。90° 回転・反転した後も `upright` の値は押したボタンのまま残す（遠近の値は回転に合わせて写す）。

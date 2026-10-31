@@ -114,7 +114,7 @@ sealed の独立 cohort は開かない。
 - crate: `ENGINE_VERSION` は `niho-14`（reader capability）、workspace は 0.26.0（#89 の作業中に main が 0.25.0 を使ったので次の版）。`DevelopSettings::neutral()` / `new_edit()` は互換の既定（`niho-1`）のまま。
 - 画面（`packages/photo-editing` の `develop-settings.ts`）: `DEVELOP_SETTINGS_ENGINE` は `niho-14`、保存済みの `niho-13` は `NIHO13_DEVELOP_SETTINGS_ENGINE`。直接描く JPEG / PNG、`raster.*`、unsigned の `raw-apple.*` の未保存の写真は `niho-14` で開く。作業コピーの無い RAW と版の分からない作業コピーは `niho-2`、signed RAW の既定（`niho-3` / `niho-11`）は変えない。
 - 保存済みの `niho-2` / `niho-6` / `niho-10` / `niho-12` / `niho-13` は、開く・プリセット・初期化・貼り付けで `niho-14` に変えない（Rust の XMP 経路も同じ）。既定の切替前に作った未保存 draft（`niho-13` を含む）はその数式のまま戻す。
-- 画面の wasm は `/develop-engine/niho-14/manifest-0.26.0.json` を読む。`niho-14` の補正を描く非公開側（ワーカー・Web の配備）は、この版の固定 SHA を取り込んでから画面を配る（#2）。
+- 画面の wasm は `/develop-engine/niho-14/manifest-0.27.0.json` を読む。`niho-14` の補正を描く非公開側（ワーカー・Web の配備）は、この版の固定 SHA を取り込んでから画面を配る（#2）。
 
 ## 再現手順
 

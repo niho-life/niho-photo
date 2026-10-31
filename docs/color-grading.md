@@ -66,5 +66,5 @@
 
 ## 互換
 
-- Mac のネイティブ書き出しは同梱の `niho-develop-render` の版（`apps/camera/develop-sidecars.lock.json`。main は 0.26.0、配布中の Mac アプリは 0.16.0）で描く。中間調・全体の輝度は形の版（`v`）を上げずに足したので、0.19.0 より前の renderer は黙って描かない。原寸へ渡すのは、renderer が `niho-develop-render capabilities` の `features` に `colorGradingLuminance` を挙げるときだけ（#131）。答えない古い renderer では原寸のカードを押せず、更新の案内を出す。
+- Mac のネイティブ書き出しは同梱の `niho-develop-render` の版（`apps/camera/develop-sidecars.lock.json`。main は 0.27.0、配布中の Mac アプリは 0.16.0）で描く。中間調・全体の輝度は形の版（`v`）を上げずに足したので、0.19.0 より前の renderer は黙って描かない。原寸へ渡すのは、renderer が `niho-develop-render capabilities` の `features` に `colorGradingLuminance` を挙げるときだけ（#131）。答えない古い renderer では原寸のカードを押せず、更新の案内を出す。
 - 0.19.0 より前の wasm は中間調・全体の輝度を描かない。画面は `DEVELOP_ENGINE_CRATE_VERSION` で 0.19.0 の公開物を読む。

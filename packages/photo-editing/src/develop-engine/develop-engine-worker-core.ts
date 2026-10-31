@@ -105,7 +105,8 @@ import {
  * - 空の検出（niho-photo#141。`docs/local-adjustments.md`「空の検出」）: `detectSky` は開いている写真の
  *   `Developer.detectSky(settingsJson, ev100)` で作業画像の空の面を作り、面の PNG（transfer）・id（`maskSurfaceId`）・寸法を返す
  *   （空が無ければ `surface: null`）。描画と同じ列で順に処理する単発の問い合わせ（`estimateUpright` と同じ）。モデル（#158 の重み）は
- *   manifest の `skyModel` の 2 つのファイルを初めての `detectSky` で読み、`setSkyModel` で glue に渡す（glue を替えたら渡し直し、
+ *   manifest の `skyModel` の 2 つのファイル（native は Mac アプリが wasm の予備として同梱する同じ manifest）を初めての `detectSky` で
+ *   読み、`setSkyModel` で glue に渡す（glue を替えたら渡し直し、
  *   native の sidecar が持っていなければ 1 回だけ渡し直して探し直す）。`Developer` と `setSkyModel` の口があり、面を受け渡せて `sky` を
  *   描け、manifest にモデルがあるときだけ `ready` に `skyDetection: true` を付け、無い glue・写真を開いていなければ error
  */
@@ -1092,7 +1093,7 @@ export function createDevelopEngineWorkerHandler(
   let upright = false;
   // 起こした wasm が空を探せるか（`Developer.detectSky` があり、面を受け渡せて `sky` を描ける）
   let skyDetection = false;
-  // 空の検出のモデルのファイル（wasm の manifest の `skyModel`。native の起動は manifest を読まないので、native では null）
+  // 空の検出のモデルのファイル（manifest の `skyModel`。native は Mac アプリが wasm の予備として同梱する同じ manifest から読む）
   let skyModelFiles: { layoutUrl: string; weightsUrl: string } | null = null;
   // モデルを渡した glue と、渡し終える Promise（失敗したら次の `detectSky` で読み直す）
   let skyModelGiven: { glue: DevelopGlue; ready: Promise<void> } | null = null;
@@ -1958,6 +1959,17 @@ export function createDevelopEngineWorkerHandler(
     nativeReleaseClient = null;
   };
 
+  /** manifest の空の検出のモデルのファイル（読めない・無ければ null。描画には使わないので、失敗しても起動は続ける） */
+  const readSkyModelFiles = async (manifestUrl: string): Promise<{ layoutUrl: string; weightsUrl: string } | null> => {
+    try {
+      const response = await deps.fetch(manifestUrl, { cache: "no-cache" });
+      if (!response.ok) return null;
+      return parseDevelopEngineManifest(await response.json(), manifestUrl)?.skyModel ?? null;
+    } catch {
+      return null;
+    }
+  };
+
   const loadNative = async (manifestUrl: string): Promise<void> => {
     const module = deps.createNativeGlue?.();
     const loaded = readGlue(module);
@@ -1969,7 +1981,8 @@ export function createDevelopEngineWorkerHandler(
     await loaded.init({ module_or_path: manifestUrl });
     wasmMemory = () => null;
     wasmThreads = 1;
-    skyModelFiles = null;
+    // 空の口のある sidecar だけ、同梱の manifest からモデルの場所を読む（押したときに `setSkyModel` で sidecar へ渡す）
+    skyModelFiles = loaded.skyDetection ? await readSkyModelFiles(manifestUrl) : null;
     activateGlue(loaded, manifestUrl, "native", "");
   };
 
