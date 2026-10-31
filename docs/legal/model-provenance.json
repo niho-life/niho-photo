@@ -851,8 +851,8 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/sky/layout.json",
-      "sha256": "4c37a2ab3a9768fd551012419c4aa018ae6070e2c402846671848f413cb6b0a7",
-      "sizeBytes": 2030,
+      "sha256": "8f193236c167908c7cca8f64aba2acc9fe48c4431754534d410592756f14322e",
+      "sizeBytes": 2031,
       "decision": "公開可能",
       "inputOwnership": "2,168 image/label pairs: 530 owner-shot photos (owner decision 2026-10-29 for #158) and 1,638 PD12M images whose license is CC0 1.0 (1,438) or Public Domain Mark 1.0 (200), fetched with the dataset's md5 and kept with url/license/sha256 in a private ledger. No real-user photos. The scored scenes of #128 and #141 and every owner photo taken on their capture days are excluded.",
       "method": "Small U-Net trained from scratch by NIHO (no pretrained weights, no third-party model or weights). Labels: SAM2 (Apache-2.0) segment candidates chosen by colour rules and NIHO's own model, reviewed one by one by AI overlay (owner decision 2026-10-29), sky-coloured gaps added by label_fill.py and reviewed. BatchNorm folded into the convolutions by train_sky.py export.",
@@ -879,7 +879,7 @@
       },
       "availableFitOrExportTool": "packages/develop-engine/tools/sky-mask-train/train_sky.py",
       "availableToolSha256": "1e3c7e45155e2d691972bee3b7aaeeeb7cda2472b1fd874141a6be58f4ad882d",
-      "reproducibility": "Trained at commit 02cb0b8bf577d0cbfdc7b35670aff534dd3f9a7f (kept by refs/pull/183/head; squash-merged as 9078e29 in #183) with train_sky.py train --epochs 40 --long 384 --wire-aug 0.5 --branch-aug 0.3 --window-aug 0.2 --channels 24 48 72 96 --seed 0 (best epoch 34), then export. The private photos, labels and ledger are not a dependency of public build/test. Frozen before one run on #141's 20 evaluation scenes (overall IoU 0.802, sunset 0.845, no-sky false sky 0/3).",
+      "reproducibility": "Trained at commit 02cb0b8bf577d0cbfdc7b35670aff534dd3f9a7f (kept by refs/pull/183/head; squash-merged as 9078e29 in #183) with train_sky.py train --epochs 40 --long 384 --wire-aug 0.5 --branch-aug 0.3 --window-aug 0.2 --channels 24 48 72 96 --seed 0 (best epoch 34), then export. The private photos, labels and ledger are not a dependency of public build/test. Frozen before one run on #141's 20 evaluation scenes (overall IoU 0.802, sunset 0.845, no-sky false sky 0/3). The repo's layout.json is export's layout.json with a final newline added (export.json records the bytes before it).",
       "runtimeVerificationSource": "packages/develop-engine/crates/niho-develop/src/sky.rs",
       "runtimeVerificationSourceSha256": "2ea17e5623f79ff84f7e004df58a62710787626a774aadf8ec2d05f56f91f8ec"
     }

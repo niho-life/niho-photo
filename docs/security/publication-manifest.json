@@ -12050,7 +12050,7 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/sky/layout.json",
-      "sha256": "4c37a2ab3a9768fd551012419c4aa018ae6070e2c402846671848f413cb6b0a7",
+      "sha256": "8f193236c167908c7cca8f64aba2acc9fe48c4431754534d410592756f14322e",
       "origin": "Issue #158 で NIHO が最初から学習した空の U-Net の層の見出し（train_sky.py export の layout.json）。出所・生成記録・入力の hash は docs/legal/model-provenance.json。写真・正解マスク・個体情報を含まない。"
     },
     {
