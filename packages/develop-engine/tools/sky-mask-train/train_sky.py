@@ -11,9 +11,11 @@ helper snaps the upsampled map to the photo with a guided filter. `train` writes
 settings to `<run>/config.json`; `predict` and `export` read them from there. For the provenance
 of a model, `train` writes `<run>/run.json` (command, data and split digests, code hashes, commit,
 best epoch) and `export` writes `<run>/export.json` (hashes of what it wrote and what it read).
+`predict --fill-delta` adds the sky-coloured gaps next to the predicted sky (`label_fill.py`)
+and `--min-area` drops sky pieces smaller than that share of the photo.
 
   python3 train_sky.py train  --data <dir with input/ label/> [--epochs 60] [--inputs rgb] [--long 512] --out <run dir>
-  python3 train_sky.py predict --run <run dir> --input <dir of PNG (+ .json ev100)> --out <dir>
+  python3 train_sky.py predict --run <run dir> --input <dir of PNG (+ .json ev100)> --out <dir> [--fill-delta 8 --min-area 0.001]
   python3 train_sky.py export --run <run dir>     # BatchNorm folded, f32 LE weights + layout JSON
 """
 from __future__ import annotations
@@ -34,8 +36,10 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from PIL import Image, ImageDraw
+from scipy import ndimage
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+from label_fill import fill  # noqa: E402
 from sky_math import guided_filter, srgb_to_lab  # noqa: E402
 
 CH = (16, 32, 48, 64)
@@ -181,6 +185,86 @@ def draw_wires(img: Image.Image) -> Image.Image:
     return Image.alpha_composite(img.convert("RGBA"), over).convert("RGB")
 
 
+def draw_branches(img: Image.Image) -> tuple[Image.Image, np.ndarray]:
+    """1-3 bare trees growing in from an edge of the frame, sometimes with blossoms or leaves.
+
+    Labels cut from segments keep a tree as one solid not-sky region and the model learns that
+    the sky never shows through branches. Drawn over a photo, the branches keep the photo's own
+    sky between them. Returns the photo and the share of each pixel the branches cover.
+    """
+    w, h = img.size
+    over = Image.new("RGBA", img.size, (0, 0, 0, 0))
+    mask = Image.new("L", img.size, 0)
+    draw_over, draw_mask = ImageDraw.Draw(over), ImageDraw.Draw(mask)
+    tone = random.randint(25, 110)
+    bark = (tone, round(tone * random.uniform(0.75, 1.0)), round(tone * random.uniform(0.55, 0.9)), 255)
+    bloom = random.choice([None, None, (240, 190, 210), (248, 244, 240), (110, 150, 60), (225, 125, 60)])
+    size = max(w, h)
+    stack = []
+    for _ in range(random.randint(1, 3)):
+        side = random.choice(("bottom", "bottom", "left", "right", "top"))
+        if side == "bottom":
+            x, y, angle = random.uniform(0.1 * w, 0.9 * w), h + 2, random.uniform(-2.0, -1.1)
+        elif side == "top":  # a branch reaching in from above the frame
+            x, y, angle = random.uniform(0.1 * w, 0.9 * w), -2, random.uniform(0.8, 2.3)
+        elif side == "left":
+            x, y, angle = -2, random.uniform(0.2 * h, 0.9 * h), random.uniform(-1.0, 0.0)
+        else:
+            x, y, angle = w + 2, random.uniform(0.2 * h, 0.9 * h), random.uniform(-3.1, -2.1)
+        stack.append((x, y, angle, random.uniform(0.15, 0.3) * size, random.uniform(3, 7), 0))
+    while stack:
+        x, y, angle, length, width, depth = stack.pop()
+        x2, y2 = x + length * math.cos(angle), y + length * math.sin(angle)
+        line_width = max(1, round(width))
+        draw_over.line([(x, y), (x2, y2)], fill=bark, width=line_width)
+        draw_mask.line([(x, y), (x2, y2)], fill=255, width=line_width)
+        inside = -20 < x2 < w + 20 and -20 < y2 < h + 20
+        if inside and depth < 7 and length > 3:
+            for _ in range(random.choice((2, 3, 3))):
+                stack.append((x2, y2, angle + random.uniform(-0.7, 0.7), length * random.uniform(0.6, 0.8),
+                              width * 0.65, depth + 1))
+        elif inside and bloom is not None:
+            for _ in range(random.randint(2, 6)):
+                cx, cy, r = x2 + random.uniform(-4, 4), y2 + random.uniform(-4, 4), random.uniform(1, 3)
+                draw_over.ellipse([cx - r, cy - r, cx + r, cy + r], fill=bloom + (255,))
+                draw_mask.ellipse([cx - r, cy - r, cx + r, cy + r], fill=255)
+    return Image.alpha_composite(img.convert("RGBA"), over).convert("RGB"), np.asarray(mask, np.float32) / 255.0
+
+
+def draw_window(img: Image.Image) -> tuple[Image.Image, np.ndarray]:
+    """The photo seen through a window: a wall around an opening, a frame, bars and sometimes a curtain.
+
+    Indoor photos with a window are few in the material, and the model saw the sky through a
+    window as not sky. Returns the photo and the share of each pixel still showing the outside.
+    """
+    w, h = img.size
+    view = np.asarray(img, np.float32) * random.uniform(0.95, 1.35)  # the outside is usually brighter
+    ow, oh = random.uniform(0.3, 0.8) * w, random.uniform(0.3, 0.8) * h
+    x0, y0 = random.uniform(0, w - ow), random.uniform(0, 0.7 * (h - oh))
+    keep = Image.new("L", img.size, 0)
+    draw = ImageDraw.Draw(keep)
+    draw.rectangle([x0, y0, x0 + ow, y0 + oh], fill=255)
+    frame = random.randint(2, 8)
+    bars = [("v", x0 + ow * random.uniform(0.3, 0.7)) for _ in range(random.choice((0, 1, 1, 2)))]
+    bars += [("h", y0 + oh * random.uniform(0.3, 0.7)) for _ in range(random.choice((0, 0, 1)))]
+    bar = random.randint(2, 6)
+    for kind, at in bars:
+        box = [at - bar / 2, y0, at + bar / 2, y0 + oh] if kind == "v" else [x0, at - bar / 2, x0 + ow, at + bar / 2]
+        draw.rectangle(box, fill=0)
+    draw.rectangle([x0, y0, x0 + ow, y0 + oh], outline=0, width=frame)
+    if random.random() < 0.3:  # a curtain over one side of the opening
+        cw = ow * random.uniform(0.1, 0.35)
+        cx = x0 if random.random() < 0.5 else x0 + ow - cw
+        draw.rectangle([cx, 0, cx + cw, h], fill=0)
+    inside = np.asarray(keep, np.float32)[..., None] / 255.0
+    base = np.array(random.choice([(235, 228, 215), (245, 245, 242), (200, 190, 175), (150, 110, 75), (215, 220, 225)]),
+                    np.float32)
+    shade = random.uniform(0.3, 0.9) * (1 - 0.25 * np.linspace(0, 1, h, dtype=np.float32))[:, None, None]
+    wall = base * shade + np.random.normal(0, 3, (h, w, 1)).astype(np.float32)
+    out = view * inside + wall * (1 - inside)
+    return Image.fromarray(np.clip(out, 0, 255).astype(np.uint8)), inside[..., 0]
+
+
 class Data(torch.utils.data.Dataset):
     def __init__(self, items: list[tuple[Path, Path]], train: bool, cfg: dict) -> None:
         self.items, self.train, self.cfg = items, train, cfg
@@ -205,9 +289,19 @@ class Data(torch.utils.data.Dataset):
                 img, label = img.transpose(Image.FLIP_LEFT_RIGHT), label.transpose(Image.FLIP_LEFT_RIGHT)
         mw, mh = model_size(*img.size, self.cfg["long"])
         img = img.resize((mw, mh), Image.BILINEAR)
+        visible = np.ones((mh, mw), np.float32)  # share of each pixel still showing the photo's sky
+        if self.train and random.random() < self.cfg.get("branches", 0.0):
+            img, cover = draw_branches(img)
+            visible *= 1 - cover
         if self.train and random.random() < self.cfg.get("wires", 0.0):
             img = draw_wires(img)
+        if self.train and random.random() < self.cfg.get("windows", 0.0):
+            img, inside = draw_window(img)
+            visible *= inside
         lab = np.asarray(label.resize((mw // 2, mh // 2), Image.BILINEAR), np.float32) / 255.0
+        if visible.min() < 1:
+            half = Image.fromarray(visible, mode="F").resize((mw // 2, mh // 2), Image.BILINEAR)
+            lab = lab * np.asarray(half, np.float32)
         rgb = np.asarray(img).astype(np.float32)
         if self.train:
             gain = 2 ** random.uniform(-0.7, 0.7)  # exposure change; the EV moves the other way
@@ -246,11 +340,12 @@ def cmd_train(args) -> None:
         resource.setrlimit(resource.RLIMIT_NOFILE, (want, hard))
     if not 384 <= args.long <= 512 or args.long % 32:
         raise ValueError("--long must be a multiple of 32 in 384..512")
-    if not 0 <= args.wire_aug <= 1:
-        raise ValueError("--wire-aug must be a probability")
+    if not all(0 <= v <= 1 for v in (args.wire_aug, args.branch_aug, args.window_aug)):
+        raise ValueError("--wire-aug, --branch-aug and --window-aug must be probabilities")
     if len(args.channels) != 4 or any(c < 8 or c > 128 for c in args.channels):
         raise ValueError("--channels takes 4 widths in 8..128")
-    cfg = {"long": args.long, "inputs": args.inputs, "wires": args.wire_aug, "channels": args.channels}
+    cfg = {"long": args.long, "inputs": args.inputs, "wires": args.wire_aug, "branches": args.branch_aug,
+           "windows": args.window_aug, "channels": args.channels}
     torch.manual_seed(args.seed)
     random.seed(args.seed)
     items = []
@@ -350,6 +445,24 @@ def predict_one(net: SkyNet, rgb: np.ndarray, ev: float | None, dev, cfg: dict) 
     return np.clip(guided_filter(guide, up.astype(np.float32), r, 1e-3), 0, 1)
 
 
+def refine(rgb: np.ndarray, prob: np.ndarray, fill_delta: float, fill_reach: float, min_area: float) -> np.ndarray:
+    """Add the sky-coloured gaps next to the predicted sky; drop sky pieces under `min_area` of the photo."""
+    if fill_delta > 0:
+        sky = prob >= 0.5
+        if sky.mean() >= 0.02:
+            filled = fill(rgb, sky, fill_delta, 0.8, fill_reach)
+            if filled is not None:
+                prob = np.where(filled & ~sky, 1.0, prob)
+    if min_area > 0:
+        sky = prob >= 0.5
+        pieces, n = ndimage.label(sky)
+        if n:
+            area = ndimage.sum_labels(sky, pieces, np.arange(1, n + 1))
+            small = np.r_[False, area < min_area * sky.size]
+            prob = np.where(small[pieces], 0.0, prob)
+    return prob
+
+
 def cmd_predict(args) -> None:
     dev = torch.device(args.device)
     cfg = load_config(args.run)
@@ -362,10 +475,13 @@ def cmd_predict(args) -> None:
         with Image.open(path) as im:
             rgb = np.asarray(im.convert("RGB"))
         t = time.perf_counter()
-        prob = predict_one(net, rgb, load_ev(path), dev, cfg)
+        prob = refine(rgb, predict_one(net, rgb, load_ev(path), dev, cfg), args.fill_delta, args.fill_reach,
+                      args.min_area)
         times[path.stem] = time.perf_counter() - t
         Image.fromarray(np.round(prob * 255).astype(np.uint8), mode="L").save(args.out / path.name)
     (args.out / "timing.json").write_text(json.dumps(times, indent=1))
+    (args.out / "predict.json").write_text(json.dumps({"weights": args.weights, "fillDelta": args.fill_delta,
+                                                        "fillReach": args.fill_reach, "minArea": args.min_area}))
     print(f"{len(times)} -> {args.out}")
 
 
@@ -429,6 +545,8 @@ def main() -> None:
     t.add_argument("--sample-weights", type=Path, help="JSON object: image stem -> sampling weight (default 1)")
     t.add_argument("--channels", type=int, nargs=4, default=list(CH), help="widths of the 4 levels")
     t.add_argument("--wire-aug", type=float, default=0.0, help="probability of drawing synthetic wires on a training photo")
+    t.add_argument("--branch-aug", type=float, default=0.0, help="probability of drawing synthetic bare trees")
+    t.add_argument("--window-aug", type=float, default=0.0, help="probability of framing the photo by a window")
     t.add_argument("--device", default="mps")
     t.add_argument("--validation-ids", type=Path, help="JSON array of image stems from distinct capture groups")
     t.add_argument("--expect-ev-count", type=int, help="expected number of photos with exposure sidecars; abort on mismatch")
@@ -438,6 +556,9 @@ def main() -> None:
     p.add_argument("--out", required=True, type=Path)
     p.add_argument("--weights", default="best.pt")
     p.add_argument("--device", default="mps")
+    p.add_argument("--fill-delta", type=float, default=0.0, help="add sky-coloured gaps within this Lab distance (0: off)")
+    p.add_argument("--fill-reach", type=float, default=0.1, help="isolated gaps lie this close to the sky (share of the long edge)")
+    p.add_argument("--min-area", type=float, default=0.0, help="drop sky pieces smaller than this share of the photo")
     e = sub.add_parser("export")
     e.add_argument("--run", required=True, type=Path)
     e.add_argument("--weights", default="best.pt")
