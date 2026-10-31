@@ -249,7 +249,10 @@ pub const EXPECTED: [(&str, &str); 27] = [
         "setSkyModel",
         "{\"channels\":[4,6,8,8],\"inputs\":\"rgb\",\"long\":64}",
     ),
-    ("Developer.detectSky", "pending"),
+    (
+        "Developer.detectSky",
+        "06338b5c0b539a50847ba7fbeccf70c430369fc94859d4dda496993a804b464d",
+    ),
     ("Developer.detectSky.size", "160x120"),
     (
         "Developer.thumbnail.render",
