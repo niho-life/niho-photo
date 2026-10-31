@@ -11844,8 +11844,8 @@
     },
     {
       "path": "packages/develop-engine/tools/sky-mask-train/README.md",
-      "sha256": "e844d09fcbcb71c9d35bcaa5fc07813f545258d122ef7f5e8895d1cad9880a7b",
-      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。 変更理由: 学習時に露出メタデータ件数を照合し、スナップショットの欠落を検出する。 変更理由: 件数照合が有効な ev100 を数えることを明記。\n変更理由: #158 入力設定・抽出の重み・生成証跡の説明を足す\n変更理由: #158 入力設定・チャネル幅・抽出の重み・合成電線の増強・生成証跡の説明を足す\n変更理由: #158 rgb-ev の digest に露出の JSON が入ることを書く"
+      "sha256": "ca4635d434d247b4ef86757de584fd9296f2e2395bed5f2319231ce0fb217700",
+      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。 変更理由: 学習時に露出メタデータ件数を照合し、スナップショットの欠落を検出する。 変更理由: 件数照合が有効な ev100 を数えることを明記。\n変更理由: #158 入力設定・抽出の重み・生成証跡の説明を足す\n変更理由: #158 入力設定・チャネル幅・抽出の重み・合成電線の増強・生成証跡の説明を足す\n変更理由: #158 rgb-ev の digest に露出の JSON が入ることを書く\n変更理由: #158 枝越しの空を足す正解の補いと、空なし素材・後処理の説明を足す"
     },
     {
       "path": "packages/develop-engine/tools/sky-mask-train/requirements.txt",
@@ -11866,6 +11866,11 @@
       "path": "packages/develop-engine/tools/sky-mask-train/evaluate.py",
       "sha256": "a6ec276743c5543f4a641a6f20b6f04e018f3240a0fdec2f4e546af33e406d38",
       "origin": "Issue #158 で NIHO が作成した非公開研究コードを公開用に整理。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。 変更理由: 空なし写真での誤検出件数を評価出力へ明示。"
+    },
+    {
+      "path": "packages/develop-engine/tools/sky-mask-train/label_fill.py",
+      "sha256": "234943aa5f814924dd9613d3e1df34377d07ffdc1b382894a0a51f6b92d5cb91",
+      "origin": "Issue #158 で NIHO が作成した研究コード。学習用の空の正解に、枝越し・建物の間の空の候補を色で足す汎用処理のみ。写真・正解マスク・学習済み重み・個体情報を含まない。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/examples/stage_timing.rs",
