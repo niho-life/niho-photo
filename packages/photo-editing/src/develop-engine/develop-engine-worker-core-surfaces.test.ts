@@ -10,7 +10,7 @@ import {
 /**
  * Worker の中の面の受け渡し（M4 #68）: 能力の `surfaces`（口が揃わない glue は面の種類を外す）、開いている写真へ渡す・手放す、見本の
  * session にもそろえる、面の PNG と id を作る、書き出しに添えた面は一時的な Developer で描く（JPEG / PNG は一発の書き出しと同じ作業
- * サイズ、作業コピーは描く前に渡す）。
+ * サイズ、作業コピーは描く前に渡す）。空の検出（niho-photo#141）は開いている写真の Developer で面を作り、PNG と id を返す。
  */
 
 const MANIFEST_URL = `https://photo.example.test${developEngineManifestPath()}`;
@@ -28,7 +28,15 @@ const CAPABILITIES = { masks: { kinds: ["linear", "radial", "brush", "subject", 
 
 type Posted = { message: DevelopEngineWorkerResponse; transfer: Transferable[] | undefined };
 
-function surfaceGlue(options: { capabilities?: unknown; developerSurfaces?: boolean; encode?: boolean } = {}) {
+function surfaceGlue(
+  options: {
+    capabilities?: unknown;
+    developerSurfaces?: boolean;
+    encode?: boolean;
+    /** `Developer.prototype.detectSky`（省略 = 口の無い glue） */
+    detectSky?: (settingsJson: string, ev100?: number) => unknown;
+  } = {},
+) {
   const developers: FakeDeveloper[] = [];
   const thumbnails: FakeDeveloper[] = [];
   class FakeDeveloper {
@@ -73,6 +81,12 @@ function surfaceGlue(options: { capabilities?: unknown; developerSurfaces?: bool
       return new Uint8Array([0xff, 0xd8, this.surfaces.size, maxDimension & 0xff, quality]);
     }
   }
+  const detectSky = options.detectSky;
+  class SkyDeveloper extends SurfaceDeveloper {
+    detectSky(settingsJson: string, ev100?: number) {
+      return detectSky!(settingsJson, ev100);
+    }
+  }
   const capabilities = options.capabilities ?? CAPABILITIES;
   const module = {
     default: vi.fn(async () => ({})),
@@ -80,7 +94,7 @@ function surfaceGlue(options: { capabilities?: unknown; developerSurfaces?: bool
     render: vi.fn(),
     exportJpeg: vi.fn(() => new Uint8Array([0xff, 0xd8, 0])),
     convertEditSettings: vi.fn(),
-    Developer: options.developerSurfaces === false ? FakeDeveloper : SurfaceDeveloper,
+    Developer: options.developerSurfaces === false ? FakeDeveloper : detectSky ? SkyDeveloper : SurfaceDeveloper,
     capabilities: () => JSON.stringify(capabilities),
     imageSize: vi.fn(() => ({ width: 3000, height: 2000 })),
     rasterDecodeSize: vi.fn((_settingsJson: string, _width: number, _height: number, maxDimension: number) => maxDimension * 2),
@@ -215,5 +229,64 @@ describe("Worker の面の受け渡し", () => {
     expect(working.surfaces.get(ID)).toEqual([9]);
     expect(working.renders).toEqual(['{"v":5}']);
     expect(posted.at(-1)?.message).toMatchObject({ type: "jpeg", id: 2 });
+  });
+});
+
+describe("Worker の空の検出（niho-photo#141）", () => {
+  const found = () => ({ width: 3, height: 2, png: new Uint8Array([0x89, 0x50, 7]) });
+
+  it("Developer に detectSky があり、面を受け渡せて sky を描ける glue だけ ready に skyDetection: true を付ける", async () => {
+    const ready = setup(surfaceGlue({ detectSky: found }).module);
+    await ready.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    expect(ready.posted[0]?.message).toMatchObject({ type: "ready", skyDetection: true });
+
+    const noSky = { capabilities: { masks: { ...CAPABILITIES.masks, kinds: ["linear", "radial", "brush", "subject"] } } };
+    for (const options of [{}, { detectSky: found, encode: false }, { detectSky: found, ...noSky }]) {
+      const other = setup(surfaceGlue(options).module);
+      await other.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+      expect(other.posted[0]?.message).toMatchObject({ type: "ready" });
+      expect("skyDetection" in other.posted[0]!.message).toBe(false);
+    }
+  });
+
+  it("開いている写真で空の面を作り、PNG（transfer）・id・寸法を返す。空が無ければ surface: null", async () => {
+    const detectSky = vi.fn((_settingsJson: string, _ev100?: number): unknown => found());
+    const glue = surfaceGlue({ detectSky });
+    const { handler, posted } = setup(glue.module);
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await handler({ type: "detectSky", id: 2, settingsJson: "{}", ev100: 14 });
+    expect(posted.at(-1)?.message).toEqual({ type: "error", id: 2, message: "no photo is open" });
+
+    await handler({ type: "open", id: 3, bytes: new ArrayBuffer(4), workingMaxDimension: 2560 });
+    await handler({ type: "detectSky", id: 4, settingsJson: '{"v":5,"engine":"niho-10"}', ev100: 14.5 });
+    expect(detectSky).toHaveBeenLastCalledWith('{"v":5,"engine":"niho-10"}', 14.5);
+    const last = posted.at(-1)!;
+    expect(last.message).toMatchObject({ type: "skyDetected", id: 4, surface: { surfaceId: ID, width: 3, height: 2 } });
+    const png = (last.message as { surface: { png: ArrayBuffer } }).surface.png;
+    expect([...new Uint8Array(png)]).toEqual([0x89, 0x50, 7]);
+    expect(last.transfer).toEqual([png]);
+    expect(glue.module.maskSurfaceId).toHaveBeenCalledWith(new Uint8Array([0x89, 0x50, 7]));
+
+    // 露出が分からなければ undefined（wasm の None）で呼ぶ
+    detectSky.mockReturnValueOnce(null);
+    await handler({ type: "detectSky", id: 5, settingsJson: "{}", ev100: null });
+    expect(detectSky).toHaveBeenLastCalledWith("{}", undefined);
+    expect(posted.at(-1)?.message).toEqual({ type: "skyDetected", id: 5, surface: null });
+
+    // 形の違う答えは error
+    detectSky.mockReturnValueOnce({ width: 0, height: 2, png: new Uint8Array([1]) });
+    await handler({ type: "detectSky", id: 6, settingsJson: "{}", ev100: null });
+    expect(posted.at(-1)?.message).toEqual({ type: "error", id: 6, message: "develop engine returned an invalid sky surface" });
+  });
+
+  it("口の無い glue では error（ほかの要求は使える）", async () => {
+    const glue = surfaceGlue();
+    const { handler, posted } = setup(glue.module);
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await handler({ type: "open", id: 2, bytes: new ArrayBuffer(4), workingMaxDimension: 2560 });
+    await handler({ type: "detectSky", id: 3, settingsJson: "{}", ev100: 14 });
+    expect(posted.at(-1)?.message).toEqual({ type: "error", id: 3, message: "develop engine cannot detect the sky" });
+    await handler({ type: "render", id: 4, settingsJson: "{}", maxDimension: 64, interactive: false });
+    expect(posted.at(-1)?.message).toMatchObject({ type: "frame", id: 4 });
   });
 });
