@@ -33,6 +33,7 @@ export const NATIVE_DEVELOP_FUNCTIONS = [
   "capabilities",
   "maskSurfaceId",
   "encodeMaskSurface",
+  "setSkyModel",
   "render",
   "exportJpeg",
   "exportPng",
@@ -72,6 +73,7 @@ export const NATIVE_DEVELOP_DEVELOPER_METHODS = [
   "sampleColor",
   "autoSettings",
   "estimateUpright",
+  "detectSky",
   "free",
 ] as const;
 
@@ -257,6 +259,8 @@ export type NativeDeveloper = {
   sampleColor(settingsJson: string, maxDimension: number, x: number, y: number): unknown;
   autoSettings(settingsJson: string): string;
   estimateUpright(settingsJson: string, mode: number): string;
+  /** 空の面 `{ width, height, png }`（空が無ければ null。niho-photo#141） */
+  detectSky(settingsJson: string, ev100?: number): unknown;
   free(): void;
 };
 
@@ -273,6 +277,8 @@ export type NativeDevelopGlue = {
   capabilities: () => string;
   maskSurfaceId: (png: Uint8Array) => string;
   encodeMaskSurface: (width: number, height: number, data: Uint8Array) => Uint8Array;
+  /** 空の検出のモデルを sidecar に渡す（niho-photo#141。モデルの `{ long, inputs, channels }` の JSON を返す） */
+  setSkyModel: (layoutJson: string, weights: Uint8Array) => string;
   render: (input: Uint8Array, settingsJson: string, maxDimension: number, decodeCap?: number | null) => unknown;
   exportJpeg: (input: Uint8Array, settingsJson: string, maxDimension: number, quality: number, decodeCap?: number | null) => Uint8Array;
   exportPng: (input: Uint8Array, settingsJson: string, maxDimension: number, decodeCap?: number | null) => Uint8Array;
@@ -478,6 +484,10 @@ export function createNativeDevelopGlue(
       return result;
     }
 
+    detectSky(settingsJson: string, ev100?: number): unknown {
+      return call("Developer.detectSky", [settingsJson, ev100 ?? null], { handle: this.live() });
+    }
+
     /** sidecar の Developer を手放す（2 回目からは何もしない。wasm の `free` と同じく呼んだ後は使えない）。 */
     free(): void {
       const handle = this.handle;
@@ -519,6 +529,7 @@ export function createNativeDevelopGlue(
     capabilities: () => callString("capabilities", []),
     maskSurfaceId: (png) => callString("maskSurfaceId", [png]),
     encodeMaskSurface: (width, height, data) => callBytes("encodeMaskSurface", [width, height, data]),
+    setSkyModel: (layoutJson, weights) => callString("setSkyModel", [layoutJson, weights]),
     render: (input, settingsJson, maxDimension, decodeCap) => toFrame(call("render", [input, settingsJson, maxDimension, decodeCap])),
     exportJpeg: (input, settingsJson, maxDimension, quality, decodeCap) =>
       callBytes("exportJpeg", [input, settingsJson, maxDimension, quality, decodeCap]),

@@ -11775,8 +11775,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-native-glue.ts",
-      "sha256": "f10e349fad57a461016e9826cdefb3f983d4eec0312ddde796023d6b6790e46f",
-      "origin": "公開repoで新規作成（niho-photo#152）。Mac アプリの現像の Worker が読む native の glue。wasm-bindgen の glue と同じ形の口を、同期の XHR（niho-develop://）で sidecar の niho-develop-render serve へ包む。外部のコード・実写真・非公開の情報を含まない。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正"
+      "sha256": "616fc9c639c4022064ea0d28dd935069b4dfcbb6b1f40d046c4fdf162f306692",
+      "origin": "公開repoで新規作成（niho-photo#152）。Mac アプリの現像の Worker が読む native の glue。wasm-bindgen の glue と同じ形の口を、同期の XHR（niho-develop://）で sidecar の niho-develop-render serve へ包む。外部のコード・実写真・非公開の情報を含まない。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正\n変更理由: #141 空のマスク: sidecar の口の一覧に setSkyModel・Developer.detectSky を足す（wasm の export と揃える）"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-native-glue.test.ts",
