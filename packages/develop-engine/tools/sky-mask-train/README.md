@@ -14,6 +14,8 @@ NIHO 独自の小型 U-Net をゼロから学習し、推論結果を独立し�
 
 `--wire-aug P` は確率 P で学習写真の上部に 1〜2px の暗い線（電線）を描き足し、正解は空のままにする。区画から切り出した正解は電線に沿って空が欠けるため、モデルが「線の横切る空は空でない」と覚える。学習外 30 場面では、電線を画像処理で消すだけで電線の場面の一部の IoU が大きく上がった。
 
+`--branch-aug P` は確率 P で、画面の端から伸びる合成の枝（ときどき花や葉）を描き、枝の間は写真の空のままにする。`--window-aug P` は確率 P で、屋外の写真を室内の壁・窓枠・桟・カーテンで囲み、窓の外の空を空のままにする。どちらも、枝越しと窓越しの空の素材が少ないことを補う。
+
 ## 正解の補い（枝越し・建物の間の空）
 
 画像の区画から切り出した正解は、木・電線の束・格子を一つの「空でない」面にする。これで学習すると、モデルは枝や電線の間から空が見えないと覚える。`label_fill.py` は、正解の空と同じ色（Lab で `--delta` 以内）の画素を、空に接する小片と、空の近くで模様に囲まれた小さい隙間に限って足した候補を作る。
@@ -24,7 +26,11 @@ python label_fill.py --data "$DATA" --out "$FILLED" --delta 6
 
 海・山の霞・雲海・青い壁や看板も空と同じ色になりうる。候補は写真と重ねて見直してから使う。#158 では、追加が 2% を超える候補は全件、0.3〜2% は抜き取りで見直した。採らなかった候補は元の正解のままにした。学習外 30 場面では、同じ学習条件で全体 IoU と境界 F が上がった。なお、この時点の候補は、孤立した隙間の周りの模様を隙間の外接矩形の中だけで調べていた。そのため、細い隙間や矩形の隙間を足していない（その後に修正）。
 
-空なしの写真（青や白の壁、無地の背景）を空なしの正解で足すと、空なし写真の誤検出が減る。推論の後処理では、面積が写真の 0.1% に満たない空の小片を消すと、調整用の場面の空なしの誤検出がさらに減った（学習外 30 場面の IoU はほぼ変わらない）。
+空なしの写真（青や白の壁、無地の背景）を空なしの正解で足すと、空なし写真の誤検出が減る。
+
+## 推論後の補い
+
+`predict --low L` は、確実な空（確率 0.5 以上）につながる弱い空（確率 L 以上）も空に含める。モデルの確率は窓越しや枝越しで 0.1〜0.4 にとどまることが多い。`--fill-delta D` は、その空を土台に `label_fill.py` と同じ規則で空色の隙間を足す。`--min-area A` は、面積が写真の A に満たない空の小片を消す。モデルの出力は長辺 384 の半分の解像度なので、枝や電線の間の細かい空はモデルだけでは拾えない。写真自身の色で補うと拾える。#158 では、設定を調整用の 18 場面だけで決めた（`--low 0.1 --fill-delta 8 --fill-reach 0.1 --min-area 0.001`）。学習外 30 場面では、補いだけで全体 IoU が 0.66 前後から 0.69〜0.71 に上がった（電線・建物・枝の場面）。`--low 0.1` を加えると 0.73 前後になった（窓・枝の場面）。製品の推論（Rust/wasm）に入れるときは、この処理も同じ規則で実装し、出力の一致を確かめる。
 
 ## 実行
 
@@ -32,7 +38,7 @@ python label_fill.py --data "$DATA" --out "$FILLED" --delta 6
 
 ```sh
 python train_sky.py train --data "$DATA" --validation-ids "$VALIDATION_IDS" --epochs 40 --out "$RUN"
-python train_sky.py predict --run "$RUN" --input "$HOLDOUT_INPUT" --out "$PREDICTIONS"
+python train_sky.py predict --run "$RUN" --input "$HOLDOUT_INPUT" --out "$PREDICTIONS" --low 0.1 --fill-delta 8 --min-area 0.001
 python evaluate.py --work "$HOLDOUT" --scenes "$HOLDOUT/scenes.json" --method own="$PREDICTIONS"
 python train_sky.py export --run "$RUN"
 ```
@@ -41,4 +47,6 @@ python train_sky.py export --run "$RUN"
 
 学習の設定は `RUN/config.json` に書き、`predict` と `export` はそこから読む（`config.json` のない古い run は長辺 384・`rgb-ev` として読む）。
 
-`export` は BatchNorm を畳み込んだ研究用の重みとレイアウトを非公開の `RUN` に書く。生成証跡として、`train` は `RUN/run.json`（命令、素材の digest＝画像ごとの入力とラベル（`rgb-ev` では露出の JSON も）の SHA-256 の一覧の hash、台帳・検証分割・抽出の重みの SHA-256、コードの hash、commit、最良 epoch と検証 IoU）を、`export` は `RUN/export.json`（読んだ重み・設定・`run.json` と、書いた `weights.f32`・`layout.json` の SHA-256）を残す。Rust/wasm へ渡すときは、この 2 つと非公開台帳を照合する。Rust/wasm 実装との一致、ボタンから結果までの実機時間、空なし写真の誤検出率を確認するまでは製品へ載せない。
+`export` は BatchNorm を畳み込んだ研究用の重みとレイアウトを非公開の `RUN` に書く。生成証跡として、`train` は `RUN/run.json`（命令、素材の digest＝画像ごとの入力とラベル（`rgb-ev` では露出の JSON も）の SHA-256 の一覧の hash、台帳・検証分割・抽出の重みの SHA-256、コードの hash、commit、最良 epoch と検証 IoU）を、`export` は `RUN/export.json`（読んだ重み・設定・`run.json` と、書いた `weights.f32`・`layout.json` の SHA-256）を残す。Rust/wasm へ渡すときは、この 2 つと非公開台帳を照合する。
+
+`export` は照合用の固定データも `RUN/fixtures/` に書く。描いた画像（写真ではない）をモデルの大きさで 2 枚作り、その入力と PyTorch のロジットを保存する。`reference_forward.py --run "$RUN"` は、`weights.f32` と `layout.json` だけから NumPy でロジットを計算し、固定データと照合する。ネットワークの構成は `reference_forward.py` の docstring にある。Rust/wasm 実装も、同じ固定データで一致を確かめる。Rust/wasm 実装との一致、ボタンから結果までの実機時間、空なし写真の誤検出率を確認するまでは製品へ載せない。
