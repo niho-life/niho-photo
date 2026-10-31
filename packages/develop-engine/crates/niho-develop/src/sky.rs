@@ -1551,17 +1551,13 @@ mod tests {
             assert_eq!(dilated[i], cross.iter().any(|&(dx, dy)| at(x + dx, y + dy)));
         }
         let distance = distance_to(&mask, w, h);
-        for i in 0..w * h {
+        for (i, &got) in distance.iter().enumerate() {
             let (x, y) = ((i % w) as f64, (i / w) as f64);
             let direct = (0..w * h)
                 .filter(|&j| mask[j])
                 .map(|j| ((j % w) as f64 - x).hypot((j / w) as f64 - y))
                 .fold(f64::INFINITY, f64::min);
-            assert!(
-                (distance[i] - direct).abs() < 1e-9,
-                "{i}: {} vs {direct}",
-                distance[i]
-            );
+            assert!((got - direct).abs() < 1e-9, "{i}: {got} vs {direct}");
         }
         for diagonal in [false, true] {
             let (pieces, count) = label(&mask, w, h, diagonal);
