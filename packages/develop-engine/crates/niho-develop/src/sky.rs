@@ -29,6 +29,21 @@
 //!    `L / 100`, radius `long side / 256`, at least 2; eps 1e-3) snaps the
 //!    edge, clipped to 0..=1 and rounded (half to even) to 0..=255.
 //!
+//! 4. **Refine** ([`estimate_sky`]; `train_sky.py predict --low 0.1
+//!    --fill-delta 8 --fill-reach 0.1 --min-area 0.001`, set on #158's
+//!    tuning scenes only). The model sees the photo at half of 384 on the
+//!    long side, so sky between twigs and wires and behind window bars is
+//!    left out, and that sky's probability often stays at 0.1..0.4:
+//!    - weaker sky (0.1 and up) joined (4-neighbours) to sure sky (0.5 and
+//!      up) becomes 0.5;
+//!    - when sky covers 2 % of the photo or more, the gaps of the sky's own
+//!      colour next to it become 1 (`label_fill.py`: Lab within 8 of one of
+//!      the three k-means colours of the inner flat sky, in the upper 80 %;
+//!      a piece touching the sky under 5 % of the photo, or an isolated one
+//!      under 1 % within a tenth of the long side of the sky and ringed by
+//!      texture);
+//!    - sky pieces (4-neighbours) under 0.1 % of the photo become 0.
+//!
 //! The steps are `train_sky.py predict`'s, so a model scores here as it
 //! scored there. Every sum runs in a fixed order and the transcendental
 //! functions are `libm`'s (the ones a wasm build links), so native and wasm
@@ -551,10 +566,54 @@ pub fn predict(
     height: usize,
     ev100: Option<f64>,
 ) -> Option<SkySurface> {
+    let probability = probability(model, rgb, width, height, ev100)?;
+    surface_of(width, height, &probability.v)
+}
+
+/// [`predict`] followed by the refine steps (the module's step 4): the
+/// surface `train_sky.py predict --low 0.1 --fill-delta 8 --fill-reach 0.1
+/// --min-area 0.001` writes, sky or not.
+pub fn predict_refined(
+    model: &SkyModel,
+    rgb: &[u8],
+    width: usize,
+    height: usize,
+    ev100: Option<f64>,
+) -> Option<SkySurface> {
+    let mut probability = probability(model, rgb, width, height, ev100)?;
+    refine(rgb, width, height, &mut probability.v);
+    surface_of(width, height, &probability.v)
+}
+
+/// The probabilities clipped to 0..=1 and rounded (half to even) to
+/// 0..=255.
+fn surface_of(width: usize, height: usize, probability: &[f32]) -> Option<SkySurface> {
+    let (width, height) = (u32::try_from(width).ok()?, u32::try_from(height).ok()?);
+    let data = probability
+        .iter()
+        .map(|&p| (p.clamp(0.0, 1.0) * 255.0).round_ties_even() as u8)
+        .collect();
+    Some(SkySurface {
+        width,
+        height,
+        data,
+    })
+}
+
+/// The model's sky probability at the photo's size (steps 1 to 3), clipped
+/// to 0..=1.
+fn probability(
+    model: &SkyModel,
+    rgb: &[u8],
+    width: usize,
+    height: usize,
+    ev100: Option<f64>,
+) -> Option<Plane> {
     if width == 0 || height == 0 || width.checked_mul(height)?.checked_mul(3)? != rgb.len() {
         return None;
     }
-    let (out_width, out_height) = (u32::try_from(width).ok()?, u32::try_from(height).ok()?);
+    u32::try_from(width).ok()?;
+    u32::try_from(height).ok()?;
     let (mw, mh) = model.input_size(width, height);
     let small = resize_rgb8(rgb, width, height, mw, mh);
     let input = model.features(&small, mw, mh, ev100.filter(|ev| ev.is_finite()));
@@ -575,19 +634,14 @@ pub fn predict(
         v: lightness_plane(rgb),
     };
     let radius = ((width.max(height) as f64 / 256.0).round_ties_even() as usize).max(2);
-    let data = guided_filter(&guide, &src, radius, 1e-3)
-        .v
-        .iter()
-        .map(|&p| (p.clamp(0.0, 1.0) * 255.0).round_ties_even() as u8)
-        .collect();
-    Some(SkySurface {
-        width: out_width,
-        height: out_height,
-        data,
-    })
+    let mut filtered = guided_filter(&guide, &src, radius, 1e-3);
+    for p in &mut filtered.v {
+        *p = p.clamp(0.0, 1.0);
+    }
+    Some(filtered)
 }
 
-/// The sky of a photo ([`predict`]), or `None` when no pixel is sky
+/// The sky of a photo ([`predict_refined`]), or `None` when no pixel is sky
 /// ([`SkySurface::has_sky`]) or the input cannot be read.
 pub fn estimate_sky(
     model: &SkyModel,
@@ -596,7 +650,412 @@ pub fn estimate_sky(
     height: usize,
     ev100: Option<f64>,
 ) -> Option<SkySurface> {
-    predict(model, rgb, width, height, ev100).filter(SkySurface::has_sky)
+    predict_refined(model, rgb, width, height, ev100).filter(SkySurface::has_sky)
+}
+
+/// Weaker sky joined to sure sky becomes sure (step 4).
+const LOW: f32 = 0.1;
+/// Sure sky (the surface's 128 and up).
+const SURE: f32 = 0.5;
+/// The share of the photo the sky must cover before its gaps are filled.
+const FILL_FROM: f64 = 0.02;
+/// The largest Lab distance from one of the sky's colours.
+const FILL_DELTA: f32 = 8.0;
+/// Isolated gaps lie within this share of the long side of the sky.
+const FILL_REACH: f64 = 0.1;
+/// Only the upper share of the rows is searched.
+const FILL_ROWS: f64 = 0.8;
+/// Sky pieces smaller than this share of the photo are dropped.
+const MIN_AREA: f64 = 0.001;
+
+/// The refine steps on `probability` (`width * height`, 0..=1) of the photo
+/// `rgb`, in place (`train_sky.py`'s `refine`).
+fn refine(rgb: &[u8], width: usize, height: usize, probability: &mut [f32]) {
+    let n = width * height;
+    // Weaker sky joined to sure sky.
+    let weak: Vec<bool> = probability.iter().map(|&p| p >= LOW).collect();
+    let (pieces, count) = label(&weak, width, height, false);
+    let mut seeded = vec![false; count + 1];
+    for (i, &k) in pieces.iter().enumerate() {
+        if probability[i] >= SURE {
+            seeded[k as usize] = true;
+        }
+    }
+    seeded[0] = false;
+    for (i, &k) in pieces.iter().enumerate() {
+        if seeded[k as usize] && probability[i] < SURE {
+            probability[i] = SURE;
+        }
+    }
+    // The gaps of the sky's colour.
+    let sky: Vec<bool> = probability.iter().map(|&p| p >= SURE).collect();
+    let covered = sky.iter().filter(|&&s| s).count();
+    if covered as f64 / n as f64 >= FILL_FROM {
+        if let Some(filled) = fill(rgb, &sky, width, height) {
+            for i in 0..n {
+                if filled[i] && !sky[i] {
+                    probability[i] = 1.0;
+                }
+            }
+        }
+    }
+    // Small sky pieces.
+    let sky: Vec<bool> = probability.iter().map(|&p| p >= SURE).collect();
+    let (pieces, count) = label(&sky, width, height, false);
+    let mut area = vec![0usize; count + 1];
+    for &k in &pieces {
+        area[k as usize] += 1;
+    }
+    let limit = MIN_AREA * n as f64;
+    for (i, &k) in pieces.iter().enumerate() {
+        if k != 0 && (area[k as usize] as f64) < limit {
+            probability[i] = 0.0;
+        }
+    }
+}
+
+/// The sky with the gaps of its own colour added (`label_fill.py`'s
+/// `fill`), or `None` when the sky has fewer than 200 inner flat pixels.
+fn fill(rgb: &[u8], sky: &[bool], width: usize, height: usize) -> Option<Vec<bool>> {
+    let (w, h, n) = (width, height, width * height);
+    let lab = lab_pixels(rgb);
+    let lightness = Plane {
+        w,
+        h,
+        v: lab.iter().map(|p| p[0]).collect(),
+    };
+    let flat = flat_pixels(&lightness);
+    let eroded = erode(sky, w, h, 5);
+    let inner: Vec<[f32; 3]> = (0..n)
+        .filter(|&i| eroded[i] && flat[i])
+        .map(|i| lab[i])
+        .collect();
+    if inner.len() < 200 {
+        return None;
+    }
+    let colours = kmeans(&inner, 3, 12);
+    let rows = (FILL_ROWS * h as f64) as usize;
+    let candidate: Vec<bool> = (0..n)
+        .map(|i| !sky[i] && i / w < rows && nearest_colour(lab[i], &colours) < FILL_DELTA)
+        .collect();
+    let (pieces, count) = label(&candidate, w, h, true);
+    if count == 0 {
+        return Some(sky.to_vec());
+    }
+    let near_sky = dilate(sky, w, h, 2);
+    let distance = distance_to(sky, w, h);
+    let mut area = vec![0usize; count + 1];
+    let mut touches = vec![false; count + 1];
+    let mut nearest = vec![f64::INFINITY; count + 1];
+    // (top, left, bottom, right), bottom and right exclusive
+    let mut bounds = vec![(usize::MAX, usize::MAX, 0usize, 0usize); count + 1];
+    for (i, &k) in pieces.iter().enumerate() {
+        if k == 0 {
+            continue;
+        }
+        let k = k as usize;
+        let (x, y) = (i % w, i / w);
+        area[k] += 1;
+        touches[k] |= near_sky[i];
+        nearest[k] = nearest[k].min(distance[i]);
+        let b = &mut bounds[k];
+        *b = (b.0.min(y), b.1.min(x), b.2.max(y + 1), b.3.max(x + 1));
+    }
+    let mean = box_mean(&lightness, 4);
+    let squared = Plane {
+        w,
+        h,
+        v: lightness.v.iter().map(|v| v * v).collect(),
+    };
+    let mean_squared = box_mean(&squared, 4);
+    let spread: Vec<f32> = (0..n)
+        .map(|i| (mean_squared.v[i] - mean.v[i] * mean.v[i]).max(0.0).sqrt())
+        .collect();
+    let reach = FILL_REACH * w.max(h) as f64;
+    let mut add = vec![false; count + 1];
+    for k in 1..=count {
+        let share = area[k] as f64 / n as f64;
+        if touches[k] && share < 0.05 {
+            add[k] = true;
+        } else if share < 0.01 && nearest[k] <= reach {
+            add[k] = ringed_by_texture(&pieces, k as u32, bounds[k], &spread, w, h);
+        }
+    }
+    Some((0..n).map(|i| sky[i] || add[pieces[i] as usize]).collect())
+}
+
+/// Whether the 4-pixel ring around piece `k` (a diamond, cut at the photo's
+/// edge) has a mean lightness spread of 6 or more.
+fn ringed_by_texture(
+    pieces: &[u32],
+    k: u32,
+    (top, left, bottom, right): (usize, usize, usize, usize),
+    spread: &[f32],
+    w: usize,
+    h: usize,
+) -> bool {
+    const RING: usize = 4;
+    let (y0, x0) = (top.saturating_sub(RING), left.saturating_sub(RING));
+    let (y1, x1) = ((bottom + RING).min(h), (right + RING).min(w));
+    let (bw, bh) = (x1 - x0, y1 - y0);
+    let piece: Vec<bool> = (0..bw * bh)
+        .map(|j| pieces[(y0 + j / bw) * w + x0 + j % bw] == k)
+        .collect();
+    let grown = dilate(&piece, bw, bh, RING);
+    let (mut sum, mut count) = (0.0f64, 0usize);
+    for j in 0..bw * bh {
+        if grown[j] && !piece[j] {
+            sum += spread[(y0 + j / bw) * w + x0 + j % bw] as f64;
+            count += 1;
+        }
+    }
+    count > 0 && sum / count as f64 >= 6.0
+}
+
+/// CIE Lab (D65) of every pixel of sRGB 8-bit RGB (`sky_math.srgb_to_lab`).
+fn lab_pixels(rgb: &[u8]) -> Vec<[f32; 3]> {
+    let linear: Vec<f32> = (0..=255u8).map(|v| srgb_linear(v as f32 / 255.0)).collect();
+    rgb.chunks_exact(3)
+        .map(|c| {
+            let [r, g, b] = [c[0], c[1], c[2]].map(|v| linear[v as usize]);
+            let x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047;
+            let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
+            let z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
+            let [fx, fy, fz] = [x, y, z].map(lab_f);
+            [116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz)]
+        })
+        .collect()
+}
+
+/// Pixels whose lightness gradient (`np.gradient`: central differences,
+/// one-sided at the edges) is under 2.
+fn flat_pixels(lightness: &Plane) -> Vec<bool> {
+    let (w, h, v) = (lightness.w, lightness.h, &lightness.v);
+    let along = |i: usize, len: usize, at: &dyn Fn(usize) -> f32| -> f32 {
+        if len < 2 {
+            0.0
+        } else if i == 0 {
+            at(1) - at(0)
+        } else if i == len - 1 {
+            at(len - 1) - at(len - 2)
+        } else {
+            (at(i + 1) - at(i - 1)) / 2.0
+        }
+    };
+    (0..w * h)
+        .map(|i| {
+            let (x, y) = (i % w, i / w);
+            let gx = along(x, w, &|t| v[y * w + t]);
+            let gy = along(y, h, &|t| v[t * w + x]);
+            libm::hypotf(gx, gy) < 2.0
+        })
+        .collect()
+}
+
+/// Lloyd's k-means of `x` (`label_fill.py`'s `kmeans`): at most 20000 rows
+/// (evenly spaced), the first centres the evenly spaced rows.
+fn kmeans(x: &[[f32; 3]], k: usize, iterations: usize) -> Vec<[f32; 3]> {
+    let spaced = |n: usize, m: usize| -> Vec<usize> {
+        if m == 1 {
+            return vec![0];
+        }
+        let step = (n - 1) as f64 / (m - 1) as f64;
+        (0..m)
+            .map(|i| {
+                if i == m - 1 {
+                    n - 1
+                } else {
+                    (i as f64 * step) as usize
+                }
+            })
+            .collect()
+    };
+    let rows: Vec<[f32; 3]> = if x.len() > 20000 {
+        spaced(x.len(), 20000).into_iter().map(|i| x[i]).collect()
+    } else {
+        x.to_vec()
+    };
+    let mut centres: Vec<[f32; 3]> = spaced(rows.len(), k.min(rows.len()))
+        .into_iter()
+        .map(|i| rows[i])
+        .collect();
+    let mut nearest = vec![0usize; rows.len()];
+    for _ in 0..iterations {
+        for (row, slot) in rows.iter().zip(&mut nearest) {
+            *slot = nearest_index(*row, &centres).0;
+        }
+        for (j, centre) in centres.iter_mut().enumerate() {
+            let (mut sum, mut count) = ([0.0f64; 3], 0usize);
+            for (row, &slot) in rows.iter().zip(&nearest) {
+                if slot == j {
+                    for c in 0..3 {
+                        sum[c] += row[c] as f64;
+                    }
+                    count += 1;
+                }
+            }
+            if count > 0 {
+                *centre = sum.map(|s| (s / count as f64) as f32);
+            }
+        }
+    }
+    centres
+}
+
+/// The index of the nearest centre (the first of equals) and the squared
+/// distance to it.
+fn nearest_index(p: [f32; 3], centres: &[[f32; 3]]) -> (usize, f32) {
+    let mut best = (0, f32::INFINITY);
+    for (j, c) in centres.iter().enumerate() {
+        let d = (p[0] - c[0]) * (p[0] - c[0])
+            + (p[1] - c[1]) * (p[1] - c[1])
+            + (p[2] - c[2]) * (p[2] - c[2]);
+        if d < best.1 {
+            best = (j, d);
+        }
+    }
+    best
+}
+
+/// The Lab distance to the nearest of `colours`.
+fn nearest_colour(p: [f32; 3], colours: &[[f32; 3]]) -> f32 {
+    nearest_index(p, colours).1.sqrt()
+}
+
+/// The connected pieces of `mask` (4-neighbours, or 8 with `diagonal`),
+/// numbered from 1 in the order a row-major scan meets them; 0 elsewhere.
+fn label(mask: &[bool], w: usize, h: usize, diagonal: bool) -> (Vec<u32>, usize) {
+    let mut pieces = vec![0u32; w * h];
+    let mut count = 0u32;
+    let mut stack = Vec::new();
+    for start in 0..w * h {
+        if !mask[start] || pieces[start] != 0 {
+            continue;
+        }
+        count += 1;
+        pieces[start] = count;
+        stack.push(start);
+        while let Some(i) = stack.pop() {
+            let (x, y) = ((i % w) as isize, (i / w) as isize);
+            for dy in -1isize..=1 {
+                for dx in -1isize..=1 {
+                    if (dx == 0 && dy == 0) || (!diagonal && dx != 0 && dy != 0) {
+                        continue;
+                    }
+                    let (nx, ny) = (x + dx, y + dy);
+                    if nx < 0 || ny < 0 || nx >= w as isize || ny >= h as isize {
+                        continue;
+                    }
+                    let j = ny as usize * w + nx as usize;
+                    if mask[j] && pieces[j] == 0 {
+                        pieces[j] = count;
+                        stack.push(j);
+                    }
+                }
+            }
+        }
+    }
+    (pieces, count as usize)
+}
+
+/// `iterations` binary erosions by the 4-neighbour cross; outside the
+/// image counts as not set (scipy's `binary_erosion`).
+fn erode(mask: &[bool], w: usize, h: usize, iterations: usize) -> Vec<bool> {
+    let mut current = mask.to_vec();
+    for _ in 0..iterations {
+        current = (0..w * h)
+            .map(|i| {
+                let (x, y) = (i % w, i / w);
+                current[i]
+                    && x > 0
+                    && x + 1 < w
+                    && y > 0
+                    && y + 1 < h
+                    && current[i - 1]
+                    && current[i + 1]
+                    && current[i - w]
+                    && current[i + w]
+            })
+            .collect();
+    }
+    current
+}
+
+/// `iterations` binary dilations by the 4-neighbour cross (scipy's
+/// `binary_dilation`).
+fn dilate(mask: &[bool], w: usize, h: usize, iterations: usize) -> Vec<bool> {
+    let mut current = mask.to_vec();
+    for _ in 0..iterations {
+        current = (0..w * h)
+            .map(|i| {
+                let (x, y) = (i % w, i / w);
+                current[i]
+                    || (x > 0 && current[i - 1])
+                    || (x + 1 < w && current[i + 1])
+                    || (y > 0 && current[i - w])
+                    || (y + 1 < h && current[i + w])
+            })
+            .collect();
+    }
+    current
+}
+
+/// The exact Euclidean distance of every pixel to the nearest set pixel of
+/// `mask` (0 on it; scipy's `distance_transform_edt` of the inverse), by
+/// Felzenszwalb and Huttenlocher's lower envelope of parabolas, columns
+/// then rows.
+fn distance_to(mask: &[bool], w: usize, h: usize) -> Vec<f64> {
+    const FAR: f64 = 1e20;
+    let mut squared: Vec<f64> = mask.iter().map(|&m| if m { 0.0 } else { FAR }).collect();
+    let mut line = Vec::new();
+    for x in 0..w {
+        line.clear();
+        line.extend((0..h).map(|y| squared[y * w + x]));
+        let out = envelope(&line);
+        for y in 0..h {
+            squared[y * w + x] = out[y];
+        }
+    }
+    for y in 0..h {
+        let out = envelope(&squared[y * w..(y + 1) * w]);
+        squared[y * w..(y + 1) * w].copy_from_slice(&out);
+    }
+    squared.into_iter().map(f64::sqrt).collect()
+}
+
+/// The 1-D squared distance transform of `f` (sampled parabolas; `z[0]` is
+/// minus infinity, so the back-tracking stops at the first parabola).
+fn envelope(f: &[f64]) -> Vec<f64> {
+    let n = f.len();
+    let mut v = vec![0usize; n];
+    let mut z = vec![0.0f64; n + 1];
+    let mut k = 0usize;
+    z[0] = f64::NEG_INFINITY;
+    z[1] = f64::INFINITY;
+    let cross = |q: usize, p: usize| {
+        ((f[q] + (q * q) as f64) - (f[p] + (p * p) as f64)) / (2.0 * (q as f64 - p as f64))
+    };
+    for q in 1..n {
+        let mut s = cross(q, v[k]);
+        while s <= z[k] {
+            k -= 1;
+            s = cross(q, v[k]);
+        }
+        k += 1;
+        v[k] = q;
+        z[k] = s;
+        z[k + 1] = f64::INFINITY;
+    }
+    let mut out = vec![0.0f64; n];
+    let mut k = 0usize;
+    for (q, slot) in out.iter_mut().enumerate() {
+        while z[k + 1] < q as f64 {
+            k += 1;
+        }
+        let d = q as f64 - v[k] as f64;
+        *slot = d * d + f[v[k]];
+    }
+    out
 }
 
 struct Plane {
@@ -1060,5 +1519,125 @@ mod tests {
         assert_eq!(axis[1], (0, 1, 0.75, 0.25));
         assert_eq!(axis[2], (0, 1, 0.25, 0.75));
         assert_eq!(axis[5], (2, 2, 0.75, 0.25));
+    }
+
+    /// The pieces, the cross erosion and dilation and the distance agree
+    /// with direct definitions on a scattered mask.
+    #[test]
+    fn the_morphology_matches_its_definitions() {
+        let (w, h) = (23, 17);
+        let mut state = 0x9e37_79b9u32;
+        let mask: Vec<bool> = (0..w * h)
+            .map(|_| {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                state % 5 < 2
+            })
+            .collect();
+        let at = |x: isize, y: isize| {
+            x >= 0
+                && y >= 0
+                && (x as usize) < w
+                && (y as usize) < h
+                && mask[y as usize * w + x as usize]
+        };
+        let cross = [(0, 0), (1, 0), (-1, 0), (0, 1), (0, -1)];
+        let eroded = erode(&mask, w, h, 1);
+        let dilated = dilate(&mask, w, h, 1);
+        for i in 0..w * h {
+            let (x, y) = ((i % w) as isize, (i / w) as isize);
+            assert_eq!(eroded[i], cross.iter().all(|&(dx, dy)| at(x + dx, y + dy)));
+            assert_eq!(dilated[i], cross.iter().any(|&(dx, dy)| at(x + dx, y + dy)));
+        }
+        let distance = distance_to(&mask, w, h);
+        for i in 0..w * h {
+            let (x, y) = ((i % w) as f64, (i / w) as f64);
+            let direct = (0..w * h)
+                .filter(|&j| mask[j])
+                .map(|j| ((j % w) as f64 - x).hypot((j / w) as f64 - y))
+                .fold(f64::INFINITY, f64::min);
+            assert!(
+                (distance[i] - direct).abs() < 1e-9,
+                "{i}: {} vs {direct}",
+                distance[i]
+            );
+        }
+        for diagonal in [false, true] {
+            let (pieces, count) = label(&mask, w, h, diagonal);
+            for i in 0..w * h {
+                assert_eq!(pieces[i] != 0, mask[i]);
+                let (x, y) = (i % w, i / w);
+                for (dx, dy) in [(1usize, 0usize), (0, 1)] {
+                    let j = (y + dy) * w + x + dx;
+                    if x + dx < w && y + dy < h && mask[i] && mask[j] {
+                        assert_eq!(pieces[i], pieces[j]);
+                    }
+                }
+                if diagonal && x + 1 < w && y + 1 < h && mask[i] && mask[i + w + 1] {
+                    assert_eq!(pieces[i], pieces[i + w + 1]);
+                }
+            }
+            assert_eq!(*pieces.iter().max().unwrap() as usize, count);
+        }
+    }
+
+    /// Weaker sky joined to sure sky becomes sure, weaker sky on its own does
+    /// not, and a speck of sure sky under 0.1 % of the photo goes.
+    #[test]
+    fn refine_joins_weak_sky_and_drops_specks() {
+        let (w, h) = (64, 64);
+        let rgb = vec![0u8; w * h * 3];
+        let mut p = vec![0.0f32; w * h];
+        for y in 0..10 {
+            for x in 0..10 {
+                p[y * w + x] = 0.9;
+                p[y * w + x + 10] = 0.2;
+                p[(y + 30) * w + x + 30] = 0.3;
+            }
+        }
+        p[50 * w + 5] = 0.8;
+        p[50 * w + 6] = 0.8;
+        refine(&rgb, w, h, &mut p);
+        assert_eq!(p[5 * w + 5], 0.9);
+        assert_eq!(p[5 * w + 15], SURE);
+        assert_eq!(p[35 * w + 35], 0.3);
+        assert_eq!(p[50 * w + 5], 0.0);
+        let surface = surface_of(w, h, &p).unwrap();
+        assert_eq!(surface.data[5 * w + 15], 128);
+        assert_eq!(surface.data[50 * w + 5], 0);
+    }
+
+    /// A sky band over a textured tree: a slit and a square gap of the sky's
+    /// colour close to it are added, nothing else is.
+    #[test]
+    fn fill_adds_sky_coloured_gaps_beside_the_sky() {
+        let (w, h) = (300, 200);
+        let mut state = 0x1234_5678u32;
+        let mut rgb = vec![0u8; w * h * 3];
+        for i in 0..w * h {
+            let pixel = if i / w < 60 {
+                [120, 170, 230]
+            } else {
+                state ^= state << 13;
+                state ^= state >> 17;
+                state ^= state << 5;
+                let t = 20 + (state % 100) as u8;
+                [40, t, 30]
+            };
+            rgb[i * 3..i * 3 + 3].copy_from_slice(&pixel);
+        }
+        let mut expected = vec![false; w * h];
+        for i in 0..w * h {
+            let (x, y) = (i % w, i / w);
+            let gap = (70..80).contains(&y) && (100..110).contains(&x);
+            let slit = (70..85).contains(&y) && x == 200;
+            if gap || slit {
+                rgb[i * 3..i * 3 + 3].copy_from_slice(&[120, 170, 230]);
+            }
+            expected[i] = y < 60 || gap || slit;
+        }
+        let sky: Vec<bool> = (0..w * h).map(|i| i / w < 60).collect();
+        assert_eq!(fill(&rgb, &sky, w, h), Some(expected));
     }
 }

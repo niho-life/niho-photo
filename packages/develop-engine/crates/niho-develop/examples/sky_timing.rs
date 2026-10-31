@@ -16,12 +16,14 @@
 //! `--photo` the photo is a synthetic 3:2 one of 2560 x 1707 (the time
 //! does not depend on what the photo shows, only on its shape).
 //!
-//! `cargo run --release -p niho-develop --example sky_timing -- --model <run> --parity <inputs> <predictions>`
+//! `cargo run --release -p niho-develop --example sky_timing -- --model <run> --parity <inputs> <predictions> [--refined]`
 //!
 //! For every `<inputs>/<id>.png` with a `<predictions>/<id>.png`
-//! (`train_sky.py predict` of the same run on the same photo): one JSON
-//! line with the mean and largest absolute difference of the two 0..=255
-//! maps and the IoU of their sky (128 and up), then a summary line.
+//! (`train_sky.py predict` of the same run on the same photo; with
+//! `--refined`, `predict --low 0.1 --fill-delta 8 --fill-reach 0.1
+//! --min-area 0.001` against `sky::predict_refined`): one JSON line with the
+//! mean and largest absolute difference of the two 0..=255 maps and the IoU
+//! of their sky (128 and up), then a summary line.
 
 use std::path::{Path, PathBuf};
 use std::time::Instant;
@@ -129,7 +131,7 @@ fn read_rgb(path: &Path) -> (Vec<u8>, usize, usize) {
     (image.into_raw(), w, h)
 }
 
-fn parity(run: &Path, inputs: &Path, predictions: &Path) {
+fn parity(run: &Path, inputs: &Path, predictions: &Path, refined: bool) {
     let (layout, weights) = read_model(run);
     let model = SkyModel::parse(&layout, &weights).expect("model");
     let mut names: Vec<PathBuf> = std::fs::read_dir(inputs)
@@ -145,7 +147,11 @@ fn parity(run: &Path, inputs: &Path, predictions: &Path) {
             continue;
         }
         let (rgb, w, h) = read_rgb(&input);
-        let ours = sky::predict(&model, &rgb, w, h, None).unwrap();
+        let ours = if refined {
+            sky::predict_refined(&model, &rgb, w, h, None).unwrap()
+        } else {
+            sky::predict(&model, &rgb, w, h, None).unwrap()
+        };
         let theirs = image::open(&reference).expect("prediction").to_luma8();
         assert_eq!((theirs.width() as usize, theirs.height() as usize), (w, h));
         let theirs = theirs.into_raw();
@@ -190,7 +196,13 @@ fn main() {
     let args: Vec<String> = std::env::args().skip(1).collect();
     let run = PathBuf::from(arg(&args, "--model").expect("--model <run dir>"));
     if let Some(i) = args.iter().position(|a| a == "--parity") {
-        parity(&run, Path::new(&args[i + 1]), Path::new(&args[i + 2]));
+        let refined = args.iter().any(|a| a == "--refined");
+        parity(
+            &run,
+            Path::new(&args[i + 1]),
+            Path::new(&args[i + 2]),
+            refined,
+        );
         return;
     }
     let trials = arg(&args, "--trials").map_or(5, |t| t.parse().expect("--trials"));
