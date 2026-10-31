@@ -3,7 +3,9 @@ import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
 import { containsPrivateReference, runtimeTokenPath } from "./publication-lib.mjs";
 
-export const lockfiles = ["apps/camera/src-tauri/Cargo.lock", "package-lock.json", "packages/desktop-account/Cargo.lock", "packages/desktop-photo/Cargo.lock", "packages/develop-engine/Cargo.lock"].sort();
+export const lockfiles = ["apps/camera/src-tauri/Cargo.lock", "apps/camera/tools/webview-isolation-probe/Cargo.lock", "package-lock.json", "packages/desktop-account/Cargo.lock", "packages/desktop-photo/Cargo.lock", "packages/develop-engine/Cargo.lock"].sort();
+// repo に入っている lockfile はすべて `lockfiles` に載せる（SBOM は全 lock の inventory）。PR の試験と main の成果物生成が同じ判定を使う。
+export const lockfilePattern = /(?:^|\/)(?:package-lock\.json|Cargo\.lock|yarn\.lock|pnpm-lock\.yaml|Package\.resolved)$/;
 export const contractFiles = ["packages/desktop-account/contract/native-account-v2.json", "packages/niho-cloud-contract/package.json", "packages/niho-cloud-contract/v1/security-cases.json", "docs/security/cloud-contract-source.json"];
 export const hash = (bytes) => createHash("sha256").update(bytes).digest("hex");
 export const jsonBytes = (value) => Buffer.from(`${JSON.stringify(value, null, 2)}\n`);
