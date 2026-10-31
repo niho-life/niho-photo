@@ -6,6 +6,8 @@
 //! to `{ width, height }`, an error message to a `JsError`. The Mac's
 //! native sidecar (`niho-develop-render serve`) wraps the same calls under
 //! the same names, so both answer alike.
+//! `setSkyModel` gives the process the sky model `Developer.detectSky`
+//! runs (niho-photo#141).
 //! The default build runs single threaded (no SharedArrayBuffer, spec "段 2").
 //! The `threads` build (#151, a cross-origin isolated page only) adds
 //! `initThreadPool(n)` and splits heavy stages on rayon's Web Workers.
@@ -85,6 +87,13 @@ pub fn mask_surface_id(png: &[u8]) -> String {
 #[wasm_bindgen(js_name = encodeMaskSurface)]
 pub fn encode_mask_surface(width: u32, height: u32, data: &[u8]) -> Result<Vec<u8>, JsError> {
     api::encode_mask_surface(width, height, data).map_err(js_error)
+}
+
+/// `niho_develop::api::set_sky_model`: the sky model of
+/// `Developer.detectSky` (`layout.json` text and `weights.f32` bytes).
+#[wasm_bindgen(js_name = setSkyModel)]
+pub fn set_sky_model(layout_json: &str, weights: &[u8]) -> Result<String, JsError> {
+    api::set_sky_model(layout_json, weights).map_err(js_error)
 }
 
 /// `niho_develop::api::render`: `{ width, height, rgba, approximations }`.
@@ -198,7 +207,7 @@ mod tests {
             value,
             serde_json::json!({"masks": {
                 "kinds": ["linear", "radial", "brush", "subject", "sky"],
-                "max": 8, "maskPlane": true, "surfaces": true
+                "max": 8, "maskPlane": true, "surfaces": true, "skyDetection": true
             }})
         );
     }
@@ -510,5 +519,30 @@ impl Developer {
         self.inner
             .estimate_upright(settings_json, mode)
             .map_err(js_error)
+    }
+
+    /// `niho_develop::api::Developer::detect_sky`: `null` without sky, else
+    /// `{ width, height, png }` (`png` a `Uint8Array`).
+    #[wasm_bindgen(js_name = detectSky)]
+    pub fn detect_sky(
+        &mut self,
+        settings_json: &str,
+        ev100: Option<f64>,
+    ) -> Result<JsValue, JsError> {
+        let found = self
+            .inner
+            .detect_sky(settings_json, ev100)
+            .map_err(js_error)?;
+        let Some(sky) = found else {
+            return Ok(JsValue::NULL);
+        };
+        let o = size_object(sky.width, sky.height)?;
+        Reflect::set(
+            &o,
+            &JsValue::from_str("png"),
+            &js_sys::Uint8Array::from(&sky.png[..]).into(),
+        )
+        .map_err(|_| JsError::new("set"))?;
+        Ok(o.into())
     }
 }

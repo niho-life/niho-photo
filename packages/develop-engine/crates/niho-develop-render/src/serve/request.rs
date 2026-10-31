@@ -350,6 +350,12 @@ impl<'a> Args<'a> {
             .ok_or_else(|| Self::wrong(i, "a number"))
     }
 
+    pub fn opt_f64(&self, i: usize) -> Result<Option<f64>, Fail> {
+        self.optional(i)
+            .map(|v| v.as_f64().ok_or_else(|| Self::wrong(i, "a number or null")))
+            .transpose()
+    }
+
     pub fn bool(&self, i: usize) -> Result<bool, Fail> {
         self.required(i)?
             .as_bool()

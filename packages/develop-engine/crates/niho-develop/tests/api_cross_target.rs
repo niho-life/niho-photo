@@ -75,6 +75,20 @@ fn native_and_wasm_give_the_same_api_results() {
         .estimate_upright(f::SETTINGS, f::UPRIGHT_MODE)
         .unwrap();
     actual.push(("Developer.estimateUpright", f::sha256(upright.as_bytes())));
+    let (layout, weights) = f::sky_model();
+    actual.push((
+        "setSkyModel",
+        api::set_sky_model(&layout, &weights).unwrap(),
+    ));
+    let sky = developer
+        .detect_sky(f::SETTINGS, None)
+        .unwrap()
+        .expect("sky");
+    actual.push(("Developer.detectSky", f::sha256(&sky.png)));
+    actual.push((
+        "Developer.detectSky.size",
+        f::size_text(sky.width.into(), sky.height.into()),
+    ));
     let mut thumbnail = developer.thumbnail(f::THUMBNAIL_MAX_DIMENSION);
     let small = thumbnail.render(f::SETTINGS, 0, false).unwrap();
     actual.push(("Developer.thumbnail.render", f::sha256(&small.rgba)));

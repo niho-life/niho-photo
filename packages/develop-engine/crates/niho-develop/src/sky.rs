@@ -1,47 +1,516 @@
-//! Sky masks made from the photo itself (niho-photo#141,
-//! `docs/local-adjustments.md` "空の検出"): candidate "A" of #128, frozen as
-//! v1. A NIHO-owned estimate without learned weights, made only of box
-//! filters, a least-squares fit of a few coefficients, breadth-first flood
-//! fills and a guided filter.
+//! Sky masks made from the photo (niho-photo#141, `docs/local-adjustments.md`
+//! "空の検出"): the small U-Net NIHO trains from scratch on its own photos
+//! (#158, `tools/sky-mask-train`), run here without a model runtime (no
+//! `.onnx`).
 //!
-//! 1. **Analysis image.** The photo resampled to a long side of
-//!    [`ANALYSIS_LONG_SIDE`] (PIL's bilinear: a triangle filter whose support
-//!    grows with the reduction), in CIE Lab (D65): luminance `L / 100`, the
-//!    local texture (the mean over 5 x 5 of the luminance gradient, numpy's
-//!    `gradient`) and the position.
-//! 2. **Seed.** Smooth, bright, sky-coloured pixels (blue, bright neutral,
-//!    or warm and bright) in the upper three quarters, kept where they
-//!    connect to the top edge. With the capture's exposure (`ev100`)
-//!    "bright" is the pixel's scene brightness (EV 12 and up at ISO 100, or
-//!    clipped); without it, brighter than 0.6 and the photo's 75th
-//!    percentile. A seed under 1% of the frame (windows, no sky at the top)
-//!    falls back to smooth, bright, blue or clipped neutral pixels anywhere in
-//!    the upper half; under 0.5% there is no sky.
-//! 3. **Sky colour field.** `L, a, b ~ (1, x, y, x*y, y^2)` fitted on the
-//!    seed, evaluated with `y` held within the seed's rows (no extrapolation);
-//!    a pixel's distance to it weighs `L` by half.
-//! 4. **Region growing** from the seed through bright pixels that are smooth
-//!    and near the field, or cloud (bright, colourless, among the brightest,
-//!    soft texture), plus isolated bright pixels very near the field down to
-//!    just below the region (sky through branches and window frames).
-//! 5. **Output size.** The region resampled to the photo's size; near its
-//!    edge the field distance decides half, then a guided filter on the
-//!    photo's luminance (radius `long side / 256`, at least 2; eps 1e-3)
-//!    snaps the edge.
+//! The model is what `train_sky.py export` writes: `layout.json` (the
+//! model input's long side, the inputs, the width of each level and every
+//! convolution's place in the weights; BatchNorm folded in) and
+//! `weights.f32` (little endian). [`SkyModel::parse`] takes the long side,
+//! the widths and the layers from that header, so a retrained model of
+//! another size reads the same way; a header that is not this U-Net is an
+//! error.
 //!
-//! A port of the prototype of #128 (`sky_a.py` and its Rust twin, compared
-//! on 30 photos): the same steps, constants, rounding (half to even), PIL's
-//! resample, numpy's percentile and gradient. Do not tune it here: a later
-//! step changes it against measured scenes. The transcendental functions
-//! are `libm`'s (the ones a wasm build links), so native and wasm agree bit
-//! for bit and the same input gives the same bytes. Single threaded.
+//! 1. **Model input.** The photo resampled to the long side `long` with
+//!    PIL's 8-bit `BILINEAR` (a triangle filter whose support grows with the
+//!    reduction; fixed point, the horizontal pass first), each side rounded
+//!    to a multiple of `2^(levels + 1)` (32 for 4 levels, so every level
+//!    halves cleanly), as `value / 255`. With `inputs: "rgb-ev"` two more
+//!    channels carry the pixel's scene brightness from the capture's
+//!    exposure (`(EV - 12) / 4`, clipped to -3..=3) and whether it is known.
+//! 2. **U-Net.** 3x3 convolutions (zero padded, BatchNorm folded, ReLU): the
+//!    stem and one level per further width each halve the size (stride 2,
+//!    then stride 1), a context level halves once more; each decoder
+//!    upsamples (bilinear, half-pixel centres: PyTorch's
+//!    `align_corners=False`), puts the encoder level of that size after it
+//!    and convolves; the head gives the logit at half the input's size.
+//! 3. **Output size.** The sigmoid resampled (PIL's float `BILINEAR`) to the
+//!    photo's size, then a guided filter on the photo's luminance (Lab
+//!    `L / 100`, radius `long side / 256`, at least 2; eps 1e-3) snaps the
+//!    edge, clipped to 0..=1 and rounded (half to even) to 0..=255.
+//!
+//! The steps are `train_sky.py predict`'s, so a model scores here as it
+//! scored there. Every sum runs in a fixed order and the transcendental
+//! functions are `libm`'s (the ones a wasm build links), so native and wasm
+//! agree bit for bit. The output rows of a convolution may run on threads
+//! ([`crate::par`]); each is computed as the sequential loop computes it.
 
-use std::collections::VecDeque;
 use std::fmt;
 
-/// Long side of the analysis image the seed, the field and the region are
-/// found on.
-pub const ANALYSIS_LONG_SIDE: usize = 384;
+use serde_json::Value;
+
+/// Output channels one pass of a convolution computes together (two
+/// 4-lane vectors).
+const LANES: usize = 8;
+/// Output pixels one pass computes together (they share the weights'
+/// loads).
+const PIXELS: usize = 4;
+/// The most levels (widths) and the widest level a header may give.
+const MAX_LEVELS: usize = 6;
+const MAX_WIDTH: usize = 512;
+/// The longest model input a header may give.
+const MAX_LONG: usize = 2048;
+
+/// What the model reads besides the photo's colour.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum SkyInputs {
+    /// sRGB only (3 channels).
+    Rgb,
+    /// sRGB, the pixel's scene brightness from the capture's exposure, and
+    /// whether the exposure is known (5 channels).
+    RgbEv,
+}
+
+impl SkyInputs {
+    fn channels(self) -> usize {
+        match self {
+            SkyInputs::Rgb => 3,
+            SkyInputs::RgbEv => 5,
+        }
+    }
+
+    /// The header's name (`"rgb"` / `"rgb-ev"`).
+    pub fn name(self) -> &'static str {
+        match self {
+            SkyInputs::Rgb => "rgb",
+            SkyInputs::RgbEv => "rgb-ev",
+        }
+    }
+}
+
+/// One 3x3 convolution (padding 1), BatchNorm folded in.
+struct Conv {
+    cin: usize,
+    cout: usize,
+    stride: usize,
+    relu: bool,
+    /// By groups of [`LANES`] outputs: `[group][ky][kx][in][lane]` (the
+    /// lanes past `cout` are 0).
+    weights: Vec<f32>,
+    /// `cout` rounded up to [`LANES`] (0 past `cout`).
+    bias: Vec<f32>,
+}
+
+/// A sky model read from its header and weights ([`SkyModel::parse`]).
+pub struct SkyModel {
+    long: usize,
+    inputs: SkyInputs,
+    widths: Vec<usize>,
+    /// In the header's order: the stem, the further levels and the context
+    /// (2 each), the decoders from the deepest, the head.
+    layers: Vec<Conv>,
+}
+
+impl fmt::Debug for SkyModel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(
+            f,
+            "SkyModel(long {}, {}, widths {:?})",
+            self.long,
+            self.inputs.name(),
+            self.widths
+        )
+    }
+}
+
+/// A layer as the header must give it: `(name, in, out, stride, relu)`.
+type Shape = (String, usize, usize, usize, bool);
+
+/// The layers of the U-Net of these `widths`, in the header's order.
+fn expected_layers(inputs: usize, widths: &[usize]) -> Vec<Shape> {
+    let levels = widths.len();
+    let mut layers = vec![
+        ("stem.0".to_string(), inputs, widths[0], 2, true),
+        ("stem.1".to_string(), widths[0], widths[0], 1, true),
+    ];
+    for k in 1..levels {
+        layers.push((format!("enc{}.0", k + 1), widths[k - 1], widths[k], 2, true));
+        layers.push((format!("enc{}.1", k + 1), widths[k], widths[k], 1, true));
+    }
+    let deepest = widths[levels - 1];
+    layers.push(("ctx.0".to_string(), deepest, deepest, 2, true));
+    layers.push(("ctx.1".to_string(), deepest, deepest, 1, true));
+    for k in (1..=levels).rev() {
+        let below = widths[k.min(levels - 1)];
+        layers.push((
+            format!("dec{k}"),
+            below + widths[k - 1],
+            widths[k - 1],
+            1,
+            true,
+        ));
+    }
+    layers.push(("head".to_string(), widths[0], 1, 1, false));
+    layers
+}
+
+fn usize_of(value: &Value, what: &str) -> Result<usize, String> {
+    value
+        .as_u64()
+        .and_then(|n| usize::try_from(n).ok())
+        .ok_or_else(|| format!("sky model: {what} must be a non-negative integer"))
+}
+
+/// The `count` floats a layer's `key` (`"weights"` / `"bias"`) places.
+fn placed<'a>(
+    values: &'a [f32],
+    layer: &Value,
+    name: &str,
+    key: &str,
+    count: usize,
+) -> Result<&'a [f32], String> {
+    let start = usize_of(&layer[key], &format!("{name}.{key}"))?;
+    start
+        .checked_add(count)
+        .and_then(|end| values.get(start..end))
+        .ok_or_else(|| format!("sky model: {name}.{key} is past the weights"))
+}
+
+impl SkyModel {
+    /// Reads a model: `layout_json` is the header (`{"long", "inputs",
+    /// "channels", "floats", "layers": [{"name", "in", "out", "stride",
+    /// "relu", "weights", "bias"}]}`), `weights` the `floats` little-endian
+    /// f32 it places (each convolution's `[out][in][3][3]` weights and its
+    /// biases). The layers must be this U-Net's for the header's widths
+    /// (1..=6 levels, each 1..=512 wide) and inputs; the weights must be
+    /// finite.
+    pub fn parse(layout_json: &str, weights: &[u8]) -> Result<Self, String> {
+        let layout: Value =
+            serde_json::from_str(layout_json).map_err(|e| format!("sky model: {e}"))?;
+        let long = usize_of(&layout["long"], "long")?;
+        let inputs = match layout["inputs"].as_str() {
+            Some("rgb") => SkyInputs::Rgb,
+            Some("rgb-ev") => SkyInputs::RgbEv,
+            _ => return Err("sky model: inputs must be \"rgb\" or \"rgb-ev\"".to_string()),
+        };
+        let widths = layout["channels"]
+            .as_array()
+            .ok_or_else(|| "sky model: channels must be an array".to_string())?
+            .iter()
+            .map(|w| usize_of(w, "a channel width"))
+            .collect::<Result<Vec<_>, _>>()?;
+        if widths.is_empty()
+            || widths.len() > MAX_LEVELS
+            || widths.iter().any(|&w| w == 0 || w > MAX_WIDTH)
+        {
+            return Err(format!(
+                "sky model: channels must be 1..={MAX_LEVELS} widths of 1..={MAX_WIDTH}"
+            ));
+        }
+        let multiple = 1usize << (widths.len() + 1);
+        if long < multiple || long > MAX_LONG {
+            return Err(format!("sky model: long must be {multiple}..={MAX_LONG}"));
+        }
+        let floats = usize_of(&layout["floats"], "floats")?;
+        if floats.checked_mul(4) != Some(weights.len()) {
+            return Err(format!(
+                "sky model: {} bytes of weights, but the header places {floats} floats",
+                weights.len()
+            ));
+        }
+        let values: Vec<f32> = weights
+            .chunks_exact(4)
+            .map(|b| f32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+            .collect();
+        if values.iter().any(|v| !v.is_finite()) {
+            return Err("sky model: the weights must be finite".to_string());
+        }
+        let given = layout["layers"]
+            .as_array()
+            .ok_or_else(|| "sky model: layers must be an array".to_string())?;
+        let expected = expected_layers(inputs.channels(), &widths);
+        if given.len() != expected.len() {
+            return Err(format!(
+                "sky model: {} layers, but a U-Net of {} levels has {}",
+                given.len(),
+                widths.len(),
+                expected.len()
+            ));
+        }
+        let mut layers = Vec::with_capacity(expected.len());
+        for (layer, (name, cin, cout, stride, relu)) in given.iter().zip(expected) {
+            let same = layer["name"].as_str() == Some(name.as_str())
+                && layer["in"].as_u64() == Some(cin as u64)
+                && layer["out"].as_u64() == Some(cout as u64)
+                && layer["stride"].as_u64() == Some(stride as u64)
+                && layer["relu"].as_bool() == Some(relu);
+            if !same {
+                return Err(format!(
+                    "sky model: layer {} is not {name} ({cin} -> {cout}, stride {stride})",
+                    layer["name"]
+                ));
+            }
+            let w = placed(&values, layer, &name, "weights", cout * cin * 9)?;
+            let b = placed(&values, layer, &name, "bias", cout)?;
+            layers.push(Conv::new(cin, cout, stride, relu, w, b));
+        }
+        Ok(SkyModel {
+            long,
+            inputs,
+            widths,
+            layers,
+        })
+    }
+
+    /// The model input's long side.
+    pub fn long_side(&self) -> usize {
+        self.long
+    }
+
+    /// What the model reads besides the colour.
+    pub fn inputs(&self) -> SkyInputs {
+        self.inputs
+    }
+
+    /// The width of each level.
+    pub fn widths(&self) -> &[usize] {
+        &self.widths
+    }
+
+    /// The model input's size for a photo of `width x height`
+    /// (`train_sky.py`'s `model_size`): scaled to the long side, each side
+    /// rounded (half to even) to the multiple every level halves, at least
+    /// one multiple.
+    pub fn input_size(&self, width: usize, height: usize) -> (usize, usize) {
+        let multiple = (1usize << (self.widths.len() + 1)) as f64;
+        let scale = self.long as f64 / width.max(height) as f64;
+        let side = |n: usize| {
+            let rounded = (n as f64 * scale / multiple).round_ties_even() * multiple;
+            (rounded as usize).max(multiple as usize)
+        };
+        (side(width), side(height))
+    }
+
+    /// The logits at half the model input's size.
+    fn logits(&self, input: Map) -> Map {
+        let mut layers = self.layers.iter();
+        let mut next = || layers.next().expect("a parsed model has every layer");
+        let mut top = conv(&padded(&input), next());
+        top = conv(&padded(&top), next());
+        let mut skips: Vec<Map> = Vec::with_capacity(self.widths.len());
+        for _ in 1..self.widths.len() {
+            let down = conv(&padded(&top), next());
+            let level = conv(&padded(&down), next());
+            skips.push(std::mem::replace(&mut top, level));
+        }
+        skips.push(top);
+        let deepest = skips.last().expect("at least one level");
+        let context = conv(&padded(deepest), next());
+        let mut low = conv(&padded(&context), next());
+        for skip in skips.iter().rev() {
+            low = conv(&upsampled_beside(&low, skip), next());
+        }
+        conv(&padded(&low), next())
+    }
+
+    /// The model's input channels for the resized photo.
+    fn features(&self, small: &[u8], w: usize, h: usize, ev100: Option<f64>) -> Map {
+        let c = self.inputs.channels();
+        let mut v = Vec::with_capacity(w * h * c);
+        for px in small.chunks_exact(3) {
+            let rgb = [
+                px[0] as f32 / 255.0,
+                px[1] as f32 / 255.0,
+                px[2] as f32 / 255.0,
+            ];
+            v.extend_from_slice(&rgb);
+            if self.inputs == SkyInputs::RgbEv {
+                match ev100 {
+                    Some(ev100) => {
+                        let lum = lab_lightness(rgb) / 100.0;
+                        let lin = if lum > 0.08 {
+                            libm::powf((lum + 0.16) / 1.16, 3.0)
+                        } else {
+                            lum / 9.033
+                        };
+                        let ev = ev100 as f32 + libm::log2f(lin.max(1e-4) / 0.18);
+                        v.extend_from_slice(&[((ev - 12.0) / 4.0).clamp(-3.0, 3.0), 1.0]);
+                    }
+                    None => v.extend_from_slice(&[0.0, 0.0]),
+                }
+            }
+        }
+        Map { w, h, c, v }
+    }
+}
+
+impl Conv {
+    fn new(cin: usize, cout: usize, stride: usize, relu: bool, w: &[f32], b: &[f32]) -> Self {
+        let groups = cout.div_ceil(LANES);
+        let mut weights = vec![0.0f32; groups * 9 * cin * LANES];
+        let mut bias = vec![0.0f32; groups * LANES];
+        bias[..cout].copy_from_slice(b);
+        for o in 0..cout {
+            let (group, lane) = (o / LANES, o % LANES);
+            for i in 0..cin {
+                for tap in 0..9 {
+                    weights[((group * 9 + tap) * cin + i) * LANES + lane] =
+                        w[(o * cin + i) * 9 + tap];
+                }
+            }
+        }
+        Conv {
+            cin,
+            cout,
+            stride,
+            relu,
+            weights,
+            bias,
+        }
+    }
+}
+
+/// A feature map: `w x h` pixels of `c` channels, row-major, the channels
+/// of a pixel together.
+struct Map {
+    w: usize,
+    h: usize,
+    c: usize,
+    v: Vec<f32>,
+}
+
+/// A [`Map`] inside a border of one zero pixel (a convolution's padding):
+/// `(w + 2) x (h + 2)` pixels.
+struct Padded {
+    w: usize,
+    h: usize,
+    c: usize,
+    v: Vec<f32>,
+}
+
+fn padded(map: &Map) -> Padded {
+    let (pw, c) = (map.w + 2, map.c);
+    let mut v = vec![0.0f32; pw * (map.h + 2) * c];
+    for (y, row) in map.v.chunks_exact(map.w * c).enumerate() {
+        v[((y + 1) * pw + 1) * c..][..map.w * c].copy_from_slice(row);
+    }
+    Padded {
+        w: map.w,
+        h: map.h,
+        c,
+        v,
+    }
+}
+
+/// PyTorch's bilinear sampling along one axis with `align_corners=False`:
+/// for every output index the two input indices and their weights.
+fn bilinear_axis(n_in: usize, n_out: usize) -> Vec<(usize, usize, f32, f32)> {
+    let scale = n_in as f32 / n_out as f32;
+    (0..n_out)
+        .map(|o| {
+            let source = (scale * (o as f32 + 0.5) - 0.5).max(0.0);
+            let i0 = (source as usize).min(n_in - 1);
+            let i1 = if i0 + 1 < n_in { i0 + 1 } else { i0 };
+            let l1 = source - i0 as f32;
+            (i0, i1, 1.0 - l1, l1)
+        })
+        .collect()
+}
+
+/// `low` upsampled to `skip`'s size, then `skip`'s channels after its own
+/// (a decoder's input, `cat([up(low), skip])`), padded.
+fn upsampled_beside(low: &Map, skip: &Map) -> Padded {
+    let (w, h, c) = (skip.w, skip.h, low.c + skip.c);
+    let pw = w + 2;
+    let mut v = vec![0.0f32; pw * (h + 2) * c];
+    let (xs, ys) = (bilinear_axis(low.w, w), bilinear_axis(low.h, h));
+    let at = |y: usize, x: usize| &low.v[(y * low.w + x) * low.c..][..low.c];
+    for (y, &(y0, y1, ly0, ly1)) in ys.iter().enumerate() {
+        for (x, &(x0, x1, lx0, lx1)) in xs.iter().enumerate() {
+            let (up, beside) = v[((y + 1) * pw + x + 1) * c..][..c].split_at_mut(low.c);
+            let (v00, v01, v10, v11) = (at(y0, x0), at(y0, x1), at(y1, x0), at(y1, x1));
+            for (k, out) in up.iter_mut().enumerate() {
+                *out = ly0 * (lx0 * v00[k] + lx1 * v01[k]) + ly1 * (lx0 * v10[k] + lx1 * v11[k]);
+            }
+            beside.copy_from_slice(&skip.v[(y * w + x) * skip.c..][..skip.c]);
+        }
+    }
+    Padded { w, h, c, v }
+}
+
+/// One convolution of a padded map.
+fn conv(input: &Padded, conv: &Conv) -> Map {
+    debug_assert_eq!(input.c, conv.cin);
+    let size = |n: usize| (n - 1) / conv.stride + 1;
+    let (w, h) = (size(input.w), size(input.h));
+    let mut v = vec![0.0f32; w * h * conv.cout];
+    crate::par::for_each_row_mut(&mut v, w * conv.cout, |y, row| {
+        conv_row(input, conv, y, row)
+    });
+    Map {
+        w,
+        h,
+        c: conv.cout,
+        v,
+    }
+}
+
+/// Output row `y` of a convolution: every output is its bias plus the taps
+/// in the order `ky`, `kx`, input channel, whichever block computes it.
+fn conv_row(input: &Padded, conv: &Conv, y: usize, row: &mut [f32]) {
+    let cout = conv.cout;
+    let w = row.len() / cout;
+    for (group, weights) in conv.weights.chunks_exact(9 * conv.cin * LANES).enumerate() {
+        let first = group * LANES;
+        let outputs = (cout - first).min(LANES);
+        let bias: [f32; LANES] = conv.bias[first..first + LANES]
+            .try_into()
+            .expect("the bias fills whole groups");
+        let mut store = |x: usize, acc: &[f32; LANES]| {
+            let out = &mut row[x * cout + first..][..outputs];
+            for (o, &a) in out.iter_mut().zip(acc) {
+                *o = if conv.relu { a.max(0.0) } else { a };
+            }
+        };
+        let mut x = 0;
+        while x + PIXELS <= w {
+            let block = conv_block::<PIXELS>(input, conv.stride, weights, bias, x, y);
+            for (p, acc) in block.iter().enumerate() {
+                store(x + p, acc);
+            }
+            x += PIXELS;
+        }
+        while x < w {
+            let [acc] = conv_block::<1>(input, conv.stride, weights, bias, x, y);
+            store(x, &acc);
+            x += 1;
+        }
+    }
+}
+
+/// [`LANES`] outputs of the `P` output pixels from `x` on row `y`.
+#[inline(always)]
+fn conv_block<const P: usize>(
+    input: &Padded,
+    stride: usize,
+    weights: &[f32],
+    bias: [f32; LANES],
+    x: usize,
+    y: usize,
+) -> [[f32; LANES]; P] {
+    let (pw, cin) = (input.w + 2, input.c);
+    let mut acc = [bias; P];
+    for ky in 0..3 {
+        let line = (y * stride + ky) * pw;
+        for kx in 0..3 {
+            let taps = &weights[(ky * 3 + kx) * cin * LANES..][..cin * LANES];
+            let pixels: [&[f32]; P] = std::array::from_fn(|p| {
+                let at = (line + (x + p) * stride + kx) * cin;
+                &input.v[at..at + cin]
+            });
+            for (i, lanes) in taps.chunks_exact(LANES).enumerate() {
+                let lanes: &[f32; LANES] = lanes.try_into().expect("whole lanes");
+                for (acc, pixel) in acc.iter_mut().zip(&pixels) {
+                    let v = pixel[i];
+                    for (a, &w) in acc.iter_mut().zip(lanes) {
+                        *a += v * w;
+                    }
+                }
+            }
+        }
+    }
+    acc
+}
 
 /// An estimated sky: `width * height` values, row-major, 0 (not sky) ..=
 /// 255 (sky), at the input's size (the bytes of a mask surface,
@@ -59,38 +528,75 @@ impl fmt::Debug for SkySurface {
     }
 }
 
-/// The sky of a photo. `rgb` is sRGB 8-bit RGB (3 bytes per pixel,
-/// row-major) of `width x height`; `ev100` is the capture's exposure value
-/// at ISO 100 (`log2(N^2 / t) - log2(ISO / 100)`), `None` when unknown
-/// (brightness is then relative to the photo). Returns the surface at the
-/// input's size, or `None` when the estimate finds no sky.
-///
-/// Input it cannot read is `None` too: a zero side, `rgb` not `width *
-/// height * 3` bytes, a side past `u32`. A non-finite `ev100` counts as
-/// unknown.
-pub fn estimate_sky(
+impl SkySurface {
+    /// Whether any pixel is sky (128 or more: more likely sky than not; the
+    /// evaluation of #158 counts a photo without sky as wrong from one such
+    /// pixel).
+    pub fn has_sky(&self) -> bool {
+        self.data.iter().any(|&v| v >= 128)
+    }
+}
+
+/// The model's sky map of a photo, sky or not. `rgb` is sRGB 8-bit RGB (3
+/// bytes per pixel, row-major) of `width x height`; `ev100` is the capture's
+/// exposure value at ISO 100 (`log2(N^2 / t) - log2(ISO / 100)`), `None`
+/// when unknown (a non-finite one counts as unknown; an `"rgb"` model does
+/// not read it). Returns the surface at the input's size, or `None` for
+/// input it cannot read: a zero side, `rgb` not `width * height * 3` bytes,
+/// a side past `u32`.
+pub fn predict(
+    model: &SkyModel,
     rgb: &[u8],
     width: usize,
     height: usize,
     ev100: Option<f64>,
 ) -> Option<SkySurface> {
-    if width == 0 || height == 0 {
-        return None;
-    }
-    if width.checked_mul(height)?.checked_mul(3)? != rgb.len() {
+    if width == 0 || height == 0 || width.checked_mul(height)?.checked_mul(3)? != rgb.len() {
         return None;
     }
     let (out_width, out_height) = (u32::try_from(width).ok()?, u32::try_from(height).ok()?);
-    let probability = sky_probability(rgb, width, height, ev100.filter(|ev| ev.is_finite()))?;
-    let data = probability
+    let (mw, mh) = model.input_size(width, height);
+    let small = resize_rgb8(rgb, width, height, mw, mh);
+    let input = model.features(&small, mw, mh, ev100.filter(|ev| ev.is_finite()));
+    let logits = model.logits(input);
+    let probability: Vec<f32> = logits
+        .v
         .iter()
-        .map(|&p| (p * 255.0).round_ties_even() as u8)
+        .map(|&z| 1.0 / (1.0 + libm::expf(-z)))
+        .collect();
+    let src = Plane {
+        w: width,
+        h: height,
+        v: resize(&probability, logits.w, logits.h, 1, width, height),
+    };
+    let guide = Plane {
+        w: width,
+        h: height,
+        v: lightness_plane(rgb),
+    };
+    let radius = ((width.max(height) as f64 / 256.0).round_ties_even() as usize).max(2);
+    let data = guided_filter(&guide, &src, radius, 1e-3)
+        .v
+        .iter()
+        .map(|&p| (p.clamp(0.0, 1.0) * 255.0).round_ties_even() as u8)
         .collect();
     Some(SkySurface {
         width: out_width,
         height: out_height,
         data,
     })
+}
+
+/// The sky of a photo ([`predict`]), or `None` when no pixel is sky
+/// ([`SkySurface::has_sky`]) or the input cannot be read.
+pub fn estimate_sky(
+    model: &SkyModel,
+    rgb: &[u8],
+    width: usize,
+    height: usize,
+    ev100: Option<f64>,
+) -> Option<SkySurface> {
+    predict(model, rgb, width, height, ev100).filter(SkySurface::has_sky)
 }
 
 struct Plane {
@@ -109,25 +615,15 @@ impl Plane {
     }
 }
 
-/// PIL's `BILINEAR` resample along one axis (a triangle filter whose support
-/// grows with the reduction), accumulated in `f64`. `src` holds `lines`
-/// lines of `len_in` samples of `channels` interleaved values: along the
-/// rows (`rows`) line `o` is row `o`, otherwise it is column `o` of an image
-/// `lines` columns wide. The output keeps that layout with `len_out` samples
-/// per line.
-fn resample_axis(
-    src: &[f32],
-    len_in: usize,
-    len_out: usize,
-    channels: usize,
-    lines: usize,
-    rows: bool,
-) -> Vec<f32> {
+/// PIL's `BILINEAR` taps along one axis (a triangle filter whose support
+/// grows with the reduction): for every output sample the first input
+/// sample and the normalized weights.
+fn pil_taps(len_in: usize, len_out: usize) -> Vec<(usize, Vec<f64>)> {
     let scale = len_in as f64 / len_out as f64;
     let filterscale = scale.max(1.0);
     let support = filterscale;
     let ss = 1.0 / filterscale;
-    let taps: Vec<(usize, Vec<f64>)> = (0..len_out)
+    (0..len_out)
         .map(|xx| {
             let center = (xx as f64 + 0.5) * scale;
             let xmin = ((center - support + 0.5) as i64).max(0) as usize;
@@ -148,33 +644,49 @@ fn resample_axis(
             }
             (xmin, weights)
         })
-        .collect();
+        .collect()
+}
+
+/// The index of sample `k` of line `o` in the layout of [`resample_axis`].
+fn sample_index(o: usize, k: usize, len: usize, lines: usize, rows: bool) -> usize {
+    if rows {
+        o * len + k
+    } else {
+        k * lines + o
+    }
+}
+
+/// PIL's float `BILINEAR` resample along one axis, accumulated in `f64`.
+/// `src` holds `lines` lines of `len_in` samples of `channels` interleaved
+/// values: along the rows (`rows`) line `o` is row `o`, otherwise it is
+/// column `o` of an image `lines` columns wide. The output keeps that
+/// layout with `len_out` samples per line.
+fn resample_axis(
+    src: &[f32],
+    len_in: usize,
+    len_out: usize,
+    channels: usize,
+    lines: usize,
+    rows: bool,
+) -> Vec<f32> {
+    let taps = pil_taps(len_in, len_out);
     let mut out = vec![0.0f32; lines * len_out * channels];
     for o in 0..lines {
         for c in 0..channels {
             for (xx, (xmin, weights)) in taps.iter().enumerate() {
                 let mut acc = 0.0f64;
                 for (k, w) in weights.iter().enumerate() {
-                    let i = if rows {
-                        (o * len_in + xmin + k) * channels + c
-                    } else {
-                        ((xmin + k) * lines + o) * channels + c
-                    };
+                    let i = sample_index(o, xmin + k, len_in, lines, rows) * channels + c;
                     acc += src[i] as f64 * w;
                 }
-                let j = if rows {
-                    (o * len_out + xx) * channels + c
-                } else {
-                    (xx * lines + o) * channels + c
-                };
-                out[j] = acc as f32;
+                out[sample_index(o, xx, len_out, lines, rows) * channels + c] = acc as f32;
             }
         }
     }
     out
 }
 
-/// Resizes an interleaved image of `channels` values per pixel (the
+/// Resizes an interleaved float image of `channels` values per pixel (the
 /// horizontal pass, then the vertical one, like PIL).
 fn resize(src: &[f32], w: usize, h: usize, channels: usize, ow: usize, oh: usize) -> Vec<f32> {
     let horizontal = if ow != w {
@@ -184,6 +696,67 @@ fn resize(src: &[f32], w: usize, h: usize, channels: usize, ow: usize, oh: usize
     };
     if oh != h {
         resample_axis(&horizontal, h, oh, channels, ow, false)
+    } else {
+        horizontal
+    }
+}
+
+/// The fraction bits of PIL's 8-bit resample.
+const PRECISION_BITS: u32 = 32 - 8 - 2;
+
+/// PIL's 8-bit `BILINEAR` resample of RGB along one axis (the layout of
+/// [`resample_axis`]): the weights in fixed point, half added, the sum
+/// shifted down and clipped to 0..=255.
+fn resample_axis_rgb8(
+    src: &[u8],
+    len_in: usize,
+    len_out: usize,
+    lines: usize,
+    rows: bool,
+) -> Vec<u8> {
+    let one = (1u32 << PRECISION_BITS) as f64;
+    let taps: Vec<(usize, Vec<i32>)> = pil_taps(len_in, len_out)
+        .into_iter()
+        .map(|(xmin, weights)| {
+            let fixed = weights
+                .iter()
+                .map(|&w| {
+                    if w < 0.0 {
+                        (-0.5 + w * one) as i32
+                    } else {
+                        (0.5 + w * one) as i32
+                    }
+                })
+                .collect();
+            (xmin, fixed)
+        })
+        .collect();
+    let mut out = vec![0u8; lines * len_out * 3];
+    for o in 0..lines {
+        for c in 0..3 {
+            for (xx, (xmin, weights)) in taps.iter().enumerate() {
+                let mut acc: i32 = 1 << (PRECISION_BITS - 1);
+                for (k, &w) in weights.iter().enumerate() {
+                    acc += src[sample_index(o, xmin + k, len_in, lines, rows) * 3 + c] as i32 * w;
+                }
+                out[sample_index(o, xx, len_out, lines, rows) * 3 + c] =
+                    (acc >> PRECISION_BITS).clamp(0, 255) as u8;
+            }
+        }
+    }
+    out
+}
+
+/// Resizes sRGB 8-bit RGB like PIL's `Image.resize(..., BILINEAR)`: the
+/// horizontal pass to 8 bits, then the vertical one.
+fn resize_rgb8(src: &[u8], w: usize, h: usize, ow: usize, oh: usize) -> Vec<u8> {
+    let horizontal = if ow != w {
+        resample_axis_rgb8(src, w, ow, h, true)
+    } else {
+        src.to_vec()
+    };
+    if oh != h {
+        resample_axis_rgb8(&horizontal, h, oh, ow, false)
     } else {
         horizontal
     }
@@ -205,16 +778,27 @@ fn lab_f(t: f32) -> f32 {
     }
 }
 
-/// sRGB (0..1, interleaved RGB) -> CIE Lab (D65).
-fn srgb_to_lab(rgb: &[f32]) -> Vec<[f32; 3]> {
+/// CIE Lab (D65) `L` of linear RGB.
+fn lightness_of_linear(r: f32, g: f32, b: f32) -> f32 {
+    116.0 * lab_f(0.2126 * r + 0.7152 * g + 0.0722 * b) - 16.0
+}
+
+/// CIE Lab (D65) `L` of sRGB 0..=1.
+fn lab_lightness(rgb: [f32; 3]) -> f32 {
+    lightness_of_linear(
+        srgb_linear(rgb[0]),
+        srgb_linear(rgb[1]),
+        srgb_linear(rgb[2]),
+    )
+}
+
+/// `L / 100` of every pixel of sRGB 8-bit RGB (the guided filter's guide).
+fn lightness_plane(rgb: &[u8]) -> Vec<f32> {
+    let linear: Vec<f32> = (0..=255u8).map(|v| srgb_linear(v as f32 / 255.0)).collect();
     rgb.chunks_exact(3)
         .map(|c| {
-            let (r, g, b) = (srgb_linear(c[0]), srgb_linear(c[1]), srgb_linear(c[2]));
-            let x = (0.4124 * r + 0.3576 * g + 0.1805 * b) / 0.95047;
-            let y = 0.2126 * r + 0.7152 * g + 0.0722 * b;
-            let z = (0.0193 * r + 0.1192 * g + 0.9505 * b) / 1.08883;
-            let (fx, fy, fz) = (lab_f(x), lab_f(y), lab_f(z));
-            [116.0 * fy - 16.0, 500.0 * (fx - fy), 200.0 * (fy - fz)]
+            let [r, g, b] = [c[0], c[1], c[2]].map(|v| linear[v as usize]);
+            lightness_of_linear(r, g, b) / 100.0
         })
         .collect()
 }
@@ -275,328 +859,93 @@ fn guided_filter(guide: &Plane, src: &Plane, r: usize, eps: f32) -> Plane {
     }
 }
 
-/// numpy's default (linear) percentile of a non-empty slice.
-fn percentile(v: &[f32], q: f64) -> f64 {
-    let mut s: Vec<f32> = v.to_vec();
-    let pos = q / 100.0 * (s.len() - 1) as f64;
-    let lo = pos.floor() as usize;
-    let hi = (lo + 1).min(s.len() - 1);
-    let (_, &mut a, rest) = s.select_nth_unstable_by(lo, |x, y| x.total_cmp(y));
-    let b = if hi == lo {
-        a
-    } else {
-        rest.iter().copied().fold(f32::INFINITY, f32::min)
-    };
-    a as f64 + (b as f64 - a as f64) * (pos - lo as f64)
-}
-
-/// The pixels of `allowed` reachable from `seed & allowed` (4-neighbour,
-/// breadth first).
-fn flood(seed: &[bool], allowed: &[bool], w: usize, h: usize) -> Vec<bool> {
-    let mut seen: Vec<bool> = seed.iter().zip(allowed).map(|(s, a)| *s && *a).collect();
-    let mut queue: VecDeque<usize> = (0..w * h).filter(|&i| seen[i]).collect();
-    while let Some(i) = queue.pop_front() {
-        let (y, x) = (i / w, i % w);
-        let mut visit = |j: usize| {
-            if allowed[j] && !seen[j] {
-                seen[j] = true;
-                queue.push_back(j);
-            }
-        };
-        if y > 0 {
-            visit(i - w);
-        }
-        if y + 1 < h {
-            visit(i + w);
-        }
-        if x > 0 {
-            visit(i - 1);
-        }
-        if x + 1 < w {
-            visit(i + 1);
-        }
-    }
-    seen
-}
-
-fn design(x: f64, y: f64) -> [f64; 5] {
-    [1.0, x, y, x * y, y * y]
-}
-
-/// Least squares of 5 coefficients per channel (normal equations, Gaussian
-/// elimination with partial pivoting; a vanishing pivot leaves its
-/// coefficient 0).
-#[allow(clippy::needless_range_loop)]
-fn fit(rows: &[([f64; 5], [f32; 3])]) -> [[f64; 3]; 5] {
-    let mut m = [[0.0f64; 8]; 5];
-    for (d, t) in rows {
-        for i in 0..5 {
-            for j in 0..5 {
-                m[i][j] += d[i] * d[j];
-            }
-            for c in 0..3 {
-                m[i][5 + c] += d[i] * t[c] as f64;
-            }
-        }
-    }
-    for col in 0..5 {
-        let pivot = (col..5)
-            .max_by(|&a, &b| m[a][col].abs().total_cmp(&m[b][col].abs()))
-            .unwrap_or(col);
-        m.swap(col, pivot);
-        let p = m[col][col];
-        if p.abs() < 1e-12 {
-            continue;
-        }
-        for row in 0..5 {
-            if row != col {
-                let f = m[row][col] / p;
-                for k in col..8 {
-                    m[row][k] -= f * m[col][k];
-                }
-            }
-        }
-    }
-    let mut coef = [[0.0f64; 3]; 5];
-    for i in 0..5 {
-        for c in 0..3 {
-            coef[i][c] = if m[i][i].abs() < 1e-12 {
-                0.0
-            } else {
-                m[i][5 + c] / m[i][i]
-            };
-        }
-    }
-    coef
-}
-
-/// The sky colour the field gives at `(x, y)` (normalized position).
-fn field(coef: &[[f64; 3]; 5], x: f64, y: f64) -> [f64; 3] {
-    let d = design(x, y);
-    std::array::from_fn(|c| (0..5).map(|i| d[i] * coef[i][c]).sum())
-}
-
-/// Distance of a Lab colour to the field's (`L` weighed by half).
-fn distance(lab: &[f32; 3], pred: &[f64; 3]) -> f32 {
-    let d = |k: usize| lab[k] as f64 - pred[k];
-    (0.5 * d(0) * d(0) + d(1) * d(1) + d(2) * d(2)).sqrt() as f32
-}
-
-fn count(mask: &[bool]) -> usize {
-    mask.iter().filter(|&&m| m).count()
-}
-
-/// Sky probability (0..1) at the input's size, `None` without sky. `rgb8`
-/// holds `w0 * h0 * 3` bytes (checked by [`estimate_sky`]).
-fn sky_probability(rgb8: &[u8], w0: usize, h0: usize, ev100: Option<f64>) -> Option<Vec<f32>> {
-    let scale = ANALYSIS_LONG_SIDE as f64 / w0.max(h0) as f64;
-    let aw = ((w0 as f64 * scale).round_ties_even() as usize).max(1);
-    let ah = ((h0 as f64 * scale).round_ties_even() as usize).max(1);
-    let full: Vec<f32> = rgb8.iter().map(|&v| v as f32 / 255.0).collect();
-    let small = resize(&full, w0, h0, 3, aw, ah);
-    let lab = srgb_to_lab(&small);
-    let n = aw * ah;
-    let lum: Vec<f32> = lab.iter().map(|l| l[0] / 100.0).collect();
-    let lin_y: Vec<f32> = lum
-        .iter()
-        .map(|&l| {
-            if l > 0.08 {
-                let t = (l + 0.16) / 1.16;
-                t * t * t
-            } else {
-                l / 9.033
-            }
-        })
-        .collect();
-
-    // Texture: the mean gradient magnitude over a small window (numpy's
-    // `gradient`: central inside, one-sided at the edges).
-    let mut grad = Plane::new(aw, ah);
-    for y in 0..ah {
-        for x in 0..aw {
-            let at = |yy: usize, xx: usize| lum[yy * aw + xx];
-            let gy = if ah < 2 {
-                0.0
-            } else if y == 0 {
-                at(1, x) - at(0, x)
-            } else if y == ah - 1 {
-                at(y, x) - at(y - 1, x)
-            } else {
-                (at(y + 1, x) - at(y - 1, x)) / 2.0
-            };
-            let gx = if aw < 2 {
-                0.0
-            } else if x == 0 {
-                at(y, 1) - at(y, 0)
-            } else if x == aw - 1 {
-                at(y, x) - at(y, x - 1)
-            } else {
-                (at(y, x + 1) - at(y, x - 1)) / 2.0
-            };
-            grad.v[y * aw + x] = (gx * gx + gy * gy).sqrt();
-        }
-    }
-    let texture = box_mean(&grad, 2).v;
-    let tex_ref = percentile(&texture, 60.0) + 1e-4;
-    let p70 = percentile(&lum, 70.0);
-    let p75 = percentile(&lum, 75.0);
-    let p80 = percentile(&lum, 80.0);
-    let yn = |i: usize| (i / aw) as f64 / (ah.max(2) - 1) as f64;
-    let xn = |i: usize| (i % aw) as f64 / (aw.max(2) - 1) as f64;
-
-    let mut smooth = vec![false; n];
-    let mut bright = vec![false; n];
-    let mut blue = vec![false; n];
-    let mut neutral_clipped = vec![false; n];
-    let mut candidate = vec![false; n];
-    let mut cloud = vec![false; n];
-    for i in 0..n {
-        let [_, a, b] = lab[i];
-        let c = libm::hypotf(a, b);
-        let hue = libm::atan2(b as f64, a as f64)
-            .to_degrees()
-            .rem_euclid(360.0);
-        let t = texture[i] as f64;
-        smooth[i] = t < 0.35 * tex_ref + 0.004;
-        // Clouds: textured, but without hard edges.
-        let soft = t < 2.0 * tex_ref + 0.01;
-        blue[i] = hue > 190.0 && hue < 300.0 && c > 8.0;
-        let neutral = c < 12.0;
-        let l = lum[i] as f64;
-        // Dusk: orange / pink.
-        let warm = !(90.0..=300.0).contains(&hue) && c > 12.0 && l > 0.45;
-        let clipped = lin_y[i] > 0.9;
-        bright[i] = match ev100 {
-            // The pixel's scene brightness (EV at ISO 100; mid grey is the
-            // capture's EV). Daylight sky is EV 12-16; lit walls indoors stay
-            // near 8-11.
-            Some(ev) => ev + libm::log2((lin_y[i].max(1e-4) / 0.18) as f64) >= 12.0 || clipped,
-            None => l > 0.6f64.max(p75),
-        };
-        let bright_neutral = neutral && bright[i] && l > 0.6f64.max(p70);
-        let colour_ok = (blue[i] && l > 0.35) || bright_neutral || (warm && bright[i]);
-        candidate[i] = smooth[i] && colour_ok && bright[i] && yn(i) < 0.75;
-        neutral_clipped[i] = neutral && clipped;
-        cloud[i] = bright[i] && soft && c < 7.0 && l > 0.72f64.max(p80);
-    }
-    let top: Vec<bool> = (0..n).map(|i| i < aw).collect();
-    let mut seed = flood(&top, &candidate, aw, ah);
-    if (count(&seed) as f64) < 0.01 * n as f64 {
-        // No sky that reaches the top: windows, or no sky at all. Fall back
-        // to smooth blue or clipped pixels anywhere in the upper half.
-        seed = (0..n)
-            .map(|i| smooth[i] && bright[i] && (blue[i] || neutral_clipped[i]) && yn(i) < 0.5)
-            .collect();
-        if (count(&seed) as f64) < 0.005 * n as f64 {
-            return None;
-        }
-    }
-
-    // The sky colour field fitted on the seed (no extrapolation below / above it).
-    let seeds: Vec<usize> = (0..n).filter(|&i| seed[i]).collect();
-    let seed_y: Vec<f64> = seeds.iter().map(|&i| yn(i)).collect();
-    let y_lo = seed_y.iter().copied().fold(f64::INFINITY, f64::min);
-    let y_hi = seed_y.iter().copied().fold(f64::NEG_INFINITY, f64::max);
-    let rows: Vec<([f64; 5], [f32; 3])> = seeds
-        .iter()
-        .map(|&i| (design(xn(i), yn(i)), lab[i]))
-        .collect();
-    let coef = fit(&rows);
-    let d: Vec<f32> = (0..n)
-        .map(|i| distance(&lab[i], &field(&coef, xn(i), yn(i).clamp(y_lo, y_hi))))
-        .collect();
-    let seed_d: Vec<f32> = seeds.iter().map(|&i| d[i]).collect();
-    let spread = (percentile(&seed_d, 90.0) + 1.5).min(10.0);
-
-    let allowed: Vec<bool> = (0..n)
-        .map(|i| {
-            let near = (d[i] as f64) < 2.2 * spread;
-            let flat = (texture[i] as f64) < 0.6 * tex_ref + 0.006;
-            bright[i] && ((near && flat) || cloud[i])
-        })
-        .collect();
-    let region = flood(&seed, &allowed, aw, ah);
-    let lowest = (0..n)
-        .rev()
-        .find(|&i| region[i])
-        .map(|i| yn(i) + 0.05)
-        .unwrap_or(0.0);
-    let region_f: Vec<f32> = (0..n)
-        .map(|i| {
-            let near = (d[i] as f64) < 0.8 * spread;
-            let isolated = near && bright[i] && !region[i] && yn(i) <= lowest;
-            if region[i] || isolated {
-                1.0
-            } else {
-                0.0
-            }
-        })
-        .collect();
-
-    // Output size: the per-pixel field distance and the upsampled region.
-    let big_lab = srgb_to_lab(&full);
-    let region_up = resize(&region_f, aw, ah, 1, w0, h0);
-    let mut p = Plane::new(w0, h0);
-    let mut guide = Plane::new(w0, h0);
-    for i in 0..w0 * h0 {
-        let x = (i % w0) as f64 / (w0.max(2) - 1) as f64;
-        let y = ((i / w0) as f64 / (h0.max(2) - 1) as f64).clamp(y_lo, y_hi);
-        let bd = distance(&big_lab[i], &field(&coef, x, y)) as f64;
-        let colour_p = ((2.0 * spread - bd) / (1.5 * spread)).clamp(0.0, 1.0) as f32;
-        let r = region_up[i];
-        // Inside the region trust it, near its edge let the colour decide.
-        p.v[i] = if r > 0.02 && r < 0.98 {
-            0.5 * r + 0.5 * colour_p
-        } else {
-            r
-        };
-        guide.v[i] = big_lab[i][0] / 100.0;
-    }
-    let r = ((w0.max(h0) as f64 / 256.0).round_ties_even() as usize).max(2);
-    let g = guided_filter(&guide, &p, r, 1e-3);
-    Some(g.v.into_iter().map(|v| v.clamp(0.0, 1.0)).collect())
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
 
-    /// A small integer hash (deterministic texture for the synthetic photos).
-    fn hash(x: usize, y: usize) -> u32 {
-        let mut h = (x as u32).wrapping_mul(0x9e37_79b1) ^ (y as u32).wrapping_mul(0x85eb_ca77);
-        h ^= h >> 15;
-        h = h.wrapping_mul(0xc2b2_ae3d);
-        h ^ (h >> 13)
+    /// A header and weights for a U-Net of `widths` (`rgb`, long 64): every
+    /// weight a small hashed value, except that the stem keeps `b - r` and
+    /// `r - b` (after ReLU) in its first two channels, `dec1` passes them on
+    /// from the skip, and the head reads `gain * (b - r) + bias`. So the sky
+    /// is where the photo is bluer than red.
+    fn blue_model(widths: &[usize], gain: f32, bias: f32) -> (String, Vec<u8>) {
+        let mut values: Vec<f32> = Vec::new();
+        let mut layers = Vec::new();
+        let mut state = 0x2545_f491u32;
+        let mut noise = || {
+            state ^= state << 13;
+            state ^= state >> 17;
+            state ^= state << 5;
+            (state % 2001) as f32 / 100_000.0 - 0.01
+        };
+        for (name, cin, cout, stride, relu) in expected_layers(3, widths) {
+            let start = values.len();
+            let mut w: Vec<f32> = (0..cout * cin * 9).map(|_| noise()).collect();
+            let mut b: Vec<f32> = (0..cout).map(|_| noise()).collect();
+            let center = |o: usize, i: usize| (o * cin + i) * 9 + 4;
+            match name.as_str() {
+                "stem.0" => {
+                    for o in 0..2 {
+                        for i in 0..cin {
+                            w[center(o, i)] = 0.0;
+                        }
+                        b[o] = 0.0;
+                    }
+                    w[center(0, 2)] = 1.0;
+                    w[center(0, 0)] = -1.0;
+                    w[center(1, 0)] = 1.0;
+                    w[center(1, 2)] = -1.0;
+                }
+                "stem.1" => {
+                    w[center(0, 0)] = 1.0;
+                    w[center(1, 1)] = 1.0;
+                }
+                "dec1" => {
+                    let skip = cin - widths[0];
+                    w[center(0, skip)] = 1.0;
+                    w[center(1, skip + 1)] = 1.0;
+                }
+                "head" => {
+                    w[center(0, 0)] = gain;
+                    w[center(0, 1)] = -gain;
+                    b[0] = bias;
+                }
+                _ => {}
+            }
+            values.extend(&w);
+            values.extend(&b);
+            layers.push(serde_json::json!({
+                "name": name, "in": cin, "out": cout, "stride": stride, "relu": relu,
+                "weights": start, "bias": start + w.len(),
+            }));
+        }
+        let layout = serde_json::json!({
+            "long": 64, "inputs": "rgb", "channels": widths, "floats": values.len(),
+            "layers": layers,
+        });
+        let bytes = values.iter().flat_map(|v| v.to_le_bytes()).collect();
+        (layout.to_string(), bytes)
     }
 
-    /// The sky at height `t` (0 at the top ..= 1 at the horizon): a smooth
-    /// blue, brighter at the top.
-    fn sky_pixel(t: f64) -> [u8; 3] {
-        let mix = |top: f64, horizon: f64| (top + (horizon - top) * t).round() as u8;
-        [mix(150.0, 60.0), mix(190.0, 120.0), mix(245.0, 210.0)]
+    fn blue(widths: &[usize], gain: f32, bias: f32) -> SkyModel {
+        let (layout, weights) = blue_model(widths, gain, bias);
+        SkyModel::parse(&layout, &weights).unwrap()
     }
 
-    /// Textured ground (a brown noise).
-    fn ground_pixel(x: usize, y: usize) -> [u8; 3] {
-        let n = (hash(x, y) % 70) as u8;
-        [60 + n, 55 + n / 2 + n / 4, 30 + n / 3]
-    }
-
-    /// The top half sky, the bottom half ground.
+    /// The top 40% a smooth blue sky, below it brown ground.
     fn sky_photo(w: usize, h: usize) -> Vec<u8> {
         (0..w * h)
             .flat_map(|i| {
-                let (x, y) = (i % w, i / w);
-                if y < h / 2 {
-                    sky_pixel(y as f64 / (h / 2 - 1) as f64)
+                let y = i / w;
+                if y * 10 < h * 4 {
+                    [110, 160, (235 - y / 4) as u8]
                 } else {
-                    ground_pixel(x, y)
+                    [120 + (i % 7) as u8, 90, 60]
                 }
             })
             .collect()
     }
 
-    /// Mean value of rows `rows` of a surface.
     fn mean_rows(surface: &SkySurface, rows: std::ops::Range<usize>) -> f64 {
         let w = surface.width as usize;
         let values = &surface.data[rows.start * w..rows.end * w];
@@ -604,68 +953,112 @@ mod tests {
     }
 
     #[test]
-    fn a_smooth_blue_top_over_textured_ground_is_sky_above_and_not_below() {
-        let (w, h) = (384, 256);
-        let surface = estimate_sky(&sky_photo(w, h), w, h, Some(14.0)).expect("sky");
-        assert_eq!((surface.width, surface.height), (w as u32, h as u32));
-        assert_eq!(surface.data.len(), w * h);
-        let (top, bottom) = (mean_rows(&surface, 0..100), mean_rows(&surface, 160..256));
-        assert!(top > 200.0, "top {top}");
-        assert!(bottom < 30.0, "bottom {bottom}");
+    fn the_header_gives_the_size_and_the_layers() {
+        let model = blue(&[4, 6, 8, 8], 12.0, 0.0);
+        assert_eq!(model.long_side(), 64);
+        assert_eq!(model.inputs(), SkyInputs::Rgb);
+        assert_eq!(model.widths(), &[4, 6, 8, 8]);
+        // Multiples of 32 for 4 levels, rounded half to even.
+        assert_eq!(model.input_size(1024, 683), (64, 32));
+        assert_eq!(model.input_size(683, 1024), (32, 64));
+        assert_eq!(model.input_size(1024, 1024), (64, 64));
+        assert_eq!(model.input_size(10, 1), (64, 32));
+        // Another depth reads the same way (multiples of 2^(levels + 1)).
+        let shallow = blue(&[4, 4], 12.0, 0.0);
+        assert_eq!(shallow.input_size(1024, 683), (64, 40));
     }
 
     #[test]
-    fn a_flat_wall_lit_indoors_has_no_sky() {
-        let (w, h) = (320, 240);
-        let rgb: Vec<u8> = (0..w * h)
-            .flat_map(|i| {
-                let shade = (i / w * 6 / h) as u8;
-                [225 - shade, 222 - shade, 216 - shade]
-            })
-            .collect();
-        assert_eq!(estimate_sky(&rgb, w, h, Some(8.0)), None);
+    fn headers_that_are_not_this_u_net_are_errors() {
+        let (layout, weights) = blue_model(&[4, 4, 4, 4], 12.0, 0.0);
+        let original: Value = serde_json::from_str(&layout).unwrap();
+        let parse = |v: &Value, w: &[u8]| SkyModel::parse(&v.to_string(), w);
+        assert!(parse(&original, &weights).is_ok());
+        assert!(SkyModel::parse("{", &weights).is_err());
+        assert!(parse(&original, &weights[..weights.len() - 4]).is_err());
+        let mut nan = weights.clone();
+        nan[0..4].copy_from_slice(&f32::NAN.to_le_bytes());
+        assert!(parse(&original, &nan).is_err());
+        let changed = |path: &[&str], value: Value| {
+            let mut v = original.clone();
+            let mut at = &mut v;
+            for key in path {
+                at = match key.parse::<usize>() {
+                    Ok(i) => &mut at[i],
+                    Err(_) => &mut at[*key],
+                };
+            }
+            *at = value;
+            parse(&v, &weights)
+        };
+        assert!(changed(&["inputs"], "rgbd".into()).is_err());
+        assert!(changed(&["layers", "3", "stride"], 2.into()).is_err());
+        assert!(changed(&["layers", "14", "name"], "tail".into()).is_err());
+        assert!(changed(&["layers", "0", "bias"], (weights.len() / 4).into()).is_err());
+        assert!(changed(&["channels"], serde_json::json!([4, 4, 4])).is_err());
+        assert!(changed(&["long"], 16.into()).is_err());
+    }
+
+    /// "上が青・下が茶色": the sky above, none below, at the photo's size.
+    #[test]
+    fn a_blue_top_over_brown_ground_is_sky_above_and_not_below() {
+        let (w, h) = (300, 200);
+        let model = blue(&[4, 6, 8, 8], 12.0, 0.0);
+        let surface = estimate_sky(&model, &sky_photo(w, h), w, h, None).expect("sky");
+        assert_eq!((surface.width, surface.height), (300, 200));
+        let (top, bottom) = (mean_rows(&surface, 0..60), mean_rows(&surface, 100..200));
+        assert!(top > 230.0, "top {top}");
+        assert!(bottom < 25.0, "bottom {bottom}");
     }
 
     #[test]
-    fn the_same_photo_gives_the_same_bytes() {
-        let (w, h) = (384, 256);
-        let rgb = sky_photo(w, h);
-        assert_eq!(
-            estimate_sky(&rgb, w, h, Some(14.0)),
-            estimate_sky(&rgb, w, h, Some(14.0))
-        );
+    fn a_model_that_sees_no_sky_gives_none() {
+        let (w, h) = (96, 64);
+        let photo = sky_photo(w, h);
+        let none = blue(&[4, 4, 4, 4], 0.0, -8.0);
+        assert_eq!(estimate_sky(&none, &photo, w, h, None), None);
+        assert!(!predict(&none, &photo, w, h, None).unwrap().has_sky());
+        let all = blue(&[4, 4, 4, 4], 0.0, 8.0);
+        let surface = estimate_sky(&all, &photo, w, h, None).unwrap();
+        assert!(surface.data.iter().all(|&v| v == 255));
     }
 
-    /// Without the exposure "bright" is relative (the photo's brightest
-    /// quarter): the sky's brighter top half is still found, the ground not.
     #[test]
-    fn without_the_exposure_the_relative_brightness_finds_the_sky() {
-        let (w, h) = (384, 256);
-        let surface = estimate_sky(&sky_photo(w, h), w, h, None).expect("sky");
-        let (top, bottom) = (mean_rows(&surface, 0..48), mean_rows(&surface, 160..256));
-        assert!(top > 200.0, "top {top}");
-        assert!(bottom < 30.0, "bottom {bottom}");
+    fn an_rgb_model_does_not_read_the_exposure() {
+        let (w, h) = (130, 97);
+        let model = blue(&[4, 6, 8, 8], 12.0, 0.0);
+        let photo = sky_photo(w, h);
+        let unknown = predict(&model, &photo, w, h, None).unwrap();
+        assert_eq!(predict(&model, &photo, w, h, Some(13.0)), Some(unknown));
     }
 
     #[test]
     fn tiny_and_invalid_inputs_do_not_panic() {
-        for (w, h) in [(1usize, 1usize), (2, 3), (3, 2), (1, 5)] {
-            let rgb: Vec<u8> = (0..w * h * 3).map(|i| (i * 40 % 256) as u8).collect();
-            for ev in [Some(14.0), Some(8.0), None] {
-                if let Some(surface) = estimate_sky(&rgb, w, h, ev) {
-                    assert_eq!((surface.width, surface.height), (w as u32, h as u32));
-                    assert_eq!(surface.data.len(), w * h);
-                }
-            }
-        }
-        let sky = [150u8, 190, 245];
-        assert_eq!(
-            estimate_sky(&sky, 1, 1, Some(f64::NAN)),
-            estimate_sky(&sky, 1, 1, None)
-        );
-        assert_eq!(estimate_sky(&[], 0, 0, None), None);
-        assert_eq!(estimate_sky(&sky, 0, 1, None), None);
-        assert_eq!(estimate_sky(&sky, 2, 1, None), None);
-        assert_eq!(estimate_sky(&sky, usize::MAX, 2, None), None);
+        let model = blue(&[4, 4, 4, 4], 12.0, 0.0);
+        assert_eq!(predict(&model, &[], 0, 0, None), None);
+        assert_eq!(predict(&model, &[1, 2], 1, 1, None), None);
+        let one = predict(&model, &[100, 150, 230], 1, 1, None).unwrap();
+        assert_eq!((one.width, one.height, one.data.len()), (1, 1, 1));
+    }
+
+    /// PIL's 8-bit resample: 4 -> 2 samples of a step (weights 3/7, 3/7,
+    /// 1/7 in 22-bit fixed point), and a flat colour stays flat.
+    #[test]
+    fn the_8_bit_resample_is_pils() {
+        let row: Vec<u8> = [0u8, 255, 255, 0].iter().flat_map(|&v| [v, v, v]).collect();
+        assert_eq!(resize_rgb8(&row, 4, 1, 2, 1), vec![146; 6]);
+        let flat: Vec<u8> = [17u8, 130, 240].repeat(35);
+        assert_eq!(resize_rgb8(&flat, 7, 5, 3, 2), [17u8, 130, 240].repeat(6));
+    }
+
+    /// PyTorch's `align_corners=False` 2x upsampling: the edge samples kept,
+    /// the rest 1/4 and 3/4 between neighbours.
+    #[test]
+    fn the_decoders_upsample_with_half_pixel_centres() {
+        let axis = bilinear_axis(3, 6);
+        assert_eq!(axis[0], (0, 1, 1.0, 0.0));
+        assert_eq!(axis[1], (0, 1, 0.75, 0.25));
+        assert_eq!(axis[2], (0, 1, 0.25, 0.75));
+        assert_eq!(axis[5], (2, 2, 0.75, 0.25));
     }
 }
