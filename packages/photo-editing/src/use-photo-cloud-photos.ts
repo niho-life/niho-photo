@@ -151,6 +151,8 @@ function uniquePhotos(photos: PhotoLibraryItem[]): PhotoLibraryItem[] {
 
 export function usePhotoCloudPhotos(options: {
   spotId: string;
+  /** 拠点を持たない写真ライブラリの明示的なキャッシュscope。省略時は既存のspotIdだけを使う。 */
+  scopeKey?: string;
   enabled: boolean;
   /** 並び（省くと追加日。NIHO Desktop の面は省く） */
   sort?: PhotoCloudListSort;
@@ -171,7 +173,7 @@ export function usePhotoCloudPhotos(options: {
   /** この Mac の「選んだ写真」。`folderId` と同時には渡さない。 */
   localSource?: "selected";
 }): PhotoCloudPhotos {
-  const { spotId, enabled, sort, hasOriginal, favorite, albumId, kind, edited, flag, folderId, localSource } = options;
+  const { spotId, scopeKey, enabled, sort, hasOriginal, favorite, albumId, kind, edited, flag, folderId, localSource } = options;
   const library = usePhotoLibrary();
   const host = usePhotoEditingHost();
   const queryClient = useQueryClient();
@@ -185,7 +187,7 @@ export function usePhotoCloudPhotos(options: {
     flag: flag ?? null,
     folderId: folderId ?? null,
     localSource: localSource ?? null,
-  });
+  }, scopeKey);
   const pendingWorkPollRef = useRef<PendingWorkPoll>({ photoIds: new Set(), since: 0 });
   const listQuery = useInfiniteQuery({
     queryKey,
@@ -278,7 +280,7 @@ export function usePhotoCloudPhotos(options: {
     (photoIds: readonly string[]) => {
       if (photoIds.length === 0) return;
       const removed = new Set(photoIds);
-      const key = photoEditingQueryKeys.cloudPhotos(spotId);
+      const key = photoEditingQueryKeys.cloudPhotos(spotId, scopeKey);
       queryClient.setQueriesData<PhotoCloudPages>({ queryKey: key }, (data) =>
         data
           ? {
@@ -292,11 +294,11 @@ export function usePhotoCloudPhotos(options: {
       );
       void queryClient.invalidateQueries({ queryKey: key });
     },
-    [queryClient, spotId],
+    [queryClient, scopeKey, spotId],
   );
   const updateOriginalAvailability = useCallback(
     (photoId: string, nextHasOriginal: boolean) => {
-      const key = photoEditingQueryKeys.cloudPhotos(spotId);
+      const key = photoEditingQueryKeys.cloudPhotos(spotId, scopeKey);
       // 一覧は元の写真の有無で絞ってあるので、有無が変わった写真は、合わなくなった一覧から外し（`hasOriginal` だけ書き換えると、
       // 別の場所の一覧に居座って、どちらの場所にも出なくなる）、移る先の一覧は読み直す（そこにはまだ載っていない。元の写真が
       // 入ったばかりの写真は ♥ が付いていないので、「お気に入り」の一覧は読み直さない）
@@ -329,11 +331,11 @@ export function usePhotoCloudPhotos(options: {
         }
       }
     },
-    [queryClient, spotId],
+    [queryClient, scopeKey, spotId],
   );
   const replacePhoto = useCallback(
     (photo: PhotoLibraryPhoto) => {
-      const key = photoEditingQueryKeys.cloudPhotos(spotId);
+      const key = photoEditingQueryKeys.cloudPhotos(spotId, scopeKey);
       queryClient.setQueriesData<PhotoCloudPages>({ queryKey: key }, (data) =>
         data
           ? {
@@ -348,11 +350,11 @@ export function usePhotoCloudPhotos(options: {
           : data,
       );
     },
-    [queryClient, spotId],
+    [queryClient, scopeKey, spotId],
   );
   const markEditedPreviewPending = useCallback(
     (photoId: string) => {
-      const key = photoEditingQueryKeys.cloudPhotos(spotId);
+      const key = photoEditingQueryKeys.cloudPhotos(spotId, scopeKey);
       queryClient.setQueriesData<PhotoCloudPages>({ queryKey: key }, (data) => {
         if (!data) return data;
         let changed = false;
@@ -367,7 +369,7 @@ export function usePhotoCloudPhotos(options: {
         return changed ? { ...data, pages } : data;
       });
     },
-    [queryClient, spotId],
+    [queryClient, scopeKey, spotId],
   );
 
   return {

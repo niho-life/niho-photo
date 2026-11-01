@@ -35,12 +35,13 @@ export type PhotoLibraryFlagsControl = {
 
 export function usePhotoLibraryFlags(options: {
   spotId: string;
+  scopeKey?: string;
   /** 一覧の外の写真（URL で開いた・このタブで追加した）にも同じ書き換えを当てる（戻すときも呼ぶ） */
   applyLocal?: (photoId: string, flag: PhotoLibraryFlag | null) => void;
   /** 変えられなかった（元に戻した後に呼ぶ） */
   onError?: (error: unknown) => void;
 }): PhotoLibraryFlagsControl {
-  const { spotId } = options;
+  const { spotId, scopeKey } = options;
   const library = usePhotoLibrary();
   const flagsTool = library.flags;
   const photosPerRequest = Math.max(1, library.limits.photosPerRequest);
@@ -60,7 +61,7 @@ export function usePhotoLibraryFlags(options: {
   /** 読み込んであるすべての一覧と一覧の外の写真で、写真ごとのフラグを書き換える（もうその値の写真は変えない）。 */
   const write = useCallback(
     (changes: ReadonlyMap<string, PhotoLibraryFlag | null>) => {
-      queryClient.setQueriesData<PhotoCloudPages>({ queryKey: photoEditingQueryKeys.cloudPhotos(spotId) }, (data) => {
+      queryClient.setQueriesData<PhotoCloudPages>({ queryKey: photoEditingQueryKeys.cloudPhotos(spotId, scopeKey) }, (data) => {
         if (!data) return data;
         let changed = false;
         const pages = data.pages.map((page) => {
@@ -80,7 +81,7 @@ export function usePhotoLibraryFlags(options: {
       });
       for (const [photoId, flag] of changes) callbacksRef.current.applyLocal?.(photoId, flag);
     },
-    [queryClient, spotId],
+    [queryClient, scopeKey, spotId],
   );
 
   const setFlag = useCallback(
@@ -94,7 +95,7 @@ export function usePhotoLibraryFlags(options: {
       const photoIds = Array.from(previous.keys());
       for (const photoId of photoIds) pendingRef.current.add(photoId);
       setPendingIds(new Set(pendingRef.current));
-      const cacheKey = photoEditingQueryKeys.cloudPhotos(spotId);
+      const cacheKey = photoEditingQueryKeys.cloudPhotos(spotId, scopeKey);
       const next = new Map(photoIds.map((photoId) => [photoId, flag] as const));
       // cancelQueries は呼んだ時点で取得を止める（promise は止め終わり）。画面はすぐ書き換え、止め終えてから送る
       const cancelBeforeMutation = queryClient.cancelQueries({ queryKey: cacheKey });
@@ -126,7 +127,7 @@ export function usePhotoLibraryFlags(options: {
       if (mountedRef.current) setPendingIds(new Set(pendingRef.current));
       if (failure !== null && mountedRef.current) callbacksRef.current.onError?.(failure);
     },
-    [flagsTool, photosPerRequest, queryClient, spotId, write],
+    [flagsTool, photosPerRequest, queryClient, scopeKey, spotId, write],
   );
 
   const isPending = useCallback((photoId: string) => pendingRef.current.has(photoId), []);

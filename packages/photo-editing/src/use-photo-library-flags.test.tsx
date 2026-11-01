@@ -7,6 +7,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type { PhotoCloudListPage } from "./use-photo-cloud-photos";
 import { photoEditingQueryKeys } from "./photo-editing-query-keys";
+import { photoCloudListFilter } from "./use-photo-cloud-favorite";
 import type { PhotoLibrary, PhotoLibraryCapabilities, PhotoLibraryFlag, PhotoLibraryItem } from "./library/photo-library";
 import { PhotoLibraryProvider, type PhotoEditingHost } from "./library/photo-library-context";
 import { usePhotoLibraryFlags, type PhotoLibraryFlagsControl } from "./use-photo-library-flags";
@@ -61,6 +62,30 @@ const PICKS_KEY = photoEditingQueryKeys.cloudPhotosList(SPOT, {
   favorite: null,
   flag: "pick",
   folderId: "f1",
+});
+
+describe("photoEditingQueryKeys scopeKey compatibility", () => {
+  it("keeps legacy keys intact and isolates scoped list cache under the matching prefix", () => {
+    const list = { sort: "added" as const, hasOriginal: null, favorite: null, folderId: "f1" };
+    const scopeA = "personal:library-a:actor-a";
+    const scopeB = "personal:library-b:actor-a";
+    const legacyKey = photoEditingQueryKeys.cloudPhotosList(SPOT, list);
+    const scopedKeyA = photoEditingQueryKeys.cloudPhotosList(SPOT, list, scopeA);
+    const scopedKeyB = photoEditingQueryKeys.cloudPhotosList(SPOT, list, scopeB);
+
+    expect(photoEditingQueryKeys.cloudPhotos(SPOT)).toEqual(["admin", "photoEditing", "cloudPhotos", SPOT]);
+    expect(legacyKey).toEqual(["admin", "photoEditing", "cloudPhotos", SPOT, { ...list, albumId: null, kind: null, edited: null }]);
+    expect(scopedKeyA).not.toEqual(scopedKeyB);
+    expect(photoCloudListFilter(scopedKeyA)).toEqual({ hasOriginal: null, favorite: null, kind: null, edited: null });
+
+    const scopedClient = new QueryClient();
+    scopedClient.setQueryData(legacyKey, "legacy");
+    scopedClient.setQueryData(scopedKeyA, "library A");
+    scopedClient.setQueryData(scopedKeyB, "library B");
+    expect(scopedClient.getQueriesData({ queryKey: photoEditingQueryKeys.cloudPhotos(SPOT, scopeA) })).toEqual([[scopedKeyA, "library A"]]);
+    expect(scopedClient.getQueriesData({ queryKey: photoEditingQueryKeys.cloudPhotos(SPOT) })).toEqual([[legacyKey, "legacy"]]);
+    scopedClient.clear();
+  });
 });
 
 let container: HTMLDivElement;

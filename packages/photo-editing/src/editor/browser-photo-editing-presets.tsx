@@ -46,6 +46,7 @@ function presetXmpGroups(input: PhotoEditingPresetSaveInput): DevelopXmpGroup[] 
  */
 export function BrowserPhotoEditingPresets(props: {
   spotId: string;
+  scopeKey?: string;
   canEdit: boolean;
   builtinPresets: { queryKey: readonly unknown[]; load: () => Promise<PhotoEditingBuiltinPreset[]> };
   presets: BrowserPhotoPresets;
@@ -126,6 +127,7 @@ export function BrowserPhotoEditingPresets(props: {
   return (
     <PhotoEditingPresetsPanel
       spotId={props.spotId}
+      scopeKey={props.scopeKey}
       canEdit={props.canEdit}
       builtinPresets={props.builtinPresets}
       canApply={canApplyPreset}

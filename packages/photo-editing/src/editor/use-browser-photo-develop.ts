@@ -66,6 +66,7 @@ function cachedFrameOf(cached: CachedFrame | null, key: string, settings: Develo
  */
 export function useBrowserPhotoDevelop(params: {
   spotId: string;
+  scopeKey?: string;
   /** Worker の論理メモリ予算。画面幅の class を呼び出し側が明示する。 */
   deviceClass: "pc" | "mobile";
   /** 認証済みユーザー。匿名・未確定では端末退避を読まず、書かない。 */
@@ -81,6 +82,7 @@ export function useBrowserPhotoDevelop(params: {
 }) {
   const {
     spotId,
+    scopeKey,
     queryClient,
     mountedRef,
     latestAccessRef,
@@ -300,14 +302,14 @@ export function useBrowserPhotoDevelop(params: {
             // 上げ終えた後に消えていた（ほかのスタッフが消した）。一覧の読み直しに任せる
             console.warn("[photo-editing] edited preview photo reload failed", new Error("photo not found"));
             void queryClient
-              .invalidateQueries({ queryKey: photoEditingQueryKeys.cloudPhotos(spotId) })
+              .invalidateQueries({ queryKey: photoEditingQueryKeys.cloudPhotos(spotId, scopeKey) })
               .catch(() => undefined);
           },
           (error: unknown) => {
             console.warn("[photo-editing] edited preview photo reload failed", error);
             // upload は成功しているため、現在の一覧行が古い場合に画面復帰後の再取得を促す。
             void queryClient
-              .invalidateQueries({ queryKey: photoEditingQueryKeys.cloudPhotos(spotId) })
+              .invalidateQueries({ queryKey: photoEditingQueryKeys.cloudPhotos(spotId, scopeKey) })
               .catch(() => undefined);
           },
         );
@@ -320,7 +322,7 @@ export function useBrowserPhotoDevelop(params: {
     });
     editedPreviewUploaderRef.current = uploader;
     return uploader;
-  }, [host, library, queryClient, spotId]);
+  }, [host, library, queryClient, scopeKey, spotId]);
 
   /**
    * 補正後のプレビューを上げてよい写真か（直せる operator の、この画面の拠点の写真だけ。付ける口〔`attachEditedPreview`〕の無い置き場

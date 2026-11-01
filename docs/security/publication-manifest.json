@@ -1177,10 +1177,11 @@
         "path": "packages/photo-editing/src/editor/browser-photo-editing-mobile-presets.tsx",
         "sha256": "5df0aada26f13de2c0f55f93097cccb913ab8219ff215b198b343c5cce62ad27"
       },
-      "outputSha256": "9f46df1c7178b22f94a55216b57f4477d38a99c1111f6b42008df7dcc0b2303d",
+      "outputSha256": "5deaea5a322c512cd68cb5741913e40d97dab0a31d7c1046947712da09f87b50",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "Add backwards-compatible personal photo library scope key"
       ]
     },
     {
@@ -1241,7 +1242,7 @@
         "path": "packages/photo-editing/src/editor/browser-photo-editing-presets.tsx",
         "sha256": "801648f9ced4999b839a58837c622df0af14464c73bcddd789450ece458e4763"
       },
-      "outputSha256": "43b38a569da94340d9823096a262bcc5121af94fb5ed3eae6d7886ee448ae9fe",
+      "outputSha256": "3f8e610098373e515760b4cc2052a972266c493a61e370ae05236b304354147f",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -1250,7 +1251,8 @@
         "L4 #53: ブラウザ版のプリセット一覧をサムネイルの升の2列にし、升の見本を長辺192pxで描く。NIHO Desktop・スマホの行と見本の大きさは据え置き。",
         "暫定RAWとpreset適用中の見本生成を待機し編集入力を優先。",
         "右パネルの補正・プリセット面の切替と段階RAW openを統合し、暫定中の見本生成停止を保つ。",
-        "Issue #49の統合確認: panelの⋯の受け口（actionsSlot）を渡す。"
+        "Issue #49の統合確認: panelの⋯の受け口（actionsSlot）を渡す。",
+        "Add backwards-compatible personal photo library scope key"
       ]
     },
     {
@@ -1431,9 +1433,10 @@
         "被写体のマスクの面 #135: PhotoLibrary.detectMaskSurface・能力 maskDetection と、マスクの追加の「被写体」（探している間の 1 行・取り消し・見つからない理由）を足す。",
         "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
         "画面幅変更後も編集面の端末メモリ区分を固定する（#155 レビュー）",
-        "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み"
+        "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み",
+        "Add backwards-compatible personal photo library scope key"
       ],
-      "outputSha256": "914a55f9159237386bbf861c2ab6c6505f5f66d572dc8299e9810fc8f34e9c87"
+      "outputSha256": "bdeb6d712bf3c889121a094bb64d540b8517ecc44e7562fe78805378a6ed1465"
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-adjustment-controls-effects.test.tsx",
@@ -1786,14 +1789,15 @@
         "path": "packages/photo-editing/src/editor/photo-editing-presets-panel.tsx",
         "sha256": "7f0524e5e1764f9274b39979d5887193faa96e37dcb6944fdd44d10a3e406541"
       },
-      "outputSha256": "a090f49f5bb7588f8f000b67faf29019e11bb16a637797841a2b065882a7acca",
+      "outputSha256": "8570d405ef1c470679abe824805aedf6e32ced9368182db240a542055c8eedbb",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "niho-photo#51 L2: 右端の道具の帯と補正パネルの並び（見出し行・自動 / 白黒のチップ・プリセットの行・面の切り替え）。",
         "niho-photo#51のプリセット面切替を#35統合後のパネルへ反映する。",
         "L4 #53: ブラウザ版のプリセット一覧をサムネイルの升の2列にし、升の見本を長辺192pxで描く。NIHO Desktop・スマホの行と見本の大きさは据え置き。",
-        "Issue #49の統合確認: panelの⋯を右パネルの見出し行（actionsSlot）へ描く。"
+        "Issue #49の統合確認: panelの⋯を右パネルの見出し行（actionsSlot）へ描く。",
+        "Add backwards-compatible personal photo library scope key"
       ]
     },
     {
@@ -1850,11 +1854,12 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-add.ts",
         "sha256": "13f9a4fc8d664358e9dddd1adc8681841cb8ad5e79f74edbcd8bff07f5adb6b9"
       },
-      "outputSha256": "a354965a31056fb5f016d54a9fbb64c9a238c584a40b43d92b0b38357910da2b",
+      "outputSha256": "b62b744f9cb9b3a4ec3734e334496e52d0701d67ae038f435e9ee83028bcd406",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
-        "個人クラウドの明示binding、保存先切替、単一写真コピーと公開境界を追加。"
+        "個人クラウドの明示binding、保存先切替、単一写真コピーと公開境界を追加。",
+        "Add backwards-compatible personal photo library scope key"
       ]
     },
     {
@@ -1879,12 +1884,13 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-bulk.ts",
         "sha256": "6518780c290b04a91f2e924816046a80f599da9d08957a516a77b94c9e02f828"
       },
-      "outputSha256": "a1b555492913a574b6f4880a029b589d9bb2e8f6e869c0f1c0f75d6381ed8107",
+      "outputSha256": "7936479cf989ada0c7a036f1b9ceac55ff5a57ca5e27c642a1c74021c9445687",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
-        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加"
+        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
+        "Add backwards-compatible personal photo library scope key"
       ]
     },
     {
@@ -1944,7 +1950,7 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-develop.ts",
         "sha256": "491153dcf3675cfd0b822a008f101a77125411c9e18966ea7b7fb96e18ce8228"
       },
-      "outputSha256": "411e1418fe1890361af4ef4018ff14697cfb04b9e1893cc6d307cf73b966c261",
+      "outputSha256": "bcd3860d2d3daa484f4a973a8202021c56a343f1e54463392c4effc99ba3a52b",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -1954,7 +1960,8 @@
         "PR #99のマスク面の描画・読み書きと遠近対応の変更を反映する。",
         "版の面の取り消し/やり直しと補正後プレビューの抑止に伴う変更。",
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
-        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加"
+        "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
+        "Add backwards-compatible personal photo library scope key"
       ]
     },
     {
@@ -2067,13 +2074,14 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-folders.ts",
         "sha256": "69941494097660785d1ce690c32ce4518598ec6e90baf626a92099c43d4caa34"
       },
-      "outputSha256": "42d35e39fa435b2ef889c9bbf93042895605f7b1d8b7ed3edac7439921540f18",
+      "outputSha256": "ba8e8006ed38de7b5380f62df8ec4fdcf3329d081a0c98d05b393fedc5801e54",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "行末空白と余分な末尾空行を整理。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "任意の個別写真ソース契約と選んだ写真のUI、復元、取消、再試行、失敗時参照保持を追加",
-        "個人クラウドの明示binding、保存先切替、単一写真コピーと公開境界を追加。"
+        "個人クラウドの明示binding、保存先切替、単一写真コピーと公開境界を追加。",
+        "Add backwards-compatible personal photo library scope key"
       ]
     },
     {
@@ -2714,7 +2722,7 @@
         "path": "packages/photo-editing/src/photo-editing-query-keys.ts",
         "sha256": "b0873ce957f9eca6dd2451b13e87d38e52e28d08ab5fbc5c31c6ebf6e94c0248"
       },
-      "outputSha256": "55f0f57dac6ecf90423a58cda680ecfc8afb2bcd0977aab4214d39f128cab872",
+      "outputSha256": "8f49a420f2d03165dc1f3ea32a2c5e6cb5d4612534c0a8b28d4949f1da21de28",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -2725,7 +2733,8 @@
         "PR #77 の情報paneをmainの公開UI変更と統合。",
         "squash済みPR #77のmainをマスク描画へ同期する。",
         "PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。",
-        "PR #98で選別フラグの保存経路とUIを更新する。"
+        "PR #98で選別フラグの保存経路とUIを更新する。",
+        "Add backwards-compatible personal photo library scope key"
       ]
     },
     {
@@ -3179,8 +3188,10 @@
         "path": "packages/photo-editing/src/use-photo-cloud-albums.ts",
         "sha256": "c7d7a1e97d50150131b53289c243a1b2bb0d72f93036882acd2bd1679a02009e"
       },
-      "outputSha256": "c7d7a1e97d50150131b53289c243a1b2bb0d72f93036882acd2bd1679a02009e",
-      "modifications": []
+      "outputSha256": "b3320e522c8e7637e891ceb941c46c19f9dc2818f04776e306068cde4b49d760",
+      "modifications": [
+        "Add backwards-compatible personal photo library scope key"
+      ]
     },
     {
       "path": "packages/photo-editing/src/use-photo-cloud-favorite.ts",
@@ -3190,10 +3201,11 @@
         "path": "packages/photo-editing/src/use-photo-cloud-favorite.ts",
         "sha256": "4f457f5629722c840569b1014a1625ebff5b0f5de07b1db5ab9f8b9f5a6a5e4d"
       },
-      "outputSha256": "6a16723c6982a7d4d27cd5ed5a73b71b2378254188b05770947433e2ef9eb65e",
+      "outputSha256": "1cf9bea5b5afce3322d582de7723da6db5f341dbf55239c03e2eb4589a76a8c9",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "Add backwards-compatible personal photo library scope key"
       ]
     },
     {
@@ -3204,13 +3216,14 @@
         "path": "packages/photo-editing/src/use-photo-cloud-photos.ts",
         "sha256": "64637052f98098cf6bb7baf600a253f0291d7a912acbada410f12f6539843e97"
       },
-      "outputSha256": "6231ae2feb799d2fc45788e556666f785b04ec1cd4068b4ce9be0b1ead3d63a9",
+      "outputSha256": "83002691b5f3d04d357e153b52b9b46c9249a2d3ee3e2a5b4cea3873d0f1ac56",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "任意の個別写真ソース契約と選んだ写真のUI、復元、取消、再試行、失敗時参照保持を追加",
         "PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。",
-        "PR #98で選別フラグの保存経路とUIを更新する。"
+        "PR #98で選別フラグの保存経路とUIを更新する。",
+        "Add backwards-compatible personal photo library scope key"
       ]
     },
     {
@@ -4370,7 +4383,7 @@
         "path": "apps/camera/src/App.tsx",
         "sha256": "ca49b85f8269569ef243f5b0164751b3347c1cc268f906ce53dd984aa470c19e"
       },
-      "outputSha256": "0ab64d887f061668c3751e70aaf6b4c350aa407ef8b53779dad4f2c5dc1fc9c8",
+      "outputSha256": "b77f17a7a2ce39f2e6a5b342dd9d30a2afef7d6f5fe0d291ad7d8e40953c3be6",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #3のpublic OAuth/PKCE、ローカル専用UI、安全契約と公開依存を新規接続。実issuer・署名検証器が未契約のため本番接続は無効。",
@@ -4378,7 +4391,8 @@
         "個人クラウドの明示binding、保存先切替、単一写真コピーと公開境界を追加。",
         "個人クラウドnamespaceと写真ソース境界の説明を明確化。",
         "保存先切替を常時表示しクラウド削除を停止",
-        "Guard cloud binding changes before remount"
+        "Guard cloud binding changes before remount",
+        "Add backwards-compatible personal photo library scope key"
       ]
     },
     {
@@ -10625,8 +10639,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-editing-info.tsx",
-      "sha256": "eeefb8432623d070c7b72dca83e191785c3465afe22213dd4fa7ed4a62242200",
-      "origin": "niho-photo#43 のため新規作成。右パネルの「情報」の面（群の見出しとラベル・値の 2 列の dl、写真の情報の読み出し）。外部コード・実データを含まない。\n変更理由: #141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み"
+      "sha256": "f34d10b0960dd3fb091b767d3801a5f64dc6eaf6819db863a64594d42206305f",
+      "origin": "niho-photo#43 のため新規作成。右パネルの「情報」の面（群の見出しとラベル・値の 2 列の dl、写真の情報の読み出し）。外部コード・実データを含まない。\n変更理由: #141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み\n変更理由: Add backwards-compatible personal photo library scope key\n変更理由: Add backwards-compatible personal photo library scope key"
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-editing-info.test.tsx",
@@ -11370,13 +11384,13 @@
     },
     {
       "path": "packages/photo-editing/src/use-photo-library-flags.test.tsx",
-      "sha256": "b68a8ea07603bbef6e8263c818145ba87fbda3e9196e60649ca3e06b1dc6b8ae",
-      "origin": "niho-photo#47 のため新規作成。選別のフラグの hook の test（偽の写真の出どころだけを使用）。\n変更理由: PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。"
+      "sha256": "d1a8de3da332d531172532dcd5940c3b3c53b607aec3356feb914f06d778c32c",
+      "origin": "niho-photo#47 のため新規作成。選別のフラグの hook の test（偽の写真の出どころだけを使用）。\n変更理由: PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。\n変更理由: Add backwards-compatible personal photo library scope key\n変更理由: Add backwards-compatible personal photo library scope key"
     },
     {
       "path": "packages/photo-editing/src/use-photo-library-flags.ts",
-      "sha256": "0edb7825942ad71034bbe317cb0adc90d26e07a6519ec5d34300049ed621715c",
-      "origin": "niho-photo#47 のため新規作成。選別のフラグの付け外しの hook（読み込んだ一覧への楽観更新と失敗時の巻き戻し）。外部コードを含まない。\n変更理由: PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。"
+      "sha256": "e608209c0a5f4bc3cd3bd6b9514b995f9c78670dbe984d9fe768a07fe4df91d5",
+      "origin": "niho-photo#47 のため新規作成。選別のフラグの付け外しの hook（読み込んだ一覧への楽観更新と失敗時の巻き戻し）。外部コードを含まない。\n変更理由: PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。\n変更理由: Add backwards-compatible personal photo library scope key\n変更理由: Add backwards-compatible personal photo library scope key"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-errors.ts",

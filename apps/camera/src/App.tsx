@@ -41,6 +41,8 @@ export type PersonalCloudPhotoBinding = {
   library: PhotoLibrary;
   host: PhotoEditingHost;
   actorId: string;
+  /** `personal:<libraryId>:<actorId>`。認可には使わず、共通編集面のquery cacheを個人ライブラリで分ける。 */
+  scopeKey?: string;
   copyLocalPhoto: BrowserPhotoCopyToCloudBinding["copyLocalPhoto"];
 };
 
@@ -211,6 +213,8 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
   const library = activeSource === "cloud" && cloud ? cloud.library : localLibrary;
   const host = activeSource === "cloud" && cloud ? cloud.host : localHost;
   const sourceKey = cloud ? personalPhotoScope(cloud.actorId, activeSource) : "local";
+  const queryScopeKey = activeSource === "cloud" ? cloud?.scopeKey : undefined;
+  const libraryKey = queryScopeKey === undefined ? sourceKey : `${sourceKey}:scope:${queryScopeKey}`;
   const actorId = cloud ? cloud.actorId : "local";
   const copyToCloud = useMemo<BrowserPhotoCopyToCloudBinding | undefined>(() =>
     cloud && !cloudBindingTransition.switching && !cloudBindingTransition.failed ? {
@@ -298,10 +302,11 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
             ) : null}
             {sourceTabs}
           </div>
-          <PhotoLibraryProvider key={sourceKey} library={library} host={host}>
+          <PhotoLibraryProvider key={libraryKey} library={library} host={host}>
             <BrowserPhotoEditingWorkbench
-              key={sourceKey}
-              spotId={sourceKey}
+              key={libraryKey}
+              spotId={libraryKey}
+              scopeKey={queryScopeKey}
               actorId={actorId}
               canEdit
               cloudOriginalsAllowed={false}

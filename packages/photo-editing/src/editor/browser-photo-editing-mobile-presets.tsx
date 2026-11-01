@@ -39,6 +39,7 @@ import { BROWSER_PRESET_AMOUNT_DEFAULT, BROWSER_PRESET_AMOUNT_MAX } from "./use-
 /** 右パネルに渡すものと同じ形の、プリセットの情報と操作（面の `useBrowserPhotoPresets` から）。 */
 export type BrowserPhotoEditingMobilePresetsProps = {
   spotId: string;
+  scopeKey?: string;
   /** 同梱のプリセットの読み方（右パネルと同じ wasm エンジン） */
   builtinPresets: {
     queryKey: readonly unknown[];
@@ -96,7 +97,7 @@ export function BrowserPhotoEditingMobilePresets(
     refetchOnWindowFocus: false,
   });
   const spotPresetsQuery = useQuery({
-    queryKey: photoEditingQueryKeys.spotPresets(props.spotId),
+    queryKey: photoEditingQueryKeys.spotPresets(props.spotId, props.scopeKey),
     queryFn: async () => ({ presets: await library.presets.list() }),
     staleTime: 30_000,
     refetchOnWindowFocus: false,

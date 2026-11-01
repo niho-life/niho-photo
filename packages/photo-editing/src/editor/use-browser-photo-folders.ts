@@ -122,6 +122,7 @@ export function resolveBrowserPhotoLocalSource(
 export function useBrowserPhotoFolders(params: {
   library: Pick<PhotoLibrary, "place" | "folders" | "selectedPhotos">;
   spotId: string;
+  scopeKey?: string;
   /** 今の場所（`folder:<folderId>` のときだけフォルダを選んでいる） */
   place: BrowserCloudPlace;
   /** 場所を移る（開いていた写真の保存・破棄の確認を済ませる。移れなければ false） */
@@ -133,7 +134,7 @@ export function useBrowserPhotoFolders(params: {
   const foldersTool = library.folders;
   const selectedTool = library.selectedPhotos;
   const queryClient = useQueryClient();
-  const queryKey = photoEditingQueryKeys.folders(library.place, params.spotId);
+  const queryKey = photoEditingQueryKeys.folders(library.place, params.spotId, params.scopeKey);
   const storageKey = browserPhotoLastFolderStorageKey(library.place);
   const query = useQuery({
     queryKey,
@@ -145,7 +146,7 @@ export function useBrowserPhotoFolders(params: {
     staleTime: 0,
     refetchOnWindowFocus: false,
   });
-  const selectedQueryKey = photoEditingQueryKeys.selectedPhotos(library.place, params.spotId);
+  const selectedQueryKey = photoEditingQueryKeys.selectedPhotos(library.place, params.spotId, params.scopeKey);
   const selectedQuery = useQuery({
     queryKey: selectedQueryKey,
     queryFn: ({ signal }) => {
@@ -202,9 +203,9 @@ export function useBrowserPhotoFolders(params: {
   const reloadSelected = useCallback(async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: selectedQueryKey }),
-      queryClient.invalidateQueries({ queryKey: photoEditingQueryKeys.cloudPhotos(params.spotId) }),
+      queryClient.invalidateQueries({ queryKey: photoEditingQueryKeys.cloudPhotos(params.spotId, params.scopeKey) }),
     ]);
-  }, [params.spotId, queryClient, selectedQueryKey]);
+  }, [params.scopeKey, params.spotId, queryClient, selectedQueryKey]);
 
   const addFolder = useCallback(
     () =>

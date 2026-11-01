@@ -32,14 +32,14 @@ type CachedPhotoPlacement = {
   photo: PhotoLibraryItem;
 };
 
-/** 一覧の query key（`cloudPhotosList` の 5 つ目）の絞り込み。無ければ絞らない（null）。 */
+/** 一覧の query key の末尾（`cloudPhotosList` の絞り込み）。無ければ絞らない（null）。 */
 export function photoCloudListFilter(queryKey: QueryKey): {
   hasOriginal: boolean | null;
   favorite: boolean | null;
   kind: "raw" | "jpeg" | "heic" | null;
   edited: boolean | null;
 } {
-  const list = queryKey[4] as
+  const list = queryKey.at(-1) as
     | {
         hasOriginal?: boolean | null;
         favorite?: boolean | null;
@@ -121,12 +121,13 @@ export type PhotoCloudFavorite = {
 
 export function usePhotoCloudFavorite(options: {
   spotId: string;
+  scopeKey?: string;
   /** 一覧の外の写真（URL で開いた・このタブで追加した）にも同じ書き換えを当てる（戻すときも呼ぶ） */
   applyLocal?: (photoId: string, favorite: boolean) => void;
   /** 変えられなかった（元に戻した後に呼ぶ） */
   onError?: (error: unknown) => void;
 }): PhotoCloudFavorite {
-  const { spotId } = options;
+  const { spotId, scopeKey } = options;
   const favoritesTool = usePhotoLibrary().favorites;
   const queryClient = useQueryClient();
   const callbacksRef = useRef(options);
@@ -149,7 +150,7 @@ export function usePhotoCloudFavorite(options: {
     (photoId: string, favorite: boolean, phase: "press" | "settle"): QueryKey[] => {
       const missing: QueryKey[] = [];
       for (const [listQueryKey, data] of queryClient.getQueriesData<PhotoCloudPages>({
-        queryKey: photoEditingQueryKeys.cloudPhotos(spotId),
+        queryKey: photoEditingQueryKeys.cloudPhotos(spotId, scopeKey),
       })) {
         if (!data) continue;
         const filter = photoCloudListFilter(listQueryKey);
@@ -170,7 +171,7 @@ export function usePhotoCloudFavorite(options: {
       callbacksRef.current.applyLocal?.(photoId, favorite);
       return missing;
     },
-    [queryClient, spotId],
+    [queryClient, scopeKey, spotId],
   );
 
   const setFavorite = useCallback(
@@ -179,7 +180,7 @@ export function usePhotoCloudFavorite(options: {
       if ((photo.favorite === true) === favorite || pendingRef.current.has(photoId)) return;
       pendingRef.current.add(photoId);
       setPendingIds(new Set(pendingRef.current));
-      const cacheKey = photoEditingQueryKeys.cloudPhotos(spotId);
+      const cacheKey = photoEditingQueryKeys.cloudPhotos(spotId, scopeKey);
       // cancelQueries は呼出時点で対象fetchを同期的にcancelし、promiseは停止処理の完了を返す。
       // UIの楽観更新をすぐ反映しつつ、cancel完了後にPOSTを送る。
       const cancelBeforeMutation = queryClient.cancelQueries({ queryKey: cacheKey });
@@ -214,7 +215,7 @@ export function usePhotoCloudFavorite(options: {
       if (mountedRef.current) setPendingIds(new Set(pendingRef.current));
       if (failure !== null && mountedRef.current) callbacksRef.current.onError?.(failure);
     },
-    [favoritesTool, queryClient, spotId, write],
+    [favoritesTool, queryClient, scopeKey, spotId, write],
   );
 
   return { pendingIds, setFavorite };

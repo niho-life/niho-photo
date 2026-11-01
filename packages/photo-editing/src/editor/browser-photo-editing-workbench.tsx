@@ -310,6 +310,8 @@ export type BrowserPhotoCopyToCloudBinding = {
  */
 export function BrowserPhotoEditingWorkbench(props: {
   spotId: string;
+  /** 拠点を持たない写真ライブラリの明示的なキャッシュscope。省略時は既存のspotIdだけを使う。 */
+  scopeKey?: string;
   /** 認証済みユーザー。未確定・匿名では未保存補正を端末から読まず、書かない。 */
   actorId?: string | null;
   canEdit: boolean;
@@ -355,10 +357,11 @@ export function BrowserPhotoEditingWorkbench(props: {
   const deleteDisabled = props.disableCloudDelete === true || library.place === "local";
   // 木の場所と並びと絞り込みはサーバーの一覧を絞る条件なので、一覧を読む前に決める
   const listView = useBrowserPhotoListView();
-  const albumLibrary = usePhotoCloudAlbums({ spotId: props.spotId });
+  const albumLibrary = usePhotoCloudAlbums({ spotId: props.spotId, scopeKey: props.scopeKey });
   const [viewMode, setViewMode] = useState<BrowserViewMode>("grid");
   const cloud = usePhotoCloudPhotos({
     spotId: props.spotId,
+    scopeKey: props.scopeKey,
     // 補正済み / 未補正で絞った一覧は、1 枚で見ている間は読み直さない（作業コピーの待ちの読み直しも止める。直した写真の補正済みが
     // 変わっても一覧から外さない = 1 枚の表示を閉じない）。一覧へ戻ると、止めていた間に古くなった一覧を読み直す（staleTime 0）。
     // 条件が無ければ今までどおり（戻っても読み直さない）。選別（採用だけ / 却下を隠す。niho-photo#47）で絞った一覧も同じ（1 枚で
@@ -474,6 +477,7 @@ export function BrowserPhotoEditingWorkbench(props: {
 
   const develop = useBrowserPhotoDevelop({
     spotId: props.spotId,
+    scopeKey: props.scopeKey,
     deviceClass: developDeviceClass,
     actorId: props.actorId ?? null,
     queryClient,
@@ -586,7 +590,15 @@ export function BrowserPhotoEditingWorkbench(props: {
   }, [items, library, selectedItem]);
   const currentAlbumId = browserCloudPlaceAlbumId(place);
   // この Mac のフォルダの木と、選んでいるフォルダ（フォルダのある写真の出どころだけ。C3 移行元設計）
-  const folders = useBrowserPhotoFolders({ library, spotId: props.spotId, place, selectPlace, setStatus, mountedRef });
+  const folders = useBrowserPhotoFolders({
+    library,
+    spotId: props.spotId,
+    scopeKey: props.scopeKey,
+    place,
+    selectPlace,
+    setStatus,
+    mountedRef,
+  });
 
   const deleteAlbum = async (albumId: string) => {
     if (albumId === currentAlbumId && !(await selectPlace("photos"))) throw new Error("could not leave album");
@@ -629,6 +641,7 @@ export function BrowserPhotoEditingWorkbench(props: {
   });
   const add = useBrowserPhotoAdd({
     spotId: props.spotId,
+    scopeKey: props.scopeKey,
     canEdit: props.canEdit,
     cloudOriginalsAllowed: props.cloudOriginalsAllowed,
     active: props.active,
@@ -683,12 +696,14 @@ export function BrowserPhotoEditingWorkbench(props: {
   const { patchLocalPhoto } = list;
   const favorites = usePhotoCloudFavorite({
     spotId: props.spotId,
+    scopeKey: props.scopeKey,
     applyLocal: (photoId, favorite) => patchLocalPhoto(photoId, { favorite }),
     onError: () => setStatus({ kind: "error", text: FAVORITE_FAILED_TEXT }),
   });
   // 選別のフラグ（採用 / 却下。niho-photo#47）。♥ と同じく押した直後に書き換え、送れなかったら戻して状態欄に 1 行
   const flags = usePhotoLibraryFlags({
     spotId: props.spotId,
+    scopeKey: props.scopeKey,
     applyLocal: (photoId, flag) => patchLocalPhoto(photoId, { flag }),
     onError: () => setStatus({ kind: "error", text: PHOTO_EDITING_FLAG_FAILED_TEXT }),
   });
@@ -697,6 +712,7 @@ export function BrowserPhotoEditingWorkbench(props: {
     !host.isDesktopApp() && !host.isNativeViewport();
   const bulk = useBrowserPhotoBulk({
     spotId: props.spotId,
+    scopeKey: props.scopeKey,
     deviceClass: developDeviceClass,
     canEdit: props.canEdit,
     wide,
@@ -774,10 +790,13 @@ export function BrowserPhotoEditingWorkbench(props: {
   // 木の件数はサーバーの全件（最初のページの値）。別の場所・並びを読んでいる間は前の値のまま出し（切り替えるたびに件数を
   // 消さない）、上げている途中の写真（まだ置き終えていないので counts に入っていない）を「写真」に足す。上げ終えた写真は、
   // 一覧を読み直すと counts に入る。一度も読めていなければ出さない
-  const lastCountsRef = useRef<{ spotId: string; counts: PhotoCloudCounts } | null>(null);
-  if (cloud.counts) lastCountsRef.current = { spotId: props.spotId, counts: cloud.counts };
+  const lastCountsRef = useRef<{ spotId: string; scopeKey?: string; counts: PhotoCloudCounts } | null>(null);
+  if (cloud.counts) lastCountsRef.current = { spotId: props.spotId, scopeKey: props.scopeKey, counts: cloud.counts };
   const serverCounts =
-    cloud.counts ?? (lastCountsRef.current?.spotId === props.spotId ? lastCountsRef.current.counts : null);
+    cloud.counts ??
+    (lastCountsRef.current?.spotId === props.spotId && lastCountsRef.current.scopeKey === props.scopeKey
+      ? lastCountsRef.current.counts
+      : null);
   const { allItems } = list;
   const treeCounts = useMemo<BrowserPhotoTreeCounts>(() => {
     if (!serverCounts) return null;
@@ -904,7 +923,9 @@ export function BrowserPhotoEditingWorkbench(props: {
     readEv100:
       capabilities.info === true && library.info
         ? (photoId: string) =>
-            loupeItem?.photo.id === photoId ? readBrowserPhotoEv100(queryClient, library, loupeItem.photo) : Promise.resolve(null)
+            loupeItem?.photo.id === photoId
+              ? readBrowserPhotoEv100(queryClient, library, loupeItem.photo, props.scopeKey)
+              : Promise.resolve(null)
         : null,
     surfaceIssue: open.maskSurfaceIssue,
     onRetrySurfaces: open.retryMaskSurfaces,
@@ -2503,6 +2524,7 @@ export function BrowserPhotoEditingWorkbench(props: {
                 ? undefined
                 : {
                     spotId: props.spotId,
+                    scopeKey: props.scopeKey,
                     builtinPresets,
                     // 別の端末の補正を読み直している間は当てない（読み直した補正が入る）
                     canApply: presets.canApply && !staleReloading && !draftRecoveryPending,
@@ -2687,6 +2709,7 @@ export function BrowserPhotoEditingWorkbench(props: {
                 ? (view) => (
                     <BrowserPhotoEditingPresets
                       spotId={props.spotId}
+                      scopeKey={props.scopeKey}
                       canEdit={props.canEdit}
                       builtinPresets={builtinPresets}
                       presets={presets}
@@ -2710,7 +2733,11 @@ export function BrowserPhotoEditingWorkbench(props: {
             panel={shownAdjustPanel}
             info={
               loupeItem ? (
-                <BrowserPhotoEditingInfo photo={loupeItem.photo} infoAvailable={capabilities.info === true} />
+                <BrowserPhotoEditingInfo
+                  photo={loupeItem.photo}
+                  infoAvailable={capabilities.info === true}
+                  scopeKey={props.scopeKey}
+                />
               ) : undefined
             }
             versions={
