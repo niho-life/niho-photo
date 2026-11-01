@@ -146,7 +146,7 @@ test("native tool lockの旧版とRust toolchain保存先の欠落をビルド�
   const engine = path.join(root, "packages/develop-engine");
   const lock = JSON.parse(readFileSync(path.join(root, "apps/camera/develop-sidecars.lock.json"), "utf8"));
   const versions = validateNativeLock(engine, lock);
-  assert.equal(versions.nihoDevelopRender, "0.26.0");
+  assert.equal(versions.nihoDevelopRender, "0.27.0");
   assert.throws(() => validateNativeLock(engine, { ...lock, nihoDevelopRender: { version: "0.16.0" } }), /tool version/u);
   const isolatedRoot = temp("niho-photo-default-rustup-");
   const env = officialBuildEnvironment({ HOME: "/build/home", PATH: "/usr/bin:/bin" }, { workspace: "/source", isolatedRoot, publicFirebaseKey: `AIza${"A".repeat(35)}` });

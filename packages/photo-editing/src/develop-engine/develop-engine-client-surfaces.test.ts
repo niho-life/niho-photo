@@ -7,7 +7,7 @@ import { neutralDevelopSettings, type DevelopSettings } from "./develop-settings
 
 /**
  * 段 2 の wasm の面の受け渡し（M4 #68）: 描く前に要る面を 1 回だけ渡す・読めない面は型付きの失敗・待っている間の追い越し・開き直しの
- * 渡し直し・上限で手放す・重ね表示・書き出しに添える・面を作る。
+ * 渡し直し・上限で手放す・重ね表示・書き出しに添える・面を作る・空の面を探す（niho-photo#141）。
  */
 
 const MANIFEST_URL = "https://photo.example.test/develop-engine/niho-2/manifest.json";
@@ -50,11 +50,15 @@ function brush(id: string, n: number, adjust: DevelopMask["adjust"] = { exposure
   return { id, kind: "brush", enabled: true, invert: false, surface: { id: surfaceId(n), width: 4, height: 3 }, adjust };
 }
 
+function sky(id: string, n: number): DevelopMask {
+  return { id, kind: "sky", enabled: true, invert: false, surface: { id: surfaceId(n), width: 4, height: 3 }, adjust: { exposure: -1 } };
+}
+
 function settingsWith(...masks: DevelopMask[]): DevelopSettings {
   return writeDevelopMasks(neutralDevelopSettings(), masks);
 }
 
-async function readyEngine(options: { source?: DevelopMaskSurfaceSource; masks?: unknown } = {}) {
+async function readyEngine(options: { source?: DevelopMaskSurfaceSource; masks?: unknown; skyDetection?: boolean } = {}) {
   const worker = new FakeWorker();
   const source = options.source ?? vi.fn(async (id: string) => new Uint8Array([0x89, id.length]));
   const engine = createDevelopEngine({
@@ -64,7 +68,14 @@ async function readyEngine(options: { source?: DevelopMaskSurfaceSource; masks?:
   });
   const ready = engine.ready();
   const init = worker.requests("init")[0]!;
-  worker.respond({ type: "ready", id: init.id, version: "0.19.0", runtime: "wasm", masks: (options.masks ?? SURFACES) as never });
+  worker.respond({
+    type: "ready",
+    id: init.id,
+    version: "0.19.0",
+    runtime: "wasm",
+    masks: (options.masks ?? SURFACES) as never,
+    ...(options.skyDetection ? { skyDetection: true as const } : {}),
+  });
   expect(await ready).toBe(true);
   return { worker, engine, source };
 }
@@ -293,5 +304,47 @@ describe("面の受け渡し（createDevelopEngine）", () => {
     const invalidRequest = worker.requests("setMaskSurface")[1]!;
     worker.respond({ type: "error", id: invalidRequest.id, message: `maskSurfaceInvalid: surface ${surfaceId(43)}: not a PNG` });
     await expect(invalid).rejects.toMatchObject({ code: "maskSurfaceInvalid", surfaceId: surfaceId(43) });
+  });
+
+  it("空の検出（niho-photo#141）は skyDetection の付いた wasm だけに送り、作った面の PNG を覚えて読み口を読まずに渡す", async () => {
+    const { worker, engine, source } = await readyEngine({ skyDetection: true });
+    expect(engine.supportsSkyDetection!()).toBe(true);
+    const settings = neutralDevelopSettings();
+    const detected = engine.detectSky!(settings, 13.5);
+    const request = worker.requests("detectSky")[0]!;
+    expect(request).toEqual({ type: "detectSky", id: request.id, settingsJson: JSON.stringify(settings), ev100: 13.5 });
+    worker.respond({
+      type: "skyDetected",
+      id: request.id,
+      surface: { surfaceId: surfaceId(7), width: 4, height: 3, png: new Uint8Array([9, 7]).buffer },
+    });
+    await expect(detected).resolves.toEqual({ id: surfaceId(7), width: 4, height: 3, png: new Uint8Array([9, 7]) });
+    await expect(engine.maskSurfacePng!(surfaceId(7))).resolves.toEqual(new Uint8Array([9, 7]));
+    // 次の描画は覚えた PNG を渡す（置き場を読まない）
+    void engine.render(settingsWith(sky("m1", 7)), { maxDimension: 640, interactive: false });
+    await flush();
+    const set = worker.requests("setMaskSurface")[0]!;
+    expect(set.surfaceId).toBe(surfaceId(7));
+    expect([...new Uint8Array(set.png)]).toEqual([9, 7]);
+    expect(source).not.toHaveBeenCalled();
+
+    // 空が無い・露出が分からない（有限でない露出も送らない）
+    const none = engine.detectSky!(settings, null);
+    const noneRequest = worker.requests("detectSky")[1]!;
+    expect(noneRequest.ev100).toBeNull();
+    worker.respond({ type: "skyDetected", id: noneRequest.id, surface: null });
+    await expect(none).resolves.toBeNull();
+    const failed = engine.detectSky!(settings, Number.NaN);
+    const failedRequest = worker.requests("detectSky")[2]!;
+    expect(failedRequest.ev100).toBeNull();
+    worker.respond({ type: "error", id: failedRequest.id, message: "no photo is open" });
+    await expect(failed).rejects.toThrow("no photo is open");
+  });
+
+  it("skyDetection の無い ready（古い wasm）では空を探さず、要求も送らない", async () => {
+    const { worker, engine } = await readyEngine();
+    expect(engine.supportsSkyDetection!()).toBe(false);
+    await expect(engine.detectSky!({}, 14)).rejects.toThrow("develop engine cannot detect the sky");
+    expect(worker.requests("detectSky")).toEqual([]);
   });
 });

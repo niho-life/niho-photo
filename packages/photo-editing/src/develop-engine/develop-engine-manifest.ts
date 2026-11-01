@@ -11,7 +11,7 @@
 export const DEVELOP_ENGINE_VERSION = "niho-14";
 
 /** この画面が読む crate の版（manifest の `version` とファイル名）。 */
-export const DEVELOP_ENGINE_CRATE_VERSION = "0.26.0";
+export const DEVELOP_ENGINE_CRATE_VERSION = "0.27.0";
 
 /** バージョン付きのファイル名や診断表示で使う build ID。 */
 export const DEVELOP_ENGINE_BUILD = `${DEVELOP_ENGINE_VERSION}-${DEVELOP_ENGINE_CRATE_VERSION}`;
@@ -23,6 +23,11 @@ export type DevelopEngineManifest = {
   wasmUrl: string;
   jsUrl: string;
   threads: { wasmUrl: string; jsUrl: string } | null;
+  /**
+   * 空の検出のモデル（niho-photo#141。`files` の `niho_sky_model-<crate 版>.json`〔層の見出し〕と `.f32`〔重み〕。#158 の
+   * `train_sky.py export` の `layout.json`・`weights.f32`）。両方が無ければ null（「空」を wasm で探さない）
+   */
+  skyModel: { layoutUrl: string; weightsUrl: string } | null;
 };
 
 /** bundle固有manifestの置き場（旧bundle向けのmanifest.jsonは更新しない）。 */
@@ -62,5 +67,8 @@ export function parseDevelopEngineManifest(value: unknown, manifestUrl: string):
   const threadsWasm = pickFile(threadFiles, `niho_develop_wasm_threads_bg-${DEVELOP_ENGINE_CRATE_VERSION}.wasm`, manifestUrl);
   const threadsJs = pickFile(threadFiles, `niho_develop_wasm_threads-${DEVELOP_ENGINE_CRATE_VERSION}.js`, manifestUrl);
   const threads = threadsWasm && threadsJs ? { wasmUrl: threadsWasm, jsUrl: threadsJs } : null;
-  return { engine: DEVELOP_ENGINE_VERSION, version: DEVELOP_ENGINE_CRATE_VERSION, wasmUrl, jsUrl, threads };
+  const skyLayout = pickFile(value.files, `niho_sky_model-${DEVELOP_ENGINE_CRATE_VERSION}.json`, manifestUrl);
+  const skyWeights = pickFile(value.files, `niho_sky_model-${DEVELOP_ENGINE_CRATE_VERSION}.f32`, manifestUrl);
+  const skyModel = skyLayout && skyWeights ? { layoutUrl: skyLayout, weightsUrl: skyWeights } : null;
+  return { engine: DEVELOP_ENGINE_VERSION, version: DEVELOP_ENGINE_CRATE_VERSION, wasmUrl, jsUrl, threads, skyModel };
 }

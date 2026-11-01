@@ -1,0 +1,148 @@
+{
+ "long": 384,
+ "inputs": "rgb",
+ "channels": [
+  24,
+  48,
+  72,
+  96
+ ],
+ "floats": 769009,
+ "layers": [
+  {
+   "name": "stem.0",
+   "in": 3,
+   "out": 24,
+   "stride": 2,
+   "relu": true,
+   "weights": 0,
+   "bias": 648
+  },
+  {
+   "name": "stem.1",
+   "in": 24,
+   "out": 24,
+   "stride": 1,
+   "relu": true,
+   "weights": 672,
+   "bias": 5856
+  },
+  {
+   "name": "enc2.0",
+   "in": 24,
+   "out": 48,
+   "stride": 2,
+   "relu": true,
+   "weights": 5880,
+   "bias": 16248
+  },
+  {
+   "name": "enc2.1",
+   "in": 48,
+   "out": 48,
+   "stride": 1,
+   "relu": true,
+   "weights": 16296,
+   "bias": 37032
+  },
+  {
+   "name": "enc3.0",
+   "in": 48,
+   "out": 72,
+   "stride": 2,
+   "relu": true,
+   "weights": 37080,
+   "bias": 68184
+  },
+  {
+   "name": "enc3.1",
+   "in": 72,
+   "out": 72,
+   "stride": 1,
+   "relu": true,
+   "weights": 68256,
+   "bias": 114912
+  },
+  {
+   "name": "enc4.0",
+   "in": 72,
+   "out": 96,
+   "stride": 2,
+   "relu": true,
+   "weights": 114984,
+   "bias": 177192
+  },
+  {
+   "name": "enc4.1",
+   "in": 96,
+   "out": 96,
+   "stride": 1,
+   "relu": true,
+   "weights": 177288,
+   "bias": 260232
+  },
+  {
+   "name": "ctx.0",
+   "in": 96,
+   "out": 96,
+   "stride": 2,
+   "relu": true,
+   "weights": 260328,
+   "bias": 343272
+  },
+  {
+   "name": "ctx.1",
+   "in": 96,
+   "out": 96,
+   "stride": 1,
+   "relu": true,
+   "weights": 343368,
+   "bias": 426312
+  },
+  {
+   "name": "dec4",
+   "in": 192,
+   "out": 96,
+   "stride": 1,
+   "relu": true,
+   "weights": 426408,
+   "bias": 592296
+  },
+  {
+   "name": "dec3",
+   "in": 168,
+   "out": 72,
+   "stride": 1,
+   "relu": true,
+   "weights": 592392,
+   "bias": 701256
+  },
+  {
+   "name": "dec2",
+   "in": 120,
+   "out": 48,
+   "stride": 1,
+   "relu": true,
+   "weights": 701328,
+   "bias": 753168
+  },
+  {
+   "name": "dec1",
+   "in": 72,
+   "out": 24,
+   "stride": 1,
+   "relu": true,
+   "weights": 753216,
+   "bias": 768768
+  },
+  {
+   "name": "head",
+   "in": 24,
+   "out": 1,
+   "stride": 1,
+   "relu": false,
+   "weights": 768792,
+   "bias": 769008
+  }
+ ]
+}

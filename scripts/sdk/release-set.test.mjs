@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import ts from "typescript";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
@@ -26,6 +26,8 @@ import {
   rewriteThreadsRuntimeReferences,
   rewriteVersionedRuntimeReferences,
   runtimeBuildEnvironment,
+  SKY_MODEL_SOURCES,
+  skyModelFileName,
   threadsRuntimeBuildEnvironment,
   versionedRuntimeFileName,
   versionedThreadsRuntimeFileName,
@@ -133,6 +135,18 @@ test("Actions/REST artifact digestをcanonical SHA-256へ揃える", () => {
   assert.equal(normalizeArtifactDigest(digest), `sha256:${digest}`);
   assert.equal(normalizeArtifactDigest(`sha256:${digest}`), `sha256:${digest}`);
   assert.throws(() => normalizeArtifactDigest("sha256:broken"));
+});
+
+test("空の検出のモデルは repo の層の見出しと重みを版つきの名前で runtime に足す", () => {
+  assert.equal(skyModelFileName(".json", "0.27.0"), "niho_sky_model-0.27.0.json");
+  assert.equal(skyModelFileName(".f32", "0.27.0"), "niho_sky_model-0.27.0.f32");
+  // 画面の manifest の読み方（develop-engine-manifest.ts）と同じ名前
+  const manifestSource = readFileSync(path.join(realRoot, "packages/photo-editing/src/develop-engine/develop-engine-manifest.ts"), "utf8");
+  assert.match(manifestSource, /niho_sky_model-\$\{DEVELOP_ENGINE_CRATE_VERSION\}\.json/);
+  assert.match(manifestSource, /niho_sky_model-\$\{DEVELOP_ENGINE_CRATE_VERSION\}\.f32/);
+  for (const [source] of SKY_MODEL_SOURCES) assert.ok(statSync(path.join(realRoot, source)).isFile(), source);
+  const layout = JSON.parse(readFileSync(path.join(realRoot, SKY_MODEL_SOURCES[0][0]), "utf8"));
+  assert.equal(statSync(path.join(realRoot, SKY_MODEL_SOURCES[1][0])).size, layout.floats * 4);
 });
 
 test("wasm-bindgen の出力名と JS/d.ts 内部参照を同じ crate version へ固定する", () => {

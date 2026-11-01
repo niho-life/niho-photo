@@ -98,7 +98,7 @@ import {
 } from "./browser-photo-editing-albums";
 import { BrowserPhotoEditingAdjustments } from "./browser-photo-editing-adjustments";
 import { BrowserPhotoEditingBulkMenu } from "./browser-photo-editing-bulk-menu";
-import { BrowserPhotoEditingInfo } from "./browser-photo-editing-info";
+import { BrowserPhotoEditingInfo, readBrowserPhotoEv100 } from "./browser-photo-editing-info";
 import {
   BrowserPhotoCloudShareSheet,
   type BrowserPhotoCloudSharingBinding,
@@ -900,6 +900,12 @@ export function BrowserPhotoEditingWorkbench(props: {
       ? (photoId, kind, detectOptions) => library.detectMaskSurface!(photoId, kind, detectOptions)
       : null,
     detectKinds: photoEditingMaskDetectKinds(capabilities),
+    // 出どころが空を作れなければ wasm が探す（niho-photo#141）。撮影時の露出は「情報」と同じ問い合わせから（読めなければ null）
+    readEv100:
+      capabilities.info === true && library.info
+        ? (photoId: string) =>
+            loupeItem?.photo.id === photoId ? readBrowserPhotoEv100(queryClient, library, loupeItem.photo) : Promise.resolve(null)
+        : null,
     surfaceIssue: open.maskSurfaceIssue,
     onRetrySurfaces: open.retryMaskSurfaces,
   });

@@ -16,6 +16,7 @@ import {
   type DevelopMask,
   type DevelopMaskAdjustKey,
   type DevelopMaskHslBand,
+  type DevelopMaskSurface,
 } from "../develop-engine/develop-masks";
 import type { DevelopSettings } from "../develop-engine/develop-settings";
 import type { PhotoLibraryMaskDetectionKind, PhotoLibraryMaskDetectionResult } from "../library/photo-library";
@@ -146,18 +147,21 @@ export function photoEditingMaskExportBlocked(capabilities: {
 /**
  * 足せる種類（wasm が描ける種類のうち、画面で作れるもの）。ブラシは面を受け渡せる wasm（`surfaces`）で、写真の出どころが面を保存
  * できる（`canSaveSurfaces`）ときだけ。被写体・空は面を受け渡せる wasm で、写真の出どころがその種類の面を作れる（`detectKinds`）
- * ときだけ。
+ * ときだけ。空は、出どころが作れなくても、wasm が空を探せて（`engineSky`。niho-photo#141）面を保存できれば足せる。
  */
 function addKinds(
   support: DevelopMaskCapabilities | null,
   canSaveSurfaces: boolean,
   detectKinds: readonly PhotoEditingMaskDetectKind[],
+  engineSky: boolean,
 ): PhotoEditingMaskAddKind[] {
   if (!support) return [];
   const kinds: PhotoEditingMaskAddKind[] = PHOTO_EDITING_MASK_SHAPE_KINDS.filter((kind) => support.kinds.includes(kind));
   if (canSaveSurfaces && support.surfaces === true && support.kinds.includes("brush")) kinds.push("brush");
   if (support.surfaces === true) {
-    kinds.push(...PHOTO_EDITING_MASK_DETECT_KINDS.filter((kind) => detectKinds.includes(kind) && support.kinds.includes(kind)));
+    const made = (kind: PhotoEditingMaskDetectKind) =>
+      detectKinds.includes(kind) || (kind === "sky" && engineSky && canSaveSurfaces);
+    kinds.push(...PHOTO_EDITING_MASK_DETECT_KINDS.filter((kind) => made(kind) && support.kinds.includes(kind)));
   }
   return kinds;
 }
@@ -200,10 +204,15 @@ export function useBrowserPhotoMasks(params: {
   saveMaskSurface?: ((photoId: string, png: Uint8Array) => Promise<{ id: string }>) | null;
   /**
    * 被写体・空の面を写真から作る口（写真の出どころの `detectMaskSurface`。`capabilities.maskDetection` で作れる種類を `detectKinds`
-   * に渡す。無ければ「被写体」「空」を出さない）。写真は開いている session の `photoId`
+   * に渡す。無ければ「被写体」を出さない。空は wasm が探せれば出す）。写真は開いている session の `photoId`
    */
   detectMaskSurface?: PhotoEditingMaskDetectSurface | null;
   detectKinds?: readonly PhotoEditingMaskDetectKind[];
+  /**
+   * 空を wasm で探すとき（niho-photo#141）の撮影時の露出（ISO 100 の EV。写真の情報の ExposureTime・FNumber・ISO から）。読めない・
+   * 分からなければ null（写真の中の相対の明るさで探す）。無ければ露出なしで探す。写真は開いている session の `photoId`
+   */
+  readEv100?: ((photoId: string) => Promise<number | null>) | null;
   /** 写真の描画が面を読めなかったマスク（無ければ null） */
   surfaceIssue?: PhotoEditingMaskSurfaceIssue | null;
   /** 面を読み直して描き直す */
@@ -218,7 +227,13 @@ export function useBrowserPhotoMasks(params: {
   const random = params.random ?? Math.random;
   const saveMaskSurface = params.saveMaskSurface ?? null;
   const detectMaskSurface = params.detectMaskSurface ?? null;
-  const kinds = addKinds(support, saveMaskSurface !== null, detectMaskSurface ? (params.detectKinds ?? []) : []);
+  const detectKinds = detectMaskSurface ? (params.detectKinds ?? []) : [];
+  /** wasm が空を探せるか（`engine.supportsSkyDetection()`。描ける種類を読んだ後〔wasm を起こした後〕に確かめる。niho-photo#141） */
+  const [engineSky, setEngineSky] = useState(false);
+  useEffect(() => {
+    setEngineSky(support?.surfaces === true && engineRef.current?.supportsSkyDetection?.() === true);
+  }, [engineRef, support]);
+  const kinds = addKinds(support, saveMaskSurface !== null, detectKinds, engineSky);
   const available = wide && photoKey !== null && kinds.length > 0;
   const [active, setActive] = useState(false);
   const [source, setSource] = useState<{ key: string; size: DevelopSize } | null>(null);
@@ -390,12 +405,13 @@ export function useBrowserPhotoMasks(params: {
   };
 
   /**
-   * 被写体・空のマスクを足す: 写真の出どころが作業画像からその範囲の面を作って写真に保存し（数秒。取り消せる）、
-   * `{ kind, surface }` を 1 単位で足して選ぶ。範囲が無ければ理由の 1 行。写真を替えた・道具を離れた・取り消したら足さない。
+   * 写真から範囲を探して面のマスクを足す（被写体・空）: `find` が面を作って写真に保存し（数秒。取り消せる）、`{ kind, surface }` を
+   * 1 単位で足して選ぶ。範囲が無ければ（null）理由の 1 行、失敗も理由の 1 行。写真を替えた・道具を離れた・取り消したら足さない。
    */
-  const addDetected = (kind: PhotoEditingMaskDetectKind) => {
-    const session = developSessionRef.current;
-    if (!session || !detectMaskSurface) return;
+  const detectAndAdd = (
+    kind: PhotoEditingMaskDetectKind,
+    find: (signal: AbortSignal) => Promise<DevelopMaskSurface | null>,
+  ) => {
     const generation = generationRef.current;
     const controller = new AbortController();
     detectControllerRef.current?.abort();
@@ -411,11 +427,11 @@ export function useBrowserPhotoMasks(params: {
       run();
     };
     void Promise.resolve()
-      .then(() => detectMaskSurface(session.photoId, kind, { developSettings: settingsRef.current, signal: controller.signal }))
+      .then(() => find(controller.signal))
       .then(
-        (result) =>
+        (surface) =>
           settle(() => {
-            if (result.kind === "notFound") {
+            if (!surface) {
               setAddNotice(PHOTO_EDITING_MASK_DETECT_NOT_FOUND_TEXTS[kind]);
               return;
             }
@@ -424,14 +440,7 @@ export function useBrowserPhotoMasks(params: {
             changeMasks((current) => {
               if (current.length >= max) return current;
               added = true;
-              return addPhotoEditingMask(current, {
-                id,
-                kind,
-                enabled: true,
-                invert: false,
-                surface: { id: result.id, width: result.width, height: result.height },
-                adjust: {},
-              });
+              return addPhotoEditingMask(current, { id, kind, enabled: true, invert: false, surface, adjust: {} });
             }, "commit");
             if (added) setSelectedId(id);
           }),
@@ -439,10 +448,47 @@ export function useBrowserPhotoMasks(params: {
       );
   };
 
+  /** 被写体・空のマスクを、写真の出どころが作業画像から作る面で足す（niho-photo#135）。 */
+  const addDetected = (kind: PhotoEditingMaskDetectKind) => {
+    const session = developSessionRef.current;
+    if (!session || !detectMaskSurface) return;
+    detectAndAdd(kind, async (signal) => {
+      const result = await detectMaskSurface(session.photoId, kind, { developSettings: settingsRef.current, signal });
+      return result.kind === "notFound" ? null : { id: result.id, width: result.width, height: result.height };
+    });
+  };
+
+  /**
+   * 空のマスクを、wasm が開いている写真の作業画像から探した面で足す（niho-photo#141。出どころが空を作れないとき）: 撮影時の露出を
+   * 読み（読めなければ相対の明るさ）、`engine.detectSky` の面をブラシと同じ口で写真に保存し（id を照らす。作った PNG はエンジンが
+   * 覚えて次の描画で渡す）、足して選ぶ。wasm の検出は途中で止められないので、取り消した・写真を替えたら結果を捨てて保存しない。
+   */
+  const addEngineSky = () => {
+    const engine = engineRef.current;
+    const session = developSessionRef.current;
+    if (!engine?.detectSky || !session || !saveMaskSurface) return;
+    const developSettings = settingsRef.current;
+    const readEv100 = params.readEv100 ?? null;
+    detectAndAdd("sky", async (signal) => {
+      const ev100 = readEv100 ? await readEv100(session.photoId).catch(() => null) : null;
+      if (signal.aborted) return null;
+      const detected = await engine.detectSky?.(developSettings, ev100);
+      if (!detected || signal.aborted) return null;
+      // 探した写真に保存する（写真を替えたら取り消し済み）
+      const saved = await saveMaskSurface(session.photoId, detected.png);
+      if (saved.id !== detected.id) throw new Error("saved mask surface has another id");
+      return { id: detected.id, width: detected.width, height: detected.height };
+    });
+  };
+
   const add = (kind: PhotoEditingMaskAddKind) => {
     if (!canAdd || !kinds.includes(kind) || !frame) return;
     if (kind === "brush") {
       addBrush();
+      return;
+    }
+    if (kind === "sky" && !detectKinds.includes("sky")) {
+      addEngineSky();
       return;
     }
     if (isDetectKind(kind)) {

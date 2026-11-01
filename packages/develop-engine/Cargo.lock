@@ -903,7 +903,7 @@ dependencies = [
 
 [[package]]
 name = "niho-base-raw"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -921,7 +921,7 @@ dependencies = [
 
 [[package]]
 name = "niho-camera-color"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "libm",
@@ -929,7 +929,7 @@ dependencies = [
 
 [[package]]
 name = "niho-camera-linear-probe"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "clap",
@@ -945,7 +945,7 @@ dependencies = [
 
 [[package]]
 name = "niho-camera-profile"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "niho-camera-color",
@@ -956,7 +956,7 @@ dependencies = [
 
 [[package]]
 name = "niho-develop"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "flate2",
  "image",
@@ -975,7 +975,7 @@ dependencies = [
 
 [[package]]
 name = "niho-develop-render"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "image",
  "niho-develop",
@@ -984,7 +984,7 @@ dependencies = [
 
 [[package]]
 name = "niho-develop-wasm"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "js-sys",
  "niho-develop",
@@ -995,7 +995,7 @@ dependencies = [
 
 [[package]]
 name = "niho-quality-probe"
-version = "0.26.0"
+version = "0.27.0"
 dependencies = [
  "anyhow",
  "clap",

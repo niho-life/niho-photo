@@ -10,7 +10,8 @@
 //! `Developer` of it at its own size: `render` interactive then final at
 //! [`MAX_DIMENSION`], `maskPlane` of [`MASK_ID`], `sampleColor` at
 //! [`SAMPLE_X`] / [`SAMPLE_Y`], `autoSettings`, `estimateUpright`
-//! ([`UPRIGHT_MODE`]), and a `thumbnail` ([`THUMBNAIL_MAX_DIMENSION`])
+//! ([`UPRIGHT_MODE`]), `setSkyModel` of [`sky_model`] and `detectSky`
+//! (without an exposure), and a `thumbnail` ([`THUMBNAIL_MAX_DIMENSION`])
 //! rendered at its own size, all with [`SETTINGS`]; a `Developer` of
 //! [`working_copy`]: `asShotWhite` and a final `render` of
 //! [`WORKING_COPY_SETTINGS`] at its own size; then `presetSettings`,
@@ -105,6 +106,72 @@ pub const UPRIGHT_MODE: u32 = 1;
 pub const PRESET_AMOUNT: f64 = 0.6;
 pub const XMP_OPTIONS: &str = r#"{"name":"api"}"#;
 
+/// A small synthetic sky model (`layout.json` text, `weights.f32` bytes;
+/// niho-photo#141): a U-Net of widths 4, 6, 8, 8 at a long side of 64
+/// whose weights are small hashed values, except that the stem keeps
+/// `b - r` and `r - b` in its first two channels, `dec1` passes them on
+/// from the skip and the head reads `12 * (b - r)`: the sky is where the
+/// photo is bluer than red ([`photo_png`]'s top). No learned weights.
+pub fn sky_model() -> (String, Vec<u8>) {
+    let widths = [4usize, 6, 8, 8];
+    let mut shapes = vec![
+        ("stem.0".to_string(), 3, 4, 2),
+        ("stem.1".to_string(), 4, 4, 1),
+    ];
+    for k in 1..widths.len() {
+        shapes.push((format!("enc{}.0", k + 1), widths[k - 1], widths[k], 2));
+        shapes.push((format!("enc{}.1", k + 1), widths[k], widths[k], 1));
+    }
+    shapes.push(("ctx.0".to_string(), 8, 8, 2));
+    shapes.push(("ctx.1".to_string(), 8, 8, 1));
+    for k in (1..=widths.len()).rev() {
+        let below = widths[k.min(widths.len() - 1)];
+        shapes.push((format!("dec{k}"), below + widths[k - 1], widths[k - 1], 1));
+    }
+    shapes.push(("head".to_string(), 4, 1, 1));
+    let mut state = 0x6b43_a9b5u32;
+    let mut noise = || {
+        state ^= state << 13;
+        state ^= state >> 17;
+        state ^= state << 5;
+        (state % 2001) as f32 / 100_000.0 - 0.01
+    };
+    let (mut values, mut layers) = (Vec::<f32>::new(), Vec::new());
+    for (name, cin, cout, stride) in shapes {
+        let start = values.len();
+        let mut w: Vec<f32> = (0..cout * cin * 9).map(|_| noise()).collect();
+        let mut b: Vec<f32> = (0..cout).map(|_| noise()).collect();
+        let center = |o: usize, i: usize| (o * cin + i) * 9 + 4;
+        let mut set = |taps: &[(usize, usize, f32)]| {
+            for &(o, i, v) in taps {
+                w[center(o, i)] = v;
+            }
+        };
+        match name.as_str() {
+            "stem.0" => {
+                set(&[(0, 0, -1.0), (0, 1, 0.0), (0, 2, 1.0)]);
+                set(&[(1, 0, 1.0), (1, 1, 0.0), (1, 2, -1.0)]);
+                b[..2].fill(0.0);
+            }
+            "stem.1" => set(&[(0, 0, 1.0), (1, 1, 1.0)]),
+            "dec1" => set(&[(0, cin - 4, 1.0), (1, cin - 3, 1.0)]),
+            "head" => set(&[(0, 0, 12.0), (0, 1, -12.0)]),
+            _ => {}
+        }
+        values.extend(&w);
+        values.extend(&b);
+        layers.push(serde_json::json!({
+            "name": name, "in": cin, "out": cout, "stride": stride, "relu": name != "head",
+            "weights": start, "bias": start + w.len(),
+        }));
+    }
+    let layout = serde_json::json!({
+        "long": 64, "inputs": "rgb", "channels": widths, "floats": values.len(), "layers": layers,
+    });
+    let weights = values.iter().flat_map(|v| v.to_le_bytes()).collect();
+    (layout.to_string(), weights)
+}
+
 /// The first bundled preset's XMP.
 pub fn preset_xmp() -> &'static str {
     niho_develop::xmp::BUILTIN_PRESETS[0].xmp
@@ -131,7 +198,7 @@ pub fn color_digest(lightness: f64, chroma: f64, hue: f64) -> String {
 }
 
 /// The results, in the order above: a SHA-256, a size or a short text.
-pub const EXPECTED: [(&str, &str); 24] = [
+pub const EXPECTED: [(&str, &str); 27] = [
     (
         "render",
         "fea876f2981be2c70d485f736012ebbd1130923e36bd93aff06fef0294b4ac33",
@@ -178,6 +245,15 @@ pub const EXPECTED: [(&str, &str); 24] = [
         "Developer.estimateUpright",
         "26083c64ba165d86d193435a3cf5dbe4b070bd98354539d3762217bacf084289",
     ),
+    (
+        "setSkyModel",
+        "{\"channels\":[4,6,8,8],\"inputs\":\"rgb\",\"long\":64}",
+    ),
+    (
+        "Developer.detectSky",
+        "c791ba2806bf700571627f59cff91b9cff2764085fc5072cdaf5eb7ec2c6314c",
+    ),
+    ("Developer.detectSky.size", "160x120"),
     (
         "Developer.thumbnail.render",
         "0af490ee372d3f993faf8c9919faf65d837b1192c1e04dff06f92e85f59bccda",

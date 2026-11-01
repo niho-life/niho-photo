@@ -66,6 +66,21 @@ export function formatPhotoInfoAperture(fNumber: number | null | undefined): str
   return value === null ? null : `f/${trimDecimal(value, 1)}`;
 }
 
+/**
+ * 撮影時の露出（ISO 100 の EV。空の検出の「明るい」の基準。niho-photo#141）: `log2(N² / t) − log2(ISO / 100)`。絞り・シャッター
+ * 速度・ISO のどれかが無い・非有限・0 以下なら null（写真の中の相対の明るさで探す）。
+ */
+export function photoInfoEv100(
+  info: Pick<PhotoLibraryPhotoInfo, "iso" | "exposureTimeSeconds" | "fNumber"> | null | undefined,
+): number | null {
+  const fNumber = positiveNumber(info?.fNumber);
+  const seconds = positiveNumber(info?.exposureTimeSeconds);
+  const iso = positiveNumber(info?.iso);
+  if (fNumber === null || seconds === null || iso === null) return null;
+  const ev100 = Math.log2((fNumber * fNumber) / seconds) - Math.log2(iso / 100);
+  return Number.isFinite(ev100) ? ev100 : null;
+}
+
 /** 焦点距離（「35 mm」。小数は 1 桁まで）。 */
 export function formatPhotoInfoFocalLength(millimeters: number | null | undefined): string | null {
   const value = positiveNumber(millimeters);

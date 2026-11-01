@@ -273,6 +273,17 @@ function bindgenOutputFiles(root, prefix = "") {
   }).sort();
 }
 
+// 空の検出のモデル（niho-photo#141・#158）。repo の層の見出しと重みを、版つきの名前で runtime の `files` に足す
+// （画面の Worker と Mac アプリが初めての「空」で読む。develop-engine-manifest.ts の `skyModel`）。
+export const SKY_MODEL_SOURCES = [
+  ["packages/develop-engine/crates/niho-develop/sky/layout.json", ".json"],
+  ["packages/develop-engine/crates/niho-develop/sky/weights.f32", ".f32"],
+];
+
+export function skyModelFileName(extension, version) {
+  return `niho_sky_model-${version}${extension}`;
+}
+
 function collectBindgenOutput(bindgenOutput, rename, rewrite) {
   return bindgenOutputFiles(bindgenOutput).map((name) => {
     const renamed = rename(name);
@@ -320,6 +331,11 @@ export function buildDevelopEngineRuntime(outputDirectory) {
     run("wasm-bindgen", ["--target", "web", "--out-dir", bindgenOutput, "--out-name", "niho_develop_wasm", path.join(isolated.target, "wasm32-unknown-unknown/release/niho_develop_wasm.wasm")], buildEnv);
     const generated = collectBindgenOutput(bindgenOutput, (name) => versionedRuntimeFileName(name, version), (name, bytes) => rewriteVersionedRuntimeReferences(name, bytes, version));
     if (![".js", ".wasm", ".d.ts"].every((extension) => generated.some(({ name }) => name.endsWith(extension)))) throw new SdkReleaseError("wasm-bindgen runtime dependency closure が不足しています");
+    // 空の検出のモデルは、build した commit の内容を写す（作業ツリーではなく）
+    for (const [source, extension] of SKY_MODEL_SOURCES) {
+      const bytes = git(["show", `${commit}:${source}`], null);
+      generated.push({ name: skyModelFileName(extension, version), bytes, sha256: hash(bytes), size: bytes.length });
+    }
 
     // スレッドの wasm（crossOriginIsolated の画面だけが読む。Mac アプリには入れない）
     const threadsEnv = threadsRuntimeBuildEnvironment(process.env, isolated);
