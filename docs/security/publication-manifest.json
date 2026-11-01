@@ -1277,11 +1277,12 @@
         "path": "packages/photo-editing/src/editor/browser-photo-editing-selection-bar.tsx",
         "sha256": "d547b833766548ceea90bafb07ee1c6e943aa8a6828c357a8a52b26040dc9855"
       },
-      "outputSha256": "bfd0dc72ce847185c43f0e9d123e778b4244117370b41a0c60ec1bbe8e3ade17",
+      "outputSha256": "8f1e0df339a47dfde206081247e2ca688f891bc97dd20c33fc881d6b8ddbc62c",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
-        "React 19のRefObject境界と互換にする"
+        "React 19のRefObject境界と互換にする",
+        "P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定"
       ]
     },
     {
@@ -11942,13 +11943,13 @@
     },
     {
       "path": "scripts/sdk/release-set-lib.mjs",
-      "sha256": "ecbb03f82413cd651a17cf9124c176dd29218f795398467f21d0fd50cb709834",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱"
+      "sha256": "b17fa55f3f372a9155ee18f5cf8d9808746775552d350f04257d7d55b49da10f",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定"
     },
     {
       "path": "scripts/sdk/release-set.test.mjs",
-      "sha256": "a22a2990e4b859a5da47efc68c935d99c4dd9bdad32c8977a64529eabd04d466",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set.test.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: #141 空のモデルの runtime のファイル名と置き場の試験を足す\n変更理由: 型宣言exportとconsumer closureを検証"
+      "sha256": "a9805f6949bf569427bda37f4924ba48d92b4bf3e3eeb5fb91bd20b219b3ab61",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set.test.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: #141 空のモデルの runtime のファイル名と置き場の試験を足す\n変更理由: 型宣言exportとconsumer closureを検証\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定"
     },
     {
       "path": "scripts/sdk/smoke-real-engine.mjs",
@@ -12087,8 +12088,8 @@
     },
     {
       "path": "sdk/release-set.json",
-      "sha256": "4a44e1ada3832973b96f4ca87ca28a36eac6dc44251b574c7b99e5d7dc00d97c",
-      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布"
+      "sha256": "6977b105c35c2245dced283762a1e21790df90e689be5514918e7dc14fd52176",
+      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定"
     },
     {
       "path": "apps/camera/src-tauri/src/cloud_copy_source.rs",
@@ -12112,8 +12113,8 @@
     },
     {
       "path": "scripts/sdk/smoke-consumer.mjs",
-      "sha256": "69f30caab12f396f247d4646c14222727e5e35b7d37b27c9ef7ca7cf904a0a70",
-      "origin": "公開SDKの外部consumer smoke。React 19 declarationsと型export境界の検証を追加。"
+      "sha256": "62e87f65aa87a90869eb9b9b6d3d01c62fe43af8b3c5a0cc06806e2034d0baa7",
+      "origin": "公開SDKの外部consumer smoke。React 19 declarationsと型export境界の検証を追加。\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定"
     }
   ],
   "excludedSources": [

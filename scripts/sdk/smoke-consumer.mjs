@@ -117,6 +117,11 @@ const workbench = <BrowserPhotoEditingWorkbench {...workbenchProps} />;
 const dialog = <PhotoEditingDialogHost />;
 export { dialog, library, workbench };
 `);
+    const publicDeclarations = ["niho-photo-editing", "niho-photo-ui", "niho-photo-cloud-contract"].flatMap((name) =>
+      outputFiles(path.join(consumer, "node_modules", name, "types"))
+        .filter((file) => file.endsWith(".d.ts"))
+        .map((file) => `node_modules/${name}/types/${file}`),
+    );
     writeFileSync(path.join(consumer, "tsconfig.react19.json"), `${JSON.stringify({
       compilerOptions: {
         target: "ES2022",
@@ -138,7 +143,7 @@ export { dialog, library, workbench };
           "react/jsx-dev-runtime": ["node_modules/@types/react19/jsx-dev-runtime.d.ts"],
         },
       },
-      include: ["src/react19-consumer.tsx"],
+      files: ["src/react19-consumer.tsx", ...publicDeclarations],
     }, null, 2)}\n`);
     writeFileSync(path.join(consumer, "vite.config.mjs"), `export default { build: { outDir: "dist", emptyOutDir: true } };\n`);
     writeFileSync(path.join(consumer, "contract-smoke.mjs"), `

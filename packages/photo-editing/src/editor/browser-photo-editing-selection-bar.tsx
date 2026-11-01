@@ -111,6 +111,7 @@ export function BrowserPhotoEditingSelectionBar(props: {
   ) : null;
   const exportButton = props.exportAction ? (
     <button
+      // React 18のintrinsic ref型へ合わせるだけで、同じbutton refをruntimeへ渡す。
       ref={props.exportAction.buttonRef as RefObject<HTMLButtonElement>}
       type="button"
       disabled={props.exportAction.stopping || props.exportAction.finalizing || props.exportAction.disabled}

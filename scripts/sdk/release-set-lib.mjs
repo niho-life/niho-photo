@@ -332,7 +332,7 @@ function exportTargets(target) {
   return Object.values(target).flatMap(exportTargets);
 }
 
-export function auditTypeScriptClosure(stage, manifest, { declarationDependencies = new Set() } = {}) {
+export function auditTypeScriptClosure(stage, manifest) {
   const files = new Set();
   function visit(directory, prefix = "") {
     for (const name of readdirSync(directory).sort()) {
@@ -358,7 +358,7 @@ export function auditTypeScriptClosure(stage, manifest, { declarationDependencie
       }
       const dependency = specifier.startsWith("@") ? specifier.split("/").slice(0, 2).join("/") : specifier.split("/")[0];
       if (["next", "@tauri-apps", "niho-ui"].some((forbidden) => dependency === forbidden || dependency.startsWith(`${forbidden}/`))) throw new SdkReleaseError(`SDK host 境界外の import があります: ${dependency}`);
-      if (!dependency.startsWith("node:") && !peers.has(dependency) && !(file.endsWith(".d.ts") && declarationDependencies.has(dependency))) throw new SdkReleaseError(`runtime dependency が peerDependencies にありません: ${dependency}`);
+      if (!dependency.startsWith("node:") && !peers.has(dependency)) throw new SdkReleaseError(`runtime dependency が peerDependencies にありません: ${dependency}`);
     }
   }
   for (const target of Object.values(manifest.exports ?? {}).flatMap(exportTargets)) {
@@ -434,25 +434,39 @@ function linkDeclarationDependency(dependencyRoot, dependency, source) {
   symlinkSync(source, target, "dir");
 }
 
-function declarationDependencyClosure(manifest) {
-  const dependencies = new Set(Object.keys(manifest.peerDependencies ?? {}));
-  const queue = [...dependencies];
-  while (queue.length) {
-    const dependency = queue.shift();
-    const manifestPath = path.join(TOOLING_ROOT, "node_modules", ...dependency.split("/"), "package.json");
-    let dependencyManifest;
-    try {
-      dependencyManifest = JSON.parse(readFileSync(manifestPath, "utf8"));
-    } catch {
-      continue;
-    }
-    for (const transitive of Object.keys(dependencyManifest.dependencies ?? {})) {
-      if (dependencies.has(transitive)) continue;
-      dependencies.add(transitive);
-      queue.push(transitive);
-    }
+function declarationTypesTarget(target) {
+  if (typeof target === "string") return target.endsWith(".d.ts") || target.endsWith(".d.cts") ? target : undefined;
+  if (!target || typeof target !== "object" || Array.isArray(target)) return undefined;
+  return declarationTypesTarget(target.import?.types) ?? declarationTypesTarget(target.types) ?? Object.values(target).map(declarationTypesTarget).find(Boolean);
+}
+
+function assertDeclarationPeerReexport(peer, dependency) {
+  const peerRoot = path.join(TOOLING_ROOT, "node_modules", ...peer.split("/"));
+  let peerManifest;
+  try {
+    peerManifest = JSON.parse(readFileSync(path.join(peerRoot, "package.json"), "utf8"));
+  } catch {
+    throw new SdkReleaseError(`declaration peer manifest がありません: ${peer}`);
   }
-  return dependencies;
+  const target = declarationTypesTarget(peerManifest.exports?.["."]) ?? declarationTypesTarget(peerManifest.types);
+  if (!target?.startsWith("./")) throw new SdkReleaseError(`declaration peer の型入口がありません: ${peer}`);
+  const declaration = readFileSync(path.join(peerRoot, target), "utf8");
+  const escaped = dependency.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  if (!new RegExp(`export\\s+\\*\\s+from\\s+["']${escaped}["']`, "u").test(declaration)) {
+    throw new SdkReleaseError(`declaration peer が型をre-exportしていません: ${peer} <- ${dependency}`);
+  }
+}
+
+function normalizeDeclarationSpecifiers(text, manifest) {
+  const rewrites = new Map([["@tanstack/query-core", "@tanstack/react-query"]]);
+  let normalized = text;
+  for (const [dependency, peer] of rewrites) {
+    if (!ts.preProcessFile(normalized, true, true).importedFiles.some(({ fileName }) => fileName === dependency)) continue;
+    if (!Object.hasOwn(manifest.peerDependencies ?? {}, peer)) continue;
+    assertDeclarationPeerReexport(peer, dependency);
+    normalized = normalized.replaceAll(`"${dependency}"`, `"${peer}"`).replaceAll(`'${dependency}'`, `'${peer}'`);
+  }
+  return normalized;
 }
 
 function emitSourceDeclarations({ repoRoot, definition, stage, manifest, sourceStages }) {
@@ -506,10 +520,12 @@ function emitSourceDeclarations({ repoRoot, definition, stage, manifest, sourceS
   const outputs = collectFiles(outputRoot);
   if (!outputs.length || outputs.some((name) => !name.endsWith(".d.ts"))) throw new SdkReleaseError(`TypeScript declaration closureが不正です: ${definition.id}`);
   for (const name of outputs) {
-    const text = readFileSync(path.join(outputRoot, name), "utf8");
+    const output = path.join(outputRoot, name);
+    const text = normalizeDeclarationSpecifiers(readFileSync(output, "utf8"), manifest);
+    writeFileSync(output, text);
     if (text.includes(repoRoot) || text.includes(stage) || /\bprivate\/var\/|\bUsers\//u.test(text)) throw new SdkReleaseError(`TypeScript declarationにprivate pathがあります: ${definition.id}`);
   }
-  auditTypeScriptClosure(stage, manifest, { declarationDependencies: declarationDependencyClosure(manifest) });
+  auditTypeScriptClosure(stage, manifest);
 }
 
 function rewriteNodeImportSpecifiers(text) {

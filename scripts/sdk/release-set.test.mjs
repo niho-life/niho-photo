@@ -290,6 +290,13 @@ test("TypeScript dependency closure の欠落を拒否する", () => {
   assert.throws(() => auditTypeScriptClosure(stage, { peerDependencies: {}, exports: { ".": "./src/index.ts" } }), /dependency closure/);
 });
 
+test("TypeScript declarationの未宣言bare importを拒否する", () => {
+  const stage = temp("niho-photo-sdk-declaration-peer-");
+  put(stage, "types/index.d.ts", 'export type { QueryClient } from "@tanstack/query-core";\n');
+  const manifest = { peerDependencies: { "@tanstack/react-query": "^5.0.0" }, exports: { ".": { types: "./types/index.d.ts" } } };
+  assert.throws(() => auditTypeScriptClosure(stage, manifest), /peerDependencies/u);
+});
+
 test("TypeScript declaration条件のexport closureも検査する", () => {
   const stage = temp("niho-photo-sdk-declaration-closure-");
   put(stage, "src/index.ts", "export const value = 1;\n");
