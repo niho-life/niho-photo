@@ -278,6 +278,7 @@ function PresetTile(props: PresetItemProps) {
  */
 export function PhotoEditingPresetsPanel(props: {
   spotId: string;
+  scopeKey?: string;
   canEdit: boolean;
   /** 段 2 の wasm の同梱プリセットの読み方。 */
   builtinPresets: {
@@ -368,7 +369,7 @@ export function PhotoEditingPresetsPanel(props: {
     retry: false,
     refetchOnWindowFocus: false,
   });
-  const spotPresetsQueryKey = photoEditingQueryKeys.spotPresets(props.spotId);
+  const spotPresetsQueryKey = photoEditingQueryKeys.spotPresets(props.spotId, props.scopeKey);
   const spotPresetsQuery = useQuery({
     queryKey: spotPresetsQueryKey,
     // 一括の補正・スマホの面と同じ cache の形（`{ presets }`）

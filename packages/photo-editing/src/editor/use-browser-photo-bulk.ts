@@ -141,6 +141,7 @@ function selectionKeyOf(keys: readonly string[]): string {
 
 export function useBrowserPhotoBulk(params: {
   spotId: string;
+  scopeKey?: string;
   /** Worker の論理メモリ予算。host / 画面 class を呼び出し側が明示する。 */
   deviceClass: "pc" | "mobile";
   canEdit: boolean;
@@ -340,7 +341,7 @@ export function useBrowserPhotoBulk(params: {
 
   // 拠点のプリセット（1 枚の面の右パネルの節と同じデータ源・同じ cache）。メニューを開いて、プリセットを当てられると分かってから読む
   const spotPresetsQuery = useQuery({
-    queryKey: photoEditingQueryKeys.spotPresets(spotId),
+    queryKey: photoEditingQueryKeys.spotPresets(spotId, params.scopeKey),
     // 1 枚の面の右パネル（photo-editing-presets-panel）と同じ cache の形（`{ presets }`）。読むのは写真の出どころ（移行元設計）
     queryFn: async () => ({ presets: await library.presets.list() }),
     staleTime: 30_000,

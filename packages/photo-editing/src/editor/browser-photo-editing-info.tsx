@@ -12,9 +12,13 @@ import { photoEditingQueryKeys } from "../photo-editing-query-keys";
  * 写真の情報の問い合わせ（{@link PhotoLibrary.info}）。右パネルの「情報」と空の検出の露出（niho-photo#141）が同じ鍵・同じ読み方を
  * 使う（どちらかが読んだ値をもう一方が使う）。読めなければ写真の行の項目だけを出す（やり直して待たせない）。
  */
-export function browserPhotoInfoQueryOptions(library: PhotoLibrary, photo: Pick<PhotoLibraryItem, "id" | "contentSha256">) {
+export function browserPhotoInfoQueryOptions(
+  library: PhotoLibrary,
+  photo: Pick<PhotoLibraryItem, "id" | "contentSha256">,
+  scopeKey?: string,
+) {
   return queryOptions({
-    queryKey: photoEditingQueryKeys.photoInfo(library.place, photo.id, photo.contentSha256),
+    queryKey: photoEditingQueryKeys.photoInfo(library.place, photo.id, photo.contentSha256, scopeKey),
     queryFn: async ({ signal }): Promise<PhotoLibraryPhotoInfo | null> =>
       library.info ? ((await library.info(photo.id, { signal })) ?? null) : null,
     retry: false,
@@ -29,9 +33,10 @@ export async function readBrowserPhotoEv100(
   queryClient: QueryClient,
   library: PhotoLibrary,
   photo: Pick<PhotoLibraryItem, "id" | "contentSha256">,
+  scopeKey?: string,
 ): Promise<number | null> {
   if (!library.info) return null;
-  const options = browserPhotoInfoQueryOptions(library, photo);
+  const options = browserPhotoInfoQueryOptions(library, photo, scopeKey);
   try {
     const cached = queryClient.getQueryData(options.queryKey);
     return photoInfoEv100(cached !== undefined ? cached : await queryClient.fetchQuery(options));
@@ -81,11 +86,11 @@ function PhotoEditingInfoGroupSection(props: { group: PhotoEditingInfoGroup }) {
  * - 読めない・失敗したら失敗の 1 行は出さず、写真の行のファイルの項目（名前・形式・大きさ・撮影日時）だけを出す
  * - 情報を読めない置き場（`capabilities.info` が false。いまのクラウド）も、写真の行のファイルの項目だけを出す
  */
-export function BrowserPhotoEditingInfo(props: { photo: PhotoLibraryItem; infoAvailable: boolean }) {
+export function BrowserPhotoEditingInfo(props: { photo: PhotoLibraryItem; infoAvailable: boolean; scopeKey?: string }) {
   const library = usePhotoLibrary();
   const { photo } = props;
   const reads = props.infoAvailable && library.info !== undefined;
-  const info = useQuery({ ...browserPhotoInfoQueryOptions(library, photo), enabled: reads });
+  const info = useQuery({ ...browserPhotoInfoQueryOptions(library, photo, props.scopeKey), enabled: reads });
   if (reads && info.isPending) return <div aria-busy="true" className="min-h-8" />;
   // 読まない間は、同じ鍵に前に読んだ値が残っていても使わない
   return <PhotoEditingInfoList groups={photoEditingInfoGroups(photo, reads ? (info.data ?? null) : null)} />;

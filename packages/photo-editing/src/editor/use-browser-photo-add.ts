@@ -73,6 +73,7 @@ const NO_MAC_PICK_EXTRAS: MacPickExtras = { failures: [], rawPairedJpegCount: 0,
  */
 export function useBrowserPhotoAdd(params: {
   spotId: string;
+  scopeKey?: string;
   canEdit: boolean;
   cloudOriginalsAllowed: boolean;
   active: boolean;
@@ -182,7 +183,7 @@ export function useBrowserPhotoAdd(params: {
     onFinished: (outcome) => {
       if (outcome.storedAny) {
         void queryClient
-          .invalidateQueries({ queryKey: photoEditingQueryKeys.cloudPhotos(outcome.spotId) })
+          .invalidateQueries({ queryKey: photoEditingQueryKeys.cloudPhotos(outcome.spotId, params.scopeKey) })
           .catch(() => undefined);
       }
       if (!mountedRef.current || outcome.aborted || latestAccessRef.current.spotId !== outcome.spotId) return;
@@ -335,7 +336,7 @@ export function useBrowserPhotoAdd(params: {
   /** この Mac の追加が終わった（止めた）ときの一覧・状態欄。止めた・画面を閉じた・拠点が変わったときは画面に出さない。 */
   const finishMacAdd = (spotId: string, outcome: PhotoLibraryDeviceAddOutcome, extras: MacPickExtras) => {
     if (outcome.storedAny) {
-      void queryClient.invalidateQueries({ queryKey: photoEditingQueryKeys.cloudPhotos(spotId) }).catch(() => undefined);
+      void queryClient.invalidateQueries({ queryKey: photoEditingQueryKeys.cloudPhotos(spotId, params.scopeKey) }).catch(() => undefined);
     }
     if (!mountedRef.current || outcome.aborted || latestAccessRef.current.spotId !== spotId) return;
     // 止めた理由 > 失敗（「再試行」） > 入れなかった写真（フォルダの上限・RAW と同じ写真の JPEG）

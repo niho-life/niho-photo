@@ -54,14 +54,14 @@ function skippedCount(result: { skipped?: { notFound?: number; noOriginal?: numb
   return (result.skipped?.notFound ?? 0) + (result.skipped?.noOriginal ?? 0);
 }
 
-export function usePhotoCloudAlbums(options: { spotId: string; enabled?: boolean }) {
-  const { spotId } = options;
+export function usePhotoCloudAlbums(options: { spotId: string; scopeKey?: string; enabled?: boolean }) {
+  const { spotId, scopeKey } = options;
   const library = usePhotoLibrary();
   const albumsTool: PhotoLibraryAlbums | undefined = library.albums;
   const favoritesTool: PhotoLibraryFavorites | undefined = library.favorites;
   const batchSize = library.limits.photosPerRequest;
   const queryClient = useQueryClient();
-  const queryKey = photoEditingQueryKeys.cloudAlbums(spotId);
+  const queryKey = photoEditingQueryKeys.cloudAlbums(spotId, scopeKey);
   const query = useQuery({
     queryKey,
     queryFn: async ({ signal }) => ({ albums: await requireTool(albumsTool, "albums").list({ signal }) }),
@@ -78,10 +78,10 @@ export function usePhotoCloudAlbums(options: { spotId: string; enabled?: boolean
     async () => {
       await Promise.all([
         queryClient.invalidateQueries({ queryKey }),
-        queryClient.invalidateQueries({ queryKey: photoEditingQueryKeys.cloudPhotos(spotId) }),
+        queryClient.invalidateQueries({ queryKey: photoEditingQueryKeys.cloudPhotos(spotId, scopeKey) }),
       ]);
     },
-    [queryClient, queryKey, spotId],
+    [queryClient, queryKey, scopeKey, spotId],
   );
 
   const createAlbum = useCallback(
