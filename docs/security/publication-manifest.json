@@ -1277,10 +1277,11 @@
         "path": "packages/photo-editing/src/editor/browser-photo-editing-selection-bar.tsx",
         "sha256": "d547b833766548ceea90bafb07ee1c6e943aa8a6828c357a8a52b26040dc9855"
       },
-      "outputSha256": "5394b63181d008b95ef4140659de48c0fd39defa5d41429da25b3e35819f2e6a",
+      "outputSha256": "bfd0dc72ce847185c43f0e9d123e778b4244117370b41a0c60ec1bbe8e3ade17",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "React 19のRefObject境界と互換にする"
       ]
     },
     {
@@ -10451,8 +10452,8 @@
     },
     {
       "path": "package.json",
-      "sha256": "2f4c24c28a0d7ae081e533d05a12d4f88e670547cc8c83fd305277cde31fc649",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK release set生成・検証・外部consumer smoke入口を追加。\n変更理由: Issue #112の実WASMとNode契約smoke入口を追加\n変更理由: Issue #113のMac candidate build・data-only検証・fixture test入口を追加。\n変更理由: rootの重いnpm scriptをMac miniで開始前に停止する。"
+      "sha256": "1c36563de63ba350922777542be3127d7bcbbc5a1b8c58ce0e988cdca62649fa",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK release set生成・検証・外部consumer smoke入口を追加。\n変更理由: Issue #112の実WASMとNode契約smoke入口を追加\n変更理由: Issue #113のMac candidate build・data-only検証・fixture test入口を追加。\n変更理由: rootの重いnpm scriptをMac miniで開始前に停止する。\n変更理由: React 19型のSDK consumer検証依存を追加"
     },
     {
       "path": "packages/develop-engine/build-macos-native.mjs",
@@ -11941,13 +11942,13 @@
     },
     {
       "path": "scripts/sdk/release-set-lib.mjs",
-      "sha256": "7ccec2d0d39d89b69309b51ca138f8b320bfc5e6f5d2a4dda0d523e4efc22cb4",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
+      "sha256": "ecbb03f82413cd651a17cf9124c176dd29218f795398467f21d0fd50cb709834",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱"
     },
     {
       "path": "scripts/sdk/release-set.test.mjs",
-      "sha256": "3fab612651aac03e0a07b7171829a084df8b934bb2e4347078aa7d284f7cd2cd",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set.test.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: #141 空のモデルの runtime のファイル名と置き場の試験を足す"
+      "sha256": "a22a2990e4b859a5da47efc68c935d99c4dd9bdad32c8977a64529eabd04d466",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set.test.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: #141 空のモデルの runtime のファイル名と置き場の試験を足す\n変更理由: 型宣言exportとconsumer closureを検証"
     },
     {
       "path": "scripts/sdk/smoke-real-engine.mjs",
@@ -12103,6 +12104,16 @@
       "path": "apps/camera/src/personal-cloud-binding.test.ts",
       "sha256": "16f83aad47dfc7ac56009d9d42be91985867e3bcacac967e6daa2fd00b10f4a9",
       "origin": "NIHO所有の新規実装。個人クラウド接続の未接続境界・原本同一性と取消/再照合を合成fixtureで検証。実写真・認証情報・第三者資産を含まない。\n変更理由: 原本保持・取消後retry・scope世代切替と不明結果照合を負例テストで固定。"
+    },
+    {
+      "path": "package-lock.json",
+      "sha256": "cbc9b374eeaa9fcf6983584ee35f191f4bdbb9876e1ecade4bc8264c72d3dfea",
+      "origin": "公開SDKのReact 19型consumer smokeだけで使う開発依存のlockfile。runtime依存を変更しない。"
+    },
+    {
+      "path": "scripts/sdk/smoke-consumer.mjs",
+      "sha256": "69f30caab12f396f247d4646c14222727e5e35b7d37b27c9ef7ca7cf904a0a70",
+      "origin": "公開SDKの外部consumer smoke。React 19 declarationsと型export境界の検証を追加。"
     }
   ],
   "excludedSources": [

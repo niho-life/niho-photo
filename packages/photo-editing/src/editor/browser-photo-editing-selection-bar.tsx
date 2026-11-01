@@ -51,7 +51,7 @@ export function BrowserPhotoEditingSelectionBar(props: {
   exportUnavailableMessage?: string;
   /** PC の複数枚書き出し。狭い幅では渡さず、F6c の共有シート経路を変えない。 */
   exportAction?: {
-    buttonRef: RefObject<HTMLButtonElement>;
+    buttonRef: RefObject<HTMLButtonElement | null>;
     exporting: boolean;
     stopping: boolean;
     finalizing?: boolean;
@@ -111,7 +111,7 @@ export function BrowserPhotoEditingSelectionBar(props: {
   ) : null;
   const exportButton = props.exportAction ? (
     <button
-      ref={props.exportAction.buttonRef}
+      ref={props.exportAction.buttonRef as RefObject<HTMLButtonElement>}
       type="button"
       disabled={props.exportAction.stopping || props.exportAction.finalizing || props.exportAction.disabled}
       onClick={props.exportAction.exporting ? props.exportAction.onStop : props.exportAction.onExport}

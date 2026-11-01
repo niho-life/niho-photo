@@ -290,6 +290,16 @@ test("TypeScript dependency closure の欠落を拒否する", () => {
   assert.throws(() => auditTypeScriptClosure(stage, { peerDependencies: {}, exports: { ".": "./src/index.ts" } }), /dependency closure/);
 });
 
+test("TypeScript declaration条件のexport closureも検査する", () => {
+  const stage = temp("niho-photo-sdk-declaration-closure-");
+  put(stage, "src/index.ts", "export const value = 1;\n");
+  put(stage, "types/index.d.ts", "export declare const value = 1;\n");
+  const manifest = { peerDependencies: {}, exports: { ".": { types: "./types/index.d.ts", default: "./src/index.ts" } } };
+  auditTypeScriptClosure(stage, manifest);
+  rmSync(path.join(stage, "types/index.d.ts"));
+  assert.throws(() => auditTypeScriptClosure(stage, manifest), /export source/);
+});
+
 test("engine runtime の欠落・tamper・symlink を拒否する", () => {
   const root = temp("niho-photo-sdk-assets-");
   const config = JSON.parse(readFileSync(path.join(realRoot, "sdk/release-set.json"), "utf8"));
@@ -345,6 +355,23 @@ test("clean Git object から決定的 tarball を作り repo 外 consumer で T
   for (const item of one.manifest.packages) {
     const entries = execFileSync("tar", ["-tzf", path.join(first, item.file)], { encoding: "utf8" });
     for (const name of ["LICENSE.md", "ASSET_LICENSE.md", "TRADEMARKS.md", "THIRD_PARTY_NOTICES.md"]) assert.match(entries, new RegExp(`package/${name}`));
+    if (["ui", "photo-editing", "cloud-contract"].includes(item.id)) {
+      const packageJson = JSON.parse(execFileSync("tar", ["-xOzf", path.join(first, item.file), "package/package.json"], { encoding: "utf8" }));
+      assert.match(entries, /package\/types\/.*\.d\.ts/u);
+      for (const target of Object.values(packageJson.exports)) {
+        if (typeof target === "string") {
+          assert.doesNotMatch(target, /\.(?:ts|tsx)$/u);
+          continue;
+        }
+        assert.deepEqual(Object.keys(target), ["types", "default"]);
+        assert.match(target.types, /^\.\/types\/.+\.d\.ts$/u);
+        assert.match(target.default, /^\.\/src\/.+\.(?:ts|tsx)$/u);
+      }
+      if (item.id === "photo-editing") {
+        const selectionBarDeclaration = execFileSync("tar", ["-xOzf", path.join(first, item.file), "package/types/editor/browser-photo-editing-selection-bar.d.ts"], { encoding: "utf8" });
+        assert.match(selectionBarDeclaration, /buttonRef: RefObject<HTMLButtonElement \| null>;/u);
+      }
+    }
     if (["develop-engine-source", "develop-engine-runtime"].includes(item.id)) {
       assert.match(entries, /LICENSES\.md/);
       assert.match(entries, /Adobe-DNG-SDK-LICENSE\.txt/);

@@ -59,6 +59,7 @@ export function smokeConsumer(manifestPath) {
       "react",
       "react-dom",
       "@types/react",
+      "@types/react19",
       "@types/react-dom",
       "@types/node",
       "@tanstack/react-query",
@@ -102,6 +103,42 @@ export type PhotoLibraryContract = PhotoLibrary;
         types: ["node", "react", "react-dom", "react/experimental"],
       },
       include: ["src"],
+    }, null, 2)}\n`);
+    writeFileSync(path.join(consumer, "src/react19-consumer.tsx"), `
+import type { ComponentProps } from "react";
+import { BrowserPhotoEditingWorkbench } from "niho-photo-editing/editor/browser-photo-editing-workbench";
+import type { PhotoLibrary } from "niho-photo-editing/library/photo-library";
+import { PhotoEditingDialogHost } from "niho-photo-editing/sdk-dialog-host";
+
+type WorkbenchProps = ComponentProps<typeof BrowserPhotoEditingWorkbench>;
+declare const library: PhotoLibrary;
+declare const workbenchProps: WorkbenchProps;
+const workbench = <BrowserPhotoEditingWorkbench {...workbenchProps} />;
+const dialog = <PhotoEditingDialogHost />;
+export { dialog, library, workbench };
+`);
+    writeFileSync(path.join(consumer, "tsconfig.react19.json"), `${JSON.stringify({
+      compilerOptions: {
+        target: "ES2022",
+        lib: ["ES2022", "DOM", "DOM.Iterable"],
+        module: "ESNext",
+        moduleResolution: "Bundler",
+        jsx: "react-jsx",
+        strict: true,
+        noUncheckedIndexedAccess: true,
+        noEmit: true,
+        skipLibCheck: false,
+        types: ["node"],
+        baseUrl: ".",
+        paths: {
+          react: ["node_modules/@types/react19/index.d.ts"],
+          "react/canary": ["node_modules/@types/react19/canary.d.ts"],
+          "react/experimental": ["node_modules/@types/react19/experimental.d.ts"],
+          "react/jsx-runtime": ["node_modules/@types/react19/jsx-runtime.d.ts"],
+          "react/jsx-dev-runtime": ["node_modules/@types/react19/jsx-dev-runtime.d.ts"],
+        },
+      },
+      include: ["src/react19-consumer.tsx"],
     }, null, 2)}\n`);
     writeFileSync(path.join(consumer, "vite.config.mjs"), `export default { build: { outDir: "dist", emptyOutDir: true } };\n`);
     writeFileSync(path.join(consumer, "contract-smoke.mjs"), `
@@ -175,6 +212,14 @@ test("SDK dialog host uses the SDK UI store and not the app niho-ui store", asyn
 `);
 
     run(process.execPath, [path.join(repoRoot, "node_modules/typescript/bin/tsc"), "-p", path.join(consumer, "tsconfig.json")], consumer);
+    const react19Files = run(process.execPath, [path.join(repoRoot, "node_modules/typescript/bin/tsc"), "-p", path.join(consumer, "tsconfig.react19.json"), "--listFiles"], consumer);
+    if (!react19Files.includes("node_modules/@types/react19/index.d.ts")) throw new SdkReleaseError("React 19 consumer が実際の @types/react19 を解決していません");
+    for (const packageName of ["niho-photo-editing", "niho-photo-ui"]) {
+      const packageFiles = react19Files.split("\n").filter((file) => file.includes(`/node_modules/${packageName}/`));
+      if (!packageFiles.some((file) => file.includes(`/node_modules/${packageName}/types/`)) || packageFiles.some((file) => /\/node_modules\/[^/]+\/src\/.*\.(?:ts|tsx)$/u.test(file))) {
+        throw new SdkReleaseError(`React 19 consumer が ${packageName} のdeclaration境界を使っていません`);
+      }
+    }
     run(process.execPath, [path.join(repoRoot, "node_modules/vite/bin/vite.js"), "build", "--config", path.join(consumer, "vite.config.mjs")], consumer);
     run(process.execPath, [path.join(consumer, "contract-smoke.mjs")], consumer);
     run(process.execPath, [path.join(repoRoot, "node_modules/vitest/vitest.mjs"), "run", "src/dialog-singleton.test.tsx", "--environment", "jsdom"], consumer);
