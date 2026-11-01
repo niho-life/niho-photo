@@ -46,3 +46,13 @@ Mac アプリの WKWebView は独自の scheme（`tauri://localhost`）の画面
 ## 公式candidateのSDK runtime
 
 公式配布は`npm run candidate:build`から作成します。選択したSDKのruntimeとmanifestを専用Mach-O sectionへ埋め込み、Tauriのasset providerは同じtable/payloadから返します。署名前の検証は候補プログラムを起動せず、sectionの実bytes・path・size・SHA-256をSDKへ照合します。`official-updates` featureの直接buildにはこの固定bundleが必要です。通常の開発buildは従来のfrontend assetsを使います。
+
+## 個人クラウド接続の準備段階
+
+現在の production 入口は引き続き `<App />` で、cloud binding を渡しません。`createMacPersonalCloudPhotoBinding(null)` は `not_connected` と未定義の binding を返します。ログインや写真追加ではコピーを開始しません。P01 の正式な認証済み native transport、P03 の実 API、P08 の scope 対応 immutable adapter（manifest・source SHA・tarball digest）の採用が揃うまで有効化しません。現在の P08 fixture source や SDK 0.1.4 を仮の production 接続としてコピー・注入しません。
+
+`src/personal-cloud-binding.ts` は正式な接続を後で渡すための境界です。trusted host が検証済み library/host と本人・library・session epoch、native の `recover/start/status/cancel` を渡します。React が扱うのは不透明な photo/request ID と進捗だけです。native の回復台帳は本人・library・接続世代・原本 hash/identity・補正の版へ束縛し、request ID を消失結果の照合にも使います。元の絶対 path や upload ticket/token は台帳や IPC に保存・返却しません。再起動時に原本を選び直す必要がある場合も、同一 hash/identity の照合前に再開しません。
+
+この native port の実装時は P00 v1 の `/api/photo/v1` と `uploads.start`（POST `/uploads`）、`uploads.get`（GET `/uploads/{uploadId}`）、`uploads.renew`、`uploads.complete`、`uploads.cancel`（各 POST 子 route）を使います。start/complete/cancel の冪等 key は操作ごとに永続化し、通信失敗時も再利用します。再開はサーバーが返す offset と renew ticket に従い、ticket を永続化しません。既存原本の dedup は補正の成功ではありません。原本、参照 mask、canonical 作業コピーと互換な補正の確定を別々に照合し、全工程が確認できるまで `completed` を返しません。既存補正への自動上書き、未知設定の欠落、RAW baseVersion の無断変換は禁止です。実 API の無い現状ではこれらの HTTP 呼出しや成功結果を生成する transport は提供していません。
+
+`src-tauri/src/cloud_copy_source.rs` は、今後の native staging 転送で用いる原本の読取境界です。開いた photo ID からのみ捕捉し、サイズ上限、SHA-256、device/inode/mtime/ctime、同じ開いた file handle を開始・転送・再確認で照合します。symlink・置換・変更・取消・書込失敗は成功にせず、原本を変更・削除しません。実サーバーは別途、受信した全 bytes の hash を照合して immutable 原本を確定する必要があります。この helper のテストは native 転送・認可・署名済み Mac/iPhone の実機受入の完了証跡ではありません。

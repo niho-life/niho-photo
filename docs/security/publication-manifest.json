@@ -3729,7 +3729,7 @@
         "path": "apps/camera/README.md",
         "sha256": "d0e1f198e83893a73cd3d84122debf76ad9755e00a5fc5e1b69c242daec8d4eb"
       },
-      "outputSha256": "9009fa5ec5950dde46be4a6cca106a85002a902589d326784a8d0716c502cbbf",
+      "outputSha256": "6dde2625f6d5b35cac8d94bd9a0a47621c39107ea01e7c7f1c357cb4ebb2628a",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "フォルダと個別写真の利用方法、公開契約、および許可するネイティブコマンドを明記",
@@ -3741,7 +3741,8 @@
         "niho-photo#152: Mac アプリの現像を native の sidecar（niho-develop-render serve）で描く口（niho-develop://・native の glue・E2E）を足す。",
         "niho-photo#152: Mac アプリの現像を native sidecar に接続",
         "Issue #152 の native 現像の画素一致と UI 実操作 E2E の手順を追記。",
-        "Mac WKWebView の独自 scheme で共有メモリが使えない原因（#173）と probe への案内を追記し、native の glue の読み分けの記述を実装に合わせた"
+        "Mac WKWebView の独自 scheme で共有メモリが使えない原因（#173）と probe への案内を追記し、native の glue の読み分けの記述を実装に合わせた",
+        "個人クラウドの未接続状態と正式native転送を後で注入する境界を明記。"
       ]
     },
     {
@@ -4172,7 +4173,7 @@
         "path": "apps/camera/src-tauri/src/lib.rs",
         "sha256": "e6415b3d0633bb4753761b89f8860fffcfa9b67f95832ab971bd9b13eebaaffc"
       },
-      "outputSha256": "8e9be0a9ac8381db67e17320f9a3d3d58165405ccc0c82b7f83264dcaacc52e4",
+      "outputSha256": "7beff35906ed10fcf46c32c612e7f7b98ffdee6c2ff7b91c0a784429649c44ac",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "共有形式フィルターを使う複数写真pickerと参照削除コマンドを同梱UIの権限内に追加 / 選択写真専用commandをinvoke handlerへ登録。",
@@ -4191,7 +4192,8 @@
         "新規runtime asset moduleの宣言順をcargo fmtの規約へ合わせる",
         "被写体のマスクの面 #135: camera_mask_surface_detect（作業画像に niho-camera-cutout surface を当て、写真の面の置き場へ保存）を足す。",
         "niho-photo#152: Mac アプリの現像を native の sidecar（niho-develop-render serve）で描く口（niho-develop://・native の glue・E2E）を足す。",
-        "niho-photo#152: Mac アプリの現像を native sidecar に接続"
+        "niho-photo#152: Mac アプリの現像を native sidecar に接続",
+        "原本を変更せず同一性を照合するnative copy sourceのmoduleを追加。"
       ]
     },
     {
@@ -12081,6 +12083,21 @@
       "path": "packages/develop-engine/tools/sky-wasm-bench.mjs",
       "sha256": "63c4c50c6d50d68e4368fe822ba7900fa9787ad59e8111bb2708cd744f1edd7a",
       "origin": "Issue #141 のため新規作成した、空の推論の wasm（Node）の時間を測る道具。重み・写真は実行時に引数で渡し、公開物に含めない。合成の写真を自前の非圧縮 PNG にする。npm 依存なし。"
+    },
+    {
+      "path": "apps/camera/src-tauri/src/cloud_copy_source.rs",
+      "sha256": "9d6bc27be0c610dc1c15fff3de733f1e42e850d1a211c9b0dbf1e802fa6f5b89",
+      "origin": "NIHO所有の新規実装。個人クラウド接続の未接続境界・原本同一性と取消/再照合を合成fixtureで検証。実写真・認証情報・第三者資産を含まない。\n変更理由: 原本保持・取消後retry・scope世代切替と不明結果照合を負例テストで固定。"
+    },
+    {
+      "path": "apps/camera/src/personal-cloud-binding.ts",
+      "sha256": "d0faab1eecee1ac8c5d07fde2c1db9ac2a83365fff0b90f78f40f5d81d64753f",
+      "origin": "NIHO所有の新規実装。個人クラウド接続の未接続境界・原本同一性と取消/再照合を合成fixtureで検証。実写真・認証情報・第三者資産を含まない。\n変更理由: 原本保持・取消後retry・scope世代切替と不明結果照合を負例テストで固定。"
+    },
+    {
+      "path": "apps/camera/src/personal-cloud-binding.test.ts",
+      "sha256": "16f83aad47dfc7ac56009d9d42be91985867e3bcacac967e6daa2fd00b10f4a9",
+      "origin": "NIHO所有の新規実装。個人クラウド接続の未接続境界・原本同一性と取消/再照合を合成fixtureで検証。実写真・認証情報・第三者資産を含まない。\n変更理由: 原本保持・取消後retry・scope世代切替と不明結果照合を負例テストで固定。"
     }
   ],
   "excludedSources": [
