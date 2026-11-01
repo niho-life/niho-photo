@@ -8,11 +8,13 @@ import {
   readFileSync,
   readdirSync,
   rmSync,
+  symlinkSync,
   writeFileSync,
 } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync } from "node:child_process";
+import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 import { assertPublicBytes, guardBundle } from "../ci/release-evidence-lib.mjs";
@@ -39,6 +41,7 @@ const ENGINE_NATIVE_CLOSURE = [
 ];
 const OWNED_SOURCE_PATHS = ["packages/photo-editing", "packages/ui", "packages/niho-cloud-contract", "packages/develop-engine", "packages/desktop-photo", "sdk", "scripts/sdk", "scripts/ci/cloud-contract-sync.mjs", "scripts/ci/image-metadata.mjs", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/ci/photo-sdk-workflow-lib.mjs", "scripts/ci/publication-lib.mjs", "scripts/ci/release-evidence-lib.mjs", "scripts/ci/workflow-lib.mjs", "LICENSE.md", "ASSET_LICENSE.md", "TRADEMARKS.md", "THIRD_PARTY_NOTICES.md"];
 const BUILD_TOOLING_PATHS = ["package.json", "package-lock.json"];
+const TOOLING_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 
 // スレッドの wasm（#151。crossOriginIsolated の画面だけが読む）の build の指定。build と release set の検証が
 // 同じ値を使う。共有メモリの上限は 1 本の wasm と同じ wasm32 の 4GiB（大きな書き出しで 1 本より先に足りなく
@@ -284,7 +287,7 @@ function packageManifest(definition, original, config) {
   manifest.name = definition.name;
   manifest.version = config.version;
   manifest.license = "UNLICENSED";
-  manifest.files = ["src", ...rootNotices, ...(definition.id === "ui" ? ["tailwind-theme.cjs"] : []), ...(definition.id === "cloud-contract" ? ["README.md"] : [])];
+  manifest.files = ["src", "types", ...rootNotices, ...(definition.id === "ui" ? ["tailwind-theme.cjs"] : []), ...(definition.id === "cloud-contract" ? ["README.md"] : [])];
   if (definition.id === "ui") manifest.sideEffects = ["./src/styles/*.css"];
   if (definition.id === "photo-editing") {
     const peers = { ...(manifest.peerDependencies ?? {}) };
@@ -299,15 +302,34 @@ function packageManifest(definition, original, config) {
       "./sdk-dialog-host": "./src/sdk-dialog-host.tsx",
     };
   }
+  manifest.exports = declarationExports(manifest.exports ?? {});
   return manifest;
+}
+
+function declarationTarget(target) {
+  if (typeof target !== "string" || !/^\.\/src\/.+\.(?:ts|tsx)$/u.test(target)) return undefined;
+  return target.replace(/^\.\/src\//u, "./types/").replace(/\.(?:ts|tsx)$/u, ".d.ts");
+}
+
+function declarationExports(exports) {
+  return Object.fromEntries(Object.entries(exports).map(([name, target]) => {
+    const types = declarationTarget(target);
+    return [name, types ? { types, default: target } : target];
+  }));
 }
 
 function resolveRelativeImport(files, fromFile, specifier) {
   const base = path.posix.normalize(path.posix.join(path.posix.dirname(fromFile), specifier));
   if (base.startsWith("../") || base === "..") return null;
   const withoutJs = base.replace(/\.(?:m?js)$/, "");
-  const candidates = [base, `${base}.ts`, `${base}.tsx`, `${base}.js`, `${base}.mjs`, `${base}.json`, `${base}.css`, `${withoutJs}.ts`, `${withoutJs}.tsx`, `${base}/index.ts`, `${base}/index.tsx`];
+  const candidates = [base, `${base}.ts`, `${base}.tsx`, `${base}.d.ts`, `${base}.js`, `${base}.mjs`, `${base}.json`, `${base}.css`, `${withoutJs}.ts`, `${withoutJs}.tsx`, `${withoutJs}.d.ts`, `${base}/index.ts`, `${base}/index.tsx`, `${base}/index.d.ts`];
   return candidates.find((candidate) => files.has(candidate)) ?? null;
+}
+
+function exportTargets(target) {
+  if (typeof target === "string") return [target];
+  if (!target || typeof target !== "object" || Array.isArray(target)) return [];
+  return Object.values(target).flatMap(exportTargets);
 }
 
 export function auditTypeScriptClosure(stage, manifest) {
@@ -339,8 +361,8 @@ export function auditTypeScriptClosure(stage, manifest) {
       if (!dependency.startsWith("node:") && !peers.has(dependency)) throw new SdkReleaseError(`runtime dependency が peerDependencies にありません: ${dependency}`);
     }
   }
-  for (const target of Object.values(manifest.exports ?? {})) {
-    if (typeof target !== "string" || !target.startsWith("./")) continue;
+  for (const target of Object.values(manifest.exports ?? {}).flatMap(exportTargets)) {
+    if (!target.startsWith("./")) continue;
     if (target.includes("*")) {
       const expression = globRegex(target.slice(2));
       if (![...files].some((file) => expression.test(file))) throw new SdkReleaseError(`export に対応する source がありません: ${target}`);
@@ -389,10 +411,121 @@ function stageSourcePackage({ repoRoot, commit, config, definition, stage, rootN
         macosNative: "node engine/build-macos-native.mjs --engine engine --lock <camera-lock.json> --output <new-stage-directory>",
       },
     }));
-  } else {
-    auditTypeScriptClosure(stage, manifest);
   }
   return manifest;
+}
+
+function linkDeclarationDependency(dependencyRoot, dependency, source) {
+  let stat;
+  try {
+    stat = lstatSync(source);
+  } catch {
+    throw new SdkReleaseError(`declaration peer がありません: ${dependency}`);
+  }
+  if (!stat.isDirectory() || stat.isSymbolicLink()) throw new SdkReleaseError(`declaration peer が通常のdirectoryではありません: ${dependency}`);
+  const target = path.join(dependencyRoot, "node_modules", ...dependency.split("/"));
+  mkdirSync(path.dirname(target), { recursive: true, mode: 0o755 });
+  try {
+    lstatSync(target);
+    return;
+  } catch (error) {
+    if (error?.code !== "ENOENT") throw new SdkReleaseError(`declaration peer linkを確認できません: ${dependency}`);
+  }
+  symlinkSync(source, target, "dir");
+}
+
+function declarationTypesTarget(target) {
+  if (typeof target === "string") return target.endsWith(".d.ts") || target.endsWith(".d.cts") ? target : undefined;
+  if (!target || typeof target !== "object" || Array.isArray(target)) return undefined;
+  return declarationTypesTarget(target.import?.types) ?? declarationTypesTarget(target.types) ?? Object.values(target).map(declarationTypesTarget).find(Boolean);
+}
+
+function assertDeclarationPeerReexport(peer, dependency) {
+  const peerRoot = path.join(TOOLING_ROOT, "node_modules", ...peer.split("/"));
+  let peerManifest;
+  try {
+    peerManifest = JSON.parse(readFileSync(path.join(peerRoot, "package.json"), "utf8"));
+  } catch {
+    throw new SdkReleaseError(`declaration peer manifest がありません: ${peer}`);
+  }
+  const target = declarationTypesTarget(peerManifest.exports?.["."]) ?? declarationTypesTarget(peerManifest.types);
+  if (!target?.startsWith("./")) throw new SdkReleaseError(`declaration peer の型入口がありません: ${peer}`);
+  const declaration = readFileSync(path.join(peerRoot, target), "utf8");
+  const escaped = dependency.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
+  if (!new RegExp(`export\\s+\\*\\s+from\\s+["']${escaped}["']`, "u").test(declaration)) {
+    throw new SdkReleaseError(`declaration peer が型をre-exportしていません: ${peer} <- ${dependency}`);
+  }
+}
+
+function normalizeDeclarationSpecifiers(text, manifest) {
+  const rewrites = new Map([["@tanstack/query-core", "@tanstack/react-query"]]);
+  let normalized = text;
+  for (const [dependency, peer] of rewrites) {
+    if (!ts.preProcessFile(normalized, true, true).importedFiles.some(({ fileName }) => fileName === dependency)) continue;
+    if (!Object.hasOwn(manifest.peerDependencies ?? {}, peer)) continue;
+    assertDeclarationPeerReexport(peer, dependency);
+    normalized = normalized.replaceAll(`"${dependency}"`, `"${peer}"`).replaceAll(`'${dependency}'`, `'${peer}'`);
+  }
+  return normalized;
+}
+
+function emitSourceDeclarations({ repoRoot, definition, stage, manifest, sourceStages }) {
+  const sourceRoot = path.join(stage, "src");
+  const outputRoot = path.join(stage, "types");
+  const dependencyRoot = path.dirname(stage);
+  const stagedPackages = new Map([...sourceStages.values()].map((item) => [item.manifest.name, item.stage]));
+  for (const dependency of Object.keys(manifest.peerDependencies ?? {})) {
+    const source = stagedPackages.get(dependency) ?? path.join(TOOLING_ROOT, "node_modules", ...dependency.split("/"));
+    linkDeclarationDependency(dependencyRoot, dependency, source);
+  }
+  for (const dependency of ["@types/node", "@types/react", "@types/react-dom"]) {
+    linkDeclarationDependency(dependencyRoot, dependency, path.join(TOOLING_ROOT, "node_modules", ...dependency.split("/")));
+  }
+  const rootNames = collectFiles(sourceRoot)
+    .filter((name) => /\.(?:ts|tsx)$/u.test(name) && !name.endsWith(".d.ts"))
+    .map((name) => path.join(sourceRoot, name));
+  const program = ts.createProgram({
+    rootNames,
+    options: {
+      declaration: true,
+      emitDeclarationOnly: true,
+      esModuleInterop: true,
+      isolatedModules: true,
+      jsx: ts.JsxEmit.ReactJSX,
+      lib: ["lib.dom.d.ts", "lib.dom.iterable.d.ts", "lib.esnext.d.ts"],
+      module: ts.ModuleKind.ESNext,
+      moduleResolution: ts.ModuleResolutionKind.Bundler,
+      newLine: ts.NewLineKind.LineFeed,
+      noEmitOnError: true,
+      noUncheckedIndexedAccess: false,
+      outDir: outputRoot,
+      resolveJsonModule: true,
+      rootDir: sourceRoot,
+      skipLibCheck: true,
+      sourceMap: false,
+      strict: true,
+      target: ts.ScriptTarget.ES2017,
+      types: definition.id === "cloud-contract" ? [] : ["node", "react", "react-dom", "react/experimental"],
+    },
+  });
+  const emitted = program.emit();
+  const diagnostics = ts.getPreEmitDiagnostics(program).filter(({ category }) => category === ts.DiagnosticCategory.Error);
+  if (emitted.emitSkipped || diagnostics.length) {
+    const detail = diagnostics.slice(0, 20).map(({ file, start, messageText }) => {
+      const location = file && start !== undefined ? `${path.relative(stage, file.fileName)}:${file.getLineAndCharacterOfPosition(start).line + 1}` : definition.id;
+      return `${location}: ${ts.flattenDiagnosticMessageText(messageText, " ")}`;
+    }).join(" / ");
+    throw new SdkReleaseError(`TypeScript declaration生成に失敗しました: ${detail}`);
+  }
+  const outputs = collectFiles(outputRoot);
+  if (!outputs.length || outputs.some((name) => !name.endsWith(".d.ts"))) throw new SdkReleaseError(`TypeScript declaration closureが不正です: ${definition.id}`);
+  for (const name of outputs) {
+    const output = path.join(outputRoot, name);
+    const text = normalizeDeclarationSpecifiers(readFileSync(output, "utf8"), manifest);
+    writeFileSync(output, text);
+    if (text.includes(repoRoot) || text.includes(stage) || /\bprivate\/var\/|\bUsers\//u.test(text)) throw new SdkReleaseError(`TypeScript declarationにprivate pathがあります: ${definition.id}`);
+  }
+  auditTypeScriptClosure(stage, manifest);
 }
 
 function rewriteNodeImportSpecifiers(text) {
@@ -707,11 +840,22 @@ export async function packReleaseSet({ repoRoot, configPath = "sdk/release-set.j
   const scratch = mkdtempSync(path.join(tmpdir(), "niho-photo-sdk-pack-"));
   try {
     const packages = [];
+    const staged = new Map();
     for (const definition of config.packages) {
       const stage = path.join(scratch, `stage-${definition.id}`);
       mkdirSync(stage, { mode: 0o755 });
-      if (definition.kind === "node-contract") stageNodeContractPackage({ repoRoot, commit, config, definition, stage, rootNotices, recipe });
-      else stageSourcePackage({ repoRoot, commit, config, definition, stage, rootNotices });
+      const manifest = definition.kind === "node-contract"
+        ? stageNodeContractPackage({ repoRoot, commit, config, definition, stage, rootNotices, recipe })
+        : stageSourcePackage({ repoRoot, commit, config, definition, stage, rootNotices });
+      staged.set(definition.id, { definition, stage, manifest });
+    }
+    for (const id of ["cloud-contract", "ui", "photo-editing"]) {
+      const item = staged.get(id);
+      emitSourceDeclarations({ repoRoot, ...item, sourceStages: staged });
+    }
+    rmSync(path.join(scratch, "node_modules"), { recursive: true, force: true });
+    for (const definition of config.packages) {
+      const { stage } = staged.get(definition.id);
       await guardBundle(stage, [repoRoot]);
       const packed = npmPackDeterministic(stage, scratch);
       packages.push({ id: definition.id, name: definition.name, ...packed });

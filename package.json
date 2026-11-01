@@ -35,5 +35,8 @@
   "engines": {
     "node": "24.x"
   },
+  "devDependencies": {
+    "@types/react19": "npm:@types/react@19.3.0"
+  },
   "license": "UNLICENSED"
 }
