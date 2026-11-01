@@ -12085,6 +12085,11 @@
       "origin": "Issue #141 のため新規作成した、空の推論の wasm（Node）の時間を測る道具。重み・写真は実行時に引数で渡し、公開物に含めない。合成の写真を自前の非圧縮 PNG にする。npm 依存なし。"
     },
     {
+      "path": "sdk/release-set.json",
+      "sha256": "4a44e1ada3832973b96f4ca87ca28a36eac6dc44251b574c7b99e5d7dc00d97c",
+      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布"
+    },
+    {
       "path": "apps/camera/src-tauri/src/cloud_copy_source.rs",
       "sha256": "9d6bc27be0c610dc1c15fff3de733f1e42e850d1a211c9b0dbf1e802fa6f5b89",
       "origin": "NIHO所有の新規実装。個人クラウド接続の未接続境界・原本同一性と取消/再照合を合成fixtureで検証。実写真・認証情報・第三者資産を含まない。\n変更理由: 原本保持・取消後retry・scope世代切替と不明結果照合を負例テストで固定。"
