@@ -2,10 +2,10 @@ import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 
 
 import type { PhotoEditingLeaveGuard } from "niho-photo-editing/editor/browser-photo-editing-model";
 
-type CloudBindingOwner = { actorId: string } | null;
+type CloudBindingOwner = { actorId: string; scopeKey?: string } | null;
 
 function sameCloudOwner(left: CloudBindingOwner, right: CloudBindingOwner): boolean {
-  return left?.actorId === right?.actorId;
+  return left?.actorId === right?.actorId && left?.scopeKey === right?.scopeKey;
 }
 
 /**

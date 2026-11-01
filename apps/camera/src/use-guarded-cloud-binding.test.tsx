@@ -7,7 +7,7 @@ import { useGuardedCloudBinding } from "./use-guarded-cloud-binding";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 
-type Binding = { actorId: string; marker: string };
+type Binding = { actorId: string; marker: string; scopeKey?: string };
 
 let container: HTMLDivElement;
 let root: Root;
@@ -76,6 +76,28 @@ describe("useGuardedCloudBinding", () => {
     expect(container.querySelector('[data-testid="owner"]')?.textContent).toBe("owner-a");
     expect(container.querySelector('[data-testid="marker"]')?.textContent).toBe("refreshed");
     expect(guard).not.toHaveBeenCalled();
+  });
+
+  it("guards a library scope change for the same actor before replacing the binding", async () => {
+    const guard = vi.fn(async () => false);
+    const { Harness, leaveGuardRef, onOwnerChange } = setup(guard);
+
+    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "library-a", scopeKey: "personal:library-a:owner-a" }} />));
+    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "library-b", scopeKey: "personal:library-b:owner-a" }} />));
+
+    expect(container.querySelector('[data-testid="owner"]')?.textContent).toBe("owner-a");
+    expect(container.querySelector('[data-testid="marker"]')?.textContent).toBe("library-a");
+    expect(container.querySelector('[data-testid="failed"]')?.textContent).toBe("true");
+    expect(guard).toHaveBeenCalledTimes(1);
+    expect(onOwnerChange).not.toHaveBeenCalled();
+
+    leaveGuardRef.current = vi.fn(async () => true);
+    await act(async () => {
+      container.querySelector<HTMLButtonElement>("button")?.click();
+      await Promise.resolve();
+    });
+    expect(container.querySelector('[data-testid="marker"]')?.textContent).toBe("library-b");
+    expect(onOwnerChange).toHaveBeenCalledTimes(1);
   });
 
   it("does not report a failed transition if the incoming binding returns to the current owner", async () => {

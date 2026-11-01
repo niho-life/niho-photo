@@ -10389,13 +10389,13 @@
     },
     {
       "path": "apps/camera/src/use-guarded-cloud-binding.test.tsx",
-      "sha256": "f44c49759d2a27e170fbca29f689806d53a2e2694750cf15268ffb8f8c3c6565",
-      "origin": "PR #64の公開クライアント回帰テストとして独立作成。所有者変更の保存成功・失敗と再試行を合成bindingで検証する。"
+      "sha256": "45b126ba4de4d4dbbe0d959eec73e237ca48aade5a63cd4d9dada54e53d787ea",
+      "origin": "PR #64の公開クライアント回帰テストとして独立作成。所有者変更の保存成功・失敗と再試行を合成bindingで検証する。\n変更理由: Cover the guarded same-actor personal photo library scope transition\n変更理由: Cover the guarded same-actor personal photo library scope transition"
     },
     {
       "path": "apps/camera/src/use-guarded-cloud-binding.ts",
-      "sha256": "c9f114015adec7bd382cb97746f8d3ce4e1360b0ae3d29ad86d616e70368b933",
-      "origin": "PR #64の公開クライアントとして独立作成。cloudBindingの所有者変更を編集保存ガードの後に反映する。非公開コード・認証情報・写真データを含まない。"
+      "sha256": "76054faa53e9ea6eb2530841b3e0ae478b8114e2ea898f998ee6031d6a198107",
+      "origin": "PR #64の公開クライアントとして独立作成。cloudBindingの所有者変更を編集保存ガードの後に反映する。非公開コード・認証情報・写真データを含まない。\n変更理由: Guard personal photo library scope changes before replacing the active edit binding"
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-leave-guards.test.tsx",
