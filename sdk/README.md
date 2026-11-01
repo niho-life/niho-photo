@@ -19,6 +19,12 @@ registry は同じ window 内に限り、SDK の別 copy や HMR の再 import �
 
 recipe contract は `packages/photo-editing/src/develop-engine/develop-settings.ts` とその純粋 TypeScript dependency closure を正本にします。pack は選択した Git object からこの closure を取り出し、相対 import に `.js` を付けた Node ESM JavaScript と `.d.ts` を生成します。`niho-photo-contract` は TypeScript loader、React、DOM を必要とせず、`readDevelopSettings`、`isEditableDevelopSettings`、`developSettingsOnWorkingCopy`、signed RAW 判定と engine/look の世代情報を提供します。validator や既定値のロジックは別実装へ転記しません。
 
+## 書込前のfield/feature能力判定（SDK 0.1.7）
+
+`supportsDevelopSettingsWrite(value, { geometry?: boolean })` をNode contractとclientのdevelop-settings exportへ追加します。readerと従来の`isEditableDevelopSettings`は未知JSONを保持する既存の挙動を維持します。新しい判定は、未知のroot/nested field、未来のversion/engine、未解釈のlegacySettingsを含む設定をfalseにし、保存済みJSONを削除・正規化せずread-onlyとして扱えるようにします。
+
+これはfield/featureを知っているかの判定です。trueでも数値・範囲の妥当性や描画可能性のすべてを保証しません。cloud writerは固定WASMの値検証、working-copy/base/meta互換性、mask surface所有権、本人認可、CASを独立して通す必要があります。既存readerや描画の数式・画素、crate/runtimeの版は変更しません。
+
 ## 生成
 
 公開用 pack は clean な Git commit からだけ作ります。source は working tree からコピーせず `git ls-tree` / `git show` で読みます。

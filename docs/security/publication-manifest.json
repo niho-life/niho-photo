@@ -557,7 +557,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-geometry.ts",
         "sha256": "ccb700dcbc95759de670ce6dae1ea52deeb57fe06b533cdda4101192b38339f5"
       },
-      "outputSha256": "785bb73d62d31f5f1dc998afd39831a6e9c80cc133f92869985cf5741ff73bdd",
+      "outputSha256": "bf5019ed873be2edb4cb1d14ce4513074b198c2b495707f492e067c9d13a16d0",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -566,7 +566,8 @@
         "PR #88 main rebase and perspective integration with develop engine 0.22.0",
         "遠近と余白補正の逆変換を適用",
         "遠近と余白補正を含む逆写像の説明を更新",
-        "niho-photo#46 で遠近・余白を埋める・Upright の読み書き、回転と反転での写し方、描かれる切り抜きの箱を足した。"
+        "niho-photo#46 で遠近・余白を埋める・Upright の読み書き、回転と反転での写し方、描かれる切り抜きの箱を足した。",
+        "aspect能力判定を共有leafへ分離し既存exportを保持"
       ]
     },
     {
@@ -752,7 +753,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-settings.ts",
         "sha256": "b32fdf32b5eafb093a9691d609ae4719a576e662507776e6c409ab0e4c98722a"
       },
-      "outputSha256": "937f2c5b45eed03a97a3aac3d7a6c863fd9abcdec3fc7b695aba8e1f0b37507b",
+      "outputSha256": "6b2f2a0aa36b0573e4011f18284137607311e5cdb9c7a71dd39afed1fc619da9",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -776,7 +777,8 @@
         "PR #96統合でcrate 0.24・v8対応",
         "PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
         "niho-photo#119: UI更新もcanonicalな既知版predicateで検査できるよう既存関数を公開する",
-        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ"
+        "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
+        "未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加"
       ]
     },
     {
@@ -11943,8 +11945,8 @@
     },
     {
       "path": "scripts/sdk/release-set-lib.mjs",
-      "sha256": "b17fa55f3f372a9155ee18f5cf8d9808746775552d350f04257d7d55b49da10f",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定"
+      "sha256": "3d94505e321ccb44a082630d02808322b95bbf67b25bef56a2cb82e2834e14b9",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加"
     },
     {
       "path": "scripts/sdk/release-set.test.mjs",
@@ -11953,8 +11955,8 @@
     },
     {
       "path": "scripts/sdk/smoke-real-engine.mjs",
-      "sha256": "0340c93881790a2208dcb4a93591386b4fadc1e5bb50e42aee1e5a257eb05781",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/smoke-real-engine.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
+      "sha256": "a8e60cab50520dd049fc0b338b3c898b4e0acce1346349f630fcc632dd5790a7",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/smoke-real-engine.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加"
     },
     {
       "path": "scripts/sdk/smoke-threads-browser.mjs",
@@ -12088,8 +12090,8 @@
     },
     {
       "path": "sdk/release-set.json",
-      "sha256": "6977b105c35c2245dced283762a1e21790df90e689be5514918e7dc14fd52176",
-      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定"
+      "sha256": "6aeafa5d5855c1ceccf0ce4613ce2611a03cc97a6e364b65a701f019d03f722f",
+      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加"
     },
     {
       "path": "apps/camera/src-tauri/src/cloud_copy_source.rs",
@@ -12113,8 +12115,28 @@
     },
     {
       "path": "scripts/sdk/smoke-consumer.mjs",
-      "sha256": "62e87f65aa87a90869eb9b9b6d3d01c62fe43af8b3c5a0cc06806e2034d0baa7",
-      "origin": "公開SDKの外部consumer smoke。React 19 declarationsと型export境界の検証を追加。\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定"
+      "sha256": "4e16fd75fb5fb0750bc17ae735d3d3e128502a5f0d64a112af6e53bdad02b82c",
+      "origin": "公開SDKの外部consumer smoke。React 19 declarationsと型export境界の検証を追加。\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加"
+    },
+    {
+      "path": "sdk/README.md",
+      "sha256": "9376af15f3a753d478a5bfb77a3f0012e47ff4c894b08da8fc73b9d615c8b3a4",
+      "origin": "NIHO photo SDKの書込field/feature能力判定と合成回帰として新規作成（niho-photo#190）。既存readerと画素は変更しない。"
+    },
+    {
+      "path": "packages/photo-editing/src/develop-engine/develop-write-capability.test.ts",
+      "sha256": "3fe21b51282ba04231d7f762a7b13b4be703c884079c668a3f3106c62d1eee4c",
+      "origin": "NIHO photo SDKの書込field/feature能力判定と合成回帰として新規作成（niho-photo#190）。既存readerと画素は変更しない。\n変更理由: aspect variantとreaderの未知値保持を回帰で固定"
+    },
+    {
+      "path": "packages/photo-editing/src/develop-engine/develop-write-capability.ts",
+      "sha256": "89d98c123431fe7d863563051cdd2b17eac37b89ceb3afd697fe211d4cbbae31",
+      "origin": "NIHO photo SDKの書込field/feature能力判定と合成回帰として新規作成（niho-photo#190）。既存readerと画素は変更しない。\n変更理由: 未知aspect variantをwriterで拒否する"
+    },
+    {
+      "path": "packages/photo-editing/src/develop-engine/develop-aspect.ts",
+      "sha256": "4a83d72120370af6dd8c1790723f729f54c099bbc8184d22a2288e40f5d17b0c",
+      "origin": "NIHO既存geometryのaspect判定をreaderとwriter能力判定で共有するために分離。判定式と既存exportを維持。"
     }
   ],
   "excludedSources": [

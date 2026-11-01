@@ -76,16 +76,17 @@ export function smokeConsumer(manifestPath) {
 import { BrowserPhotoEditingWorkbench } from "niho-photo-editing/editor/browser-photo-editing-workbench";
 import { PHOTO_EDITING_PRIMARY_BUTTON_CLASS_NAME } from "niho-photo-editing/editor/photo-editing-button-classes";
 import { createDevelopEngine } from "niho-photo-editing/develop-engine/develop-engine-client";
-import type { DevelopSettings } from "niho-photo-editing/develop-engine/develop-settings";
+import { supportsDevelopSettingsWrite as supportsClientWrite, type DevelopSettings } from "niho-photo-editing/develop-engine/develop-settings";
 import type { PhotoLibrary } from "niho-photo-editing/library/photo-library";
 import { PhotoEditingDialogHost } from "niho-photo-editing/sdk-dialog-host";
-import { readDevelopSettings, type DevelopSettings as NodeDevelopSettings } from "niho-photo-contract";
+import { readDevelopSettings, supportsDevelopSettingsWrite, type DevelopSettings as NodeDevelopSettings } from "niho-photo-contract";
 import "niho-photo-ui/styles/tokens.css";
 
 const engine = createDevelopEngine();
 const recipe: DevelopSettings = { v: 1, engine: "niho-13" };
 const nodeRecipe: NodeDevelopSettings | null = readDevelopSettings(recipe);
-const sdk = { BrowserPhotoEditingWorkbench, PhotoEditingDialogHost, engine, recipe, nodeRecipe, PHOTO_EDITING_PRIMARY_BUTTON_CLASS_NAME };
+const nodeCanWrite: boolean = supportsDevelopSettingsWrite(recipe);
+const sdk = { BrowserPhotoEditingWorkbench, PhotoEditingDialogHost, engine, recipe, nodeRecipe, nodeCanWrite, supportsClientWrite, PHOTO_EDITING_PRIMARY_BUTTON_CLASS_NAME };
 document.body.dataset.sdkExports = Object.keys(sdk).sort().join(",");
 export type PhotoLibraryContract = PhotoLibrary;
 `);
@@ -159,6 +160,7 @@ import {
   readDevelopSettings,
   signedWorkingCopyState,
   supportedDevelopSettingsVersions,
+  supportsDevelopSettingsWrite,
 } from "niho-photo-contract";
 
 assert.deepEqual([...supportedDevelopSettingsVersions], [1, 2, 3, 4, 5, 6, 7, 8, 9]);
@@ -171,6 +173,10 @@ assert.equal(signedWorkingCopyState("raster.d1", null), "unsigned");
 for (const v of supportedDevelopSettingsVersions) assert.ok(readDevelopSettings({ v, engine: "niho-1" }));
 const unknown = { v: 1, engine: "niho-1", futureTopLevel: { keep: true } };
 assert.deepEqual(readDevelopSettings(unknown), unknown);
+assert.equal(isEditableDevelopSettings(unknown), true);
+assert.equal(supportsDevelopSettingsWrite(unknown), false);
+assert.equal(supportsDevelopSettingsWrite(neutralDevelopSettings(null)), true);
+assert.equal(supportsDevelopSettingsWrite({ ...neutralDevelopSettings(null), whiteBalance: { mode: "asShot", futureDrawingFeature: 0 } }), false);
 for (const invalid of [
   { v: 10, engine: "niho-1" },
   { v: 4, engine: "niho-1", colorPoints: [{ id: "broken" }] },
