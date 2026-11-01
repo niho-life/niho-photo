@@ -12081,6 +12081,11 @@
       "path": "packages/develop-engine/tools/sky-wasm-bench.mjs",
       "sha256": "63c4c50c6d50d68e4368fe822ba7900fa9787ad59e8111bb2708cd744f1edd7a",
       "origin": "Issue #141 のため新規作成した、空の推論の wasm（Node）の時間を測る道具。重み・写真は実行時に引数で渡し、公開物に含めない。合成の写真を自前の非圧縮 PNG にする。npm 依存なし。"
+    },
+    {
+      "path": "sdk/release-set.json",
+      "sha256": "4a44e1ada3832973b96f4ca87ca28a36eac6dc44251b574c7b99e5d7dc00d97c",
+      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布"
     }
   ],
   "excludedSources": [
