@@ -19,6 +19,7 @@ import {
   isActiveDevelopLens,
   readDevelopLens,
 } from "./develop-lens";
+import { hasKnownDevelopSettingsWriteFields } from "./develop-write-capability";
 /**
  * NIHO の現像エンジンの編集内容 `developSettings`（移行元設計。移行時の設計文書「段 2」）。Photo Bench の
  * `EditSettings` の上位集合に `v`・`engine`・`look`・`base`・`geometry`・`heal`・`lens` を足したもの。ブラウザは基本補正の 13 項目（NIHO Photo 段 1
@@ -549,6 +550,15 @@ export function isEditableDevelopSettings(value: unknown, options: { geometry?: 
   if (niho4Engine !== (value.look === NIHO4_DEVELOP_SETTINGS_LOOK)) return false;
   if ((niho7Engine || niho11Engine) !== (value.look === NIHO7_DEVELOP_SETTINGS_LOOK)) return false;
   return options.geometry !== false || !hasDevelopGeometry(value);
+}
+
+/**
+ * SDK がこの `developSettings` を既知の field / feature だけで書き戻せるか。未知の field は、現在の reader が保持できても false にする。
+ * true は全値の妥当性を保証しない。保存前には数値・範囲 / WASM、working-copy・base・metadata、所有権・認可・CAS など、それぞれの
+ * 独立した validator を引き続き通すこと。
+ */
+export function supportsDevelopSettingsWrite(value: unknown, options: { geometry?: boolean } = {}): boolean {
+  return isRecord(value) && isEditableDevelopSettings(value, options) && hasKnownDevelopSettingsWriteFields(value);
 }
 
 /**

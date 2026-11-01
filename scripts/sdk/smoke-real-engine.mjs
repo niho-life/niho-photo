@@ -55,6 +55,11 @@ export async function smokeRealEngine(manifestPath) {
     const contractModule = await import(pathToFileURL(path.join(consumer, "node_modules", contract.name, "dist/index.js")).href);
     if (typeof contractModule.neutralDevelopSettings !== "function") throw new SdkReleaseError("Node recipe契約のneutralDevelopSettingsがありません");
     const settings = contractModule.neutralDevelopSettings(null);
+    if (typeof contractModule.supportsDevelopSettingsWrite !== "function") throw new SdkReleaseError("Node recipe契約のsupportsDevelopSettingsWriteがありません");
+    assert.equal(contractModule.supportsDevelopSettingsWrite(settings), true);
+    const unknownFeature = { ...settings, futureDrawingFeature: { amount: 1 } };
+    assert.deepEqual(contractModule.readDevelopSettings(unknownFeature), unknownFeature);
+    assert.equal(contractModule.supportsDevelopSettingsWrite(unknownFeature), false);
     const issues = JSON.parse(glue.validateSettings(JSON.stringify(settings)));
     assert.deepEqual(issues, []);
 
