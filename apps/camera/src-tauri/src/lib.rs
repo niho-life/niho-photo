@@ -19,6 +19,7 @@
 mod account;
 mod activity;
 mod app_log;
+mod cloud_copy_source;
 mod cutout;
 mod cutout_commands;
 mod develop;
