@@ -1,3 +1,5 @@
+import { isDevelopAspect } from "./develop-aspect";
+
 const TOP_LEVEL_KEYS: ReadonlySet<string> = new Set([
   "v",
   "engine",
@@ -180,6 +182,7 @@ function hasKnownVignetteFields(value: unknown): boolean {
 function hasKnownGeometryFields(value: unknown): boolean {
   if (value === null) return true;
   if (!isRecord(value) || !hasOnlyKeys(value, GEOMETRY_KEYS)) return false;
+  if (hasOwn(value, "aspect") && (typeof value.aspect !== "string" || !isDevelopAspect(value.aspect))) return false;
   if (hasOwn(value, "crop") && (!isRecord(value.crop) || !hasOnlyKeys(value.crop, CROP_KEYS))) {
     return false;
   }

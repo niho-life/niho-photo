@@ -1,3 +1,5 @@
+import { FIXED_ASPECT_PATTERN, isDevelopAspect } from "./develop-aspect";
+export { isDevelopAspect } from "./develop-aspect";
 import {
   DEVELOP_PERSPECTIVE_FIELDS,
   constrainCropBoxToPerspective,
@@ -555,13 +557,6 @@ export function resizeCropBox(
   const widened = step([box.width, box.height], [targetWidth, box.height]);
   const [width, height] = step(widened, [widened[0], targetHeight]);
   return place(width, height);
-}
-
-const FIXED_ASPECT_PATTERN = /^([1-9]\d{0,3}):([1-9]\d{0,3})$/;
-
-/** `aspect` として書ける値か（crate の `is_aspect`: `free`・`original`・`originalSwapped`・`<w>:<h>`〔1〜9999〕）。 */
-export function isDevelopAspect(aspect: string): boolean {
-  return aspect === "free" || aspect === "original" || aspect === "originalSwapped" || FIXED_ASPECT_PATTERN.test(aspect);
 }
 
 /** `aspect` の比率を「幅 : 高さ」の組で（`free`・読めない値は null。無いのは `original`）。 */

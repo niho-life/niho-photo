@@ -557,7 +557,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-geometry.ts",
         "sha256": "ccb700dcbc95759de670ce6dae1ea52deeb57fe06b533cdda4101192b38339f5"
       },
-      "outputSha256": "785bb73d62d31f5f1dc998afd39831a6e9c80cc133f92869985cf5741ff73bdd",
+      "outputSha256": "bf5019ed873be2edb4cb1d14ce4513074b198c2b495707f492e067c9d13a16d0",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -566,7 +566,8 @@
         "PR #88 main rebase and perspective integration with develop engine 0.22.0",
         "遠近と余白補正の逆変換を適用",
         "遠近と余白補正を含む逆写像の説明を更新",
-        "niho-photo#46 で遠近・余白を埋める・Upright の読み書き、回転と反転での写し方、描かれる切り抜きの箱を足した。"
+        "niho-photo#46 で遠近・余白を埋める・Upright の読み書き、回転と反転での写し方、描かれる切り抜きの箱を足した。",
+        "aspect能力判定を共有leafへ分離し既存exportを保持"
       ]
     },
     {
@@ -12124,13 +12125,18 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-write-capability.test.ts",
-      "sha256": "d3e6f3f0e7e56b980cd867bb906504f51533031692b5dff1306ff8f032498428",
-      "origin": "NIHO photo SDKの書込field/feature能力判定と合成回帰として新規作成（niho-photo#190）。既存readerと画素は変更しない。"
+      "sha256": "3fe21b51282ba04231d7f762a7b13b4be703c884079c668a3f3106c62d1eee4c",
+      "origin": "NIHO photo SDKの書込field/feature能力判定と合成回帰として新規作成（niho-photo#190）。既存readerと画素は変更しない。\n変更理由: aspect variantとreaderの未知値保持を回帰で固定"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-write-capability.ts",
-      "sha256": "46e9198639e1a9913ca92f914923275404d624734ea2c6a2942ef48d32b965b2",
-      "origin": "NIHO photo SDKの書込field/feature能力判定と合成回帰として新規作成（niho-photo#190）。既存readerと画素は変更しない。"
+      "sha256": "89d98c123431fe7d863563051cdd2b17eac37b89ceb3afd697fe211d4cbbae31",
+      "origin": "NIHO photo SDKの書込field/feature能力判定と合成回帰として新規作成（niho-photo#190）。既存readerと画素は変更しない。\n変更理由: 未知aspect variantをwriterで拒否する"
+    },
+    {
+      "path": "packages/photo-editing/src/develop-engine/develop-aspect.ts",
+      "sha256": "4a83d72120370af6dd8c1790723f729f54c099bbc8184d22a2288e40f5d17b0c",
+      "origin": "NIHO既存geometryのaspect判定をreaderとwriter能力判定で共有するために分離。判定式と既存exportを維持。"
     }
   ],
   "excludedSources": [

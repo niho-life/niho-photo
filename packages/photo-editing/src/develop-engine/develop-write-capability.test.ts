@@ -176,6 +176,20 @@ describe("supportsDevelopSettingsWrite", () => {
     for (const settings of unknowns) expect(supportsDevelopSettingsWrite(settings)).toBe(false);
   });
 
+  it("既知の切り抜き比率だけを書き込み、未知variantはreaderで保持する", () => {
+    for (const aspect of ["free", "original", "originalSwapped", "4:5", "16:9", "9999:1"]) {
+      expect(supportsDevelopSettingsWrite(withNestedChange("geometry", { aspect })), aspect).toBe(true);
+    }
+    for (const aspect of ["futureAspect", "", "square", "0:1", "04:5", "10000:1"]) {
+      const source = withNestedChange("geometry", { aspect });
+      deepFreeze(source);
+      expect(readDevelopSettings(source)).toEqual(source);
+      expect(isEditableDevelopSettings(source)).toBe(true);
+      expect(supportsDevelopSettingsWrite(source), aspect).toBe(false);
+      expect(source.geometry).toEqual({ aspect });
+    }
+  });
+
   it("legacySettings は absent または空 object だけを許す", () => {
     const { legacySettings: _legacySettings, ...absent } = FULL_SETTINGS;
     expect(supportsDevelopSettingsWrite(absent)).toBe(true);
