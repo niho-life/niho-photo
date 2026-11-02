@@ -651,7 +651,8 @@ export type PhotoLibraryWorkingCopyDownload = {
    * {@link PhotoLibrary.loadWorkingCopy} に渡し返す
    */
   ref: string;
-  expiresAt: string;
+  /** 期限を持つticketだけ日時を返す。不透明なasset参照ではnull。 */
+  expiresAt: string | null;
   work: {
     /** 土台の版（`developSettings.base` と照合する） */
     baseVersion: string;
@@ -660,7 +661,8 @@ export type PhotoLibraryWorkingCopyDownload = {
     height: number;
     /** 段 1 が返したメタデータ（実装は中身を解釈しない） */
     meta: Record<string, unknown>;
-    renderedAt: string;
+    /** providerの生成時刻が分かる場合だけ返す。request時刻では代用しない。 */
+    renderedAt: string | null;
   };
 };
 
