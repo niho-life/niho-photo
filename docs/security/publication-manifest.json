@@ -10514,8 +10514,8 @@
     },
     {
       "path": "scripts/ci/release-evidence.test.mjs",
-      "sha256": "82df7799638ae5f871b83508b28fdf3851cb01bbbdc38cf151a1c68983cf1321",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: repository移管契約のtestを更新\n変更理由: 新repository receipt assertionを追加\n変更理由: main の Public CI: #174 で増えた probe の Cargo.lock を公開成果物の lockfile 収録範囲に足し、PR で一致を検査する\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+      "sha256": "8453866a2127a44356452736f54d5ca30b518031e10979286f4292f8009e89da",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: repository移管契約のtestを更新\n変更理由: 新repository receipt assertionを追加\n変更理由: main の Public CI: #174 で増えた probe の Cargo.lock を公開成果物の lockfile 収録範囲に足し、PR で一致を検査する\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: PR206の修復: 同一取得物のlock name差替えでもSBOM生成を拒否し正しいnameは受理する"
     },
     {
       "path": "scripts/ci/write-artifact-receipt.mjs",
@@ -12569,8 +12569,8 @@
     },
     {
       "path": "scripts/ci/public-sdk-dependencies.test.mjs",
-      "sha256": "35de963d12f82daedc41443cf5fae927b7ef7fced92b950769281961c39d0c52",
-      "origin": "NIHO所有C08の公式公開SDK依存契約・拒否試験・匿名取得receipt。既公開SDK0.1.7の同一取得bytesをsize/SHA-256/SHA-512で照合。非公開source・秘密値・実写真を含まない。\n変更理由: 固定SDK両件のconsumer宣言とworkspace lock edgeとnode_modules integrityを必須照合\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+      "sha256": "5421964fdb2bbd638c51f6e4b47112909fa3384bdeb832f47a13e590d5dcf8db",
+      "origin": "NIHO所有C08の公式公開SDK依存契約・拒否試験・匿名取得receipt。既公開SDK0.1.7の同一取得bytesをsize/SHA-256/SHA-512で照合。非公開source・秘密値・実写真を含まない。\n変更理由: 固定SDK両件のconsumer宣言とworkspace lock edgeとnode_modules integrityを必須照合\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: PR206の修復: 明示した正しいSDK名を受理し異なるname・null・数値を拒否する負例を追加"
     },
     {
       "path": "docs/security/public-sdk-dependency-receipt.json",
@@ -12589,8 +12589,8 @@
     },
     {
       "path": "scripts/ci/publication-lib.mjs",
-      "sha256": "8aa723e53441c49c829ba06ce2a4832e5d7fc49f635feb0d3f0a8c1ce4334601",
-      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/ci/publication-lib.mjs / 元SHA-256 3251f4ab5ab51e1db83f8b6fa5dc947664140627ba076a344e23d13cf5ac4790。C08の公式SDK依存契約に合わせて編集。初回の台帳登録であり、非公開履歴の取込みではない。\n変更理由: C04公式SDKの公開tarをconsumer・両digest・source・proof・lockへ固定して必須検証\n変更理由: 固定SDK両件のconsumer宣言とworkspace lock edgeとnode_modules integrityを必須照合\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+      "sha256": "242cdef1278b555c8b985d676acf60a1e3d6f7c39a2ffef31b4c66a345b08984",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/ci/publication-lib.mjs / 元SHA-256 3251f4ab5ab51e1db83f8b6fa5dc947664140627ba076a344e23d13cf5ac4790。C08の公式SDK依存契約に合わせて編集。初回の台帳登録であり、非公開履歴の取込みではない。\n変更理由: C04公式SDKの公開tarをconsumer・両digest・source・proof・lockへ固定して必須検証\n変更理由: 固定SDK両件のconsumer宣言とworkspace lock edgeとnode_modules integrityを必須照合\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: PR206の修復: optional lock nameも固定SDK名に拘束しSBOMの誤識別を拒否する"
     },
     {
       "path": "scripts/ci/publication.test.mjs",

@@ -30,6 +30,9 @@ test("監査したconsumerと公式SDKのexact artifactだけを許可する", a
     assert.equal(approvedSdkLockDependency(entries, `node_modules/${entry.name}`, {
       version: entry.version, resolved: entry.url, integrity: entry.integrity,
     }), true);
+    assert.equal(approvedSdkLockDependency(entries, `node_modules/${entry.name}`, {
+      name: entry.name, version: entry.version, resolved: entry.url, integrity: entry.integrity,
+    }), true);
     assert.equal(approvedSdkConsumerLockDependency(entry, "packages/photo-cloud-media", {
       dependencies: { [entry.name]: entry.url },
     }), true);
@@ -46,6 +49,7 @@ test("監査したconsumerと公式SDKのexact artifactだけを許可する", a
       version: entry.version, resolved: entry.url, integrity: entry.integrity,
     }), false);
     for (const mutation of [
+      { name: "different-sdk-name" }, { name: null }, { name: 123 },
       { version: "999.0.0" }, { resolved: `${entry.url}?changed=true` },
       { integrity: "sha512-synthetic" }, { integrity: undefined }, { link: true },
     ]) {
