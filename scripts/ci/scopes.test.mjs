@@ -15,6 +15,8 @@ test("文書変更でもpublicationはworkflow側で常時実行、package実行
   assert.deepEqual(selected(["packages/ui/src/cn.ts"]), ["photo-editing", "camera", "desktop-photo", "desktop-account"]);
   assert.deepEqual(selected(["packages/niho-cloud-contract/src/v1.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-library-contract/src/v2.ts"]), ["photo-editing"]);
+  assert.deepEqual(selected(["packages/photo-cloud-session/src/server/service.ts"]), ["photo-editing"]);
+  assert.deepEqual(selected(["apps/photo-web/src/server/auth.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/develop-engine/core.rs"]), ["camera", "desktop-photo", "develop-engine"]);
   assert.equal(selectScopes(["packages/develop-engine/core.rs"], all).find((s) => s.scope === "develop-engine").swift, true);
   // 筆の照合の fixture は TS と cutout の Swift 試験の両方が読む
