@@ -71,6 +71,8 @@ Macアプリの権限 `allow-camera-library` は、次の7コマンドだけを�
 
 どちらの保存先も同じ `BrowserPhotoEditingWorkbench` を使います。切り替え時は provider と workbench を作り直し、query と端末内の補正下書きは `personal-user:<actorId>:local|cloud` の本人用 namespace で分けます。この値は従来の prop 名が `spotId` の共有編集面へ渡しますが、拠点 ID や認可証明として扱いません。クラウド側には camera の背景除去 host を渡しません。
 
-コピーは、この Mac で選んだ 1 枚に対する利用者の明示操作だけで、元ファイルをこの Mac から移動・削除しません。React が binding へ渡す写真の情報は不透明な `photoId` のみで、path、bytes、token は渡しません。切り替えとコピー開始は共通の route leave guard を通り、補正の保存または破棄確認が完了できない場合は進みません。コピー中は進捗を表示して二重実行を止め、失敗を成功として扱いません。成功結果に `cloudPhotoId` がある場合だけ「クラウドで開く」を表示します。ログインやアカウント状態の変化からコピーを自動開始しません。本人の写真削除と退会 purge は private API で未実装のため、公開UIからのクラウド削除も無効です。
+コピーは、この Mac で選んだ 1 枚に対する利用者の明示操作だけで、元ファイルをこの Mac から移動・削除しません。React が binding へ渡す写真の情報は不透明な `photoId` のみで、path、bytes、token は渡しません。切り替えとコピー開始は共通の route leave guard を通り、補正の保存または破棄確認が完了できない場合は進みません。コピー中は進捗を表示して二重実行を止め、失敗を成功として扱いません。成功結果に `cloudPhotoId` がある場合だけ「クラウドで開く」を表示します。ログインやアカウント状態の変化からコピーを自動開始しません。本人の写真削除と退会 purge の基盤は既存 private backend にありますが、Photo 製品への実接続・受入は未完了のため、公開UIからのクラウド削除は無効です。
 
 実ファイルの upload、idempotency key、通信中断後の resume、認証・認可、容量制限は private integration の `copyLocalPhoto` 実装の責務です。公開 React 層へこれらの資格情報や転送データを追加しません。個人クラウドの共有リンクは別機能であり、この binding は共有 UI を有効にしません。
+
+本人クラウドの現行製品境界・API対応・5GiB・即時削除・Photo専用Webとwriterは [個人クラウド接続契約](../architecture/personal-photo-cloud.md) とPhoto Epic #192 / #193を正本とします。旧Editor側の配置・ゴミ箱契約は再開しません。

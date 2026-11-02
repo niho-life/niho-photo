@@ -1,0 +1,24 @@
+{
+  "schemaVersion": 1,
+  "repository": "niho-life/niho-editor",
+  "commit": "9c57b4698e755e025ab4bb53361a42421557722c",
+  "sources": [
+    {
+      "path": "packages/photo-library-contract/src/v1.ts",
+      "sha256": "63b2209fb0b03c42f19f16ab0b18b168fa6c540d6b8064b3f2ed1476a29502c0"
+    },
+    {
+      "path": "packages/photo-library-contract/fixtures/v1.ts",
+      "sha256": "eab8d98608c8db01a9c5a0dbb4975a78d27b8a662e656bc41a4c2cb19c272c0e"
+    },
+    {
+      "path": "packages/photo-library-contract/fixtures/type-boundary.ts",
+      "sha256": "2299e2a47dd605e0c639f533daa98ba3eca6bbe65a3057b2508fd15f97266e53"
+    },
+    {
+      "path": "packages/photo-library-contract/fixtures/security-cases.json",
+      "sha256": "61ff077ff20ac47c8a98a6b7a85418e7d16d28951b71395993b4489597bde111"
+    }
+  ],
+  "policy": "One-time audited derivation. Photo v2 is maintained here only; do not synchronize legacy Editor v1 or import its DB/auth/HTTP routes."
+}
