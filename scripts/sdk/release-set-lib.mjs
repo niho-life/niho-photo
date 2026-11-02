@@ -18,7 +18,7 @@ import { fileURLToPath } from "node:url";
 import ts from "typescript";
 
 import { assertPublicBytes, guardBundle } from "../ci/release-evidence-lib.mjs";
-import { validateReleaseManifest, verifyManifestPackageFiles } from "./verify-release-artifact.mjs";
+import { sdkReleaseProfile, validateReleaseManifest, verifyManifestPackageFiles } from "./verify-release-artifact.mjs";
 
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/;
 const PACKAGE_NAME = /^(?:@[a-z0-9][a-z0-9._-]*\/[a-z0-9][a-z0-9._-]*|[a-z0-9][a-z0-9._-]*)$/;
@@ -39,9 +39,50 @@ const ENGINE_NATIVE_CLOSURE = [
   "tools/niho-camera-cutout/Package.swift",
   "tools/niho-camera-cutout/Sources/NihoCameraCutoutCLI/main.swift",
 ];
-const OWNED_SOURCE_PATHS = ["packages/photo-editing", "packages/ui", "packages/niho-cloud-contract", "packages/develop-engine", "packages/desktop-photo", "sdk", "scripts/sdk", "scripts/ci/cloud-contract-sync.mjs", "scripts/ci/image-metadata.mjs", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/ci/photo-sdk-workflow-lib.mjs", "scripts/ci/publication-lib.mjs", "scripts/ci/release-evidence-lib.mjs", "scripts/ci/workflow-lib.mjs", "LICENSE.md", "ASSET_LICENSE.md", "TRADEMARKS.md", "THIRD_PARTY_NOTICES.md"];
 const BUILD_TOOLING_PATHS = ["package.json", "package-lock.json"];
 const TOOLING_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
+const PACKAGE_DEFINITIONS = Object.freeze({
+  ui: Object.freeze({
+    id: "ui", name: "niho-photo-ui", sourceRoot: "packages/ui", kind: "typescript",
+    include: ["package.json", "tailwind-theme.cjs", "src/**"], exclude: ["**/*.test.*"],
+  }),
+  "photo-editing": Object.freeze({
+    id: "photo-editing", name: "niho-photo-editing", sourceRoot: "packages/photo-editing", kind: "typescript",
+    include: ["package.json", "src/**"], exclude: ["**/*.test.*"],
+    rewritePackageImports: { "niho-ui": "niho-photo-ui" },
+    rewriteSpecifiers: {
+      "../../niho-cloud-contract/src/mock.js": "niho-photo-cloud-contract/mock",
+      "../../niho-cloud-contract/src/v1.js": "niho-photo-cloud-contract/v1",
+    },
+  }),
+  "cloud-contract": Object.freeze({
+    id: "cloud-contract", name: "niho-photo-cloud-contract", sourceRoot: "packages/niho-cloud-contract", kind: "typescript",
+    include: ["package.json", "README.md", "src/**"], exclude: [],
+  }),
+  "photo-contract": Object.freeze({
+    id: "photo-contract", name: "niho-photo-contract", sourceRoot: "packages/photo-editing", kind: "node-contract",
+    entry: "src/develop-engine/develop-settings.ts", include: ["src/develop-engine/develop-settings.ts"], exclude: [],
+  }),
+  "personal-cloud-contract": Object.freeze({
+    id: "personal-cloud-contract", name: "niho-photo-personal-cloud-contract", sourceRoot: "packages/photo-library-contract", kind: "node-contract",
+    entry: "src/v2.ts", include: ["src/v2.ts"], exclude: [],
+  }),
+  "develop-engine-source": Object.freeze({
+    id: "develop-engine-source", name: "niho-photo-develop-engine-source", sourceRoot: "packages/develop-engine", kind: "rust-source",
+    include: [
+      ".cargo/config.toml", "Cargo.lock", "Cargo.toml", "LICENSES.md", "README.md", "build-macos-native.mjs", "licenses/**", "rust-toolchain.toml",
+      "calibration/**", "crates/*/Cargo.toml", "crates/*/src/**", "crates/niho-base-raw/profiles/**", "crates/niho-develop/looks/**",
+      "crates/niho-develop/niho3/**", "crates/niho-develop/niho4/**", "crates/niho-develop/niho6/**", "crates/niho-develop/presets/**",
+      "tools/apple-raw-linear/Package.swift", "tools/apple-raw-linear/Sources/**", "tools/apple-raw-linear/Tests/**",
+      "tools/niho-camera-cutout/Package.swift", "tools/niho-camera-cutout/Sources/**", "tools/niho-camera-cutout/Tests/**",
+    ],
+    exclude: [],
+  }),
+});
+const CONFIG_PACKAGE_IDS = Object.freeze({
+  1: Object.freeze(["ui", "photo-editing", "cloud-contract", "photo-contract", "develop-engine-source"]),
+  2: Object.freeze(["ui", "photo-editing", "cloud-contract", "photo-contract", "personal-cloud-contract", "develop-engine-source"]),
+});
 
 // スレッドの wasm（#151。crossOriginIsolated の画面だけが読む）の build の指定。build と release set の検証が
 // 同じ値を使う。共有メモリの上限は 1 本の wasm と同じ wasm32 の 4GiB（大きな書き出しで 1 本より先に足りなく
@@ -148,10 +189,27 @@ export function matchesPackagePath(relative, definition) {
   return definition.include.some((pattern) => globRegex(pattern).test(relative)) && !definition.exclude.some((pattern) => globRegex(pattern).test(relative));
 }
 
+function canonicalJson(value) {
+  if (Array.isArray(value)) return value.map(canonicalJson);
+  if (value !== null && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map((key) => [key, canonicalJson(value[key])]));
+  return value;
+}
+
+function sameJson(left, right) {
+  return JSON.stringify(canonicalJson(left)) === JSON.stringify(canonicalJson(right));
+}
+
+function hasExactKeys(value, expected) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) && sameJson(Object.keys(value).sort(), [...expected].sort());
+}
+
 export function validateConfig(config) {
-  if (!config || config.schemaVersion !== 1 || config.repository !== "niho-life/niho-photo") throw new SdkReleaseError("release-set の基本契約が不正です");
+  let profile;
+  try { profile = sdkReleaseProfile(config?.schemaVersion); } catch { throw new SdkReleaseError("release-set の schema profile が不正です"); }
+  if (!hasExactKeys(config, ["schemaVersion", "version", "repository", "packages", "ownedSourcePaths", "buildToolingPaths", "engine"]) || config.repository !== "niho-life/niho-photo") throw new SdkReleaseError("release-set の基本契約が不正です");
   assertStrictSemver(config.version);
-  if (!Array.isArray(config.packages) || config.packages.length !== 5) throw new SdkReleaseError("release-set は UI/editor/cloud contract/Node contract/engine source の 5 package が必要です");
+  const expectedIds = CONFIG_PACKAGE_IDS[profile.schemaVersion];
+  if (!Array.isArray(config.packages) || config.packages.length !== expectedIds.length || config.packages.some((definition, index) => !sameJson(definition, PACKAGE_DEFINITIONS[expectedIds[index]]))) throw new SdkReleaseError("release-set package profile が不正です");
   const ids = new Set();
   const names = new Set();
   for (const definition of config.packages) {
@@ -162,7 +220,7 @@ export function validateConfig(config) {
     assertRelativePath(definition.sourceRoot, "sourceRoot");
     if (!Array.isArray(definition.include) || !definition.include.length || !Array.isArray(definition.exclude)) throw new SdkReleaseError("package include/exclude が不正です");
     for (const pattern of [...definition.include, ...definition.exclude]) globRegex(pattern);
-    if (definition.kind === "node-contract" && (definition.id !== "photo-contract" || definition.name !== "niho-photo-contract" || !assertRelativePath(definition.entry, "Node contract entry") || !definition.include.some((pattern) => globRegex(pattern).test(definition.entry)))) throw new SdkReleaseError("Node contract 定義が不正です");
+    if (definition.kind === "node-contract" && (!["photo-contract", "personal-cloud-contract"].includes(definition.id) || !assertRelativePath(definition.entry, "Node contract entry") || !definition.include.some((pattern) => globRegex(pattern).test(definition.entry)))) throw new SdkReleaseError("Node contract 定義が不正です");
     for (const [from, to] of Object.entries(definition.rewritePackageImports ?? {})) {
       if (!PACKAGE_NAME.test(from) || !PACKAGE_NAME.test(to) || from === to) throw new SdkReleaseError("package import rewrite が不正です");
     }
@@ -171,13 +229,14 @@ export function validateConfig(config) {
       if (typeof from !== "string" || !from || from.includes("\\") || from.includes("\0") || !PACKAGE_NAME.test(dependency)) throw new SdkReleaseError("module specifier rewrite が不正です");
     }
   }
-  if (!ids.has("ui") || !ids.has("photo-editing") || !ids.has("cloud-contract") || !ids.has("photo-contract") || !ids.has("develop-engine-source")) throw new SdkReleaseError("必須 package がありません");
-  if (JSON.stringify(config.ownedSourcePaths) !== JSON.stringify(OWNED_SOURCE_PATHS)) throw new SdkReleaseError("SDK owned source path が不正です");
+  if (expectedIds.some((id) => !ids.has(id))) throw new SdkReleaseError("必須 package がありません");
+  if (!sameJson(config.ownedSourcePaths, profile.ownedSourcePaths)) throw new SdkReleaseError("SDK owned source path が不正です");
   if (JSON.stringify(config.buildToolingPaths) !== JSON.stringify(BUILD_TOOLING_PATHS)) throw new SdkReleaseError("SDK build tooling path が不正です");
   const engineSource = config.packages.find(({ id }) => id === "develop-engine-source");
   if (!ENGINE_NOTICE_FILES.every((file) => engineSource.include.some((pattern) => globRegex(pattern).test(file)))) throw new SdkReleaseError("engine source の license/notice closure が不足しています");
   if (!ENGINE_NATIVE_CLOSURE.every((file) => engineSource.include.some((pattern) => globRegex(pattern).test(file)))) throw new SdkReleaseError("engine source の macOS native build closure が不足しています");
   const engine = config.engine;
+  if (!hasExactKeys(engine, ["version", "crateVersion", "runtimePackageName", "assetDirectory", "manifestName", "requiredExtensions", "contractPaths", "buildInputs"])) throw new SdkReleaseError("engine pin key集合が不正です");
   if (!engine || !/^niho-[1-9]\d*$/.test(engine.version ?? "") || !SEMVER.test(engine.crateVersion ?? "") || !PACKAGE_NAME.test(engine.runtimePackageName ?? "")) throw new SdkReleaseError("engine pin が不正です");
   assertStrictSemver(engine.crateVersion);
   assertRelativePath(engine.assetDirectory, "engine assetDirectory");
@@ -262,7 +321,9 @@ function packageManifest(definition, original, config) {
     return {
       name: definition.name,
       version: config.version,
-      description: "NIHO photo recipe contract for plain Node.js ESM consumers",
+      description: definition.id === "personal-cloud-contract"
+        ? "NIHO photo personal cloud v2 contract for Node.js and browser consumers"
+        : "NIHO photo recipe contract for plain Node.js ESM consumers",
       type: "module",
       license: "UNLICENSED",
       files: ["dist", ...rootNotices],
@@ -568,23 +629,25 @@ function stageNodeContractPackage({ repoRoot, commit, config, definition, stage,
   mkdirSync(sourceRoot, { recursive: true, mode: 0o755 });
   put(buildRoot, "package.json", jsonBytes({ type: "module" }));
   for (const [relative, text] of collectNodeContractSources(repoRoot, commit, definition)) put(sourceRoot, relative, Buffer.from(text));
-  const entry = [
-    "export {",
-    "  DEVELOP_SETTINGS_ENGINE, DEVELOP_SETTINGS_LOOK, DEVELOP_SETTINGS_LOOKS, DEVELOP_SETTINGS_LOOK_WHEN_MISSING,",
-    "  LEGACY_DEVELOP_SETTINGS_ENGINE, NIHO2_DEVELOP_SETTINGS_ENGINE,",
-    "  NIHO4_DEVELOP_SETTINGS_ENGINE, NIHO4_DEVELOP_SETTINGS_LOOK,",
-    "  NIHO6_DEVELOP_SETTINGS_ENGINE, NIHO6_DEVELOP_SETTINGS_LOOKS, NIHO7_DEVELOP_SETTINGS_ENGINE, NIHO7_DEVELOP_SETTINGS_LOOK,",
-    "  NIHO10_DEVELOP_SETTINGS_ENGINE, NIHO11_DEVELOP_SETTINGS_ENGINE, NIHO11_DEVELOP_SETTINGS_LOOK,",
-    "  NIHO12_DEVELOP_SETTINGS_ENGINE, SIGNED_DEVELOP_SETTINGS_ENGINE, SIGNED_DEVELOP_SETTINGS_LOOK, SIGNED_WORKING_COPY_ENCODING,",
-    "  DevelopSettingsBaseMismatchError, developSettingsOnWorkingCopy, hasNullDevelopGeometryField, isEditableDevelopSettings,",
-    "  neutralDevelopSettings, newDevelopSettingsEngine, readDevelopSettings, signedNeutralDevelopSettings, signedWorkingCopyState,",
-    "  supportsDevelopSettingsWrite, supportsNiho4SignedRaw, supportsNiho7SignedRaw,",
-    '} from "./src/develop-engine/develop-settings.js";',
-    'export type { DevelopSettings, DevelopSettingsVersion, NewDevelopSettingsEngineOptions, SignedWorkingCopyState } from "./src/develop-engine/develop-settings.js";',
-    `export const supportedDevelopSettingsVersions = ${JSON.stringify(recipe.supportedVersions)} as const;`,
-    `export const developSettingsEngineIdentifiers = ${JSON.stringify(recipe.engineIdentifiers)} as const;`,
-    "",
-  ].join("\n");
+  const entry = definition.id === "personal-cloud-contract"
+    ? 'export * from "./src/v2.js";\n'
+    : [
+      "export {",
+      "  DEVELOP_SETTINGS_ENGINE, DEVELOP_SETTINGS_LOOK, DEVELOP_SETTINGS_LOOKS, DEVELOP_SETTINGS_LOOK_WHEN_MISSING,",
+      "  LEGACY_DEVELOP_SETTINGS_ENGINE, NIHO2_DEVELOP_SETTINGS_ENGINE,",
+      "  NIHO4_DEVELOP_SETTINGS_ENGINE, NIHO4_DEVELOP_SETTINGS_LOOK,",
+      "  NIHO6_DEVELOP_SETTINGS_ENGINE, NIHO6_DEVELOP_SETTINGS_LOOKS, NIHO7_DEVELOP_SETTINGS_ENGINE, NIHO7_DEVELOP_SETTINGS_LOOK,",
+      "  NIHO10_DEVELOP_SETTINGS_ENGINE, NIHO11_DEVELOP_SETTINGS_ENGINE, NIHO11_DEVELOP_SETTINGS_LOOK,",
+      "  NIHO12_DEVELOP_SETTINGS_ENGINE, SIGNED_DEVELOP_SETTINGS_ENGINE, SIGNED_DEVELOP_SETTINGS_LOOK, SIGNED_WORKING_COPY_ENCODING,",
+      "  DevelopSettingsBaseMismatchError, developSettingsOnWorkingCopy, hasNullDevelopGeometryField, isEditableDevelopSettings,",
+      "  neutralDevelopSettings, newDevelopSettingsEngine, readDevelopSettings, signedNeutralDevelopSettings, signedWorkingCopyState,",
+      "  supportsDevelopSettingsWrite, supportsNiho4SignedRaw, supportsNiho7SignedRaw,",
+      '} from "./src/develop-engine/develop-settings.js";',
+      'export type { DevelopSettings, DevelopSettingsVersion, NewDevelopSettingsEngineOptions, SignedWorkingCopyState } from "./src/develop-engine/develop-settings.js";',
+      `export const supportedDevelopSettingsVersions = ${JSON.stringify(recipe.supportedVersions)} as const;`,
+      `export const developSettingsEngineIdentifiers = ${JSON.stringify(recipe.engineIdentifiers)} as const;`,
+      "",
+    ].join("\n");
   put(sourceRoot, "index.ts", Buffer.from(entry));
   const rootNames = ["index.ts", ...collectFiles(sourceRoot).filter((name) => name.endsWith(".ts"))]
     .filter((name, index, values) => values.indexOf(name) === index)
@@ -594,14 +657,14 @@ function stageNodeContractPackage({ repoRoot, commit, config, definition, stage,
     options: {
       declaration: true,
       esModuleInterop: false,
-      lib: ["lib.es2022.d.ts"],
+      lib: definition.id === "personal-cloud-contract" ? ["lib.es2022.d.ts", "lib.dom.d.ts"] : ["lib.es2022.d.ts"],
       module: ts.ModuleKind.NodeNext,
       moduleResolution: ts.ModuleResolutionKind.NodeNext,
       newLine: ts.NewLineKind.LineFeed,
       noEmitOnError: true,
       outDir: outputRoot,
       rootDir: sourceRoot,
-      skipLibCheck: true,
+      skipLibCheck: definition.id !== "personal-cloud-contract",
       sourceMap: false,
       strict: true,
       target: ts.ScriptTarget.ES2022,
@@ -869,7 +932,7 @@ export async function packReleaseSet({ repoRoot, configPath = "sdk/release-set.j
 
     const manifestName = `niho-photo-sdk-${config.version}-${commit}.json`;
     const manifest = {
-      schemaVersion: 1,
+      schemaVersion: config.schemaVersion,
       releaseReady: true,
       repository: config.repository,
       version: config.version,

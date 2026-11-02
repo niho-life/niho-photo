@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 1,
-  "version": "0.1.7",
+  "schemaVersion": 2,
+  "version": "0.1.8",
   "repository": "niho-life/niho-photo",
   "packages": [
     {
@@ -61,6 +61,17 @@
       "exclude": []
     },
     {
+      "id": "personal-cloud-contract",
+      "name": "niho-photo-personal-cloud-contract",
+      "sourceRoot": "packages/photo-library-contract",
+      "kind": "node-contract",
+      "entry": "src/v2.ts",
+      "include": [
+        "src/v2.ts"
+      ],
+      "exclude": []
+    },
+    {
       "id": "develop-engine-source",
       "name": "niho-photo-develop-engine-source",
       "sourceRoot": "packages/develop-engine",
@@ -111,7 +122,8 @@
     "LICENSE.md",
     "ASSET_LICENSE.md",
     "TRADEMARKS.md",
-    "THIRD_PARTY_NOTICES.md"
+    "THIRD_PARTY_NOTICES.md",
+    "packages/photo-library-contract"
   ],
   "buildToolingPaths": [
     "package.json",

@@ -11949,13 +11949,13 @@
     },
     {
       "path": "scripts/sdk/release-set-lib.mjs",
-      "sha256": "3d94505e321ccb44a082630d02808322b95bbf67b25bef56a2cb82e2834e14b9",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加"
+      "sha256": "795ada7c7df275247edbca4374411b5595269542788026fbcdaa8856e2c01ce2",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
     },
     {
       "path": "scripts/sdk/release-set.test.mjs",
-      "sha256": "a9805f6949bf569427bda37f4924ba48d92b4bf3e3eeb5fb91bd20b219b3ab61",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set.test.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: #141 空のモデルの runtime のファイル名と置き場の試験を足す\n変更理由: 型宣言exportとconsumer closureを検証\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定"
+      "sha256": "f40f6652d8590868518b0115cb015ba31420b9ca4625a29d4a5a627d99f0c9aa",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set.test.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: #141 空のモデルの runtime のファイル名と置き場の試験を足す\n変更理由: 型宣言exportとconsumer closureを検証\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
     },
     {
       "path": "scripts/sdk/smoke-real-engine.mjs",
@@ -11969,8 +11969,8 @@
     },
     {
       "path": "scripts/sdk/verify-release-artifact.mjs",
-      "sha256": "600cf2647380a1e8670fa9641cbbb38f34664330ec53269f958627a2026d2667",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/verify-release-artifact.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
+      "sha256": "5f373bf08dd40af9e314a9eb88a485e02525c29b4f2425de69c4bb20da78ebe3",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/verify-release-artifact.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
     },
     {
       "path": "apps/camera/tools/webview-isolation-probe/Cargo.lock",
@@ -12094,8 +12094,8 @@
     },
     {
       "path": "sdk/release-set.json",
-      "sha256": "6aeafa5d5855c1ceccf0ce4613ce2611a03cc97a6e364b65a701f019d03f722f",
-      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加"
+      "sha256": "a19ed74544f84a689969ae3105e21144b339fad9f6fc39e222e25c94035ef117",
+      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
     },
     {
       "path": "apps/camera/src-tauri/src/cloud_copy_source.rs",
@@ -12124,8 +12124,8 @@
     },
     {
       "path": "sdk/README.md",
-      "sha256": "9376af15f3a753d478a5bfb77a3f0012e47ff4c894b08da8fc73b9d615c8b3a4",
-      "origin": "NIHO photo SDKの書込field/feature能力判定と合成回帰として新規作成（niho-photo#190）。既存readerと画素は変更しない。"
+      "sha256": "1c395028ef8b29c5dd33206cc33974246be69b63bbbb49dab4b297a03f444267",
+      "origin": "NIHO photo SDKの書込field/feature能力判定と合成回帰として新規作成（niho-photo#190）。既存readerと画素は変更しない。\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-write-capability.test.ts",
@@ -12604,18 +12604,28 @@
     },
     {
       "path": "scripts/candidate/mac-candidate-lib.mjs",
-      "sha256": "7b997c4ab2aff6e757f6a50771e67108c5658aee921d5f68aac0eb4415704d88",
-      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate-lib.mjs / 元SHA-256 ca11db7292461c7735162da788075be51c2ec418085c4e337a33f11b86cdcb26。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+      "sha256": "0c34c92210835dddc5eca3d598595192a9acdf1ba92c0a9d39a5cd0e43ad0268",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate-lib.mjs / 元SHA-256 ca11db7292461c7735162da788075be51c2ec418085c4e337a33f11b86cdcb26。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
     },
     {
       "path": "scripts/candidate/mac-candidate.test.mjs",
-      "sha256": "c06c60e9b86154e5f39bc43e232d02d7a3c48e0c9e7cead65ac40e93ef9b0512",
-      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate.test.mjs / 元SHA-256 317e82bf2949f90503f248a3ea8886e71fd3aa6b19c73b9e7a21196bd3140d95。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+      "sha256": "bc9364c21ffa9c8b564442dbcd49c97348f3019c61ff273f238fe6bd27acfefe",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate.test.mjs / 元SHA-256 317e82bf2949f90503f248a3ea8886e71fd3aa6b19c73b9e7a21196bd3140d95。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
     },
     {
       "path": "packages/photo-cloud-library/test/lifecycle.test.ts",
       "sha256": "aac39e06d5787868df5fe6a95c9c2d190f55815f2fb22ac2c8c78f0b4e1b4079",
       "origin": "NIHO所有の新規C02本人クラウドadapter回帰試験。合成fixtureで本人境界・削除・資源寿命を検証し、実写真・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "scripts/candidate/build-mac-candidate.mjs",
+      "sha256": "4d5322ee44ed4ad557b04baf9ccb924846cd68100ac8be789f05516c641ec9b8",
+      "origin": "NIHO所有の公開済みcandidate/SDK proof用CLI。公開commit 7a98b3467e22a3e538090f36f7117d2c3ccf019f の scripts/candidate/build-mac-candidate.mjs（SHA-256 0d738589165b3dde3f78c28766a17149b110d5470ab5ed194ea66170729c5333）を出発点にC00 SDK profile接続を更新する。秘密・内部URL・実利用データを含まない。\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
+    },
+    {
+      "path": "scripts/candidate/prepare-published-sdk.mjs",
+      "sha256": "bfc66d61b9a6cfc2c0089594e216d551200f96f0aaf2e4138dfbb1e06d593086",
+      "origin": "NIHO所有の公開済みcandidate/SDK proof用CLI。公開commit 7a98b3467e22a3e538090f36f7117d2c3ccf019f の scripts/candidate/prepare-published-sdk.mjs（SHA-256 fccbce57eb3276cde6f88e323b4161c7281d48c18ce48bf3c88828ef5836f82e）を出発点にC00 SDK profile接続を更新する。秘密・内部URL・実利用データを含まない。\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
     }
   ],
   "excludedSources": [
