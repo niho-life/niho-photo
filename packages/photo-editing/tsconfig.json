@@ -20,10 +20,13 @@
       "react",
       "react-dom",
       "react/experimental"
-    ]
+    ],
+    "allowImportingTsExtensions": true
   },
   "include": [
     "src/**/*.ts",
-    "src/**/*.tsx"
+    "src/**/*.tsx",
+    "../photo-library-contract/src/**/*.ts",
+    "../photo-library-contract/fixtures/**/*.ts"
   ]
 }

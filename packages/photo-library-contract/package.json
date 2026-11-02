@@ -1,0 +1,18 @@
+{
+  "name": "@niho/photo-personal-cloud-contract",
+  "version": "2.0.0",
+  "private": true,
+  "type": "module",
+  "description": "NIHO photo本人クラウドのport契約。既存backendへの接続・本番有効化を含まない",
+  "exports": {
+    ".": "./src/v2.ts",
+    "./fixtures": "./fixtures/v2.ts",
+    "./cases": "./fixtures/security-cases.json"
+  },
+  "scripts": {
+    "test": "node --test ../../scripts/ci/personal-photo-contract.test.mjs"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

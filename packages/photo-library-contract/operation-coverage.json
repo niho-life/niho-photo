@@ -1,0 +1,121 @@
+{
+  "contractVersion": 2,
+  "auditedAt": "2026-11-03",
+  "productionAcceptance": "not-performed",
+  "operations": {
+    "library.get": {
+      "issue": 195,
+      "backend": "missing",
+      "photoWiring": "not-connected",
+      "evidence": "本人のusage/予約/削除待ち/能力read modelが必要。Editor DBで再集計しない。"
+    },
+    "photos.list": {
+      "issue": 195,
+      "backend": "partial",
+      "photoWiring": "not-connected",
+      "evidence": "本人・保存時刻/ID keyset・limit60は存在。能力/usage/revision/filterの公開DTOは未接続。"
+    },
+    "photos.get": {
+      "issue": 195,
+      "backend": "partial",
+      "photoWiring": "not-connected",
+      "evidence": "本人の保存済み原本と補正は存在。寸法/asset/media/baseを正本から構成する。"
+    },
+    "photos.info": {
+      "issue": 195,
+      "backend": "missing",
+      "photoWiring": "not-connected",
+      "evidence": "本人専用EXIF read modelが必要。クライアント推測をAPI成功にしない。"
+    },
+    "photos.lookup": {
+      "issue": 195,
+      "backend": "partial",
+      "photoWiring": "not-connected",
+      "evidence": "upload開始で同一本人のhash重複照合は存在。bulk lookup APIはない。"
+    },
+    "uploads.start": {
+      "issue": 195,
+      "backend": "partial",
+      "photoWiring": "not-connected",
+      "evidence": "owner lock・200MiB・5GiB・requestId再送・予約は存在。mask予約は未実装。"
+    },
+    "uploads.get": {
+      "issue": 195,
+      "backend": "missing",
+      "photoWiring": "not-connected",
+      "evidence": "requestIdで結果不明を照合するowner-scoped状態APIが必要。"
+    },
+    "uploads.renew": {
+      "issue": 195,
+      "backend": "missing",
+      "photoWiring": "not-connected",
+      "evidence": "予約再発行/offset照合と期限意味を確定する。再startで延長したと見なさない。"
+    },
+    "uploads.complete": {
+      "issue": 195,
+      "backend": "partial",
+      "photoWiring": "not-connected",
+      "evidence": "固定世代・実size/SHA-256・CASは存在。magic bytes/寸法/形式provider受入は不足。"
+    },
+    "uploads.cancel": {
+      "issue": 195,
+      "backend": "partial",
+      "photoWiring": "not-connected",
+      "evidence": "未保存のphotoのpurgeは再利用候補。requestId/状態を照合し保存済み原本を消さない専用契約が必要。"
+    },
+    "content.get": {
+      "issue": 195,
+      "backend": "partial",
+      "photoWiring": "not-connected",
+      "evidence": "本人確認後の短命原本downloadは存在。URLをUIへ渡さない認証transportとRange/stream検証が必要。"
+    },
+    "masks.get": {
+      "issue": 196,
+      "backend": "missing",
+      "photoWiring": "not-connected",
+      "evidence": "photo/owner/hashに拘束したmask保存・取得と同じ5GiB台帳が必要。"
+    },
+    "recipes.put": {
+      "issue": 196,
+      "backend": "partial",
+      "photoWiring": "not-connected",
+      "evidence": "revision CAS・idempotency・競合永続化は存在。完全recipe/base/mask検証と旧64KiB制限との整合が必要。"
+    },
+    "versions.get": {
+      "issue": 196,
+      "backend": "missing",
+      "photoWiring": "not-connected",
+      "evidence": "既存補正revisionを再利用。名前付き版を含むowner read modelは不足。"
+    },
+    "versions.put": {
+      "issue": 196,
+      "backend": "missing",
+      "photoWiring": "not-connected",
+      "evidence": "独立versions revision CASと永続化が必要。Editor storeへ二重書込みしない。"
+    },
+    "recipe-conflicts.list": {
+      "issue": 196,
+      "backend": "partial",
+      "photoWiring": "not-connected",
+      "evidence": "本人の競合両snapshotとページングは存在。完全recipe/maskのprojectionと実機受入が必要。"
+    },
+    "recipe-conflicts.resolve": {
+      "issue": 196,
+      "backend": "partial",
+      "photoWiring": "not-connected",
+      "evidence": "adopt/keep-current・CAS・再送は存在。未知設定の保全とmask/base検証が必要。"
+    },
+    "media.ensure": {
+      "issue": 197,
+      "backend": "missing",
+      "photoWiring": "not-connected",
+      "evidence": "本人原本に対する固定SDK/engineの派生job/asset/base read modelが必要。拠点mediaと混同しない。"
+    },
+    "photos.delete": {
+      "issue": 195,
+      "backend": "implemented",
+      "photoWiring": "not-connected",
+      "evidence": "即時非表示・generation指定purge・request fence・退会/再試行基盤を再利用。Photo製品への配線と実環境受入は未完。"
+    }
+  }
+}
