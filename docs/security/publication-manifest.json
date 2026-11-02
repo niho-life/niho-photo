@@ -10457,8 +10457,8 @@
     },
     {
       "path": "package.json",
-      "sha256": "3de8095a1c34aaf5f0db8965394581c50922ebb28b826f5b2d9b20ae8692a242",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK release set生成・検証・外部consumer smoke入口を追加。\n変更理由: Issue #112の実WASMとNode契約smoke入口を追加\n変更理由: Issue #113のMac candidate build・data-only検証・fixture test入口を追加。\n変更理由: rootの重いnpm scriptをMac miniで開始前に停止する。\n変更理由: React 19型のSDK consumer検証依存を追加\n変更理由: Photo専用session packageをroot workspaceへ登録して共通検証対象に追加"
+      "sha256": "ad356af1d46c41abedbb5470d74bbf554b53482c4c63c141f7e9d39b6e567ef8",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK release set生成・検証・外部consumer smoke入口を追加。\n変更理由: Issue #112の実WASMとNode契約smoke入口を追加\n変更理由: Issue #113のMac candidate build・data-only検証・fixture test入口を追加。\n変更理由: rootの重いnpm scriptをMac miniで開始前に停止する。\n変更理由: React 19型のSDK consumer検証依存を追加\n変更理由: Photo専用session packageをroot workspaceへ登録して共通検証対象に追加\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録"
     },
     {
       "path": "packages/develop-engine/build-macos-native.mjs",
@@ -10467,13 +10467,13 @@
     },
     {
       "path": "scripts/ci/scopes.mjs",
-      "sha256": "f1d280bda806b0bfbd64099080b6bcc557b3feeea526684b202a66d2e8b0dc15",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK所有source変更範囲を選択\n変更理由: Issue #113のMac candidate変更範囲selectorを追加。\n変更理由: Mac candidateが直接依存するrelease evidence helper変更でもproof CIを起動する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: 本人Photo契約v2の単独変更でも既存Photo editing型検査を必須にする\n変更理由: Photo sessionとPhoto Web変更で既存Ubuntu scopeから型検査・対象試験・lintを実行"
+      "sha256": "18094c7a85a1243a825ea5360b7d756db07990cb91a80b42b073af5a2e976e91",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK所有source変更範囲を選択\n変更理由: Issue #113のMac candidate変更範囲selectorを追加。\n変更理由: Mac candidateが直接依存するrelease evidence helper変更でもproof CIを起動する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: 本人Photo契約v2の単独変更でも既存Photo editing型検査を必須にする\n変更理由: Photo sessionとPhoto Web変更で既存Ubuntu scopeから型検査・対象試験・lintを実行\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録"
     },
     {
       "path": "scripts/ci/scopes.test.mjs",
-      "sha256": "c4e64cdefc12116fed496a1cebf1ec38c09bb5cceefa9c823913fae22fd4b9cd",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: PR #81 のマスク描画を最新mainの変更と統合。\n変更理由: PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: Upright自動推定を作者更新後の遠近crate v0.23.0へ統合\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: Issue #112のSDK変更範囲とaggregateを回帰検証\n変更理由: Issue #113のcandidate selectorとrequired aggregate回帰を追加。\n変更理由: release evidence helper単独変更でもMac candidate proofが選択される回帰例を追加する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。\n変更理由: niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。\n変更理由: #148: threads feature と render_identity の公開CI選択を検証。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: 本人Photo契約v2のCI対象選択を回帰検査する\n変更理由: Photo sessionとPhoto Web単独変更をCI対象から漏らさない選択回帰を追加"
+      "sha256": "80ea500079803c2177f2ba404db2b9cb3d7d51d7a295d514e690f8ef6adfe1c4",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: PR #81 のマスク描画を最新mainの変更と統合。\n変更理由: PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: Upright自動推定を作者更新後の遠近crate v0.23.0へ統合\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: Issue #112のSDK変更範囲とaggregateを回帰検証\n変更理由: Issue #113のcandidate selectorとrequired aggregate回帰を追加。\n変更理由: release evidence helper単独変更でもMac candidate proofが選択される回帰例を追加する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。\n変更理由: niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。\n変更理由: #148: threads feature と render_identity の公開CI選択を検証。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: 本人Photo契約v2のCI対象選択を回帰検査する\n変更理由: Photo sessionとPhoto Web単独変更をCI対象から漏らさない選択回帰を追加\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録"
     },
     {
       "path": "scripts/ci/workflow-lib.mjs",
@@ -12112,8 +12112,8 @@
     },
     {
       "path": "package-lock.json",
-      "sha256": "e500ae611ed3eb79be242ab8883aeccb7e3aa1707e938284b090ba52745d3e88",
-      "origin": "公開SDKのReact 19型consumer smokeだけで使う開発依存のlockfile。runtime依存を変更しない。\n変更理由: 依存追加なしでPhoto session workspace linkとpackage metadataをnpmで同期"
+      "sha256": "25699e77f59c43e5d7cda36766de91aea8ffc159019ddd94935b0ca9aee1f3a9",
+      "origin": "公開SDKのReact 19型consumer smokeだけで使う開発依存のlockfile。runtime依存を変更しない。\n変更理由: 依存追加なしでPhoto session workspace linkとpackage metadataをnpmで同期\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録"
     },
     {
       "path": "scripts/sdk/smoke-consumer.mjs",
@@ -12349,6 +12349,136 @@
       "path": "scripts/ci/photo-cloud-session.test.mjs",
       "sha256": "92bd3e676fbd378dfc19d3391ce4cb3980b62525e5f2359cd76d7e23235f8cbd",
       "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-media/README.md",
+      "sha256": "f474fc63c12bffb6a2d35c95573d3abe4f11ce8f9d63ce338ba2c5749d64c23d",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/acceptance.md",
+      "sha256": "812d4786068bcd410ae5e71c8b9d245be4ee4ad6918393ec7fc38cd7e3e65e65",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/contract-files.json",
+      "sha256": "05e49d308374b5dcd569d6e923eb56338014cd8276c9b8480807c6b5947ac10d",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/eslint.config.mjs",
+      "sha256": "453b778645cb9b6572c968b04ec05d505a2abd1dbf7d606e2ccaac8e8fbb6bf3",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/package.json",
+      "sha256": "d8408102a098777adb9fd096ce3384c7c654309befc7d1d4947fcaf92521c5b2",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/provenance.json",
+      "sha256": "e6a0093898a348a781f72e22e1e52cf9aac2f24d8031068d118d56f68d4cd90b",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/sdk-baseline.json",
+      "sha256": "35f1f68ad0b57cdc7e40f98f9a6958387743d5c3403071531e5620a48112f78d",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/src/browser/index.ts",
+      "sha256": "0d9a599a28ebc3b93eea9d4a5f50502860bc0727388eda92dfb4032f0015daab",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/src/browser/types.ts",
+      "sha256": "ff6c5cb18d3f01452aa835e96c74ba0e018b63ed33aafe7d3729daf8a3792967",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/src/index.ts",
+      "sha256": "95c33de032d4156740ef59eaf866c9ecf7e222592593e51cb66256ceef7dd46b",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/src/server/identity.ts",
+      "sha256": "ccc82b289560570afc29c538b0accf3ad3a2165ab199099a9df423fed5f6d112",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/src/server/index.ts",
+      "sha256": "c8b68c6b63faf5b76ec0d981aceb1794847ab1c4a6e157a3f29a57b3f6331ab3",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/src/server/pinned-provider-child.ts",
+      "sha256": "2661d32af8404c48d18a34dddf4a6d5f4b7fd4627feaa628e56e444d19c07805",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/src/server/pinned-provider.ts",
+      "sha256": "7ab54f374ddca3c4007e63197a11a871d95c1b1f53bf92b2107f5ea42694c930",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/src/server/png.ts",
+      "sha256": "cad11e5fc39edbcc72d54239095edfb9399f1ac60e0df68a015e331025dbd8d0",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/src/server/runtime.ts",
+      "sha256": "e0e50cea5c95bf74cac0d7c4016a58879858b89c875cb5a6851e6d5789a43506",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/src/server/types.ts",
+      "sha256": "d65c680872f97085d48124442667c7b529764ffa5c32cca55be7394b912cb06e",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/src/types.ts",
+      "sha256": "b82a4c0a76aa6e898ecadbb44d02794005691ac5acedc71609cb1d339c120eba",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/test/browser.test.mjs",
+      "sha256": "782003ce070d9159d95ab5c48c46f553698ee587f0984e20d728d343db00ca9c",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/test/identity.test.mjs",
+      "sha256": "407d6dbc2828974e8d41821c941d03f58fd0b06930fa855154dc9a80145d1b3c",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/test/provider.test.mjs",
+      "sha256": "c5fb04ed08839c6fcf5e5efb4246a312a71dfab8649bfff42db7b0db44e8764c",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/test/runtime.test.mjs",
+      "sha256": "4d02bfbcb877af78e657f26d541d326640c48551f40496c355ce130864f99e57",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/test/selector.test.mjs",
+      "sha256": "87ec9d616050b70f4ba1dbaf54cbcd60be424cdcd95f9b8c277ea878563ca6ae",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/test/synthetic-jpeg.mjs",
+      "sha256": "6fc6dd3c0cf44e4dd0d19e83b33f955708f6c624f596b7695ca902544ce5d938",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/test/synthetic-png.mjs",
+      "sha256": "16399ca5c00358799064a79f739a3ec933eac3efbfeec9869ccf7d8d93c00822",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "packages/photo-cloud-media/tsconfig.json",
+      "sha256": "ff75ca767024bd6da60012ce58af8e545e01a0aca25118a072b10efa0ed6f406",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
     }
   ],
   "excludedSources": [
