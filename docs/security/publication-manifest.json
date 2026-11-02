@@ -10457,8 +10457,8 @@
     },
     {
       "path": "package.json",
-      "sha256": "1c36563de63ba350922777542be3127d7bcbbc5a1b8c58ce0e988cdca62649fa",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK release set生成・検証・外部consumer smoke入口を追加。\n変更理由: Issue #112の実WASMとNode契約smoke入口を追加\n変更理由: Issue #113のMac candidate build・data-only検証・fixture test入口を追加。\n変更理由: rootの重いnpm scriptをMac miniで開始前に停止する。\n変更理由: React 19型のSDK consumer検証依存を追加"
+      "sha256": "3de8095a1c34aaf5f0db8965394581c50922ebb28b826f5b2d9b20ae8692a242",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK release set生成・検証・外部consumer smoke入口を追加。\n変更理由: Issue #112の実WASMとNode契約smoke入口を追加\n変更理由: Issue #113のMac candidate build・data-only検証・fixture test入口を追加。\n変更理由: rootの重いnpm scriptをMac miniで開始前に停止する。\n変更理由: React 19型のSDK consumer検証依存を追加\n変更理由: Photo専用session packageをroot workspaceへ登録して共通検証対象に追加"
     },
     {
       "path": "packages/develop-engine/build-macos-native.mjs",
@@ -10467,13 +10467,13 @@
     },
     {
       "path": "scripts/ci/scopes.mjs",
-      "sha256": "43f99cc6c7693b37522bdd430149a987494b5ac106adfc0632c0120b36a6c3cb",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK所有source変更範囲を選択\n変更理由: Issue #113のMac candidate変更範囲selectorを追加。\n変更理由: Mac candidateが直接依存するrelease evidence helper変更でもproof CIを起動する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: 本人Photo契約v2の単独変更でも既存Photo editing型検査を必須にする"
+      "sha256": "f1d280bda806b0bfbd64099080b6bcc557b3feeea526684b202a66d2e8b0dc15",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK所有source変更範囲を選択\n変更理由: Issue #113のMac candidate変更範囲selectorを追加。\n変更理由: Mac candidateが直接依存するrelease evidence helper変更でもproof CIを起動する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: 本人Photo契約v2の単独変更でも既存Photo editing型検査を必須にする\n変更理由: Photo sessionとPhoto Web変更で既存Ubuntu scopeから型検査・対象試験・lintを実行"
     },
     {
       "path": "scripts/ci/scopes.test.mjs",
-      "sha256": "2f9d700d48b17d2670f9046820245145ce3a26fe09a2e953c829fe2c156cb44b",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: PR #81 のマスク描画を最新mainの変更と統合。\n変更理由: PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: Upright自動推定を作者更新後の遠近crate v0.23.0へ統合\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: Issue #112のSDK変更範囲とaggregateを回帰検証\n変更理由: Issue #113のcandidate selectorとrequired aggregate回帰を追加。\n変更理由: release evidence helper単独変更でもMac candidate proofが選択される回帰例を追加する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。\n変更理由: niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。\n変更理由: #148: threads feature と render_identity の公開CI選択を検証。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: 本人Photo契約v2のCI対象選択を回帰検査する"
+      "sha256": "c4e64cdefc12116fed496a1cebf1ec38c09bb5cceefa9c823913fae22fd4b9cd",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: PR #81 のマスク描画を最新mainの変更と統合。\n変更理由: PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: Upright自動推定を作者更新後の遠近crate v0.23.0へ統合\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: Issue #112のSDK変更範囲とaggregateを回帰検証\n変更理由: Issue #113のcandidate selectorとrequired aggregate回帰を追加。\n変更理由: release evidence helper単独変更でもMac candidate proofが選択される回帰例を追加する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。\n変更理由: niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。\n変更理由: #148: threads feature と render_identity の公開CI選択を検証。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: 本人Photo契約v2のCI対象選択を回帰検査する\n変更理由: Photo sessionとPhoto Web単独変更をCI対象から漏らさない選択回帰を追加"
     },
     {
       "path": "scripts/ci/workflow-lib.mjs",
@@ -12112,8 +12112,8 @@
     },
     {
       "path": "package-lock.json",
-      "sha256": "cbc9b374eeaa9fcf6983584ee35f191f4bdbb9876e1ecade4bc8264c72d3dfea",
-      "origin": "公開SDKのReact 19型consumer smokeだけで使う開発依存のlockfile。runtime依存を変更しない。"
+      "sha256": "e500ae611ed3eb79be242ab8883aeccb7e3aa1707e938284b090ba52745d3e88",
+      "origin": "公開SDKのReact 19型consumer smokeだけで使う開発依存のlockfile。runtime依存を変更しない。\n変更理由: 依存追加なしでPhoto session workspace linkとpackage metadataをnpmで同期"
     },
     {
       "path": "scripts/sdk/smoke-consumer.mjs",
@@ -12229,6 +12229,126 @@
       "path": "docs/legal/asset-inventory.csv",
       "sha256": "32ea957a2e590acdef014dd4df35d7781cab288a9402cc61398512b3a4f22d80",
       "origin": "Photo #193 / C00 の契約確定に伴い監査。既存backendの即時purgeとPhoto製品未接続の区別、抽出した合成fixtureの権利・出典または対象型検査を記録。内部URL・実写真・資格情報を含まない。\n変更理由: レビュー反映後の合成型負例のexact hashとサイズを更新"
+    },
+    {
+      "path": "apps/photo-web/src/server/auth.ts",
+      "sha256": "f5e07f02d558408cce866d34e45f7573bf22b7394ae72d9552781fcccaa44b63",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/README.md",
+      "sha256": "238373ad515f2f18f384d5f9deb949ea0492b6ce8da66399adc4627ea010e65a",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/eslint.config.mjs",
+      "sha256": "453b778645cb9b6572c968b04ec05d505a2abd1dbf7d606e2ccaac8e8fbb6bf3",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/package.json",
+      "sha256": "a12a6aae761a2a3d2a60cfe5f2890263a6810fc049bf9c3252101b79dbb88d3e",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/provenance.json",
+      "sha256": "260c82437aa83a119eb39dea62453d1a0c1f045a0fc31c3fc306ab21f9cf1815",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/src/browser-host.ts",
+      "sha256": "03950a1b924d6fa60b82671437b124e9da27dfad4c00a1ab9688254aa9b6891a",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/src/controller.ts",
+      "sha256": "4ee6428cca7306966db313f827e509af7cdc957d9b3d554a3c63f5c5cda69038",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/src/identity.ts",
+      "sha256": "72fce3b8f90ecc6b3247184fdb895f2ecd21283c37eb2a16187a2fca6315f4cd",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/src/index.ts",
+      "sha256": "316c32c14219369f1c9b8f1bb103e4b36f9cbf023de13b5178e20efbb55c3e9f",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/src/mac-bridge.ts",
+      "sha256": "314d36316672d085fb624fdb22c97a98292361180671be7878a17f1d6b4fcbb1",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/src/server/config.ts",
+      "sha256": "13266748106d88ba00f83a2c0adaf1400d212ae73aaadd28e7f4486d67bec1de",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/src/server/cookies.ts",
+      "sha256": "d32b83f57f30a98ee28c07c276d40d4ebdca8f49b89458fc768ac839b278306b",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。\n変更理由: B担当33f3685のcookie全体4096byte境界修正を取り込み公開hashを同期"
+    },
+    {
+      "path": "packages/photo-cloud-session/src/server/http.ts",
+      "sha256": "9495f3f64bce9ff63b418efbba9abca927f3e1d9d4585bdfe5925adb8ca477e9",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/src/server/index.ts",
+      "sha256": "02bcef3ca4202f61f4073200835cf75b6cde08ed9a9b1599248dcdc0001297ef",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/src/server/protocol.ts",
+      "sha256": "2667717b5eda525eb186c5140741818003403ec1c93cc0eef71578a4663fedda",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。\n変更理由: B担当33f3685のcredential長さ上限の修正を取り込み公開hashを同期"
+    },
+    {
+      "path": "packages/photo-cloud-session/src/server/service.ts",
+      "sha256": "216da1b31db935f445c2f875bce58af342c2ffd750f0b3380cbffa086d81c6ef",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/src/server/transport.ts",
+      "sha256": "1857f127ec467c3556c53d155e7bbd85bb48608c45482d61b42cb522e9e6c704",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/test/browser-entry.test.mjs",
+      "sha256": "b10f7796124af5e3cfb004b12eee82dcc60f76a9d71863d3732e9a62190cdf33",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/test/browser-host.test.mjs",
+      "sha256": "593093fa0d653da3c70d39f8b3f874b7f1404591dcc016a86714beb8967b591b",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/test/controller.test.mjs",
+      "sha256": "aeb002a2484ab340b453eec2a17be53e9db91b87e4fd675a278ca01f9a77fda0",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/test/server.test.mjs",
+      "sha256": "874000f0daec3733c263084494f5629b2dd5a5b4a040767ea6a4554d42f7c8d4",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。\n変更理由: B担当33f3685のcookie直列化サイズ境界試験を取り込み公開hashを同期"
+    },
+    {
+      "path": "packages/photo-cloud-session/test/transport.test.mjs",
+      "sha256": "0ba7f33d63a555ac3b4e0bcfd5536f0432656401befc1815d13796312fbbc40f",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-session/tsconfig.json",
+      "sha256": "750e83ff1917e752b95276ebb66cc5c0466741a0550589c5cc6b530df6fa8269",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "scripts/ci/photo-cloud-session.test.mjs",
+      "sha256": "92bd3e676fbd378dfc19d3391ce4cb3980b62525e5f2359cd76d7e23235f8cbd",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
     }
   ],
   "excludedSources": [
