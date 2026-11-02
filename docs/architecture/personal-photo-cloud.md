@@ -108,7 +108,7 @@ start前に本人/epoch・requestId・原本identity/hash・payloadをdurable jo
 | offline draft | 本人/library/photo/baseRevision/epochで隔離し未同期を表示。復帰時にCAS照合。iOS背景転送完了を保証しない |
 | session切替/失効 | epoch更新、fetch/reader/worker abort、QueryClient/object URL/bytes/旧draftを破棄。遅着結果を次の本人へ適用しない |
 
-epochはサーバーの検証済みsession snapshot/credential世代から導く。BFF/nativeは捕捉scopeを毎要求のverified actorと照合し、対応するcredentialだけをbackendへforwardする。body/queryのepochを信用しない。backendはmutation commit前にも親session/世代/失効を再検証する。同じactorIdでもepochが異なれば別session。未保存guardで失効credentialを復活させない。下書き保持の選択と認証を切り分ける。
+epochはサーバーの検証済み親session/AppConnectionとその失効世代から導く。通常のcredential refresh/graceでは論理scopeを維持し、独立した端末sessionを一括で失効させない。logout・再接続・本人切替・失効では旧scopeを無効化する。BFF/nativeは捕捉scopeを毎要求のverified actorと照合し、対応するcredentialだけをbackendへforwardする。body/queryのepochを信用しない。backendはmutation commit前にも親session/世代/失効を再検証する。同じactorIdでもepochが異なれば別session。未保存guardで失効credentialを復活させない。下書き保持の選択と認証を切り分ける。
 
 | 形式 | C04/C07の実受入 |
 | --- | --- |

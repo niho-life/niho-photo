@@ -12177,13 +12177,13 @@
     },
     {
       "path": "packages/photo-library-contract/src/v2.ts",
-      "sha256": "12bac5817dbc5bc25d13d2a9dc1205a44b28f9b6e343636c921987459bfa0f82",
-      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。 公開済み niho-life/niho-editor source 9c57b4698e755e025ab4bb53361a42421557722c の packages/photo-library-contract/src/v1.ts (SHA-256 63b2209fb0b03c42f19f16ab0b18b168fa6c540d6b8064b3f2ed1476a29502c0) を一度監査抽出し、Photo v2・即時purge・200MiB/30分/60件・transport非依存へ変更。以後Photo側だけで保守する。\n変更理由: retry/CASを伴うmutationの冪等keyと捕捉scopeを型で必須化する\n変更理由: server由来session世代と削除冪等性を明記しcontentをdomain rangeとbounded streamへ統一"
+      "sha256": "dc7ae24efe82288b97ce3cbe5622ea462f9d5fc68b3af34a85d75505401a0473",
+      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。 公開済み niho-life/niho-editor source 9c57b4698e755e025ab4bb53361a42421557722c の packages/photo-library-contract/src/v1.ts (SHA-256 63b2209fb0b03c42f19f16ab0b18b168fa6c540d6b8064b3f2ed1476a29502c0) を一度監査抽出し、Photo v2・即時purge・200MiB/30分/60件・transport非依存へ変更。以後Photo側だけで保守する。\n変更理由: retry/CASを伴うmutationの冪等keyと捕捉scopeを型で必須化する\n変更理由: server由来session世代と削除冪等性を明記しcontentをdomain rangeとbounded streamへ統一\n変更理由: 既存backendのopaque IDと親session失効世代を明記し通常refresh時のscope維持を確定"
     },
     {
       "path": "docs/architecture/personal-photo-cloud.md",
-      "sha256": "a4a89dedb7b0c54133cd31cf426325abbabe2e1973ee5a8e790a405dd1aae7f9",
-      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消"
+      "sha256": "1a84a11104e3ae93ef96de3f5c692d87d1e78eeff10701ba54a888ad9575985b",
+      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消\n変更理由: 親sessionと通常refreshを区別し端末間の独立性と失効時の旧scope破棄を明確化"
     },
     {
       "path": "scripts/ci/personal-photo-contract.test.mjs",

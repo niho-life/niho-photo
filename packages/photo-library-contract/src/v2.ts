@@ -32,7 +32,7 @@ export const PHOTO_LIMITS = {
 
 /** Opaque stable NIHO account ID, not an email, spot ID or pairwise OAuth sub. */
 export type UserId = string;
-/** Server-generated UUIDs. None is an authorization capability. */
+/** Server-issued opaque resource IDs. No UUID format or authorization capability is implied. */
 export type LibraryId = string;
 export type PhotoId = string;
 export type AssetId = string;
@@ -49,7 +49,9 @@ export type JsonObject = { readonly [key: string]: Json };
 export interface VerifiedPhotoActor {
   readonly userId: UserId;
   readonly sessionId: string;
-  /** Server-issued credential generation. Revalidate revocation before committing a mutation. */
+  /** Server-issued parent-session/connection revocation generation. Normal credential refresh keeps
+   * this logical scope stable; revalidate its active generation before committing a mutation.
+   */
   readonly sessionEpoch: string;
   readonly transport: "browser-session" | "mac-bearer";
   readonly expiresAt: Instant;
