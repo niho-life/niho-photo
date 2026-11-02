@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { artifactName, buildEnvironment, contractFiles, createManifest, createSbom, guardBundle, jsonBytes, lockfilePattern, lockfiles, validateManifest, assertPublicBytes, workflowArtifactName } from "./release-evidence-lib.mjs";
+import { readPublicSdkDependencies } from "./publication-lib.mjs";
 
 const root = fileURLToPath(new URL("../../", import.meta.url));
 const run = (command, args, options = {}) => execFileSync(command, args, { cwd: root, encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], ...options });
@@ -25,7 +26,8 @@ try {
   const tools = { node: process.version, npm: tool("npm", ["--version"]), rustc: tool("rustc", ["--version"]), cargo: tool("cargo", ["--version"]), xcode: tool("xcodebuild", ["-version"]), tauri: JSON.parse(await readFile(path.join(root, "node_modules/@tauri-apps/cli/package.json"), "utf8")).version };
   const contracts = Object.fromEntries(await Promise.all(contractFiles.map(async (file) => [file, await readFile(path.join(root, file))])));
   const locks = Object.fromEntries(await Promise.all(lockfiles.map(async (file) => [file, await readFile(path.join(root, file))])));
-  const sbom = jsonBytes(createSbom(commit, locks));
+  const publicSdkDependencies = await readPublicSdkDependencies(root, JSON.parse(await readFile(path.join(root, "docs/security/publication-policy.json"), "utf8")));
+  const sbom = jsonBytes(createSbom(commit, locks, publicSdkDependencies));
   // npm lifecycle PATHだけをnpmに設定させ、ビルド自身が署名/認証等の環境を再度allowlistする。
   stage = "release build";
   run("npm", ["run", "build:evidence", "--workspace", "apps/camera"], { env, stdio: ["ignore", "ignore", "ignore"] });

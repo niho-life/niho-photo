@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import path from "node:path";
-import { containsPrivateReference, runtimeTokenPath } from "./publication-lib.mjs";
+import { containsPrivateReference, runtimeTokenPath, approvedSdkLockDependency, approvedSdkConsumerLockDependency, isVerifiedPublicSdkDependencies } from "./publication-lib.mjs";
 
 export const lockfiles = ["apps/camera/src-tauri/Cargo.lock", "apps/camera/tools/webview-isolation-probe/Cargo.lock", "package-lock.json", "packages/desktop-account/Cargo.lock", "packages/desktop-photo/Cargo.lock", "packages/develop-engine/Cargo.lock"].sort();
 // repo に入っている lockfile はすべて `lockfiles` に載せる（SBOM は全 lock の inventory）。PR の試験と main の成果物生成が同じ判定を使う。
@@ -74,17 +74,26 @@ export async function guardBundle(root, forbiddenRoots = []) {
   return count;
 }
 
-export function npmComponents(bytes) {
+export function npmComponents(bytes, publicSdkDependencies = []) {
   const lock = JSON.parse(bytes);
   if (lock.lockfileVersion !== 3 || !lock.packages) throw new Error("npm lock v3が必要です");
+  if (!isVerifiedPublicSdkDependencies(publicSdkDependencies)) throw new Error("検証済みSDK依存proofが必要です");
+  for (const sdk of publicSdkDependencies) {
+    if (!approvedSdkLockDependency(publicSdkDependencies, `node_modules/${sdk.name}`, lock.packages[`node_modules/${sdk.name}`])
+      || !approvedSdkConsumerLockDependency(sdk, sdk.consumer.slice(0, -"/package.json".length), lock.packages[sdk.consumer.slice(0, -"/package.json".length)])) throw new Error("公式SDKのlock依存が一致しません");
+  }
   const result = [];
   for (const [location, entry] of Object.entries(lock.packages)) {
     if (entry.link) continue;
     const name = entry.name ?? (location.includes("node_modules/") ? location.split("node_modules/").at(-1) : undefined);
     if (!name || !entry.version) throw new Error("npm依存の名前と版が必要です");
-    if (entry.resolved && !/^https:\/\/registry\.npmjs\.org\//.test(entry.resolved)) throw new Error("公開npm registry以外は禁止です");
-    const purl = `pkg:npm/${name.replace(/^@/, "%40")}@${encodeURIComponent(entry.version)}`;
-    result.push({ type: location === "" || !location.includes("node_modules/") ? "application" : "library", name, version: entry.version, purl, "bom-ref": purl });
+    const sdk = publicSdkDependencies.find((item) => approvedSdkLockDependency([item], location, entry));
+    if (entry.resolved && !/^https:\/\/registry\.npmjs\.org\//.test(entry.resolved) && !sdk) throw new Error("公開npm registry以外は禁止です");
+    const purl = sdk
+      ? `pkg:generic/${encodeURIComponent(name)}@${encodeURIComponent(entry.version)}?checksum=${encodeURIComponent(`sha256:${sdk.sha256}`)}&download_url=${encodeURIComponent(sdk.url)}`
+      : `pkg:npm/${name.replace(/^@/, "%40")}@${encodeURIComponent(entry.version)}`;
+    result.push({ type: location === "" || !location.includes("node_modules/") ? "application" : "library", name, version: entry.version, purl, "bom-ref": purl,
+      ...(sdk ? { hashes: [{ alg: "SHA-256", content: sdk.sha256 }], externalReferences: [{ type: "distribution", url: sdk.url }], properties: [{ name: "niho:sdk-source-commit", value: sdk.sourceCommit }] } : {}) });
   }
   return result;
 }
@@ -104,11 +113,11 @@ export function cargoComponents(bytes) {
   });
 }
 
-export function createSbom(commit, locks) {
+export function createSbom(commit, locks, publicSdkDependencies = []) {
   if (!/^[a-f0-9]{40}$/.test(commit) || JSON.stringify(Object.keys(locks).sort()) !== JSON.stringify(lockfiles)) throw new Error("SBOMのcommit/lockfile集合が不正です");
   const components = new Map();
   for (const file of lockfiles) {
-    for (const component of file.endsWith(".json") ? npmComponents(locks[file]) : cargoComponents(locks[file])) {
+    for (const component of file.endsWith(".json") ? npmComponents(locks[file], publicSdkDependencies) : cargoComponents(locks[file])) {
       const existing = components.get(component.purl);
       if (existing?.hashes && component.hashes && JSON.stringify(existing.hashes) !== JSON.stringify(component.hashes)) throw new Error("同一依存のchecksumが一致しません");
       components.set(component.purl, { ...existing, ...component });

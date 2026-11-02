@@ -16,7 +16,9 @@ async function fixture(t) {
   const put = async (name, bytes) => { await mkdir(path.dirname(path.join(root, name)), { recursive: true }); await writeFile(path.join(root, name), bytes); };
   const json = async (name, value) => put(name, `${JSON.stringify(value, null, 2)}\n`);
   execFileSync("git", ["init", "--quiet"], { cwd: root });
-  await put("docs/security/publication-policy.json", await readFile(path.join(realRoot, "docs/security/publication-policy.json")));
+  const policy = JSON.parse(await readFile(path.join(realRoot, "docs/security/publication-policy.json"), "utf8"));
+  delete policy.publicSdkDependencies; // SDKを使わない基準fixture。SDK例外は専用の拒否試験で検証する。
+  await json("docs/security/publication-policy.json", policy);
   await put("docs/legal/asset-inventory.csv", header);
   const source = "export const exposure = 0;\n";
   await put("packages/example/src/exposure.ts", source);
@@ -293,4 +295,87 @@ test("runtime tokenの置き場はGitignoreを無視してもfixtureを含む全
     await rejected(f, /公開禁止パス/);
     await rm(path.join(f.root, name));
   }
+});
+
+test("公式SDKのexact consumer/proof/lockを統合検査し、consumer・lock・proofの差替えを拒否する", async (t) => {
+  const f = await fixture(t);
+  const policy = JSON.parse(await readFile(path.join(realRoot, "docs/security/publication-policy.json"), "utf8"));
+  await f.json("docs/security/publication-policy.json", policy);
+  const consumer = "packages/photo-cloud-media/package.json";
+  const proofPath = "packages/photo-cloud-media/sdk-baseline.json";
+  const proof = await readFile(path.join(realRoot, proofPath));
+  const receiptPath = policy.publicSdkDependencyReceipt.path;
+  const receipt = await readFile(path.join(realRoot, receiptPath));
+  const pkg = { name: "@niho/photo-cloud-media", private: true,
+    dependencies: Object.fromEntries(policy.publicSdkDependencies.map((entry) => [entry.name, entry.url])) };
+  const pkgBytes = `${JSON.stringify(pkg, null, 2)}\n`;
+  await f.put(consumer, pkgBytes);
+  await f.put(proofPath, proof);
+  await f.put(receiptPath, receipt);
+  f.manifest.generatedFiles.push(
+    { path: consumer, sha256: digest(pkgBytes), origin: "公式SDK依存の合成consumer検証" },
+    { path: proofPath, sha256: digest(proof), origin: "公開済み公式SDKの固定baseline proof" },
+    { path: receiptPath, sha256: digest(receipt), origin: "公式取得物の両digestを固定したreceipt" },
+  );
+  await f.save();
+  const lock = { lockfileVersion: 3, packages: Object.fromEntries(policy.publicSdkDependencies.map((entry) =>
+    [`node_modules/${entry.name}`, { version: entry.version, resolved: entry.url, integrity: entry.integrity }])) };
+  lock.packages["packages/photo-cloud-media"] = { dependencies: { ...pkg.dependencies } };
+  await f.json("package-lock.json", lock);
+  assert.deepEqual(await f.check(), []);
+  const workspaceLock = lock.packages["packages/photo-cloud-media"];
+  for (const dependencies of [{}, { ...pkg.dependencies, [policy.publicSdkDependencies[0].name]: "changed" }]) {
+    workspaceLock.dependencies = dependencies;
+    await f.json("package-lock.json", lock);
+    await rejected(f, /固定公式SDKのconsumer lock依存欠落/);
+  }
+  workspaceLock.dependencies = { ...pkg.dependencies };
+  await f.json("package-lock.json", lock);
+  const firstLockPath = Object.keys(lock.packages)[0];
+  const firstLock = lock.packages[firstLockPath];
+  delete lock.packages[firstLockPath];
+  await f.json("package-lock.json", lock);
+  await rejected(f, /公式SDKのlock依存欠落/);
+  lock.packages[firstLockPath] = firstLock;
+  await f.json("package-lock.json", lock);
+  const oneDependency = structuredClone(pkg);
+  delete oneDependency.dependencies[policy.publicSdkDependencies[0].name];
+  const reduced = `${JSON.stringify(oneDependency, null, 2)}\n`;
+  await f.put(consumer, reduced);
+  f.manifest.generatedFiles.find((entry) => entry.path === consumer).sha256 = digest(reduced);
+  await f.save();
+  await rejected(f, /公式SDKに対応するconsumer依存欠落/);
+  await f.put(consumer, pkgBytes);
+  f.manifest.generatedFiles.find((entry) => entry.path === consumer).sha256 = digest(pkgBytes);
+  await f.save();
+  const noSdk = `${JSON.stringify({ ...pkg, dependencies: {} }, null, 2)}\n`;
+  await f.put(consumer, noSdk);
+  f.manifest.generatedFiles.find((entry) => entry.path === consumer).sha256 = digest(noSdk);
+  await f.save();
+  await f.json("package-lock.json", { lockfileVersion: 3, packages: {} });
+  await rejected(f, /固定公式SDKのconsumer依存欠落/);
+  await rejected(f, /固定公式SDKのlock依存欠落/);
+  await f.put(consumer, pkgBytes);
+  f.manifest.generatedFiles.find((entry) => entry.path === consumer).sha256 = digest(pkgBytes);
+  await f.save();
+  await f.json("package-lock.json", lock);
+  const first = Object.values(lock.packages)[0];
+  const originalIntegrity = first.integrity;
+  first.integrity = "sha512-modified";
+  await f.json("package-lock.json", lock);
+  await rejected(f, /公開registry以外のlock依存/);
+  first.integrity = originalIntegrity;
+  await f.json("package-lock.json", lock);
+  const other = "packages/other/package.json";
+  await f.put(other, pkgBytes);
+  f.manifest.generatedFiles.push({ path: other, sha256: digest(pkgBytes), origin: "別consumerの拒否境界を確認" });
+  await f.save();
+  await rejected(f, /非公開\/非registry package参照.*packages\/other/);
+  await rm(path.join(f.root, other));
+  f.manifest.generatedFiles.pop();
+  const changedProof = `${proof.toString("utf8")}\n`;
+  await f.put(proofPath, changedProof);
+  f.manifest.generatedFiles.find((entry) => entry.path === proofPath).sha256 = digest(changedProof);
+  await f.save();
+  await rejected(f, /公式SDK依存の公開proof不正/);
 });

@@ -1,0 +1,25 @@
+{
+  "schemaVersion": 1,
+  "repository": "niho-life/niho-photo",
+  "releaseTag": "photo-sdk-v0.1.7",
+  "sourceCommit": "5ff21a28ae5f7a0e3a64a98b1ef31a7ca523b2a6",
+  "verification": "NIHO公式公開Releaseから匿名取得した同一tar bytesのsize・SHA-256・SHA-512を照合。runtime展開物はC04のbaselineとcontract-filesで別途検証する。",
+  "artifacts": [
+    {
+      "name": "niho-photo-contract",
+      "url": "https://github.com/niho-life/niho-photo/releases/download/photo-sdk-v0.1.7/niho-photo-contract-0.1.7.tgz",
+      "sizeBytes": 104752,
+      "sha256": "0958a5cb74693b479a2817734809f93ece66eae380e59ad96197530b2987066f",
+      "integrity": "sha512-GZ/dlkrtNxj0djV4JCU6KUP61o6FEHLzJM+vp9spWZIz06lI8+WhEkxf9pr61RG6471MrrnQNEKzSZvN1Xraxg==",
+      "file": "niho-photo-contract-0.1.7.tgz"
+    },
+    {
+      "name": "niho-photo-develop-engine-runtime",
+      "url": "https://github.com/niho-life/niho-photo/releases/download/photo-sdk-v0.1.7/niho-photo-develop-engine-runtime-0.1.7.tgz",
+      "sizeBytes": 8865193,
+      "sha256": "253ca897350578d73c764684d8516e6532c72f6fb4e7d779c4a0139a0dcf433d",
+      "integrity": "sha512-wKsYI8ZkcQ+jCqi4MUC4yLBgHpz9kIBJOZzeBxQFG8WMx77vMdyyjFyNOFBDInrsL81czY8hE7WgBdlrCEkPtg==",
+      "file": "niho-photo-develop-engine-runtime-0.1.7.tgz"
+    }
+  ]
+}

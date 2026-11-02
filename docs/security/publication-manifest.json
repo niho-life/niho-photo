@@ -10502,18 +10502,18 @@
     },
     {
       "path": "scripts/ci/release-evidence-lib.mjs",
-      "sha256": "67f6ea9ee3085829511a0516e6f87419301aba944f3557a102d9c63869429ef2",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: 検出値を表示せず非公開参照の種別だけを診断に加え、既存の公開拒否条件を維持する\n変更理由: 新repositoryの成果物metadataへ移管\n変更理由: main の Public CI: #174 で増えた probe の Cargo.lock を公開成果物の lockfile 収録範囲に足し、PR で一致を検査する"
+      "sha256": "a1a14ef4088a07700bca8644033963108a42734caacdb4ebc7c9c914f7be8c0a",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: 検出値を表示せず非公開参照の種別だけを診断に加え、既存の公開拒否条件を維持する\n変更理由: 新repositoryの成果物metadataへ移管\n変更理由: main の Public CI: #174 で増えた probe の Cargo.lock を公開成果物の lockfile 収録範囲に足し、PR で一致を検査する\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
     },
     {
       "path": "scripts/ci/release-evidence.mjs",
-      "sha256": "cde533388db8db74cc590d46ab66c70a91ca1e49a0533e7831dd8bfbfdca6c2b",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: main push repository allowlistを移管\n変更理由: main の Public CI: #174 で増えた probe の Cargo.lock を公開成果物の lockfile 収録範囲に足し、PR で一致を検査する"
+      "sha256": "83738f0f53cfc7b2e32bd0e323fe204efca9d9c9df6ea8125f30d13d5198fa48",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: main push repository allowlistを移管\n変更理由: main の Public CI: #174 で増えた probe の Cargo.lock を公開成果物の lockfile 収録範囲に足し、PR で一致を検査する\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
     },
     {
       "path": "scripts/ci/release-evidence.test.mjs",
-      "sha256": "3741697ab6e96a04f528755cf984a4ffdc22e137f1302a25b1aef009bf4b836a",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: repository移管契約のtestを更新\n変更理由: 新repository receipt assertionを追加\n変更理由: main の Public CI: #174 で増えた probe の Cargo.lock を公開成果物の lockfile 収録範囲に足し、PR で一致を検査する"
+      "sha256": "82df7799638ae5f871b83508b28fdf3851cb01bbbdc38cf151a1c68983cf1321",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: repository移管契約のtestを更新\n変更理由: 新repository receipt assertionを追加\n変更理由: main の Public CI: #174 で増えた probe の Cargo.lock を公開成果物の lockfile 収録範囲に足し、PR で一致を検査する\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
     },
     {
       "path": "scripts/ci/write-artifact-receipt.mjs",
@@ -12479,6 +12479,51 @@
       "path": "packages/photo-cloud-media/tsconfig.json",
       "sha256": "ff75ca767024bd6da60012ce58af8e545e01a0aca25118a072b10efa0ed6f406",
       "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+    },
+    {
+      "path": "docs/security/publication-gates.md",
+      "sha256": "ba3c5bce07e2320e01db682aa1af52e185f9ca5c4c768ec1680c77c9cd93d9aa",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:docs/security/publication-gates.md / 元SHA-256 ffc75e84325b8755a36d27a486a31f6bb86792e57fdd5475449fb4b702eccf41。C08の公式SDK依存契約に合わせて編集。初回の台帳登録であり、非公開履歴の取込みではない。\n変更理由: C04公式SDKの公開tarをconsumer・両digest・source・proof・lockへ固定して必須検証\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+    },
+    {
+      "path": "docs/security/publication-policy.json",
+      "sha256": "7de3e1940af5da9190822a88e60b244b64f1c5fcd465fbcb63e14869008f813b",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:docs/security/publication-policy.json / 元SHA-256 f528b79ee1b3628d692fa11409e81ff2c571e030bea7cdc55c7b4fa7ddbfe57a。C08の公式SDK依存契約に合わせて編集。初回の台帳登録であり、非公開履歴の取込みではない。\n変更理由: C04公式SDKの公開tarをconsumer・両digest・source・proof・lockへ固定して必須検証\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+    },
+    {
+      "path": "docs/security/public-sdk-dependency-receipt.json",
+      "sha256": "f497917b6e6564bd11d1614c9f1bb9ceb0d61f0a487564c7881123a48573b0c4",
+      "origin": "NIHO所有C08の公式公開SDK依存契約・拒否試験・匿名取得receipt。既公開SDK0.1.7の同一取得bytesをsize/SHA-256/SHA-512で照合。非公開source・秘密値・実写真を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+    },
+    {
+      "path": "scripts/ci/publication-lib.mjs",
+      "sha256": "8aa723e53441c49c829ba06ce2a4832e5d7fc49f635feb0d3f0a8c1ce4334601",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/ci/publication-lib.mjs / 元SHA-256 3251f4ab5ab51e1db83f8b6fa5dc947664140627ba076a344e23d13cf5ac4790。C08の公式SDK依存契約に合わせて編集。初回の台帳登録であり、非公開履歴の取込みではない。\n変更理由: C04公式SDKの公開tarをconsumer・両digest・source・proof・lockへ固定して必須検証\n変更理由: 固定SDK両件のconsumer宣言とworkspace lock edgeとnode_modules integrityを必須照合\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+    },
+    {
+      "path": "scripts/ci/public-sdk-dependencies.test.mjs",
+      "sha256": "35de963d12f82daedc41443cf5fae927b7ef7fced92b950769281961c39d0c52",
+      "origin": "NIHO所有C08の公式公開SDK依存契約・拒否試験・匿名取得receipt。既公開SDK0.1.7の同一取得bytesをsize/SHA-256/SHA-512で照合。非公開source・秘密値・実写真を含まない。\n変更理由: 固定SDK両件のconsumer宣言とworkspace lock edgeとnode_modules integrityを必須照合\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+    },
+    {
+      "path": "scripts/ci/publication.test.mjs",
+      "sha256": "dc7be6db6ae1a445cf096abbef6f85ecb2cd4b069700c49a8b5c9ea6cd4bf92a",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/ci/publication.test.mjs / 元SHA-256 f69d62f4ed12cfabd44eba4245cd903ec191ce6c1de039a3ae6c3c625009c7cd。C08の公式SDK依存契約に合わせて編集。初回の台帳登録であり、非公開履歴の取込みではない。\n変更理由: C04公式SDKの公開tarをconsumer・両digest・source・proof・lockへ固定して必須検証\n変更理由: 固定SDK両件のconsumer宣言とworkspace lock edgeとnode_modules integrityを必須照合\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+    },
+    {
+      "path": "scripts/ci/verify-publication-script.test.mjs",
+      "sha256": "1962bcd4333fb4791d039406ec83f9f6a9e337a3d241323527b1db9aff8c479d",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/ci/verify-publication-script.test.mjs / 元SHA-256 7b9ec6b8e12c729b807cf12155c0f3195195a59504b83d7849d5f8cc7117311d。C08の公式SDK依存契約に合わせて編集。初回の台帳登録であり、非公開履歴の取込みではない。\n変更理由: C04公式SDKの公開tarをconsumer・両digest・source・proof・lockへ固定して必須検証\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+    },
+    {
+      "path": "scripts/candidate/mac-candidate-lib.mjs",
+      "sha256": "7b997c4ab2aff6e757f6a50771e67108c5658aee921d5f68aac0eb4415704d88",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate-lib.mjs / 元SHA-256 ca11db7292461c7735162da788075be51c2ec418085c4e337a33f11b86cdcb26。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+    },
+    {
+      "path": "scripts/candidate/mac-candidate.test.mjs",
+      "sha256": "c06c60e9b86154e5f39bc43e232d02d7a3c48e0c9e7cead65ac40e93ef9b0512",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate.test.mjs / 元SHA-256 317e82bf2949f90503f248a3ea8886e71fd3aa6b19c73b9e7a21196bd3140d95。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
     }
   ],
   "excludedSources": [

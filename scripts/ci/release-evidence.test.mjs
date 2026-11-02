@@ -6,13 +6,15 @@ import { spawnSync } from "node:child_process";
 import { fileURLToPath } from "node:url";
 import path from "node:path";
 import { artifactName, assertPublicBytes, buildEnvironment, cargoComponents, contractFiles, createArtifactReceipt, createManifest, createSbom, guardBundle, hash, jsonBytes, lockfilePattern, lockfiles, npmComponents, validateManifest, validateSchema, workflowArtifactName } from "./release-evidence-lib.mjs";
+import { readPublicSdkDependencies } from "./publication-lib.mjs";
 
 const root = new URL("../../", import.meta.url);
+const publicSdkDependencies = await readPublicSdkDependencies(fileURLToPath(root), JSON.parse(await readFile(new URL("docs/security/publication-policy.json", root), "utf8")));
 const schema = JSON.parse(await readFile(new URL("docs/releases/manifest-v1.schema.json", root)));
 const locks = Object.fromEntries(await Promise.all(lockfiles.map(async (file) => [file, await readFile(new URL(file, root))])));
 const contracts = Object.fromEntries(await Promise.all(contractFiles.map(async (file) => [file, await readFile(new URL(file, root))])));
 const commit = "a".repeat(40);
-const options = { commit, tree: "b".repeat(40), arch: "arm64", runId: "123", runAttempt: "1", tools: Object.fromEntries(["node", "npm", "rustc", "cargo", "xcode", "tauri"].map((key) => [key, "1.0"])), locks, contracts, artifactBytes: Buffer.from("synthetic app archive"), sbomBytes: jsonBytes(createSbom(commit, locks)), checkedFiles: 3 };
+const options = { commit, tree: "b".repeat(40), arch: "arm64", runId: "123", runAttempt: "1", tools: Object.fromEntries(["node", "npm", "rustc", "cargo", "xcode", "tauri"].map((key) => [key, "1.0"])), locks, contracts, artifactBytes: Buffer.from("synthetic app archive"), sbomBytes: jsonBytes(createSbom(commit, locks, publicSdkDependencies)), checkedFiles: 3 };
 const manifest = () => createManifest(options);
 
 test("manifestは全lock・contract・archive・SBOMの実bytesをSHA-256へ結び付ける", () => {
@@ -89,15 +91,15 @@ test("contract sourceのversion driftは生成時にも拒否", () => {
 });
 
 test("CycloneDXは全lockのnpm/Cargo inventoryを重複なし・安定順で収録", () => {
-  const bom = createSbom(commit, locks);
+  const bom = createSbom(commit, locks, publicSdkDependencies);
   assert.equal(bom.bomFormat, "CycloneDX");
   assert.equal(bom.specVersion, "1.6");
-  const expected = new Set(lockfiles.flatMap((file) => file.endsWith(".json") ? npmComponents(locks[file]) : cargoComponents(locks[file])).map((item) => item.purl));
+  const expected = new Set(lockfiles.flatMap((file) => file.endsWith(".json") ? npmComponents(locks[file], publicSdkDependencies) : cargoComponents(locks[file])).map((item) => item.purl));
   assert.deepEqual(new Set(bom.components.map((item) => item.purl)), expected);
   assert.equal(expected.size, bom.components.length);
   assert.ok(bom.components.some((item) => item.name === "vitest"), "開発依存も収録する");
   assert.ok(bom.components.some((item) => item.name === "tauri" && item.hashes?.length), "Cargo checksumを残す");
-  assert.deepEqual(jsonBytes(createSbom(commit, Object.fromEntries(Object.entries(locks).reverse()))), jsonBytes(bom));
+  assert.deepEqual(jsonBytes(createSbom(commit, Object.fromEntries(Object.entries(locks).reverse()), publicSdkDependencies)), jsonBytes(bom));
   assertPublicBytes(jsonBytes(bom));
   assert.throws(() => createSbom(commit, { ...locks, "unknown.lock": Buffer.from("") }));
 });
@@ -210,4 +212,22 @@ test("公開artifact入口はPR contextを拒否し子processの値を表示し�
   assert.equal(result.stdout, "");
   assert.match(result.stderr, /context\/clean checkout/);
   assert.ok(!result.stderr.includes(commit));
+});
+
+test("公式SDK tarを取得URLとSHA-256付きでinventoryへ収録し、未検証設定・lock改変を拒否する", () => {
+  const components = npmComponents(locks["package-lock.json"], publicSdkDependencies);
+  for (const sdk of publicSdkDependencies) {
+    const component = components.find((item) => item.name === sdk.name && item.purl.startsWith("pkg:generic/"));
+    assert.ok(component);
+    assert.deepEqual(component.hashes, [{ alg: "SHA-256", content: sdk.sha256 }]);
+    assert.deepEqual(component.externalReferences, [{ type: "distribution", url: sdk.url }]);
+    const lock = JSON.parse(locks["package-lock.json"]);
+    lock.packages[`node_modules/${sdk.name}`].integrity = "changed";
+    assert.throws(() => npmComponents(JSON.stringify(lock), publicSdkDependencies));
+    const other = JSON.parse(locks["package-lock.json"]);
+    delete other.packages["packages/photo-cloud-media"].dependencies[sdk.name];
+    assert.throws(() => npmComponents(JSON.stringify(other), publicSdkDependencies));
+  }
+  assert.throws(() => npmComponents(locks["package-lock.json"], structuredClone(publicSdkDependencies)));
+  assert.throws(() => npmComponents(locks["package-lock.json"]));
 });
