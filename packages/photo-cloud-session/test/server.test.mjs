@@ -10,7 +10,8 @@ import {
   createPhotoAuthService,
   parsePhotoAuthConfiguration,
 } from "../src/server/index.ts";
-import { parsePendingAttempt } from "../src/server/cookies.ts";
+import { parsePendingAttempt, setCredentialCookie } from "../src/server/cookies.ts";
+import { MAX_CREDENTIAL_BYTES } from "../src/server/protocol.ts";
 import {
   createPhotoWebAuthAdapter,
   photoWebAuth,
@@ -490,6 +491,27 @@ test("stable refresh rotates only the Photo credential and exposes no credential
     audience: config.audience,
     credential: CREDENTIAL,
   });
+});
+
+test("credential limits include serialized cookie overhead before reporting success", async () => {
+  const expiry = new Date(NOW + 31 * 24 * 60 * 60 * 1000).toISOString();
+  assert.ok(Buffer.byteLength(setCredentialCookie("a".repeat(MAX_CREDENTIAL_BYTES), expiry, NOW)) <= 4096);
+  assert.throws(() => setCredentialCookie("a".repeat(MAX_CREDENTIAL_BYTES + 1), expiry, NOW), /invalid Photo cookie/);
+  for (const size of [MAX_CREDENTIAL_BYTES + 1, 4096]) {
+    const oversized = { ...credentialEnvelope(), credential: "a".repeat(size) };
+    const { auth } = service(createProducer({
+      [config.endpoints.exchange]: () => json(oversized),
+      [config.endpoints.refresh]: () => json(oversized),
+    }));
+    const started = await begin(auth);
+    const exchanged = await auth.callback(callbackRequest(`code=${"c".repeat(43)}&state=${started.pending.state}`, { cookie: started.pendingCookie }));
+    const refreshed = await auth.refresh(request(AUTH_PUBLIC_PATHS.refresh, { headers: { cookie: `${PHOTO_CREDENTIAL_COOKIE}=${CREDENTIAL}` } }));
+    for (const response of [exchanged, refreshed]) {
+      assert.equal(response.status, 503);
+      assert.equal(response.headers.has("set-cookie"), false);
+      assert.equal(response.headers.has("location"), false);
+    }
+  }
 });
 
 test("logout and cancel enforce same-origin CSRF inside each public method", async () => {

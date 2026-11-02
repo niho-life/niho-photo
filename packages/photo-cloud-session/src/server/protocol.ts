@@ -4,8 +4,10 @@ import type { PhotoAuthConfiguration } from "./config.ts";
 export const ATTEMPT_MAX_LIFETIME_MS = 10 * 60 * 1000;
 export const RESPONSE_MAX_BYTES = 16 * 1024;
 export const REQUEST_TIMEOUT_MS = 10_000;
+// Leave room for the __Host- name, Max-Age, and all attributes within a 4096-byte cookie.
+export const MAX_CREDENTIAL_BYTES = 3800;
 
-const CREDENTIAL = /^[A-Za-z0-9._~-]{16,4096}$/;
+const CREDENTIAL = /^[A-Za-z0-9._~-]{16,}$/;
 const BEGIN_KEYS = ["attemptId", "confirmationPath", "expiresAt"] as const;
 const ACTOR_KEYS = ["id"] as const;
 const ACTOR_ENVELOPE_KEYS = [
@@ -30,7 +32,7 @@ function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boo
 }
 
 export function isSafeCredential(value: unknown): value is string {
-  return typeof value === "string" && CREDENTIAL.test(value);
+  return typeof value === "string" && value.length <= MAX_CREDENTIAL_BYTES && CREDENTIAL.test(value);
 }
 
 export function isOpaqueId(value: unknown): value is string {

@@ -88,7 +88,11 @@ export function setPendingCookie(pending: PendingAttempt, now: number): string {
 
 export function setCredentialCookie(credential: string, expiresAt: string, now: number): string {
   const maxAge = Math.max(1, Math.floor((Date.parse(expiresAt) - now) / 1000));
-  return `${PHOTO_CREDENTIAL_COOKIE}=${credential}; Max-Age=${maxAge}; ${COOKIE_FLAGS}`;
+  const serialized = `${PHOTO_CREDENTIAL_COOKIE}=${credential}; Max-Age=${maxAge}; ${COOKIE_FLAGS}`;
+  if (!isSafeCredential(credential) || Buffer.byteLength(serialized, "utf8") > MAX_COOKIE_BYTES) {
+    throw new Error("invalid Photo cookie");
+  }
+  return serialized;
 }
 
 export function clearPendingCookie(): string {
