@@ -1,0 +1,23 @@
+{
+  "name": "@niho/photo-cloud-media",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Photo本人クラウドの検証済み描画入力と固定SDK renderer。認証・storage・queueを含まない",
+  "exports": {
+    ".": "./src/index.ts",
+    "./browser": "./src/browser/index.ts",
+    "./server": "./src/server/index.ts",
+    "./package.json": "./package.json"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "node --test test/*.test.mjs",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "niho-photo-contract": "https://github.com/niho-life/niho-photo/releases/download/photo-sdk-v0.1.7/niho-photo-contract-0.1.7.tgz",
+    "niho-photo-develop-engine-runtime": "https://github.com/niho-life/niho-photo/releases/download/photo-sdk-v0.1.7/niho-photo-develop-engine-runtime-0.1.7.tgz"
+  },
+  "engines": { "node": "24.x" }
+}
