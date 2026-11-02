@@ -324,6 +324,7 @@ export function approvedSdkPackageDependency(entries, consumer, name, specifier)
 export function approvedSdkLockDependency(entries, lockPath, dependency) {
   return record(dependency) && !dependency.link && entries.some((entry) =>
     lockPath === `node_modules/${entry.name}` && dependency.version === entry.version
+    && (dependency.name === undefined || dependency.name === entry.name)
     && dependency.resolved === entry.url && dependency.integrity === entry.integrity);
 }
 

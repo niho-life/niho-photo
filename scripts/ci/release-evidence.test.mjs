@@ -224,6 +224,11 @@ test("公式SDK tarを取得URLとSHA-256付きでinventoryへ収録し、未検
     const lock = JSON.parse(locks["package-lock.json"]);
     lock.packages[`node_modules/${sdk.name}`].integrity = "changed";
     assert.throws(() => npmComponents(JSON.stringify(lock), publicSdkDependencies));
+    const renamed = JSON.parse(locks["package-lock.json"]);
+    renamed.packages[`node_modules/${sdk.name}`].name = "different-sdk-name";
+    assert.throws(() => npmComponents(JSON.stringify(renamed), publicSdkDependencies));
+    renamed.packages[`node_modules/${sdk.name}`].name = sdk.name;
+    assert.ok(npmComponents(JSON.stringify(renamed), publicSdkDependencies).some((item) => item.name === sdk.name));
     const other = JSON.parse(locks["package-lock.json"]);
     delete other.packages["packages/photo-cloud-media"].dependencies[sdk.name];
     assert.throws(() => npmComponents(JSON.stringify(other), publicSdkDependencies));
