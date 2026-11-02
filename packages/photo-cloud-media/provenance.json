@@ -1,0 +1,77 @@
+{
+  "repository": "niho-life/niho-editor",
+  "sourceCommit": "d778248ff772496f131b347967b5a2c851899b31",
+  "files": [
+    {
+      "sourcePath": "packages/photo-library-contract/sdk-baseline.json",
+      "sourceSha256": "35f1f68ad0b57cdc7e40f98f9a6958387743d5c3403071531e5620a48112f78d",
+      "path": "sdk-baseline.json",
+      "reason": "audited public fixed SDK baseline/synthetic fixture"
+    },
+    {
+      "sourcePath": "workers/photo-media/src/png.ts",
+      "sourceSha256": "b3b68dcddf0c93dfda8170ca1701ebe0baa739dfd0c2759eb2c3c3db8ec0b4f7",
+      "path": "src/server/png.ts",
+      "reason": "C00 v2 import; input-only EXIF orientation support through unchanged SDK; distinct bounded chunk budgets for PNG16 inputs and sanitized outputs. Original source hash retained."
+    },
+    {
+      "sourcePath": "workers/photo-media/test/synthetic-png.mjs",
+      "sourceSha256": "16399ca5c00358799064a79f739a3ec933eac3efbfeec9869ccf7d8d93c00822",
+      "path": "test/synthetic-png.mjs",
+      "reason": "audited public fixed SDK baseline/synthetic fixture"
+    },
+    {
+      "sourcePath": "workers/photo-media/test/synthetic-jpeg.mjs",
+      "sourceSha256": "6fc6dd3c0cf44e4dd0d19e83b33f955708f6c624f596b7695ca902544ce5d938",
+      "path": "test/synthetic-jpeg.mjs",
+      "reason": "audited public fixed SDK baseline/synthetic fixture"
+    }
+  ],
+  "newSource": "Photo-owned C04 input/provider plumbing; no private source or Git history imported",
+  "referenceDesigns": [
+    {
+      "sourcePath": "workers/photo-media/src/identity.ts",
+      "sourceSha256": "4c47b17609985209271522802b4e7eae74d59a705fe1f6ae8b0084542918c4f0",
+      "sourceBlobSha": "75b7c7da9ebc7d4f00a437127417e2233a23527d",
+      "paths": [
+        "src/server/identity.ts"
+      ],
+      "adaptation": "C00 v2 opaque IDs/immediate lifecycle, complete recipe/mask/input identity; no old store/queue"
+    },
+    {
+      "sourcePath": "workers/photo-media/src/pinned-provider.ts",
+      "sourceSha256": "3c308c1d2838a06d35e8db473468f46ec6ecaaf194da6de39ecf32e32f6cbee0",
+      "sourceBlobSha": "649a188bad2c9ccc209c19d49a1110566956cd07",
+      "paths": [
+        "src/server/pinned-provider.ts"
+      ],
+      "adaptation": "audited bounded isolated SDK provider design adapted for C00 streams, working copies and masks; no production registration"
+    },
+    {
+      "sourcePath": "workers/photo-media/src/pinned-provider-child.ts",
+      "sourceSha256": "4cef7b6eed760852beacd5f71ee3856a14b20393c9bc39b35bcf24913368d87b",
+      "sourceBlobSha": "3b9d36e83656faab93427b5b91e6cf09c63f0753",
+      "paths": [
+        "src/server/pinned-provider-child.ts",
+        "src/server/runtime.ts"
+      ],
+      "adaptation": "fixed public SDK verification and Developer API, no first-stage decoder/DB/queue"
+    },
+    {
+      "sourcePath": "workers/photo-media/src/baseline.ts",
+      "sourceSha256": "5e0e8b46d075f2d90d63ff7235512b856bfc457f6f6cab517b76b32e4b176cea",
+      "sourceBlobSha": "a7ada6a7e90905abf0a3556e095e36235e050706",
+      "paths": [
+        "src/server/runtime.ts",
+        "contract-files.json"
+      ],
+      "adaptation": "explicit actual SDK manifest and compiled contract file hash verification"
+    }
+  ],
+  "officialSdk": {
+    "releaseTag": "photo-sdk-v0.1.7",
+    "sourceCommit": "5ff21a28ae5f7a0e3a64a98b1ef31a7ca523b2a6",
+    "engineManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+    "contractFileHashes": "contract-files.json (15 compiled JS files derived from hash-verified official archive)"
+  }
+}

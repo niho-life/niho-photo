@@ -1,0 +1,82 @@
+{
+  "sdkVersion": "0.1.7",
+  "sourceCommit": "5ff21a28ae5f7a0e3a64a98b1ef31a7ca523b2a6",
+  "packageSha256": "0958a5cb74693b479a2817734809f93ece66eae380e59ad96197530b2987066f",
+  "files": [
+    {
+      "path": "dist/index.js",
+      "sha256": "5e7352026b6cb3e6959ab5590a1508bf71d99ebe8d5d80fecd07b4124c910a71",
+      "sizeBytes": 1195
+    },
+    {
+      "path": "dist/src/browser-photo-adjustments.js",
+      "sha256": "22b00eb8306ac6849373d8f9983f8e697c2b2dd6f481492c8b19e1d5217b4f97",
+      "sizeBytes": 2634
+    },
+    {
+      "path": "dist/src/develop-engine/develop-aspect.js",
+      "sha256": "38ffc936b5877ad522b84cb49d0b687cedb6f18aab7d9bd8f04e40c7c54f1572",
+      "sizeBytes": 377
+    },
+    {
+      "path": "dist/src/develop-engine/develop-geometry.js",
+      "sha256": "3ee8efe1ef557f3ac374dd771156f23db7e1b239a65d0dfcc084330d6fe68e1c",
+      "sizeBytes": 35644
+    },
+    {
+      "path": "dist/src/develop-engine/develop-heal.js",
+      "sha256": "ed6a23aee93874e6f2ccbe1723b8b883fb9f81ebe436d54b62434762e4347a26",
+      "sizeBytes": 4937
+    },
+    {
+      "path": "dist/src/develop-engine/develop-lens.js",
+      "sha256": "4c98b381e782600830fc11ebe3fef43969c0b5b1e6c4d505d47a2f63197bfe39",
+      "sizeBytes": 6174
+    },
+    {
+      "path": "dist/src/develop-engine/develop-masks.js",
+      "sha256": "cf3f697ea9359d01ca50e62752f98a7da851bb4633a4bbc0bb18819b467d833c",
+      "sizeBytes": 15207
+    },
+    {
+      "path": "dist/src/develop-engine/develop-perspective.js",
+      "sha256": "4611732efac99e73d0bd9cfa7cb117fd4900faf99bac878976a31f79ed72a03b",
+      "sizeBytes": 11894
+    },
+    {
+      "path": "dist/src/develop-engine/develop-preset-masks.js",
+      "sha256": "5699f02631ce97cdbb317b4149a09400c8ba7a675376db5cd5a430d57b83f858",
+      "sizeBytes": 5126
+    },
+    {
+      "path": "dist/src/develop-engine/develop-settings.js",
+      "sha256": "45d15adadafc92a9b954d24d5f4f0cdcc3e98b710e527ce094a9f2b0794b655d",
+      "sizeBytes": 49724
+    },
+    {
+      "path": "dist/src/develop-engine/develop-write-capability.js",
+      "sha256": "4318b7d90c0a7c1330e841fc1a60cfe2b788f49f44651d72f89efd510275ecfd",
+      "sizeBytes": 7158
+    },
+    {
+      "path": "dist/src/photo-editing-copy.js",
+      "sha256": "3bb4700c4572e73091333f2ea0fa06ea324d623fd54c6413d800f1a1c57031f6",
+      "sizeBytes": 79691
+    },
+    {
+      "path": "dist/src/photo-editing-effects.js",
+      "sha256": "16914140885a7808169ceb9d22b0c648003131e03d51b0cd5d6894c55392f014",
+      "sizeBytes": 6928
+    },
+    {
+      "path": "dist/src/photo-editing-settings-neutral.js",
+      "sha256": "aef13e9dc2a6f5f2a2a9f3efaf3d3f2ffedaeec9182ca596d6b8ab8b7f51a928",
+      "sizeBytes": 4898
+    },
+    {
+      "path": "dist/src/photo-editing-types.js",
+      "sha256": "99e00d87af9077b47a234b4c17bf3f0e409218ab2f3824257e6198e665e7c4bf",
+      "sizeBytes": 115
+    }
+  ]
+}
