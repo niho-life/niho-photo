@@ -12141,6 +12141,31 @@
       "origin": "NIHO既存geometryのaspect判定をreaderとwriter能力判定で共有するために分離。判定式と既存exportを維持。"
     },
     {
+      "path": "docs/cloud/client-acceptance-preparation.md",
+      "sha256": "9cb323bcac401f611b4eb83eac0149b8979d62df709a39f122496b2f9487ab09",
+      "origin": "NIHO所有の新規作成。Photo cloud B担当の調査・試験準備と、合成データによる受入記録の検査。実写真・認証値・第三者資産を含まない。Refs #194 / #197 / #199 / #200。"
+    },
+    {
+      "path": "scripts/ci/cloud-acceptance-evidence.test.mjs",
+      "sha256": "6440ab09cb193b8e9e686f00a960cb20d4dd29f770cd66c8a2c5165c07aebca3",
+      "origin": "NIHO所有の新規作成。Photo cloud B担当の調査・試験準備と、合成データによる受入記録の検査。実写真・認証値・第三者資産を含まない。Refs #194 / #197 / #199 / #200。"
+    },
+    {
+      "path": "scripts/cloud/acceptance/cases.mjs",
+      "sha256": "a5e515d604e0e3fb5e275896a05610495ecd5e6b98c92dbf225f387c64d6b327",
+      "origin": "NIHO所有の新規作成。Photo cloud B担当の調査・試験準備と、合成データによる受入記録の検査。実写真・認証値・第三者資産を含まない。Refs #194 / #197 / #199 / #200。"
+    },
+    {
+      "path": "scripts/cloud/acceptance/verify-evidence.mjs",
+      "sha256": "b926876c9be2c6f64e3f47110cb83bfc969f0ba47162088ab8fd33914bfd302e",
+      "origin": "NIHO所有の新規作成。Photo cloud B担当の調査・試験準備と、合成データによる受入記録の検査。実写真・認証値・第三者資産を含まない。Refs #194 / #197 / #199 / #200。"
+    },
+    {
+      "path": "scripts/cloud/acceptance/verify-evidence.test.mjs",
+      "sha256": "ce9399e96e1e8931013d4a7a914300f065b71a675f2ace11f5fbe97cf4e6de7d",
+      "origin": "NIHO所有の新規作成。Photo cloud B担当の調査・試験準備と、合成データによる受入記録の検査。実写真・認証値・第三者資産を含まない。Refs #194 / #197 / #199 / #200。"
+    },
+    {
       "path": "packages/photo-library-contract/provenance.json",
       "sha256": "2237fd907bc4d276b9ac4208423243ddd4c1a55e41069930d6071d19eeac8b59",
       "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
