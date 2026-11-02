@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { execFileSync } from "node:child_process";
 import { lstat, readFile } from "node:fs/promises";
@@ -142,10 +143,16 @@ export async function verifyPublication(root) {
   for (const excluded of manifest.excludedSources) {
     if (!validPath(excluded.sourcePath) || !meaningful(excluded.reason) || (excluded.sourceSha256 && !sha256.test(excluded.sourceSha256))) fail("manifest除外記録不正");
   }
+  let publicSdkDependencies = [];
+  try { publicSdkDependencies = await readPublicSdkDependencies(root, policy); }
+  catch { fail("公式SDK依存の公開proof不正"); }
   const files = repositoryFiles(root);
   const existing = new Set(files.map(({ name }) => name));
   const workspaceNames = new Set();
   const workspacePaths = new Set();
+  const sdkConsumers = new Set();
+  const sdkLocks = new Set();
+  const sdkConsumerLocks = new Set();
   for (const { name } of files.filter(({ name }) => isSource(name) && name.endsWith("/package.json"))) {
     try { workspaceNames.add((await readJson(name)).name); workspacePaths.add(path.posix.dirname(name)); } catch { fail("package JSON不正", name); }
   }
@@ -212,7 +219,9 @@ export async function verifyPublication(root) {
         if (isSource(name) && pkg.private !== true) fail("npm公開禁止設定なし", name);
         for (const section of ["dependencies", "devDependencies", "peerDependencies", "optionalDependencies", "overrides"]) {
           for (const [dependency, version] of Object.entries(pkg[section] ?? {})) {
-            if (typeof version !== "string" || /(?:https?:|git[+:]|github:|file:|link:|ssh:|\/\/)/i.test(version) || ((/^@niho\//.test(dependency) || /^niho-/.test(dependency)) && !workspaceNames.has(dependency))) fail("非公開/非registry package参照", name);
+            const approvedSdk = approvedSdkPackageDependency(publicSdkDependencies, name, dependency, version);
+            if (approvedSdk && section === "dependencies") sdkConsumers.add(dependency);
+            if (!approvedSdk && (typeof version !== "string" || /(?:https?:|git[+:]|github:|file:|link:|ssh:|\/\/)/i.test(version) || ((/^@niho\//.test(dependency) || /^niho-/.test(dependency)) && !workspaceNames.has(dependency)))) fail("非公開/非registry package参照", name);
           }
         }
       } catch { fail("package JSON不正", name); }
@@ -220,12 +229,107 @@ export async function verifyPublication(root) {
     if (name === "package-lock.json") {
       const lock = JSON.parse(text);
       if (lock.lockfileVersion !== 3) fail("lock形式不正", name);
-      for (const dependency of Object.values(lock.packages ?? {})) {
+      for (const [lockPath, dependency] of Object.entries(lock.packages ?? {})) {
+        for (const entry of publicSdkDependencies) {
+          if (approvedSdkConsumerLockDependency(entry, lockPath, dependency)) sdkConsumerLocks.add(entry.name);
+        }
+        if (approvedSdkLockDependency(publicSdkDependencies, lockPath, dependency)) sdkLocks.add(lockPath.slice("node_modules/".length));
         if (dependency.link && !workspacePaths.has(dependency.resolved)) fail("公開workspace以外へのlock link", name);
-        if (dependency.resolved && !dependency.link && !/^https:\/\/registry\.npmjs\.org\//.test(dependency.resolved)) fail("公開registry以外のlock依存", name);
+        if (dependency.resolved && !dependency.link && !/^https:\/\/registry\.npmjs\.org\//.test(dependency.resolved) && !approvedSdkLockDependency(publicSdkDependencies, lockPath, dependency)) fail("公開registry以外のlock依存", name);
       }
     }
   }
+  for (const name of sdkConsumers) if (!sdkLocks.has(name)) fail("公式SDKのlock依存欠落");
+  for (const name of sdkLocks) if (!sdkConsumers.has(name)) fail("公式SDKに対応するconsumer依存欠落");
+  for (const entry of publicSdkDependencies) {
+    if (!sdkConsumers.has(entry.name)) fail("固定公式SDKのconsumer依存欠落");
+    if (!sdkLocks.has(entry.name)) fail("固定公式SDKのlock依存欠落");
+    if (!sdkConsumerLocks.has(entry.name)) fail("固定公式SDKのconsumer lock依存欠落");
+  }
   for (const name of approved.keys()) if (!existing.has(name)) fail("manifestファイル欠落", name);
   return { failures: [...new Set(failures)], fileCount: files.length, imported: manifest.importedFiles.length, generated: manifest.generatedFiles.length };
+}
+
+// 公開依存と配布SBOMで共有する固定SDK proof。SDK ownership対象の本moduleへ集約する。
+const REPOSITORY = "niho-life/niho-photo";
+const CONSUMER = "packages/photo-cloud-media/package.json";
+const PROOF_PATH = "packages/photo-cloud-media/sdk-baseline.json";
+const RECEIPT_PATH = "docs/security/public-sdk-dependency-receipt.json";
+const NAMES = new Set(["niho-photo-contract", "niho-photo-develop-engine-runtime"]);
+const verifiedDependencies = new WeakSet();
+const HEX256 = /^[a-f0-9]{64}$/;
+const COMMIT = /^[a-f0-9]{40}$/;
+const invalid = () => { throw new Error("公開SDK依存の固定proofが不正です"); };
+const record = (value) => value !== null && typeof value === "object" && !Array.isArray(value);
+
+/** Only the two audited artifacts from this repository, bound to one declared consumer. */
+export async function readPublicSdkDependencies(root, policy) {
+  return readPublicSdkDependenciesSync(root, policy);
+}
+
+export function readPublicSdkDependenciesSync(root, policy) {
+  const entries = policy.publicSdkDependencies === undefined ? [] : policy.publicSdkDependencies;
+  if (!Array.isArray(entries) || (entries.length !== 0 && entries.length !== NAMES.size)) invalid();
+  if (entries.length === 0) return [];
+  const receiptPolicy = policy.publicSdkDependencyReceipt;
+  if (!record(receiptPolicy) || Object.keys(receiptPolicy).length !== 2
+    || receiptPolicy.path !== RECEIPT_PATH || !HEX256.test(receiptPolicy.sha256 ?? "")) invalid();
+  const receiptBytes = readFileSync(path.join(root, RECEIPT_PATH));
+  if (digest(receiptBytes) !== receiptPolicy.sha256) invalid();
+  const receipt = JSON.parse(receiptBytes.toString("utf8"));
+  if (!record(receipt) || receipt.schemaVersion !== 1 || receipt.repository !== REPOSITORY
+    || !Array.isArray(receipt.artifacts) || receipt.artifacts.length !== NAMES.size) invalid();
+  const proofBytes = readFileSync(path.join(root, PROOF_PATH));
+  const proof = JSON.parse(proofBytes.toString("utf8"));
+  const names = new Set();
+  for (const entry of entries) {
+    if (!record(entry) || Object.keys(entry).length !== 10 || !NAMES.has(entry.name) || names.has(entry.name)
+      || entry.consumer !== CONSUMER || entry.proofPath !== PROOF_PATH
+      || typeof entry.version !== "string" || !/^\d+\.\d+\.\d+$/.test(entry.version)
+      || !COMMIT.test(entry.sourceCommit ?? "") || !HEX256.test(entry.sha256 ?? "")
+      || !HEX256.test(entry.proofSha256 ?? "") || digest(proofBytes) !== entry.proofSha256
+      || !Number.isSafeInteger(entry.sizeBytes) || entry.sizeBytes <= 0 || entry.sizeBytes > 52_428_800
+      || typeof entry.integrity !== "string" || !/^sha512-[A-Za-z0-9+/]{86}==$/.test(entry.integrity)) invalid();
+    const filename = `${entry.name}-${entry.version}.tgz`;
+    const receipts = receipt.artifacts.filter((item) => record(item) && item.name === entry.name);
+    const accepted = receipts[0];
+    if (receipts.length !== 1 || receipt.releaseTag !== `photo-sdk-v${entry.version}`
+      || receipt.sourceCommit !== entry.sourceCommit || accepted.url !== entry.url
+      || accepted.file !== filename || accepted.sizeBytes !== entry.sizeBytes
+      || accepted.sha256 !== entry.sha256 || accepted.integrity !== entry.integrity) invalid();
+    if (entry.url !== `https://github.com/${REPOSITORY}/releases/download/photo-sdk-v${entry.version}/${filename}`
+      || !record(proof) || proof.schemaVersion !== 1 || proof.repository !== REPOSITORY
+      || proof.releaseTag !== `photo-sdk-v${entry.version}` || proof.sourceCommit !== entry.sourceCommit
+      || !Array.isArray(proof.packages)) invalid();
+    const artifacts = proof.packages.filter((item) => record(item) && item.name === entry.name);
+    const artifact = artifacts[0];
+    if (artifacts.length !== 1 || artifact.file !== filename || artifact.sha256 !== entry.sha256
+      || artifact.size !== entry.sizeBytes
+      || artifact.integrity !== `sha256-${Buffer.from(entry.sha256, "hex").toString("base64")}`) invalid();
+    names.add(entry.name);
+  }
+  const verified = Object.freeze(entries.map((entry) => Object.freeze({ ...entry })));
+  verifiedDependencies.add(verified);
+  return verified;
+}
+
+export function isVerifiedPublicSdkDependencies(entries) {
+  return Array.isArray(entries) && (entries.length === 0 || verifiedDependencies.has(entries));
+}
+
+export function approvedSdkPackageDependency(entries, consumer, name, specifier) {
+  return entries.some((entry) => entry.consumer === consumer && entry.name === name && entry.url === specifier);
+}
+
+export function approvedSdkLockDependency(entries, lockPath, dependency) {
+  return record(dependency) && !dependency.link && entries.some((entry) =>
+    lockPath === `node_modules/${entry.name}` && dependency.version === entry.version
+    && (dependency.name === undefined || dependency.name === entry.name)
+    && dependency.resolved === entry.url && dependency.integrity === entry.integrity);
+}
+
+export function approvedSdkConsumerLockDependency(entry, lockPath, dependency) {
+  return lockPath === entry.consumer.slice(0, -"/package.json".length)
+    && record(dependency) && record(dependency.dependencies)
+    && dependency.dependencies[entry.name] === entry.url;
 }

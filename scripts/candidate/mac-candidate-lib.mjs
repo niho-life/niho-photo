@@ -21,6 +21,7 @@ import path from "node:path";
 
 import { assertSystemNativeSearchPaths } from "../../packages/develop-engine/build-macos-native.mjs";
 import { assertPublicBytes, createSbom, lockfiles } from "../ci/release-evidence-lib.mjs";
+import { readPublicSdkDependenciesSync } from "../ci/publication-lib.mjs";
 import { normalizeArtifactDigest, validateReleaseManifest, verifyManifestPackageFiles } from "../sdk/verify-release-artifact.mjs";
 
 const COMMIT = /^[a-f0-9]{40}$/u;
@@ -473,7 +474,8 @@ export function verifyBuiltApp({ appPath, workspace, version, sdkManifest, nativ
 
 export function createCandidateSbom(workspace, sourceSha) {
   const locks = Object.fromEntries(lockfiles.map((relative) => [relative, readFileSync(path.join(workspace, ...relative.split("/")))]));
-  return createSbom(sourceSha, locks);
+  const publicSdkDependencies = readPublicSdkDependenciesSync(workspace, JSON.parse(readFileSync(path.join(workspace, "docs/security/publication-policy.json"), "utf8")));
+  return createSbom(sourceSha, locks, publicSdkDependencies);
 }
 
 export function candidateBaseName({ version, sourceSha, runId, runAttempt }) {

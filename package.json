@@ -8,7 +8,8 @@
     "packages/ui",
     "packages/photo-editing",
     "apps/camera",
-    "packages/photo-cloud-session"
+    "packages/photo-cloud-session",
+    "packages/photo-cloud-media"
   ],
   "scripts": {
     "pretypecheck": "node scripts/ci/guard-local-heavy.mjs typecheck",

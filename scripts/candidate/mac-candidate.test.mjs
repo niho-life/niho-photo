@@ -16,6 +16,7 @@ import {
   assertSdkSelection,
   candidateBaseName,
   candidateContract,
+  createCandidateSbom,
   inventoryTree,
   officialBuildEnvironment,
   packAppTar,
@@ -605,5 +606,15 @@ test("DMG rootはappと固定Applications linkだけを許可し、隠しmetadat
     put(root, name === ".DS_Store" ? name : `${name}/payload`, "synthetic hidden payload\n");
     assert.throws(() => assertDmgRoot(root), /metadata payload/u);
     rmSync(path.join(root, name), { recursive: true, force: true });
+  }
+});
+
+test("candidateのSBOM生成は公開policyで検証したSDK取得物を収録する", () => {
+  const bom = createCandidateSbom(root, "a".repeat(40));
+  for (const name of ["niho-photo-contract", "niho-photo-develop-engine-runtime"]) {
+    const component = bom.components.find((item) => item.name === name && item.purl.startsWith("pkg:generic/"));
+    assert.ok(component);
+    assert.equal(component.hashes[0].alg, "SHA-256");
+    assert.equal(component.externalReferences[0].type, "distribution");
   }
 });

@@ -25,7 +25,9 @@ test("公開guardはmanifest外も含めてrepository全体の禁止pathを検�
   for (const name of ["scripts/ci/publication-lib.mjs", "scripts/ci/workflow-lib.mjs", "scripts/ci/photo-sdk-workflow-lib.mjs", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/ci/image-metadata.mjs"]) {
     try { await put(name, await readFile(path.join(realRoot, name))); } catch (error) { if (error.code !== "ENOENT") throw error; }
   }
-  await put("docs/security/publication-policy.json", await readFile(path.join(realRoot, "docs/security/publication-policy.json")));
+  const policy = JSON.parse(await readFile(path.join(realRoot, "docs/security/publication-policy.json"), "utf8"));
+  delete policy.publicSdkDependencies; // SDKを使わない基準fixture。
+  await put("docs/security/publication-policy.json", `${JSON.stringify(policy)}\n`);
   await put("docs/security/publication-manifest.json", `${JSON.stringify({
     schemaVersion: 1,
     issue: 1,

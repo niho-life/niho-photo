@@ -44,3 +44,9 @@
 ## Docs / Photo 共通contract
 
 [Docs #15](https://github.com/niho-coliving/niho-docs/issues/15) を共通仕様の起点とし、Docs正本の [`packages/niho-cloud-contract`](https://github.com/niho-coliving/niho-docs/tree/main/packages/niho-cloud-contract) と [`cloud-contract-v1.md`](cloud-contract-v1.md) を完全な40桁SHAで固定して取り込む。Photo側の `packages/niho-cloud-contract` は型、mock、負例vector、test-only reference modelを同一byte列で保ち、`docs/security/cloud-contract-source.json` と Publication manifest の双方で出典SHA・各ファイルhashを記録する。CIは公開Docsを資格情報なしで取得し、固定SHAと全対象ファイルのhash一致を検証する。契約変更はDocsを先に更新し、Photoを同じSHAへ追随させる対応PRを用意する。公開contractとmockはクライアントの合意面・テスト用であり、認証・認可を実行するコードではない。
+
+## 公式SDKをRelease tarから使う依存
+
+通常の依存は公開npm registryまたは公開workspaceへ限定する。C04の固定SDKだけは、publication policyの `publicSdkDependencies` に登録したconsumer・package名・NIHO公式Release URL・版・source SHA・artifact size/SHA-256・lock SHA-512と、公開baseline proofおよび同一取得物の両digestを記録したreceiptのhashを全て照合する。tar取得時に同じbytesの両digestを確認し、版を更新するときは対応する公開proofとpolicyを同時にレビューする。別consumer、別URL、未固定版、改変hash、認証付き取得やprivate packageへの一般的な許可には使わない。CIのpublication guardとnpm ciによるintegrity確認を維持する。
+
+正式Release tarのSBOMは、取得URLとchecksumを含む[generic PURL](https://github.com/package-url/purl-spec/blob/main/types/generic-definition.json)とdistribution参照・SHA-256で識別する。registry上の別packageと混同せず、公開guardで検証してfreezeした依存proofだけをSBOM生成へ渡す。
