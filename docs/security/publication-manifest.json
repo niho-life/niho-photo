@@ -3344,11 +3344,12 @@
         "path": "packages/photo-editing/tsconfig.json",
         "sha256": "f0c661fb5ba79d3e296a4871b2b02ce443d47b4e10050d1be434918ea67c4daa"
       },
-      "outputSha256": "2986b6cac2e4e0bbc73605eaf37a02259901c66d92026adc3980122575e1876e",
+      "outputSha256": "bb45ad732d0db2d79f0b5be6ec7e1b42b6349cfdb290a5a839002665156ec213",
       "modifications": [
         "ルートworkspaceのnode_modulesで型解決するため、package直下node_modulesへの固定pathsを削除。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
-        "Photo C00の公開port型と型負例を既存required typecheckへ含める"
+        "Photo C00の公開port型と型負例を既存required typecheckへ含める",
+        "Node24で実行する契約fixtureの明示.ts importをnoEmitのhost型検査でも許可しCI TS5097を修正"
       ]
     },
     {

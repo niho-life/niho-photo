@@ -20,7 +20,8 @@
       "react",
       "react-dom",
       "react/experimental"
-    ]
+    ],
+    "allowImportingTsExtensions": true
   },
   "include": [
     "src/**/*.ts",
