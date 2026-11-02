@@ -1,0 +1,21 @@
+{
+  "compilerOptions": {
+    "target": "ES2022",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "types": ["node"],
+    "module": "ESNext",
+    "moduleResolution": "Bundler",
+    "allowImportingTsExtensions": true,
+    "strict": true,
+    "noUncheckedIndexedAccess": true,
+    "exactOptionalPropertyTypes": true,
+    "verbatimModuleSyntax": true,
+    "noUnusedLocals": true,
+    "noUnusedParameters": true,
+    "noEmit": true
+  },
+  "include": [
+    "src/**/*.ts",
+    "../../apps/photo-web/src/server/auth.ts"
+  ]
+}

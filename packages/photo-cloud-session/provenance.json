@@ -1,0 +1,16 @@
+{
+  "schemaVersion": 1,
+  "repository": "niho-life/niho-editor",
+  "commit": "d778248ff772496f131b347967b5a2c851899b31",
+  "sources": [
+    {
+      "path": "apps/editor-web/src/auth/niho.ts",
+      "sha256": "67a4c2b90b9bf763f0fb2d9206113f71b0418f9b1c8fd403a89834741ca4b3b9"
+    },
+    {
+      "path": "apps/editor-web/src/auth/auto-form.ts",
+      "sha256": "41e2ec0b7ed32e1a424c08578f26d568129a604c808a5d33139af31a4f3d8f3a"
+    }
+  ],
+  "policy": "One-time audit of the existing POST v2 wire protocol and bounded POST body, cookie, and escaped nonce-form helpers at the recorded repository paths. Editor client IDs, cookie names, endpoints, return paths, profile claims, and provider defaults were not inherited. No private source is imported; Photo code is maintained here only."
+}
