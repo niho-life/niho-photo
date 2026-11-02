@@ -72,6 +72,6 @@
     "releaseTag": "photo-sdk-v0.1.7",
     "sourceCommit": "5ff21a28ae5f7a0e3a64a98b1ef31a7ca523b2a6",
     "engineManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
-    "contractFileHashes": "contract-files.json (15 compiled JS files derived from hash-verified official archive)"
+    "contractFileHashes": "contract-files.json (package metadata including export map +15 compiled JS files from verified official archive)"
   }
 }

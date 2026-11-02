@@ -78,5 +78,10 @@
       "sha256": "99e00d87af9077b47a234b4c17bf3f0e409218ab2f3824257e6198e665e7c4bf",
       "sizeBytes": 115
     }
-  ]
+  ],
+  "packageMetadata": {
+    "path": "package.json",
+    "sha256": "c4da734ab2d73b13e30bb1434709fdceb1df1f2dc9db27f8d0e3c851c779793e",
+    "sizeBytes": 492
+  }
 }

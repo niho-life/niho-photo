@@ -56,7 +56,10 @@ export function loadVerifiedContract(): Promise<ContractRuntime> {
   contractPromise ??= (async () => {
     try {
       const packageUrl = new URL(import.meta.resolve("niho-photo-contract/package.json"));
-      const packageJson: unknown = JSON.parse((await readFile(packageUrl)).toString("utf8"));
+      const packageBytes = await readFile(packageUrl);
+      // The export map chooses executable code; pin it along with the compiled module graph.
+      if (!verifyExactBytes(packageBytes, contractFiles.packageMetadata)) throw new Error();
+      const packageJson: unknown = JSON.parse(packageBytes.toString("utf8"));
       if (!record(packageJson) || packageJson.version !== contractFiles.sdkVersion
         || contractFiles.sdkVersion !== baseline.releaseTag.slice("photo-sdk-v".length)
         || contractFiles.sourceCommit !== baseline.sourceCommit || !SHA256.test(contractFiles.packageSha256)) throw new Error();
