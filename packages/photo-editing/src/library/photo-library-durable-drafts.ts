@@ -87,6 +87,11 @@ export type PhotoLibraryDevelopDraftWriter = {
  * 書込前に復旧候補を確認し、同じ本人のpendingだけを小さいpageで読む。
  */
 export type PhotoLibraryDurableDevelopDrafts = {
+  /** 再認証後の同一本人が明示して開く入口。通常一覧や自動同期とは別のtoken/stateを使う。 */
+  readonly previous?: {
+    list: PhotoLibraryDurableDevelopDrafts["list"];
+    reopen: PhotoLibraryDurableDevelopDrafts["reopen"];
+  };
   /** local draftを読める本人tupleか。期限切れのnetwork許可は別に検証する。 */
   isCurrent(): boolean;
   subscribe(listener: () => void): () => void;

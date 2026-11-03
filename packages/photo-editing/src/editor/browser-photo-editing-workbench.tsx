@@ -111,6 +111,7 @@ import { BrowserPhotoEditingFolderTree } from "./browser-photo-editing-folder-tr
 import { BrowserPhotoEditingFooter, BrowserPhotoEditingStatusLine } from "./browser-photo-editing-footer";
 import { BrowserPhotoExportSheet } from "./browser-photo-editing-export-sheet";
 import { BrowserPhotoDurableComparisonDialog } from "./browser-photo-durable-comparison";
+import { BrowserPhotoPreviousDraftsDialog } from "./browser-photo-previous-drafts";
 import {
   BrowserPhotoEditingGrid,
   BrowserPhotoListSortControl,
@@ -844,7 +845,8 @@ export function BrowserPhotoEditingWorkbench(props: {
   // 1 枚で補正の入力を開けている（wasm か S1 の canvas）。閲覧のみの operator も wasm なら保存済みの補正で描く
   const loupeEditing = loupeOpened !== null && (loupeOpened.mode === "wasm" || Boolean(loupeOpened.decoded));
   const editable = props.canEdit && loupeEditing;
-  const draftRecoveryPending = develop.draftRecovery.selectedDraft !== null || develop.durableRecovery.blocksCurrentPhoto;
+  const draftRecoveryPending = develop.draftRecovery.selectedDraft !== null ||
+    develop.durableRecovery.blocksCurrentPhoto || develop.previousDrafts.blocksCurrentPhoto;
   const controlsDisabled =
     !editable || operation !== null || develop.leaving || staleReloading || cropSettling || draftRecoveryPending;
   // 切り抜きの道具（F3b 移行元設計）を開いている（1 枚で見ている wasm の写真）
@@ -2983,6 +2985,7 @@ export function BrowserPhotoEditingWorkbench(props: {
               ? { mode: compareMode, disabled: controlsDisabled || !compareAvailable, onChange: changeCompareView }
               : undefined
           }
+          previousDraftsAction={develop.previousDrafts.entryAction ?? undefined}
           exportButtonRef={exportButtonRef}
           exportSheetOpen={exportSheetOpen && !mobileBatchExport}
           exportButtonExpanded={exportSheetOpen}
@@ -3023,7 +3026,12 @@ export function BrowserPhotoEditingWorkbench(props: {
         onRename={albumLibrary.renameAlbum}
         onDelete={deleteAlbum}
       />
-      <BrowserPhotoDurableComparisonDialog model={develop.durableRecovery.comparison} />
+      <BrowserPhotoPreviousDraftsDialog model={develop.previousDrafts.dialog} />
+      <BrowserPhotoDurableComparisonDialog
+        model={develop.previousDrafts.dialog
+          ? null
+          : develop.previousDrafts.comparison ?? develop.durableRecovery.comparison}
+      />
       <BrowserPhotoAlbumAddDialog
         open={albumAddOpen}
         albums={albumLibrary.albums}

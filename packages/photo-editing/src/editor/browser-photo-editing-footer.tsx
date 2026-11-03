@@ -266,6 +266,8 @@ export function BrowserPhotoEditingFooter(props: {
    * 比較しない）。渡さない間は出さない
    */
   compareView?: { mode: BrowserPhotoCompareMode; disabled: boolean; onChange: (mode: BrowserPhotoCompareMode) => void };
+  /** freshな本人クラウドで、本人が押したときだけ以前の下書きを列挙する。 */
+  previousDraftsAction?: { label: string; disabled: boolean; onClick: () => void };
   exportButtonRef: MutableRefObject<HTMLButtonElement | null>;
   exportSheetOpen: boolean;
   /** 一覧の複数選択のシートも同じボタンで開く */
@@ -375,6 +377,16 @@ export function BrowserPhotoEditingFooter(props: {
         </button>
       ) : null}
       {props.compareView ? <BrowserPhotoCompareViewMenu {...props.compareView} /> : null}
+      {props.previousDraftsAction ? (
+        <button
+          type="button"
+          disabled={props.previousDraftsAction.disabled}
+          onClick={props.previousDraftsAction.onClick}
+          className={cn(PHOTO_EDITING_SECONDARY_BUTTON_CLASS_NAME, "h-11 shrink-0")}
+        >
+          {props.previousDraftsAction.label}
+        </button>
+      ) : null}
       <div className="relative shrink-0">
         <button
           ref={props.exportButtonRef}

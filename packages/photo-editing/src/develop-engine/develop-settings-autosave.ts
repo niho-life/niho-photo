@@ -55,6 +55,8 @@ export type DevelopSettingsSaver = {
   getExpectedRevision: () => number | undefined;
   /** durable の結果確認で、その送信値だけを確定する。後発入力は保持する。 */
   acknowledgeDurableInput?: (settings: Readonly<Record<string, unknown>>) => boolean;
+  /** 以前の下書きの明示操作中だけ次の自動送信を止める。入力/固定要求を保持し、返す関数で同じ値の送信を再開する。 */
+  pauseDurable?: () => () => void;
   /** まとめる待ちを止める（以後の変更は受けず、まだ送っていない値は flush されない限り送らない。送信中の保存は捨てない） */
   dispose: () => void;
 };
@@ -302,6 +304,7 @@ function createDurableDevelopSettingsSaver(
   let frozen = false;
   let holdPending = false;
   let disposed = false;
+  const pauseTokens = new Set<object>();
   let lastSaved: DevelopSettingsLastSaved | null = null;
   let lastError: unknown = null;
   let flushWaiters: Array<(result: DevelopSettingsFlushResult) => void> = [];
@@ -327,8 +330,9 @@ function createDurableDevelopSettingsSaver(
   };
   const settleWaiters = () => {
     if (flushWaiters.length === 0 || sending || timer !== null) return;
-    if (pending !== null && failure === null && !frozen && !holdPending) return;
-    const result: DevelopSettingsFlushResult = failure !== null || frozen || blockedInput || holdPending || pending !== null
+    if (pending !== null && failure === null && !frozen && !holdPending && pauseTokens.size === 0) return;
+    const result: DevelopSettingsFlushResult = failure !== null || frozen || blockedInput || holdPending ||
+      pauseTokens.size > 0 || pending !== null
       ? { ok: false, error: lastError ?? new Error("補正をまだ保存できていません") }
       : { ok: true, saved: lastSaved };
     const waiters = flushWaiters;
@@ -438,7 +442,8 @@ function createDurableDevelopSettingsSaver(
   };
 
   function pump(): void {
-    if (sending || timer !== null || failure !== null || frozen || holdPending || blockedInput || pending === null || (disposed && flushWaiters.length === 0)) {
+    if (sending || timer !== null || failure !== null || frozen || holdPending || blockedInput ||
+        pauseTokens.size > 0 || pending === null || (disposed && flushWaiters.length === 0)) {
       settleWaiters();
       notify();
       return;
@@ -454,6 +459,12 @@ function createDurableDevelopSettingsSaver(
         const committed = await waitForStage(scheduled);
         if (committed === "superseded") return { kind: "superseded" } as const;
         if (committed === "unsaved") return { kind: "unsaved" } as const;
+        if (pauseTokens.size > 0) {
+          // A was admitted to staging before the pause. Keep a later B if present;
+          // otherwise retain this exact committed stage until explicit resume.
+          if (pending === null) pending = scheduled;
+          return { kind: "paused" } as const;
+        }
         if (pendingConflict !== null) {
           // A 競合後に保存できなかった B を再stageした。Bは送らず比較用に保持する。
           pending = scheduled;
@@ -464,7 +475,7 @@ function createDurableDevelopSettingsSaver(
       })
       .then(
         async (result) => {
-          if (result.kind === "conflict-ready") return;
+          if (result.kind === "conflict-ready" || result.kind === "paused") return;
           if (result.kind === "superseded") return;
           if (result.kind === "saved") {
             lastSaved = {
@@ -501,14 +512,14 @@ function createDurableDevelopSettingsSaver(
     flushWaiters.push(resolve);
     stopTimer();
     // durable の失敗・競合・unknown は、同じ内容を legacy retry のように作り直さない。
-    if (failure === null && !frozen && !holdPending && !blockedInput) pump();
+    if (failure === null && !frozen && !holdPending && !blockedInput && pauseTokens.size === 0) pump();
     else settleWaiters();
   });
 
   const retry = (): Promise<DevelopSettingsFlushResult> => new Promise((resolve) => {
     flushWaiters.push(resolve);
     stopTimer();
-    if (frozen || blockedInput) {
+    if (frozen || blockedInput || pauseTokens.size > 0) {
       settleWaiters();
       return;
     }
@@ -564,7 +575,7 @@ function createDurableDevelopSettingsSaver(
       holdPending = false;
       lastError = stageError;
       stopTimer();
-      if (flushWaiters.length === 0 && failure === null && !frozen) {
+      if (flushWaiters.length === 0 && failure === null && !frozen && pauseTokens.size === 0) {
         timer = setTimeout(() => {
           timer = null;
           pump();
@@ -579,6 +590,24 @@ function createDurableDevelopSettingsSaver(
     getLastError: () => lastError,
     hasPendingWork: () => currentState() !== "idle",
     getExpectedRevision: () => expectedRevision,
+    pauseDurable() {
+      const token = {};
+      let active = true;
+      pauseTokens.add(token);
+      stopTimer();
+      notify();
+      settleWaiters();
+      return () => {
+        if (!active) return;
+        active = false;
+        pauseTokens.delete(token);
+        if (pauseTokens.size === 0 && !disposed) pump();
+        else {
+          notify();
+          settleWaiters();
+        }
+      };
+    },
     acknowledgeDurableInput(settings) {
       const blocked = blockedRequest;
       if (blocked !== null && sameJsonValue(blocked.settings, settings)) {
@@ -586,7 +615,10 @@ function createDurableDevelopSettingsSaver(
         pendingConflict = null;
         frozen = false;
         failure = pending !== null && (pending.stageStatus === "unsaved" || pending.stageStatus === "failed") ? "stage" : null;
-        if (pending === blocked) pending = null;
+        if (pending === blocked) {
+          pending = null;
+          stopTimer();
+        }
         holdPending = pending !== null && failure === null;
         lastError = holdPending ? new Error("後の補正がまだ保存されていません") : null;
         notify();
@@ -595,6 +627,7 @@ function createDurableDevelopSettingsSaver(
       }
       if (pending !== null && sameJsonValue(pending.settings, settings)) {
         pending = null;
+        stopTimer();
         failure = null;
         holdPending = false;
         lastError = null;

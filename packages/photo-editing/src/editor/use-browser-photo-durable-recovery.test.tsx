@@ -12,6 +12,88 @@ import { useBrowserPhotoDevelop } from "./use-browser-photo-develop";
 
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
+it("reuses the active writer when opening its current draft during the autosave debounce", async () => {
+  const token = Object.freeze({ kind: "develop-draft" as const });
+  const stage = { committed: Promise.resolve("committed" as const) };
+  const candidate = { settings: { v: 1, engine: "niho-1", exposure: 0.2 }, baseVersion: null, maskSurfaceIds: [] };
+  let pending = false;
+  let snapshot: PhotoLibraryDevelopDraftSnapshot = {
+    latest: null, latestStage: null, attempted: null, conflicts: [],
+    hasUnknownAttempt: false, hasPendingResolution: false, terminalReason: null,
+  };
+  let notify: (() => void) | null = null;
+  const writer: PhotoLibraryDevelopDraftWriter = {
+    photoId: "photo", sourceSha256: "a".repeat(64), token,
+    stage: vi.fn(() => {
+      pending = true;
+      snapshot = { ...snapshot, latest: candidate, latestStage: stage };
+      notify?.();
+      return stage;
+    }),
+    save: vi.fn(),
+    retry: vi.fn(async () => {
+      pending = false;
+      snapshot = { latest: null, latestStage: null, attempted: null, conflicts: [], hasUnknownAttempt: false, hasPendingResolution: false, terminalReason: null };
+      notify?.();
+      return { kind: "saved" as const, revision: 1, updatedAt: null };
+    }),
+    read: vi.fn(async () => snapshot), compare: vi.fn(), resolve: vi.fn(), retryResolution: vi.fn(),
+    discard: vi.fn(), dispose: vi.fn(),
+  };
+  const reopen = vi.fn(async () => writer);
+  const port: PhotoLibraryDurableDevelopDrafts = {
+    isCurrent: () => true,
+    subscribe: (listener) => { notify = listener; return () => { notify = null; }; },
+    open: () => writer,
+    reopen,
+    list: async () => ({
+      items: pending ? [{ token, photoId: "photo", hasLatest: true, hasUnknownAttempt: false, conflictCount: 0 }] : [],
+      nextCursor: null,
+    }),
+  };
+  const photo = { id: "photo", contentSha256: "a".repeat(64), developRevision: 1 };
+  const library = { place: "cloud", durableDevelopDrafts: port, get: async () => photo } as unknown as PhotoLibrary;
+  const host: PhotoEditingHost = { notifyPhotosChanged() {}, saveFile: async () => "saved", nativeFileSaveAvailable: () => false, isNativeViewport: () => false, isDesktopApp: () => false, isScopeCurrent: () => true };
+  let current!: ReturnType<typeof useBrowserPhotoDevelop>;
+  function Harness() {
+    const mountedRef = useRef(true);
+    const latestAccessRef = useRef({ canEdit: true, spotId: "test-context", actorId: "user" } as unknown as BrowserPhotoAccess);
+    const queryClient = useRef(new QueryClient());
+    current = useBrowserPhotoDevelop({ spotId: "test-context", deviceClass: "pc", actorId: "user", mountedRef, latestAccessRef, queryClient: queryClient.current, setStatus: vi.fn(), replaceCloudPhoto: vi.fn(), markEditedPreviewPending: vi.fn() });
+    return null;
+  }
+  const container = document.createElement("div"); document.body.append(container); const root = createRoot(container);
+  try {
+    await act(async () => {
+      root.render(createElement(PhotoLibraryProvider, { library, host, children: createElement(Harness) }));
+      for (let n = 0; n < 10; n++) await Promise.resolve();
+    });
+    const saver = current.createSaver("test-context", "photo", 0, "a".repeat(64));
+    if (!saver) throw new Error("durable saver missing");
+    const acknowledge = vi.spyOn(saver, "acknowledgeDurableInput");
+    await act(async () => {
+      current.startSession({ key: "photo", spotId: "test-context", photoId: "photo", saver, photo } as DevelopSession);
+      saver.schedule({ v: 1, engine: "niho-1", exposure: 0.2 });
+      for (let n = 0; n < 20; n++) await Promise.resolve();
+    });
+    await act(async () => {
+      current.durableRecovery.actions.find((action) => action.label === PHOTO_EDITING_DURABLE_DRAFT_COPY.check)?.onClick();
+      for (let n = 0; n < 20; n++) await Promise.resolve();
+    });
+    expect(reopen).not.toHaveBeenCalled();
+    expect(writer.read).toHaveBeenCalled();
+    await act(async () => {
+      current.durableRecovery.actions.find((action) => action.label === PHOTO_EDITING_DURABLE_DRAFT_COPY.save)?.onClick();
+      for (let n = 0; n < 30; n++) await Promise.resolve();
+    });
+    expect(writer.retry).toHaveBeenCalledOnce();
+    expect(acknowledge).toHaveReturnedWith(true);
+    expect(writer.dispose).not.toHaveBeenCalled();
+    expect(saver.hasPendingWork()).toBe(false);
+    await expect(saver.flush()).resolves.toMatchObject({ ok: true });
+  } finally { await act(async () => root.unmount()); container.remove(); }
+});
+
 it.each(["none", "committed", "unsaved"] as const)("after unknown A confirmation settles only A and preserves later B (%s)", async (later) => {
   const token = { kind: "develop-draft" as const };
   const candidate = { settings: { v: 1, engine: "niho-1", exposure: 0.2 }, baseVersion: null, maskSurfaceIds: [] };
