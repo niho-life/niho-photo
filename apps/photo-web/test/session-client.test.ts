@@ -268,6 +268,91 @@ describe("captured photo web cloud client", () => {
     }
   });
 
+  it("rejects caller abort promptly after JSON is boxed behind the refresh barrier", async () => {
+    const work = deferred<unknown>();
+    const refresh = deferred<PhotoIdentity>();
+    const caller = new AbortController();
+    const reason = new DOMException("synthetic caller abort", "AbortError");
+    const session = controller(host({ refresh: () => refresh.promise }));
+    let verification: Promise<unknown> | null = null;
+    let operation: Promise<void> | null = null;
+    try {
+      await session.read();
+      const client = createCapturedPhotoWebCloudClient({
+        client: fakeClient(() => work.promise),
+        session,
+        identity: session.getSnapshot().identity!,
+        scopeSignal: new AbortController().signal,
+      });
+      let settled = false;
+      let rejection: unknown = null;
+      operation = client.request("library.get", {}, { signal: caller.signal }).then(
+        () => { settled = true; },
+        (error: unknown) => { settled = true; rejection = error; },
+      );
+      verification = session.refresh();
+      work.resolve(Object.freeze({ id: "synthetic-library-alpha" }));
+      await turn();
+      expect(settled).toBe(false);
+      caller.abort(reason);
+      await turn();
+      expect(session.getSnapshot().phase).toBe("verifying");
+      expect(settled).toBe(true);
+      expect(rejection).toBe(reason);
+      client.dispose();
+    } finally {
+      refresh.resolve(identity({ expiresAt: "2026-11-03T03:00:00.000Z" }));
+      await verification;
+      await operation;
+      session.dispose();
+    }
+  });
+
+  it("rejects caller abort promptly and cancels boxed content behind the refresh barrier", async () => {
+    const work = deferred<unknown>();
+    const refresh = deferred<PhotoIdentity>();
+    const caller = new AbortController();
+    const cancelled = vi.fn();
+    const session = controller(host({ refresh: () => refresh.promise }));
+    let verification: Promise<unknown> | null = null;
+    let operation: Promise<void> | null = null;
+    try {
+      await session.read();
+      const client = createCapturedPhotoWebCloudClient({
+        client: fakeClient(() => work.promise),
+        session,
+        identity: session.getSnapshot().identity!,
+        scopeSignal: new AbortController().signal,
+      });
+      let settled = false;
+      operation = client.request("content.get", {
+        photoId: "synthetic-photo", assetId: "synthetic-asset",
+      }, { signal: caller.signal }).then(
+        () => { settled = true; },
+        () => { settled = true; },
+      );
+      verification = session.refresh();
+      work.resolve(content(new ReadableStream<Uint8Array>({ cancel: cancelled })));
+      await turn();
+      expect(settled).toBe(false);
+      caller.abort();
+      await turn();
+      expect(session.getSnapshot().phase).toBe("verifying");
+      expect(settled).toBe(true);
+      expect(cancelled).toHaveBeenCalledTimes(1);
+      refresh.resolve(identity({ expiresAt: "2026-11-03T03:00:00.000Z" }));
+      await verification;
+      await turn();
+      expect(cancelled).toHaveBeenCalledTimes(1);
+      client.dispose();
+    } finally {
+      refresh.resolve(identity({ expiresAt: "2026-11-03T03:00:00.000Z" }));
+      await verification;
+      await operation;
+      session.dispose();
+    }
+  });
+
   it("drops old results when refresh changes the logical identity", async () => {
     const work = deferred<unknown>();
     const session = controller(host({
@@ -423,6 +508,26 @@ describe("captured photo web cloud client", () => {
     }
   });
 
+  it.each(["json", "content"] as const)("releases aliased caller/host signals after %s completes", async (mode) => {
+    const scope = new AbortController();
+    const add = vi.spyOn(scope.signal, "addEventListener");
+    const remove = vi.spyOn(scope.signal, "removeEventListener");
+    const body = new ReadableStream<Uint8Array>({ start(value) { value.enqueue(new Uint8Array([1])); value.close(); } });
+    const harness = await readyHarness(async () => mode === "content"
+      ? content(body, { totalBytes: 1, range: { start: 0, endInclusive: 0 } })
+      : { id: "synthetic-library-alpha" }, scope);
+    try {
+      if (mode === "json") await harness.client.request("library.get", {}, { signal: scope.signal });
+      else {
+        const accepted = await harness.client.request("content.get", { photoId: "synthetic-photo", assetId: "synthetic-asset" }, { signal: scope.signal });
+        const reader = accepted.body.getReader();
+        await reader.read();
+        expect((await reader.read()).done).toBe(true);
+      }
+      expect(remove.mock.calls.length).toBe(add.mock.calls.length);
+    } finally { harness.client.dispose(); harness.session.dispose(); }
+  });
+
   it("preserves and freezes ranged content metadata", async () => {
     const metadata = content(new ReadableStream<Uint8Array>({ start(value) { value.close(); } }), {
       contentType: "image/heic",
@@ -468,6 +573,34 @@ describe("captured photo web cloud client", () => {
       });
       await expect(client.request("library.get", {}, { signal: new AbortController().signal }))
         .rejects.toMatchObject({ code: "scope_changed" });
+      client.dispose();
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it("cancels raw content when scope rebinding is detected after allocation", async () => {
+    const cancelled = vi.fn();
+    const raw = fakeClient(async () => {
+      Object.defineProperty(raw, "scope", {
+        value: Object.freeze({ ...raw.scope }),
+        configurable: true,
+      });
+      return content(new ReadableStream<Uint8Array>({ cancel: cancelled }));
+    });
+    const session = controller(host());
+    try {
+      await session.read();
+      const client = createCapturedPhotoWebCloudClient({
+        client: raw,
+        session,
+        identity: session.getSnapshot().identity!,
+        scopeSignal: new AbortController().signal,
+      });
+      await expect(client.request("content.get", {
+        photoId: "synthetic-photo", assetId: "synthetic-asset",
+      }, { signal: new AbortController().signal })).rejects.toMatchObject({ code: "scope_changed" });
+      expect(cancelled).toHaveBeenCalledTimes(1);
       client.dispose();
     } finally {
       session.dispose();

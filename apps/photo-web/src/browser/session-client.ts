@@ -100,15 +100,17 @@ export function createCapturedPhotoWebCloudClient(options: {
       assertRawScope();
 
       let completed: RequestBox<PhotoOperationMap[K]["response"]> | null = null;
-      const captured = await session.runCaptured(async (capture) => {
+      const publicLink = linkedAbortController(...new Set([callerSignal, scopeSignal, lifecycle.signal]));
+      const capturedPromise = session.runCaptured(async (capture) => {
         let link: AbortLink | null = null;
+        let allocatedContent: PhotoContent | null = null;
         let contentOwnsLink = false;
         try {
           if (!samePhotoIdentityScope(expected, capture.identity)) {
             throw new PersonalPhotoCloudError("scope_changed");
           }
           assertRawScope();
-          link = linkedAbortController(callerSignal, scopeSignal, capture.signal, lifecycle.signal);
+          link = linkedAbortController(...new Set([callerSignal, scopeSignal, capture.signal, lifecycle.signal]));
           if (link.controller.signal.aborted) throw fenceError(callerSignal, scopeSignal, lifecycle.signal, capture.signal);
           const linkedOptions = idempotencyKey === undefined
             ? { signal: link.controller.signal }
@@ -117,28 +119,43 @@ export function createCapturedPhotoWebCloudClient(options: {
           const value = await awaitAbortable(pending, link.controller.signal, (late) => {
             if (operation === "content.get") cancelContent(late as PhotoContent, link?.controller.signal.reason);
           });
+          if (operation === "content.get") allocatedContent = value as PhotoContent;
           if (link.controller.signal.aborted) {
-            if (operation === "content.get") cancelContent(value as PhotoContent, link.controller.signal.reason);
             throw fenceError(callerSignal, scopeSignal, lifecycle.signal, capture.signal);
           }
           assertRawScope();
           const exposed = operation === "content.get"
             ? finalizeContent(
-              value as PhotoContent,
+              allocatedContent!,
               link,
               () => fenceError(callerSignal, scopeSignal, lifecycle.signal, capture.signal),
             ) as PhotoOperationMap[K]["response"]
             : value;
           contentOwnsLink = operation === "content.get";
+          allocatedContent = null;
           completed = { value: exposed };
           return completed;
         } catch (error) {
-          completed = { error: fenceErrorOr(error, callerSignal, scopeSignal, lifecycle.signal, capture.signal) };
+          const boxedError = fenceErrorOr(error, callerSignal, scopeSignal, lifecycle.signal, capture.signal);
+          if (allocatedContent !== null) cancelContent(allocatedContent, boxedError);
+          completed = { error: boxedError };
           return completed;
         } finally {
           if (!contentOwnsLink) link?.dispose();
         }
       });
+      let captured: Awaited<typeof capturedPromise>;
+      try {
+        captured = await awaitAbortable(capturedPromise, publicLink.controller.signal, (late) => {
+          const reason = fenceError(callerSignal, scopeSignal, lifecycle.signal);
+          if (late.status === "accepted") cancelBoxContent(operation, late.value, reason);
+          else cancelBoxContent(operation, completed, reason);
+        });
+      } catch (error) {
+        throw fenceErrorOr(error, callerSignal, scopeSignal, lifecycle.signal);
+      } finally {
+        publicLink.dispose();
+      }
 
       if (captured.status !== "accepted") {
         cancelBoxContent(operation, completed, new PersonalPhotoCloudError("scope_changed"));
