@@ -5,8 +5,21 @@ import { BrowserPhotoEditingWorkbench } from "niho-photo-editing/editor/browser-
 import { PhotoLibraryProvider } from "niho-photo-editing/library/photo-library-context";
 import { AppDialogHost } from "niho-ui/components/app-dialog-host";
 
+import { PhotoWebTransferPanel, type PhotoWebTransferHost } from "./PhotoWebTransferPanel";
 import type { PhotoWebViewBinding, PhotoWebViewProps } from "./types";
 import "./PhotoWebView.css";
+
+const transferIdentityKeys = new WeakMap<object, number>();
+let nextTransferIdentityKey = 1;
+
+function transferIdentityKey(value: object): number {
+  const existing = transferIdentityKeys.get(value);
+  if (existing !== undefined) return existing;
+  const next = nextTransferIdentityKey;
+  nextTransferIdentityKey += 1;
+  transferIdentityKeys.set(value, next);
+  return next;
+}
 
 type ActionState = {
   readonly scope: string;
@@ -238,23 +251,38 @@ export function PhotoWebView(props: PhotoWebViewProps) {
         {binding ? (
           <main className="photo-web-workspace">
             <PhotoLibraryProvider key={binding.key} library={binding.library} host={binding.host}>
-              <BrowserPhotoEditingWorkbench
-                key={binding.key}
-                spotId={binding.key}
-                scopeKey={binding.scopeKey}
-                actorId={binding.actorId}
-                canEdit={binding.canEdit}
-                cloudOriginalsAllowed={binding.cloudOriginalsAllowed}
-                mobileEditingAllowed={binding.mobileEditingAllowed}
-                disableCloudDelete={binding.disableCloudDelete}
-                appearance="fill"
-                active
-                openCloudPhotoId={null}
-                onOpenCloudPhotoHandled={() => undefined}
-                registerRouteLeaveGuard={props.registerRouteLeaveGuard}
-                treeHidden={treeHidden}
-                treeFooter={<span>{props.copy.version}</span>}
-              />
+              <div className="photo-web-workspace-stack">
+                {binding.transfer !== undefined
+                  && binding.host.scopeSignal !== undefined
+                  && typeof binding.host.scopeSignal.addEventListener === "function"
+                  && typeof binding.host.isScopeCurrent === "function" ? (
+                    <PhotoWebTransferPanel
+                      key={`${binding.key}:${binding.scopeKey}:${transferIdentityKey(binding.transfer)}:${transferIdentityKey(binding.transfer.controller)}:${transferIdentityKey(binding.host.scopeSignal)}`}
+                      transfer={binding.transfer}
+                      host={binding.host as PhotoWebTransferHost}
+                      mutationEnabled={props.session.phase === "ready" && props.online && binding.canEdit && binding.cloudOriginalsAllowed}
+                    />
+                  ) : null}
+                <div className="photo-web-workbench">
+                  <BrowserPhotoEditingWorkbench
+                    key={binding.key}
+                    spotId={binding.key}
+                    scopeKey={binding.scopeKey}
+                    actorId={binding.actorId}
+                    canEdit={binding.canEdit}
+                    cloudOriginalsAllowed={binding.cloudOriginalsAllowed}
+                    mobileEditingAllowed={binding.mobileEditingAllowed}
+                    disableCloudDelete={binding.disableCloudDelete}
+                    appearance="fill"
+                    active
+                    openCloudPhotoId={null}
+                    onOpenCloudPhotoHandled={() => undefined}
+                    registerRouteLeaveGuard={props.registerRouteLeaveGuard}
+                    treeHidden={treeHidden}
+                    treeFooter={<span>{props.copy.version}</span>}
+                  />
+                </div>
+              </div>
             </PhotoLibraryProvider>
           </main>
         ) : (
