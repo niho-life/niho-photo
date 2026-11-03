@@ -6,7 +6,7 @@
   "description": "NIHO photo専用Web・Safari/PWAホスト",
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
-    "test": "node --experimental-strip-types --test test/*.test.mjs && vitest run --config vitest.view.config.ts && vitest run --config vitest.mount.config.ts",
+    "test": "node --experimental-strip-types --test test/*.test.mjs && vitest run --config vitest.view.config.ts && vitest run --config vitest.mount.config.ts && vitest run --config vitest.session.config.ts",
     "lint": "eslint src"
   },
   "dependencies": {
