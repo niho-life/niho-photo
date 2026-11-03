@@ -1204,6 +1204,7 @@ export const PHOTO_EDITING_DURABLE_DRAFT_COPY = {
   previousChecking: "以前の補正を確認しています…",
   previousEmpty: "以前の未同期の補正はありません。",
   previousDescription: "再接続前の補正です。確認して保存すると、未完了の保存を照合し、未送信なら保存します。",
+  previousUnsupported: "この補正は現在の写真やこの端末と互換性がないため、クラウドへ保存できません。補正データはファイルに保存できます。",
   previousSave: "確認して保存",
   previousNext: "次へ",
   previousFirst: "最初へ",

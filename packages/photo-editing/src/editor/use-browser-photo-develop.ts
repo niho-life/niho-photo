@@ -90,6 +90,7 @@ type PreviousDraftsState = {
   comparisonPreview: DurableComparisonPreview | null;
   photoName: string;
   busy: boolean;
+  saveUnsupported: boolean;
   message: string | null;
 };
 
@@ -130,6 +131,7 @@ const EMPTY_PREVIOUS_DRAFTS: PreviousDraftsState = {
   comparisonPreview: null,
   photoName: PHOTO_EDITING_DURABLE_DRAFT_COPY.photoFallback,
   busy: false,
+  saveUnsupported: false,
   message: null,
 };
 
@@ -812,7 +814,14 @@ export function useBrowserPhotoDevelop(params: {
     if (!durablePort || !target || !isDurableScopeCurrent()) return;
     setDurableRecovery((current) => ({ ...current, busy: true, message: PHOTO_EDITING_DURABLE_DRAFT_COPY.checking }));
     try {
-      const writer = await durablePort.reopen(
+      const session = developSessionRef.current;
+      const active = session?.saver ? durableSaversRef.current.get(session.saver) : undefined;
+      const reusableWriter = active && session && active.writer.token === target.token &&
+        active.photoId === target.photoId && session.photoId === target.photoId &&
+        active.sourceSha256 === session.photo.contentSha256
+        ? active.writer
+        : null;
+      const writer = reusableWriter ?? await durablePort.reopen(
         target.token,
         host.scopeSignal === undefined ? undefined : { signal: host.scopeSignal },
       );
@@ -1009,6 +1018,7 @@ export function useBrowserPhotoDevelop(params: {
       comparisonPreview: null,
       photoName: PHOTO_EDITING_DURABLE_DRAFT_COPY.photoFallback,
       busy: false,
+      saveUnsupported: false,
       message: null,
     }));
   }, []);
@@ -1042,6 +1052,7 @@ export function useBrowserPhotoDevelop(params: {
       comparisonPreview: null,
       photoName: PHOTO_EDITING_DURABLE_DRAFT_COPY.photoFallback,
       busy: true,
+      saveUnsupported: false,
       message: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousChecking,
     }));
     try {
@@ -1106,6 +1117,7 @@ export function useBrowserPhotoDevelop(params: {
     setPreviousDrafts((current) => ({
       ...current,
       busy: true,
+      saveUnsupported: false,
       message: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousChecking,
       photoName: entry.photoName,
     }));
@@ -1281,12 +1293,15 @@ export function useBrowserPhotoDevelop(params: {
     const paused = previousPausedSaverRef.current;
     const sameSession = session?.saver !== null && session?.saver !== undefined && paused?.saver === session.saver &&
       session.photoId === writer.photoId && session.photo.contentSha256 === writer.sourceSha256;
-    const shouldReload = sameSession && paused?.saver.hasPendingWork() !== true;
+    const mayReload = (): boolean => sameSession && session !== null && paused !== null &&
+      paused.saver === session.saver && paused.saver.hasPendingWork() !== true &&
+      developSessionRef.current === session && isDurableScopeCurrent();
+    const shouldReload = mayReload();
     releasePreviousSelection(true);
     if (!shouldReload || !isDurableScopeCurrent()) return;
     try {
       const photo = await library.get(writer.photoId, previousRequestOptions);
-      if (!mountedRef.current || !isDurableScopeCurrent() || developSessionRef.current !== session) return;
+      if (!mountedRef.current || !mayReload()) return;
       if (photo === null || photo.id !== writer.photoId || photo.contentSha256 !== writer.sourceSha256 ||
           photo.developRevision < revision) {
         releaseDevelopSession();
@@ -1296,7 +1311,7 @@ export function useBrowserPhotoDevelop(params: {
       if (kind === "saved") saveDurableRecoveryHandlerRef.current?.(photo);
       else saveStaleHandlerRef.current?.(photo);
     } catch {
-      if (!mountedRef.current || !isDurableScopeCurrent() || developSessionRef.current !== session) return;
+      if (!mountedRef.current || !mayReload()) return;
       releaseDevelopSession();
       latestSetStatusRef.current({ kind: "error", text: PHOTO_EDITING_DURABLE_DRAFT_COPY.failed });
     }
@@ -1312,8 +1327,16 @@ export function useBrowserPhotoDevelop(params: {
     if (result.kind === "conflict") {
       const snapshot = await writer.read(previousRequestOptions);
       if (!isPreviousGenerationCurrent(generation)) return;
-      setPreviousDrafts((current) => ({ ...current, snapshot, busy: false, message: null }));
+      setPreviousDrafts((current) => ({ ...current, snapshot, busy: false, saveUnsupported: false, message: null }));
       return;
+    }
+    const unsupported = result.kind === "unsupported";
+    if (unsupported) {
+      setPreviousDrafts((current) => ({
+        ...current,
+        saveUnsupported: true,
+        message: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousUnsupported,
+      }));
     }
     const snapshot = await writer.read(previousRequestOptions);
     if (!isPreviousGenerationCurrent(generation)) return;
@@ -1325,7 +1348,8 @@ export function useBrowserPhotoDevelop(params: {
       comparison: snapshot.hasPendingResolution ? current.comparison : null,
       comparisonPreview: snapshot.hasPendingResolution ? current.comparisonPreview : null,
       busy: false,
-      message: null,
+      saveUnsupported: unsupported,
+      message: unsupported ? PHOTO_EDITING_DURABLE_DRAFT_COPY.previousUnsupported : null,
     }));
     if (empty && (result.kind === "saved" || result.kind === "resolved")) {
       await finishPreviousKnownSettlement(writer, result.revision, result.kind);
@@ -1334,7 +1358,8 @@ export function useBrowserPhotoDevelop(params: {
 
   const savePreviousDraft = useCallback(async (): Promise<void> => {
     const { writer, snapshot } = previousDraftsRef.current;
-    if (!writer || !snapshot || previousDraftsRef.current.busy || !isDurableScopeCurrent()) return;
+    if (!writer || !snapshot || previousDraftsRef.current.busy || previousDraftsRef.current.saveUnsupported ||
+        !isDurableScopeCurrent()) return;
     const generation = previousGenerationRef.current;
     setPreviousDrafts((current) => ({
       ...current, busy: true, message: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousChecking,
@@ -1352,7 +1377,11 @@ export function useBrowserPhotoDevelop(params: {
     } catch {
       if (!isPreviousGenerationCurrent(generation)) return;
       setPreviousDrafts((current) => ({
-        ...current, busy: false, message: PHOTO_EDITING_DURABLE_DRAFT_COPY.failed,
+        ...current,
+        busy: false,
+        message: current.saveUnsupported
+          ? PHOTO_EDITING_DURABLE_DRAFT_COPY.previousUnsupported
+          : PHOTO_EDITING_DURABLE_DRAFT_COPY.failed,
       }));
     }
   }, [handlePreviousSaveResult, isDurableScopeCurrent, isPreviousGenerationCurrent, previousRequestOptions]);
@@ -1705,7 +1734,7 @@ export function useBrowserPhotoDevelop(params: {
       label: PHOTO_EDITING_DURABLE_DRAFT_COPY.compare,
       onClick: () => void comparePreviousDraft(),
     }] : []),
-    ...(!previousSnapshot?.terminalReason ? [{
+    ...(!previousSnapshot?.terminalReason && !previousDrafts.saveUnsupported ? [{
       label: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousSave,
       onClick: () => void savePreviousDraft(),
     }] : []),

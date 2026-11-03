@@ -117,7 +117,7 @@ describe("createDevelopSettingsSaver durable mode", () => {
 
   it("keeps the legacy saver surface unchanged", () => {
     const saver = createDevelopSettingsSaver({
-      save: vi.fn(async () => ({ kind: "saved" as const, revision: 1, updatedAt: null })),
+      save: vi.fn<Parameters<typeof createDevelopSettingsSaver>[0]["save"]>(),
       isPermanentFailure: () => false,
     });
     expect(saver.pauseDurable).toBeUndefined();

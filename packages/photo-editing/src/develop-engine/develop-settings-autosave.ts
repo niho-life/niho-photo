@@ -615,7 +615,10 @@ function createDurableDevelopSettingsSaver(
         pendingConflict = null;
         frozen = false;
         failure = pending !== null && (pending.stageStatus === "unsaved" || pending.stageStatus === "failed") ? "stage" : null;
-        if (pending === blocked) pending = null;
+        if (pending === blocked) {
+          pending = null;
+          stopTimer();
+        }
         holdPending = pending !== null && failure === null;
         lastError = holdPending ? new Error("後の補正がまだ保存されていません") : null;
         notify();
@@ -624,6 +627,7 @@ function createDurableDevelopSettingsSaver(
       }
       if (pending !== null && sameJsonValue(pending.settings, settings)) {
         pending = null;
+        stopTimer();
         failure = null;
         holdPending = false;
         lastError = null;
