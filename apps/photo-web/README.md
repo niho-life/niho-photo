@@ -63,3 +63,5 @@ renderer probeは、このbundleに固定した受入済みSDK/manifest proofと
 `src/browser/session-client.ts` はC01 controllerとC02の実clientをつなぐ。identity portは通常refresh中も同じ本人tupleを保ち、新規requestはC01のcapture入口で止める。開始済みrequestの成功値とC00 errorは、通常refreshの確認barrierを通して返す。contentは原本全体をbufferせず、EOF/error/cancelまでscope signalを保ち、失効後のchunk公開を止める。
 
 正式compositionでは、固定Photo BFFへのfetchで得た401をruntimeのfence・peer通知・本人再確認へつなぐ。providerへの送信失敗はC02の再開・renewで扱う。helperの単体成功だけではこのHTTP接続、失効時の両journal消去、preview解放、実producer・SDK・memory budgetの受入は完了しない。
+
+`connect` が受け取る `onAuthenticationRejected` を `createPhotoWebCloudFetch` へ渡し、そのfetchをC02 browser clientだけに注入する。固定same-origin `/cloud/v2/` の401でruntimeが同期的に旧接続を止め、匿名のpeer通知と実本人再確認を行う。同じ本人へ戻っても自動接続を繰り返さず、明示retryで再開する。旧世代・失効済み接続からの通知は無視する。403/409/503やproviderの401はこの本人通知へ変換しない。
