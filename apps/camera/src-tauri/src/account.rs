@@ -18,8 +18,8 @@ struct PhotoIdentityInvalidated {
   invalidated: bool,
 }
 
-struct SharedAccount {
-  account: Account,
+pub(crate) struct SharedAccount {
+  pub(crate) account: Account,
   invalidated: AtomicBool,
 }
 
@@ -33,13 +33,19 @@ impl SharedAccount {
 
   fn emit_invalidation(&self, app: &AppHandle) {
     self.invalidated.store(true, Ordering::SeqCst);
+    if let Some(cache) = app.try_state::<Arc<crate::photo_cloud::PhotoCloudState>>() {
+      cache.abort_all();
+    }
     let _ = app.emit(
       PHOTO_IDENTITY_INVALIDATED_EVENT,
       PhotoIdentityInvalidated { invalidated: true },
     );
   }
 
-  fn observe(&self, app: &AppHandle) -> AccountSnapshot {
+  pub(crate) fn observe(&self, app: &AppHandle) -> AccountSnapshot {
+    if let Some(cache) = app.try_state::<Arc<crate::photo_cloud::PhotoCloudState>>() {
+      cache.purge_expired();
+    }
     let snapshot = self.account.snapshot();
     if snapshot.phase == AccountPhase::Connected {
       self.invalidated.store(false, Ordering::SeqCst);
@@ -50,6 +56,9 @@ impl SharedAccount {
       ))
       && !self.invalidated.swap(true, Ordering::SeqCst)
     {
+      if let Some(cache) = app.try_state::<Arc<crate::photo_cloud::PhotoCloudState>>() {
+        cache.abort_all();
+      }
       let _ = app.emit(
         PHOTO_IDENTITY_INVALIDATED_EVENT,
         PhotoIdentityInvalidated { invalidated: true },
@@ -125,8 +134,10 @@ pub async fn camera_account_login(
 pub fn camera_account_cancel(
   app: AppHandle,
   account: State<'_, Arc<SharedAccount>>,
+  cache: State<'_, Arc<crate::photo_cloud::PhotoCloudState>>,
 ) -> Result<(), niho_desktop_account::AccountError> {
   let refreshing = account.account.snapshot().phase == AccountPhase::Refreshing;
+  cache.abort_all();
   let result = account.account.cancel();
   if refreshing {
     account.emit_invalidation(&app);
@@ -139,8 +150,10 @@ pub fn camera_account_cancel(
 pub async fn camera_account_logout(
   app: AppHandle,
   account: State<'_, Arc<SharedAccount>>,
+  cache: State<'_, Arc<crate::photo_cloud::PhotoCloudState>>,
 ) -> Result<(), niho_desktop_account::AccountError> {
   // UIへはnative cleanup/network完了を待たず、logout開始時点で失効を知らせる。
+  cache.abort_all();
   account.emit_invalidation(&app);
   let account = Arc::clone(account.inner());
   tauri::async_runtime::spawn_blocking(move || account.account.logout())
