@@ -13136,8 +13136,8 @@
     },
     {
       "path": "apps/camera/src-tauri/src/photo_cloud.rs",
-      "sha256": "0adae517721250de576502a2d77f76157a28a4d0d9ca274f2e0c0955c9f206a6",
-      "origin": "NIHO所有の公開sourceとして新規作成。Camera限定の固定Photo API・原本検証・一時handle/小chunkと合成fixtureによる境界試験。秘密、内部URL、実写真、個人情報、外部提供の資産を含まない。\n変更理由: 原本range responseのSerialize契約を明示しRAII後の不要なreturn closureを整理する\n変更理由: 親のterminal logout fenceを固定C00操作と原本handle公開の前後へ接続し、遅いhandleを回収する"
+      "sha256": "f9703ab39ec788ba663b7ca1f344d0df3f52d7011c7ac6b2c5bc773f77b4f9f1",
+      "origin": "NIHO所有の公開sourceとして新規作成。Camera限定の固定Photo API・原本検証・一時handle/小chunkと合成fixtureによる境界試験。秘密、内部URL、実写真、個人情報、外部提供の資産を含まない。\n変更理由: 原本range responseのSerialize契約を明示しRAII後の不要なreturn closureを整理する\n変更理由: 親のterminal logout fenceを固定C00操作と原本handle公開の前後へ接続し、遅いhandleを回収する\n変更理由: 親失効fenceのobserve後は通信失敗も再確認し、古いエラーを公開しない"
     },
     {
       "path": "apps/camera/src/native-photo-client.test.ts",

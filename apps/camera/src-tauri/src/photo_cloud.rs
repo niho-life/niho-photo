@@ -514,18 +514,26 @@ pub async fn camera_photo_request(
   let current_before_observe = account.ensure_photo_operation_current(generation);
   account.observe(&app);
   current_before_observe?;
-  let response = response?;
-  // A current request's closed 401 envelope must still reach the C00 client so
-  // it can invalidate its scope after native observation emits revocation.
-  if response.status != 401 {
-    account.ensure_photo_operation_current(generation)?;
-  }
+  let response = finish_photo_response(response, || account.ensure_photo_operation_current(generation))?;
   if response.status == 200 {
     if let Some(photo_id) = delete_photo_id {
       cache.invalidate_photo(&delete_scope, &photo_id);
     }
   }
   Ok(response)
+}
+
+// A current request's closed 401 envelope must still reach the C00 client so
+// it can invalidate its scope after native observation emits revocation.
+// Every other outcome, including transport errors, is checked after observe.
+fn finish_photo_response(
+  response: Result<PhotoJsonResponse, AccountError>,
+  assert_current: impl FnOnce() -> Result<(), AccountError>,
+) -> Result<PhotoJsonResponse, AccountError> {
+  if !matches!(&response, Ok(response) if response.status == 401) {
+    assert_current()?;
+  }
+  response
 }
 
 #[tauri::command]
@@ -786,6 +794,40 @@ fn unlink_entries(entries: Vec<CacheEntry>) {
 #[cfg(test)]
 mod tests {
   use super::*;
+
+  #[test]
+  fn post_observe_revocation_withholds_transport_errors_and_successes() {
+    for error in [
+      AccountError::Network,
+      AccountError::InvalidResponse,
+      AccountError::Cancelled,
+    ] {
+      let result = finish_photo_response(Err(error), || Err(AccountError::Cancelled));
+      assert!(matches!(result, Err(AccountError::Cancelled)));
+    }
+    let result = finish_photo_response(
+      Ok(PhotoJsonResponse {
+        status: 200,
+        body: serde_json::json!({}),
+      }),
+      || Err(AccountError::Cancelled),
+    );
+    assert!(matches!(result, Err(AccountError::Cancelled)));
+  }
+
+  #[test]
+  fn current_transport_error_and_closed_unauthenticated_envelope_keep_their_meaning() {
+    let result = finish_photo_response(Err(AccountError::Network), || Ok(()));
+    assert!(matches!(result, Err(AccountError::Network)));
+    let result = finish_photo_response(
+      Ok(PhotoJsonResponse {
+        status: 401,
+        body: serde_json::json!({ "error": "unauthenticated" }),
+      }),
+      || panic!("closed 401 must reach the scoped client after observation"),
+    );
+    assert!(matches!(result, Ok(response) if response.status == 401));
+  }
 
   fn scope(epoch: &str) -> PhotoScopeCapture {
     PhotoScopeCapture {
