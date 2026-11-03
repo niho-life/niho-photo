@@ -368,6 +368,7 @@ describe("browser original copy controller", () => {
     const harness = makeController({ factory, name, now: () => NOW + minute * 60_000 });
     const request = startRequestFor(seeded);
     harness.client.dispatch = async (operation) => {
+      if (operation === "uploads.get") return reserved(request, 3);
       if (operation === "uploads.complete") return { value: { ...reserved(request, 3), state: "stored", result: { kind: "original", photo: photoFor(request) } }, replayed: minute > 60 };
       throw new Error(`unexpected ${operation}`);
     };
@@ -530,3 +531,78 @@ function journalEntry(scope: JournalScope): TransferJournalEntry {
 function startRequestFor(entry: TransferJournalEntry): StartUploadRequest {
   return { target: { kind: "original", fileName: entry.fileName, format: entry.format }, sizeBytes: entry.sizeBytes, sha256: entry.sha256, contentType: entry.contentType };
 }
+
+
+describe("durable recovery and response upload binding", () => {
+  async function seed(phase: "complete-pending" | "cancel-pending" | "uploading", uploadId: string | null = "synthetic-upload") {
+    const factory = new IDBFactory();
+    const name = `recovery-${Math.random()}`;
+    const scope: JournalScope = { actorId: IDS.userA, libraryId: responses["library.get"].id, sessionId: "parent-1", sessionEpoch: "epoch-1" };
+    const bytes = await file().arrayBuffer();
+    const sha256 = Array.from(new Uint8Array(await crypto.subtle.digest("SHA-256", bytes)), (value) => value.toString(16).padStart(2, "0")).join("");
+    const entry = { ...journalEntry(scope), sha256, phase, uploadId, expiresAt: uploadId === null ? null : EXPIRES, uploadedBytes: phase === "complete-pending" ? 3 : 0 };
+    const journal = new IndexedDbTransferJournal(factory, name);
+    await journal.add(entry);
+    journal.dispose();
+    return { factory, name, entry, request: startRequestFor(entry) };
+  }
+
+  it.each(["stored", "verifying", "reserved", "unknown"] as const)("reconciles an unknown complete beyond grace when server is %s", async (state) => {
+    const seeded = await seed("complete-pending");
+    const harness = makeController({ ...seeded, now: () => NOW + 91 * 60_000 });
+    harness.client.dispatch = async (operation) => {
+      if (operation !== "uploads.get") throw new Error("no new mutation after grace");
+      const upload = reserved(seeded.request, 3);
+      if (state === "unknown") throw new Error("temporarily unavailable");
+      if (state === "stored") return { ...upload, state, result: { kind: "original", photo: photoFor(seeded.request) } };
+      if (state === "verifying") return { ...upload, state, jobId: "job" };
+      return upload;
+    };
+    try {
+      const resumed = await harness.controller.resume({ intentId: "intent" });
+      expect(resumed.phase).toBe(state === "stored" ? "done" : state === "verifying" ? "verifying" : state === "reserved" ? "expired" : "complete-pending");
+      if (state === "stored") expect(resumed.photoId).toBe(photoFor(seeded.request).id);
+      expect(harness.client.calls.map((call) => call.operation)).toEqual(["uploads.get"]);
+    } finally { harness.controller.dispose(); }
+  });
+
+  it.each(["synthetic-upload", null])("resumes a persisted cancellation with upload ID %s using its existing keys", async (uploadId) => {
+    const seeded = await seed("cancel-pending", uploadId);
+    const harness = makeController(seeded);
+    harness.client.dispatch = async (operation) => {
+      if (operation === "uploads.start") return { value: { kind: "upload", upload: reserved(seeded.request), ticket: null }, replayed: true };
+      if (operation === "uploads.cancel") return { value: { ...reserved(seeded.request), state: "cancelled" }, replayed: true };
+      throw new Error(`unexpected ${operation}`);
+    };
+    try {
+      expect(await harness.controller.resume({ intentId: "intent" })).toMatchObject({ phase: "cancelled" });
+      expect(harness.client.calls.filter((call) => call.operation === "uploads.cancel").map((call) => call.idempotencyKey)).toEqual([seeded.entry.cancelKey]);
+      if (uploadId === null) expect(harness.client.calls.find((call) => call.operation === "uploads.start")?.idempotencyKey).toBe(seeded.entry.startKey);
+    } finally { harness.controller.dispose(); }
+  });
+
+  it.each(["id", "expiresAt"] as const)("rejects a cancel response with changed %s", async (field) => {
+    const seeded = await seed("uploading");
+    const harness = makeController(seeded);
+    harness.client.dispatch = async () => ({ value: { ...reserved(seeded.request), state: "cancelled", [field]: field === "id" ? "different-upload" : "2026-11-03T00:31:00.000Z" }, replayed: false });
+    try {
+      expect(await harness.controller.cancel("intent")).toMatchObject({ phase: "failed", failure: "invalid-response" });
+    } finally { harness.controller.dispose(); }
+  });
+
+  it("rejects a renewed ticket for a different upload before provider PUT", async () => {
+    const seeded = await seed("uploading");
+    let providerCalls = 0;
+    const harness = makeController({ ...seeded, provider: async () => { providerCalls += 1; return new Response(null, { status: 200 }); } });
+    harness.client.dispatch = async (operation) => {
+      if (operation === "uploads.get") return reserved(seeded.request);
+      if (operation === "uploads.renew") return { upload: { ...reserved(seeded.request), id: "different-upload" }, ticket: ticket() };
+      throw new Error(`unexpected ${operation}`);
+    };
+    const input = file();
+    try {
+      expect(await harness.controller.resume({ intentId: "intent", file: input })).toMatchObject({ phase: "failed", failure: "invalid-response" });
+      expect(providerCalls).toBe(0);
+    } finally { harness.controller.dispose(); }
+  });
+});

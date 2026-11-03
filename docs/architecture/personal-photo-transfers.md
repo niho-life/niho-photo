@@ -71,7 +71,9 @@ completeの最終期限は元expiresAtに60分を加えた時点、開始から�
 
 mask参照のJSON一致だけでは実体の確認にならない。photoに束縛したmasks.getの実assetでhash/kind/size/寸法を検証できるまでpending-recipeを維持する。C03前の未対応応答や欠損maskを、コピー全体の完了に読み替えない。
 
-取消も送信前にjournalへ記録する。応答不明は同じcancel keyで照合し、物理purge確認前に空き容量/取消成功を表示しない。completeが先にstoredへ進んだ409では原本を削除しない。取消/失敗からの再試行を暗黙の新copyにしない。
+complete応答を失ったjournalは、確定猶予を過ぎても先にuploads.getで保存結果を照合する。期限は新しいcompleteを止めるために使い、保存済みPhotoや検証中の結果の読戻しを妨げない。照合も失敗した場合は結果不明を維持する。
+
+取消も送信前にjournalへ記録する。再起動後のresumeはcancel-pendingも同じ開始/取消keyで回復し、Fileを要求しない。renew・cancelを含む全upload応答は既知upload IDと元期限へ照合してからticketや成功状態を採用する。応答不明は同じcancel keyで照合し、物理purge確認前に空き容量/取消成功を表示しない。completeが先にstoredへ進んだ409では原本を削除しない。取消/失敗からの再試行を暗黙の新copyにしない。
 
 ## 実接続の完了条件
 

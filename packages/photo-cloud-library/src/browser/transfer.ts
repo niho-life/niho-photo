@@ -210,22 +210,7 @@ class TransferController implements BrowserPersonalPhotoTransferController {
       if (entry.phase === "cancelled" || entry.phase === "purged" || entry.phase === "rejected" || entry.phase === "expired") return status(entry);
       if (entry.phase === "done" || entry.phase === "pending-recipe") return status(await this.update(entry, { phase: "failed", failure: "stored" }));
       entry = await this.update(entry, { phase: "cancel-pending" });
-      if (entry.uploadId === null) {
-        const reconciled = await this.reconcileStart(entry, operationSignal);
-        entry = reconciled.entry;
-        if (reconciled.existing) return status(await this.update(entry, { phase: "failed", failure: "stored" }));
-        if (entry.uploadId === null) return status(entry);
-        if (entry.phase !== "cancel-pending") entry = await this.update(entry, { phase: "cancel-pending" });
-      }
-      try {
-        const receipt = await this.options.client.request("uploads.cancel", { uploadId: requiredUploadId(entry) }, { signal: operationSignal, idempotencyKey: entry.cancelKey });
-        const upload = receipt.value;
-        assertUploadBinding(entry, upload);
-        if (upload.state === "cancelled") entry = await this.update(entry, { phase: "cancelled" });
-        else if (upload.state === "stored" || upload.state === "verifying") entry = await this.update(entry, { phase: upload.state === "stored" ? "failed" : "verifying", failure: upload.state === "stored" ? "stored" : null });
-        else if (upload.state === "expired") entry = await this.update(entry, { phase: "expired" });
-      } catch (error) { entry = await this.handleKnownFailure(entry, error); }
-      return status(entry);
+      return status(await this.cancelEntry(entry, operationSignal));
     });
   }
 
@@ -248,6 +233,26 @@ class TransferController implements BrowserPersonalPhotoTransferController {
 
   dispose(): void { if (this.disposed) return; this.disposed = true; this.unsubscribeIdentity(); this.lifecycle.abort(new PersonalPhotoCloudError("disposed")); this.journal.dispose(); }
 
+  private async cancelEntry(initial: TransferJournalEntry, signal: AbortSignal): Promise<TransferJournalEntry> {
+    let entry = initial;
+    if (entry.uploadId === null) {
+      const reconciled = await this.reconcileStart(entry, signal);
+      entry = reconciled.entry;
+      if (reconciled.existing) return await this.update(entry, { phase: "failed", failure: "stored" });
+      if (entry.uploadId === null || terminal(entry.phase)) return entry;
+      if (entry.phase !== "cancel-pending") entry = await this.update(entry, { phase: "cancel-pending" });
+    }
+    try {
+      const receipt = await this.options.client.request("uploads.cancel", { uploadId: requiredUploadId(entry) }, { signal, idempotencyKey: entry.cancelKey });
+      const upload = receipt.value;
+      assertUploadBinding(entry, upload);
+      if (upload.state === "cancelled") entry = await this.update(entry, { phase: "cancelled" });
+      else if (upload.state === "stored" || upload.state === "verifying") entry = await this.update(entry, { phase: upload.state === "stored" ? "failed" : "verifying", failure: upload.state === "stored" ? "stored" : null });
+      else if (upload.state === "expired") entry = await this.update(entry, { phase: "expired" });
+    } catch (error) { entry = await this.handleKnownFailure(entry, error); }
+    return entry;
+  }
+
   private async run(initial: TransferJournalEntry, file: File, signal: AbortSignal): Promise<PersonalPhotoTransferStatus> {
     let entry = initial;
     if (entry.phase === "start-pending") {
@@ -257,7 +262,8 @@ class TransferController implements BrowserPersonalPhotoTransferController {
       return await this.upload(entry, file, reconciled.ticket, signal);
     }
     if (entry.phase === "uploading") return await this.upload(entry, file, null, signal);
-    if (entry.phase === "complete-pending") return status(await this.complete(entry, signal));
+    if (entry.phase === "complete-pending") return status(await this.complete(entry, signal, true));
+    if (entry.phase === "cancel-pending") return status(await this.cancelEntry(entry, signal));
     if (entry.phase === "verifying") {
       try {
         const upload = await this.options.client.request("uploads.get", { uploadId: requiredUploadId(entry) }, { signal });
@@ -278,7 +284,6 @@ class TransferController implements BrowserPersonalPhotoTransferController {
     if (response.kind === "existing") return { entry: await this.finishPhoto(entry, response.photo, signal), ticket: null, existing: true };
     assertUploadBinding(entry, response.upload);
     const upload = response.upload;
-    if (entry.uploadId !== null && entry.uploadId !== upload.id || entry.expiresAt !== null && entry.expiresAt !== upload.expiresAt) throw new PersonalPhotoCloudError("invalid_response");
     entry = await this.update(entry, { uploadId: upload.id, expiresAt: entry.expiresAt ?? upload.expiresAt });
     entry = await this.acceptUploadState(entry, upload, signal, false);
     const ticket = response.ticket === null || entry.uploadedBytes === entry.sizeBytes || entry.phase !== "uploading"
@@ -367,7 +372,6 @@ class TransferController implements BrowserPersonalPhotoTransferController {
 
   private async acceptUploadState(entry: TransferJournalEntry, upload: Upload, signal: AbortSignal, allowComplete = true): Promise<TransferJournalEntry> {
     assertUploadBinding(entry, upload);
-    if (entry.uploadId !== null && upload.id !== entry.uploadId || entry.expiresAt !== null && upload.expiresAt !== entry.expiresAt) throw new PersonalPhotoCloudError("invalid_response");
     if (upload.state === "reserved") {
       if (upload.uploadedBytes < entry.uploadedBytes) throw new PersonalPhotoCloudError("invalid_response");
       entry = await this.update(entry, { phase: "uploading", uploadedBytes: upload.uploadedBytes });
@@ -384,9 +388,18 @@ class TransferController implements BrowserPersonalPhotoTransferController {
     return await this.update(entry, { phase: "rejected" });
   }
 
-  private async complete(entry: TransferJournalEntry, signal: AbortSignal): Promise<TransferJournalEntry> {
-    if (entry.expiresAt === null || this.now() >= completionDeadline(entry.expiresAt)) return await this.update(entry, { phase: "expired" });
+  private async complete(entry: TransferJournalEntry, signal: AbortSignal, reconcileFirst = false): Promise<TransferJournalEntry> {
+    if (entry.expiresAt === null) throw new PersonalPhotoCloudError("invalid_response");
     try {
+      // The deadline closes new completion attempts; an earlier successful commit remains readable.
+      if (reconcileFirst || this.now() >= completionDeadline(entry.expiresAt)) {
+        const upload = await this.options.client.request("uploads.get", { uploadId: requiredUploadId(entry) }, { signal });
+        const current = await this.acceptUploadState(entry, upload, signal, false);
+        if (current.phase !== "uploading") return current;
+        if (current.uploadedBytes !== current.sizeBytes) throw new PersonalPhotoCloudError("invalid_response");
+        if (this.now() >= completionDeadline(entry.expiresAt)) return await this.update(current, { phase: "expired" });
+        entry = await this.update(current, { phase: "complete-pending" });
+      }
       const receipt = await this.options.client.request("uploads.complete", { uploadId: requiredUploadId(entry) }, { signal, idempotencyKey: entry.completeKey });
       return await this.acceptUploadState(entry, receipt.value, signal, false);
     } catch (error) { return await this.handleKnownFailure(entry, error); }
@@ -475,7 +488,7 @@ class TransferController implements BrowserPersonalPhotoTransferController {
 async function hashFile(file: File, signal: AbortSignal): Promise<string> { const hash = sha256.create(); for (let offset = 0; offset < file.size; offset += HASH_SLICE_BYTES) { throwIfAborted(signal); const bytes = await awaitBounded(file.slice(offset, Math.min(offset + HASH_SLICE_BYTES, file.size)).arrayBuffer(), { signal, timeoutMs: TRANSPORT_TIMEOUT_MS }); throwIfAborted(signal); hash.update(new Uint8Array(bytes)); } throwIfAborted(signal); return [...hash.digest()].map((byte) => byte.toString(16).padStart(2, "0")).join(""); }
 async function verifyReselectedFile(entry: TransferJournalEntry, file: File, signal: AbortSignal): Promise<void> { if (file.size !== entry.sizeBytes || validateFile(file, entry.format) !== entry.contentType || await hashFile(file, signal) !== entry.sha256) throw new PersonalPhotoCloudError("invalid_response"); }
 function startPayload(entry: TransferJournalEntry) { return { target: { kind: "original" as const, fileName: entry.fileName, format: entry.format }, sizeBytes: entry.sizeBytes, sha256: entry.sha256, contentType: entry.contentType }; }
-function assertUploadBinding(entry: TransferJournalEntry, upload: Upload): void { if (upload.target.kind !== "original" || upload.target.fileName !== entry.fileName || upload.target.format !== entry.format || upload.sizeBytes !== entry.sizeBytes || upload.sha256 !== entry.sha256) throw new PersonalPhotoCloudError("invalid_response"); }
+function assertUploadBinding(entry: TransferJournalEntry, upload: Upload): void { if ((entry.uploadId !== null && upload.id !== entry.uploadId) || (entry.expiresAt !== null && upload.expiresAt !== entry.expiresAt) || upload.target.kind !== "original" || upload.target.fileName !== entry.fileName || upload.target.format !== entry.format || upload.sizeBytes !== entry.sizeBytes || upload.sha256 !== entry.sha256) throw new PersonalPhotoCloudError("invalid_response"); }
 function requiredUploadId(entry: TransferJournalEntry): string { if (entry.uploadId === null) throw new PersonalPhotoCloudError("invalid_response"); return entry.uploadId; }
 function parseProviderRange(value: string | null, offset: number, chunkEnd: number, total: number): number | null { if (value === null || value.includes(",")) return null; const match = /^bytes=0-(\d+)$/u.exec(value); if (!match) return null; const last = Number(match[1]); return Number.isSafeInteger(last) && last + 1 >= offset && last <= chunkEnd && last < total ? last + 1 : null; }
 function recipeMatches(candidate: RecipeCandidate, recipe: RecipeDocument): boolean { return candidate.settingsSha256 === recipe.settingsSha256 && candidate.baseVersion === recipe.baseVersion && deepEqual(candidate.settings, recipe.settings) && deepEqual(candidate.maskSurfaceIds, recipe.maskSurfaceIds); }
