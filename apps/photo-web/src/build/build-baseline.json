@@ -1,0 +1,46 @@
+{
+  "schemaVersion": 1,
+  "sourceCommit": "5ff21a28ae5f7a0e3a64a98b1ef31a7ca523b2a6",
+  "sdkVersion": "0.1.7",
+  "runtimePackageSha256": "253ca897350578d73c764684d8516e6532c72f6fb4e7d779c4a0139a0dcf433d",
+  "origin": "Exact bytes from already audited official photo-sdk-v0.1.7 runtime tar; public notices only. Icon is the existing publication-approved camera512 asset.",
+  "notices": [
+    {
+      "path": "LICENSE.md",
+      "sha256": "e8cdad51fdfaf9020f223a766b0b54ea9c85ab9f3cb82cf3fcd793a1872f638c",
+      "sizeBytes": 1581
+    },
+    {
+      "path": "ASSET_LICENSE.md",
+      "sha256": "283b275547974744c081db9f769701b8f2e4867d4d1c96fb35a9dfb699c54cdb",
+      "sizeBytes": 1318
+    },
+    {
+      "path": "TRADEMARKS.md",
+      "sha256": "bde31f1cf3e4d2728d1118b761b9bd2caf562b753ae95db11cac47704b908867",
+      "sizeBytes": 560
+    },
+    {
+      "path": "THIRD_PARTY_NOTICES.md",
+      "sha256": "aa895d78fde0391422bcb7b4813ecacb4930652c8e9473e4df4b8492b9ec1a0a",
+      "sizeBytes": 929
+    },
+    {
+      "path": "LICENSES.md",
+      "sha256": "0dbb93355f1f261db39d729cc37a50901f9e16303127ce940f192cb5934f3ee0",
+      "sizeBytes": 19913
+    },
+    {
+      "path": "licenses/Adobe-DNG-SDK-LICENSE.txt",
+      "sha256": "7d79b475bc595c1d7744bc06ea16c2a298828260a991f57c71389cabf1a64b5f",
+      "sizeBytes": 5282
+    }
+  ],
+  "icon": {
+    "sourcePath": "apps/camera/src-tauri/icons/icon.png",
+    "sha256": "6b5a38eb49eced3de9ebf1a3b43ffe29b6d0efedfb80f7563bce96a0ddf3820b",
+    "sizeBytes": 57585,
+    "width": 512,
+    "height": 512
+  }
+}

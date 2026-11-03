@@ -1,0 +1,50 @@
+{
+  "schemaVersion": 1,
+  "origin": "C00 v2に従ってNIHO所有のPhoto専用Web host・静的配信・PWA・表示接続を独立作成。",
+  "reusedPublicModules": [
+    "packages/photo-cloud-session",
+    "packages/photo-cloud-media",
+    "packages/photo-editing",
+    "packages/ui"
+  ],
+  "referenceAudits": [
+    {
+      "repository": "niho-life/niho-editor",
+      "commit": "d778248ff772496f131b347967b5a2c851899b31",
+      "mode": "read-only audit reference, not adopted production source",
+      "files": [
+        {
+          "path": "apps/editor-web/public/photo-sw.js",
+          "blobSha": "7bbee6a0763718398eda0e23fe28b7d161cd12f7",
+          "sha256": "901da889862ca8b061017a3506a4dd18f8ae8530087ac5b9cf4a280760c42100",
+          "bytes": 8034
+        },
+        {
+          "path": "apps/editor-web/src/pwa/photo-manifest.ts",
+          "blobSha": "885ca20fcff1da1b90628f1aa31973880ea3afc7",
+          "sha256": "4a9525ff0eea2bdb7749883dfa782bd1629888e30e172f1bcdbadf817f166262",
+          "bytes": 1037
+        },
+        {
+          "path": "apps/editor-web/src/pwa/photo-sw.test.ts",
+          "blobSha": "4017b53813d61dd81d9ef78beea69f2465c8c930",
+          "sha256": "e9abbc9d36bfb2444cde1dc79b6306b441824c7d2082df5eebd3c56f086c63ce",
+          "bytes": 21199
+        }
+      ]
+    }
+  ],
+  "runtimeAssets": {
+    "policy": "公式SDK baselineのmetadata・manifest・glue・WASM・notice bytesを検証してbuild時に配置する。生成済みruntimeや実写真はsourceへ追加しない。",
+    "baseline": "src/build/build-baseline.json",
+    "iconSource": "apps/camera/src-tauri/icons/icon.png"
+  },
+  "excluded": [
+    "Editor /photo開発",
+    "新しい認証producer",
+    "独自DB・永続下書き・outbox",
+    "新しいpixel engine",
+    "private endpoint・credential・実利用データ"
+  ],
+  "acceptance": "source/unit/local合成試験は正式配備・実保存先・実Safari/PWA/Mac往復の代わりにならない。"
+}
