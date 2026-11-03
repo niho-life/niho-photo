@@ -30,10 +30,8 @@ fn acquire() -> Result<DialogSlot, CameraError> {
   Ok(DialogSlot)
 }
 
-/// E2E の build か（feature `e2e`。配布の build では常に false で、環境変数は読まない）。
-const E2E: bool = cfg!(feature = "e2e");
-
 /// E2E の答え（環境変数が無ければ None = 閉じた）。
+#[cfg(feature = "e2e")]
 fn e2e_path(name: &str) -> Option<PathBuf> {
   std::env::var_os(name)
     .filter(|value| !value.is_empty())
@@ -58,9 +56,13 @@ fn split_e2e_paths(value: Option<std::ffi::OsString>) -> Vec<PathBuf> {
 /// フォルダの選択ダイアログ（写真のフォルダを足す）。閉じたら None。
 pub async fn pick_folder(title: &str) -> Result<Option<PathBuf>, CameraError> {
   let _slot = acquire()?;
-  if E2E {
+  #[cfg(feature = "e2e")]
+  let _ = title;
+  #[cfg(feature = "e2e")]
+  {
     return Ok(e2e_path("NIHO_CAMERA_E2E_PICK_FOLDER"));
   }
+  #[cfg(not(feature = "e2e"))]
   Ok(
     rfd::AsyncFileDialog::new()
       .set_title(title)
@@ -94,9 +96,13 @@ pub async fn pick_photos() -> Result<Vec<PathBuf>, CameraError> {
 /// 書き出し先のフォルダの選択ダイアログ（複数枚の原寸の書き出し）。閉じたら None。
 pub async fn pick_export_folder(title: &str) -> Result<Option<PathBuf>, CameraError> {
   let _slot = acquire()?;
-  if E2E {
+  #[cfg(feature = "e2e")]
+  let _ = title;
+  #[cfg(feature = "e2e")]
+  {
     return Ok(e2e_path("NIHO_CAMERA_E2E_EXPORT_DIR"));
   }
+  #[cfg(not(feature = "e2e"))]
   Ok(
     rfd::AsyncFileDialog::new()
       .set_title(title)
@@ -110,9 +116,13 @@ pub async fn pick_export_folder(title: &str) -> Result<Option<PathBuf>, CameraEr
 /// ダイアログの確かめに任せる。
 pub async fn save_file(title: &str, file_name: &str, filter: (&str, &[&str])) -> Result<Option<PathBuf>, CameraError> {
   let _slot = acquire()?;
-  if E2E {
+  #[cfg(feature = "e2e")]
+  let _ = (title, filter);
+  #[cfg(feature = "e2e")]
+  {
     return Ok(e2e_path("NIHO_CAMERA_E2E_SAVE_DIR").map(|dir| dir.join(file_name)));
   }
+  #[cfg(not(feature = "e2e"))]
   Ok(
     rfd::AsyncFileDialog::new()
       .set_title(title)
