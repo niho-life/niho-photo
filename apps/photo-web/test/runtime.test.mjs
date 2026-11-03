@@ -584,6 +584,15 @@ describe("createPhotoWebRuntime", () => {
     invalid.runtime.dispose();
   });
 
+  it("accepts and normalizes case-insensitive C02 file extensions", async () => {
+    const transfer = transferDescriptor({ formats: [{ format: "jpeg", extensions: ["JPG", "JpEg"], ingest: true, workingCopy: true }] });
+    const test = harness({ connect: async () => new FakeConnection(binding("owner-a", { transfer })) });
+    await test.runtime.start();
+    assert.deepEqual(test.runtime.getSnapshot().binding?.transfer.formats[0].extensions, ["jpg", "jpeg"]);
+    assert.deepEqual(transfer.formats[0].extensions, ["JPG", "JpEg"]);
+    test.runtime.dispose();
+  });
+
   it("reused descriptor gets a fresh controller projection after scope changes", async () => {
     const transfer = transferDescriptor();
     const oldController = transfer.controller;

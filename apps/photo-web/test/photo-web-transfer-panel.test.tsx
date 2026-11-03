@@ -293,6 +293,41 @@ describe("PhotoWebTransferPanel", () => {
     }, expect.any(AbortSignal));
   });
 
+  it.each(["done", "cancelled", "complete-pending", "verifying", "cancel-pending", "pending-recipe"] as const)("別タブで%sへ進んだjournalを古いneeds-fileで隠さない", async (phase) => {
+    const initial = status();
+    const advanced = status({ phase, uploadedBytes: 100 });
+    const controller = fakeController();
+    controller.list.mockResolvedValueOnce(page([initial])).mockResolvedValueOnce(page([initial])).mockResolvedValueOnce(page([advanced]));
+    controller.resume.mockResolvedValueOnce(status({ phase: "needs-file" }));
+    await render(binding(controller), host());
+    await flush();
+    act(() => byText(container, "button", copy.resume).click());
+    await flush();
+    expect(container.querySelector('input[aria-label="' + copy.chooseSameFile + '"]')).not.toBeNull();
+    act(() => byText(container, "button", copy.refresh).click());
+    await flush();
+    expect(container.querySelector('input[aria-label="' + copy.chooseSameFile + '"]')).toBeNull();
+    expect(container.textContent).toContain(copy.phaseLabels[phase]);
+    expect(controller.resume).toHaveBeenCalledTimes(1);
+    expect(controller.cancel).not.toHaveBeenCalled();
+  });
+
+  it("needs-fileを残す場合も別タブの新しい転送進捗を表示する", async () => {
+    const initial = status();
+    const controller = fakeController();
+    controller.list.mockResolvedValueOnce(page([initial])).mockResolvedValueOnce(page([initial])).mockResolvedValueOnce(page([status({ uploadedBytes: 75 })]));
+    controller.resume.mockResolvedValueOnce(status({ phase: "needs-file" }));
+    await render(binding(controller), host());
+    await flush();
+    act(() => byText(container, "button", copy.resume).click());
+    await flush();
+    act(() => byText(container, "button", copy.refresh).click());
+    await flush();
+    expect(container.querySelector<HTMLProgressElement>(".photo-web-transfer-row progress")?.value).toBe(75);
+    expect(container.textContent).toContain(copy.phaseLabels["needs-file"]);
+    expect(controller.resume).toHaveBeenCalledTimes(1);
+  });
+
   it("cancelは現在intentへだけ渡し、terminal行にはmutation controlを出さない", async () => {
     const active = status({ intentId: "intent-cancel" });
     const cancelled = status({ ...active, phase: "cancelled" });

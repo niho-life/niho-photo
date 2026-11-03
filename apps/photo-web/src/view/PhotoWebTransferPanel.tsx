@@ -85,7 +85,7 @@ export function PhotoWebTransferPanel(props: PhotoWebTransferPanelProps) {
   const mutationEnabledRef = useRef(props.mutationEnabled);
   const pageCursorRef = useRef<string | null>(null);
   const pageRequestRef = useRef<object | null>(null);
-  const needsFileRowsRef = useRef(new Map<string, TransferRow>());
+  const needsFileIntentsRef = useRef(new Set<string>());
   const waitingForAuthorityRef = useRef(false);
   const activeRef = useRef<{ readonly owner: PhotoWebTransferBinding; readonly token: object } | null>(null);
   const addInputRef = useRef<HTMLInputElement | null>(null);
@@ -120,7 +120,7 @@ export function PhotoWebTransferPanel(props: PhotoWebTransferPanelProps) {
     showFailure: boolean,
   ): Promise<void> => {
     if (!isCurrent(lifecycle)) return;
-    if (cursor !== pageCursorRef.current) needsFileRowsRef.current.clear();
+    if (cursor !== pageCursorRef.current) needsFileIntentsRef.current.clear();
     const request = {};
     pageRequestRef.current = request;
     setPage((current) => ({
@@ -135,10 +135,17 @@ export function PhotoWebTransferPanel(props: PhotoWebTransferPanelProps) {
       if (!isCurrent(lifecycle) || pageRequestRef.current !== request) return;
       const listed = result.items.slice(0, PAGE_LIMIT).map(rowFromStatus);
       const listedIntents = new Set(listed.map((item) => item.intentId));
-      for (const intentId of needsFileRowsRef.current.keys()) {
-        if (!listedIntents.has(intentId)) needsFileRowsRef.current.delete(intentId);
+      for (const intentId of needsFileIntentsRef.current.keys()) {
+        if (!listedIntents.has(intentId)) needsFileIntentsRef.current.delete(intentId);
       }
-      const items = listed.map((item) => needsFileRowsRef.current.get(item.intentId) ?? item);
+      const items = listed.map((item) => {
+        if (!needsFileIntentsRef.current.has(item.intentId)) return item;
+        if (item.phase === "start-pending" || item.phase === "uploading" || item.phase === "needs-file") {
+          return { ...item, phase: "needs-file" as const };
+        }
+        needsFileIntentsRef.current.delete(item.intentId);
+        return item;
+      });
       pageCursorRef.current = cursor;
       setPage({ owner: transfer, items, cursor, nextCursor: result.nextCursor, loading: false });
     } catch {
@@ -161,7 +168,7 @@ export function PhotoWebTransferPanel(props: PhotoWebTransferPanelProps) {
     lifecycleRef.current = lifecycle;
     pageCursorRef.current = null;
     pageRequestRef.current = null;
-    needsFileRowsRef.current.clear();
+    needsFileIntentsRef.current.clear();
     activeRef.current = null;
     setPage({ owner: transfer, items: [], cursor: null, nextCursor: null, loading: false });
     setActiveOwner(null);
@@ -172,7 +179,7 @@ export function PhotoWebTransferPanel(props: PhotoWebTransferPanelProps) {
       lifecycle.controller.abort(host.scopeSignal.reason);
       if (lifecycleRef.current !== lifecycle) return;
       pageRequestRef.current = null;
-      needsFileRowsRef.current.clear();
+      needsFileIntentsRef.current.clear();
       activeRef.current = null;
       setPage({ owner: transfer, items: [], cursor: null, nextCursor: null, loading: false });
       setActiveOwner(null);
@@ -248,8 +255,8 @@ export function PhotoWebTransferPanel(props: PhotoWebTransferPanelProps) {
         const status = await invoke(lifecycle.controller.signal);
         if (!isCurrent(lifecycle) || activeRef.current?.token !== token) return;
         accepted = true;
-        if (status.phase === "needs-file") needsFileRowsRef.current.set(status.intentId, rowFromStatus(status));
-        else needsFileRowsRef.current.delete(status.intentId);
+        if (status.phase === "needs-file") needsFileIntentsRef.current.add(status.intentId);
+        else needsFileIntentsRef.current.delete(status.intentId);
         updateAcceptedStatus(status);
         try {
           await transfer.onSettled(status);

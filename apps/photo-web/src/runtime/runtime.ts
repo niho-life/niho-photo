@@ -143,12 +143,12 @@ function copyTransferBinding(value: unknown): PhotoWebTransferBinding | undefine
     if (typeof format !== "object" || format === null
       || !PHOTO_FORMATS.has(format.format)
       || !Array.isArray(format.extensions)
-      || !format.extensions.every((extension: unknown) => typeof extension === "string" && /^[a-z0-9]+$/u.test(extension))
+      || !format.extensions.every((extension: unknown) => typeof extension === "string" && /^[a-z0-9]+$/iu.test(extension))
       || typeof format.ingest !== "boolean"
       || typeof format.workingCopy !== "boolean") throw new TypeError("invalid transfer format");
     return Object.freeze({
       format: format.format,
-      extensions: Object.freeze([...format.extensions]),
+      extensions: Object.freeze(format.extensions.map((extension: string) => extension.toLowerCase())),
       ingest: format.ingest,
       workingCopy: format.workingCopy,
     });
