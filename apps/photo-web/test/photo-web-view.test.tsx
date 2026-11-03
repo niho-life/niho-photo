@@ -3,12 +3,18 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-import type { PhotoWebViewBinding, PhotoWebViewCopy, PhotoWebViewProps } from "../src/view/types";
+import type {
+  PhotoWebTransferBinding,
+  PhotoWebViewBinding,
+  PhotoWebViewCopy,
+  PhotoWebViewProps,
+} from "../src/view/types";
 
 const mockState = vi.hoisted(() => ({
   workbenchProps: [] as Array<Record<string, unknown>>,
   workbenchQueryClients: [] as Array<unknown>,
   providerProps: [] as Array<Record<string, unknown>>,
+  transferPanelProps: [] as Array<Record<string, unknown>>,
 }));
 
 vi.mock("niho-photo-editing/editor/browser-photo-editing-workbench", async () => {
@@ -31,6 +37,13 @@ vi.mock("niho-photo-editing/library/photo-library-context", () => ({
 
 vi.mock("niho-ui/components/app-dialog-host", () => ({
   AppDialogHost: () => <div data-testid="dialog-host" />,
+}));
+
+vi.mock("../src/view/PhotoWebTransferPanel", () => ({
+  PhotoWebTransferPanel: (props: Record<string, unknown>) => {
+    mockState.transferPanelProps.push(props);
+    return <div data-testid="transfer-panel" />;
+  },
 }));
 
 import { PhotoWebView } from "../src/view/PhotoWebView";
@@ -99,6 +112,40 @@ function binding(overrides: Partial<PhotoWebViewBinding> = {}): PhotoWebViewBind
   };
 }
 
+function transferBinding(): PhotoWebTransferBinding {
+  return {
+    controller: {
+      checkCapability: vi.fn(async () => true),
+      start: vi.fn(),
+      resume: vi.fn(),
+      cancel: vi.fn(),
+      list: vi.fn(),
+      readPendingRecipe: vi.fn(),
+      dispose: vi.fn(),
+    },
+    formats: [],
+    copy: {} as PhotoWebTransferBinding["copy"],
+    describeError: () => "",
+    onSettled: vi.fn(),
+  };
+}
+
+function scopedHost() {
+  const scopeController = new AbortController();
+  return {
+    scopeController,
+    host: {
+      scopeSignal: scopeController.signal,
+      isScopeCurrent: () => true,
+      notifyPhotosChanged: vi.fn(),
+      saveFile: vi.fn(async () => "downloaded" as const),
+      nativeFileSaveAvailable: () => false,
+      isNativeViewport: () => false,
+      isDesktopApp: () => false,
+    } satisfies PhotoWebViewBinding["host"],
+  };
+}
+
 function props(overrides: Partial<PhotoWebViewProps> = {}): PhotoWebViewProps {
   return {
     queryClient: new QueryClient(),
@@ -141,6 +188,7 @@ describe("PhotoWebView", () => {
     mockState.workbenchProps.length = 0;
     mockState.workbenchQueryClients.length = 0;
     mockState.providerProps.length = 0;
+    mockState.transferPanelProps.length = 0;
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
@@ -221,9 +269,62 @@ describe("PhotoWebView", () => {
     expect(mockState.workbenchQueryClients.at(-1)).toBe(queryClient);
     expect(mockState.providerProps.at(-1)).toMatchObject({ library: accepted.library, host: accepted.host });
     expect(container.textContent).toContain(copy.version);
+    expect(container.querySelector(".photo-web-transfer")).toBeNull();
 
     act(() => byText(container, "button", copy.toggleTree).click());
     expect(mockState.workbenchProps.at(-1)?.treeHidden).toBe(true);
+  });
+
+  it.each([
+    ["ready+online", "ready", true, true],
+    ["verifying+online", "verifying", true, false],
+    ["ready+offline", "ready", false, false],
+  ] as const)("transfer descriptorを持つ%sではWorkbenchの直前にpanelを1つ置く", (_name, phase, online, mutationEnabled) => {
+    const transfer = transferBinding();
+    const { host } = scopedHost();
+    render(props({
+      session: session(phase),
+      online,
+      binding: binding({ transfer, host }),
+    }));
+
+    expect(container.querySelectorAll('[data-testid="transfer-panel"]')).toHaveLength(1);
+    expect(container.querySelectorAll('[data-testid="workbench"]')).toHaveLength(1);
+    const stack = container.querySelector(".photo-web-workspace-stack");
+    expect(stack?.children[0]?.getAttribute("data-testid")).toBe("transfer-panel");
+    expect(stack?.children[1]?.classList.contains("photo-web-workbench")).toBe(true);
+    expect(mockState.transferPanelProps).toHaveLength(1);
+    expect(mockState.transferPanelProps[0]).toMatchObject({ transfer, host, mutationEnabled });
+  });
+
+  it.each([
+    { canEdit: false },
+    { cloudOriginalsAllowed: false },
+  ])("原本保存policyが閉じるbindingではtransfer mutationを止める: %o", (policy) => {
+    const transfer = transferBinding();
+    const { host } = scopedHost();
+    render(props({ binding: binding({ transfer, host, ...policy }) }));
+    expect(mockState.transferPanelProps.at(-1)?.mutationEnabled).toBe(false);
+    expect(container.querySelectorAll('[data-testid="workbench"]')).toHaveLength(1);
+  });
+
+  it.each([
+    ["descriptorなし", (host: PhotoWebViewBinding["host"]) => binding({ host })],
+    ["scopeSignalなし", (host: PhotoWebViewBinding["host"]) => binding({
+      transfer: transferBinding(),
+      host: { ...host, scopeSignal: undefined },
+    })],
+    ["isScopeCurrentなし", (host: PhotoWebViewBinding["host"]) => binding({
+      transfer: transferBinding(),
+      host: { ...host, isScopeCurrent: undefined },
+    })],
+  ])("%sではpanelを出さずWorkbenchを保つ", (_name, createBinding) => {
+    const { host } = scopedHost();
+    render(props({ binding: createBinding(host) }));
+
+    expect(container.querySelector('[data-testid="transfer-panel"]')).toBeNull();
+    expect(container.querySelectorAll('[data-testid="workbench"]')).toHaveLength(1);
+    expect(mockState.transferPanelProps).toHaveLength(0);
   });
 
   it("retry/logout/updateを同一tickの連打から一度に抑止する", async () => {
