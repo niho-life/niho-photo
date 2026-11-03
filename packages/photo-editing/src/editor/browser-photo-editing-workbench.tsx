@@ -1039,7 +1039,6 @@ export function BrowserPhotoEditingWorkbench(props: {
     histogramAvailable && !clipUnavailable && clipMask && (histogram.clip.shadows || histogram.clip.highlights)
       ? { mask: clipMask, shadows: histogram.clip.shadows, highlights: histogram.clip.highlights }
       : null;
-  const { readyDevelopEngine } = develop;
   // 色ミキサーは v4 を描ける wasm の共通 workbench だけ。旧 canvas 面には
   // 動かない操作を出さない。写真・compare・crop・pending が変わると pick を破棄する。
   const [colorPicking, setColorPicking] = useState(false);

@@ -101,21 +101,22 @@ export function BrowserPhotoEditingStatusLine(props: {
       </>
     );
   }
-  if (props.recovery) {
-    const extra = props.recovery.count > 1 ? `（ほか${props.recovery.count - 1}件）` : "";
-    const actions = props.recovery.actions;
+  const recovery = props.recovery;
+  if (recovery) {
+    const extra = recovery.count > 1 ? `（ほか${recovery.count - 1}件）` : "";
+    const actions = recovery.actions;
     return (
       <>
         <p role="status" className={cn(STATUS_LINE_CLASS_NAME, "text-niho-text-sub")}>
-          {props.recovery.message ??
-            (props.recovery.conflict ? "別の端末の編集後に、未保存の補正があります" : "未保存の補正があります")}
+          {recovery.message ??
+            (recovery.conflict ? "別の端末の編集後に、未保存の補正があります" : "未保存の補正があります")}
           {extra}
         </p>
         {actions ? actions.map((action) => (
           <button
             key={action.label}
             type="button"
-            disabled={props.recovery.busy || action.disabled}
+            disabled={recovery.busy || action.disabled}
             onClick={action.onClick}
             className={RETRY_BUTTON_CLASS_NAME}
           >
@@ -123,10 +124,10 @@ export function BrowserPhotoEditingStatusLine(props: {
           </button>
         )) : (
           <>
-            <button type="button" disabled={props.recovery.busy} onClick={props.recovery.onRestore} className={RETRY_BUTTON_CLASS_NAME}>
+            <button type="button" disabled={recovery.busy} onClick={recovery.onRestore} className={RETRY_BUTTON_CLASS_NAME}>
               復元
             </button>
-            <button type="button" disabled={props.recovery.busy} onClick={props.recovery.onDiscard} className={RETRY_BUTTON_CLASS_NAME}>
+            <button type="button" disabled={recovery.busy} onClick={recovery.onDiscard} className={RETRY_BUTTON_CLASS_NAME}>
               破棄
             </button>
           </>

@@ -817,7 +817,7 @@ export function useBrowserPhotoDevelop(params: {
   const resolveDurableConflict = useCallback(async (decision: "adopt" | "keep-current"): Promise<void> => {
     const { writer, comparison, comparisonPreview } = durableRecoveryRef.current;
     const displayedChoice = comparisonPreview?.comparison.choice;
-    if (!writer || !comparison || displayedChoice !== comparison.choice || !isDurableScopeCurrent()) return;
+    if (!writer || !comparison || !comparisonPreview || displayedChoice !== comparison.choice || !isDurableScopeCurrent()) return;
     if (decision === "adopt" && (
       !comparison.canAdopt || comparisonPreview.candidateFrame === null || comparisonPreview.currentFrame === null
     )) return;

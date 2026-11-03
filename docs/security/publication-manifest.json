@@ -1066,7 +1066,7 @@
         "path": "packages/photo-editing/src/editor/browser-photo-editing-footer.tsx",
         "sha256": "448c53cf1da0a5f3b41e1d507d2ac5d618a39c0b300571ad95a670bdba86bca0"
       },
-      "outputSha256": "30a69235aa84cdb17d5fc47ae33e44fd20be7944b3485de30a6051f97c4a288c",
+      "outputSha256": "9897aded0567fd7744d9bc2c8767de096c06dcc4ba406c3884c020b6065cc1bb",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -1078,7 +1078,8 @@
         "niho-photo#41 の比較UIを #72 のヒストグラム・Jキー契約と併存するようmainへ積み直した。",
         "PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。",
         "PR #98で選別フラグの保存経路とUIを更新する。",
-        "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する"
+        "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
+        "自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する"
       ]
     },
     {
@@ -1455,9 +1456,10 @@
         "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み",
         "Add backwards-compatible personal photo library scope key",
         "niho-photo #219: COEP分離文書の写真画像CORS読み込みを追加",
-        "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する"
+        "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
+        "自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する"
       ],
-      "outputSha256": "a70ac9efcbb2496993a6dc56c1fb38ddcc0bb8940b00926195fdf6fd2ffaa39d"
+      "outputSha256": "6de387401b822ffd3bd547fe86b15a7b540f9803afe385ccc0ad4f48ba9edaa6"
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-adjustment-controls-effects.test.tsx",
@@ -1974,7 +1976,7 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-develop.ts",
         "sha256": "491153dcf3675cfd0b822a008f101a77125411c9e18966ea7b7fb96e18ce8228"
       },
-      "outputSha256": "23f2b6c3bb945fe8d30b745bc3bbc74c41486d2ddaea2510e822f2bf71741790",
+      "outputSha256": "6cdbf955412902f653ff446e1e239630ff318d294116c7ec63c016f09b5185d6",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -1986,7 +1988,8 @@
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
         "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
         "Add backwards-compatible personal photo library scope key",
-        "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する"
+        "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
+        "自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する"
       ]
     },
     {
@@ -13086,8 +13089,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-durable-recovery.test.tsx",
-      "sha256": "923031a0671aff72691a1ac91e779d7b208b45c3b4f290663f62c53fcaa412e6",
-      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "f5b49f4c78d4d174fa845bf86c4e00d4533ba389d5110d3d6b2a55200ba33540",
+      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する"
     },
     {
       "path": "packages/photo-editing/src/library/photo-library-durable-drafts.ts",

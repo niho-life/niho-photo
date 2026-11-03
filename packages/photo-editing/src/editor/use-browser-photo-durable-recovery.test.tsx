@@ -52,6 +52,7 @@ it.each(["none", "committed", "unsaved"] as const)("after unknown A confirmation
   try {
     await act(async () => { root.render(createElement(PhotoLibraryProvider, { library, host, children: createElement(Harness) })); });
     const saver = current.createSaver("test-context", "photo", 0, "a".repeat(64));
+    if (!saver) throw new Error("durable saver missing");
     await act(async () => {
       current.startSession({
         key: "photo", spotId: "test-context", photoId: "photo", saver,
