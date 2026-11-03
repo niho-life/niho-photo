@@ -13179,8 +13179,8 @@
     },
     {
       "path": "packages/desktop-account/src/photo_cloud.rs",
-      "sha256": "ce4c8049ea7b2aaf7f3453401e0766baeec48dbd5824fe81771362230fa42aed",
-      "origin": "NIHO所有の公開sourceとして新規作成。Camera限定の固定Photo API・原本検証・一時handle/小chunkと合成fixtureによる境界試験。秘密、内部URL、実写真、個人情報、外部提供の資産を含まない。"
+      "sha256": "af3a404f9201e28dd305463682d1e658ece26d10835d494e0fa90224075932c3",
+      "origin": "NIHO所有の公開sourceとして新規作成。Camera限定の固定Photo API・原本検証・一時handle/小chunkと合成fixtureによる境界試験。秘密、内部URL、実写真、個人情報、外部提供の資産を含まない。\n変更理由: native CIで検出したURL組立てmatchの単位型とobject関数名shadowを修正"
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-previous-drafts.test.tsx",

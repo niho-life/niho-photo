@@ -550,8 +550,12 @@ pub(crate) fn native_request(
   {
     let mut segments = url.path_segments_mut().expect("fixed HTTPS base");
     match &request.route {
-      Route::Library => segments.push("library"),
-      Route::PhotosList(_) => segments.push("photos"),
+      Route::Library => {
+        segments.push("library");
+      }
+      Route::PhotosList(_) => {
+        segments.push("photos");
+      }
       Route::Photo { photo_id, info } => {
         segments.push("photos").push(photo_id);
         if *info {
@@ -666,7 +670,7 @@ pub(crate) fn content_request(
 }
 
 pub(crate) fn read_json_response(
-  mut response: PhotoHttpResponse,
+  response: PhotoHttpResponse,
   operation: PhotoOperation,
 ) -> Result<PhotoJsonResponse, AccountError> {
   let success = (200..300).contains(&response.status);
@@ -767,11 +771,11 @@ pub(crate) fn original_metadata(
   asset_id: &str,
 ) -> Result<PhotoContentMetadata, AccountError> {
   validate_photo(value)?;
-  let object = object(value)?;
-  if string(object, "id")? != photo_id {
+  let photo = object(value)?;
+  if string(photo, "id")? != photo_id {
     return Err(AccountError::InvalidResponse);
   }
-  let original = object(object.get("original").ok_or(AccountError::InvalidResponse)?)?;
+  let original = object(photo.get("original").ok_or(AccountError::InvalidResponse)?)?;
   if string(original, "id")? != asset_id || string(original, "kind")? != "original" {
     return Err(AccountError::InvalidResponse);
   }
