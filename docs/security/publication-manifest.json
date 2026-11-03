@@ -12702,8 +12702,8 @@
     },
     {
       "path": "apps/photo-web/README.md",
-      "sha256": "f56ebc8130815b2d7a2bd1ece3b4d1b26e2cae4c798f533fa32075dc16204f32",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する"
+      "sha256": "a98edd0cbc1487fcf0f9ce421c19f059c8669c7822b2da3471dd0040d76458dc",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: Photo WebのC01 captureとC02 clientの接続・受信stream寿命、正式bootstrapの残る責務を記録する。"
     },
     {
       "path": "apps/photo-web/eslint.config.mjs",
@@ -12712,8 +12712,8 @@
     },
     {
       "path": "apps/photo-web/package.json",
-      "sha256": "dc4de293c3d07bc88fbe8cd764100bdbc9afa738a47b7198c2d7e7ddb5667616",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加"
+      "sha256": "e09b94ceaaf0c74282083fa2b04d4c50939c61d1cf6917164956ca5ce6a4241d",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加\n変更理由: 本人captureと受信streamの対象Vitestを既存Photo Web検証へ追加する。"
     },
     {
       "path": "apps/photo-web/provenance.json",
@@ -12902,8 +12902,8 @@
     },
     {
       "path": "apps/photo-web/test/browser-bundle.test.mjs",
-      "sha256": "5ba6b4b5fd7a868f1aedd8663ac6be76811d9a8c3a1430374b89636d00572819",
-      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加"
+      "sha256": "1b78a01b30ecd47150641fdc4bc23f50755e7eb26e0f33cf99aa6ba966a2d90d",
+      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加\n変更理由: 本人capture helperを実配布graphへ含め、server/native依存の混入がないことを確認する。"
     },
     {
       "path": "apps/photo-web/vitest.mount.config.ts",
@@ -13139,6 +13139,21 @@
       "path": "apps/photo-web/test/photo-web-transfer-panel.test.tsx",
       "sha256": "a1c64671666f242608ccf9ae7a7dc9898bcc91b3a23729bb27a83008e66d9f50",
       "origin": "NIHOがC06転送表示の合成controllerとReactイベント回帰試験として新規作成。実写真・個人情報を含まない。"
+    },
+    {
+      "path": "apps/photo-web/src/browser/session-client.ts",
+      "sha256": "795c7598f3242fee96edc9782d45526a1678c4ca40b30380cec68c47531e6705",
+      "origin": "NIHOがC01本人captureとC02 client、受信streamのscope別寿命を接続するPhoto Web内部helperとして新規作成。"
+    },
+    {
+      "path": "apps/photo-web/test/session-client.test.ts",
+      "sha256": "febe00f4d9d6116305cb1e0ef5603f926619886057108e52bccfbb1ce3c4aaee",
+      "origin": "NIHOが合成session/client/streamによるPhoto Web本人scope・refresh・abort・cleanupの回帰試験として新規作成。実credential・写真・個人情報を含まない。\n変更理由: 本人scope取消中のpending readerが取消直後・pull解決後とも解放済みであることを回帰assertする"
+    },
+    {
+      "path": "apps/photo-web/vitest.session.config.ts",
+      "sha256": "def0d97b6869087e63df8e2f159df33145ba2680c832aef6adc29e958832b058",
+      "origin": "NIHOがPhoto Web本人capture helperの対象Node環境試験を実行する設定として新規作成。"
     }
   ],
   "excludedSources": [

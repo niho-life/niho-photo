@@ -57,3 +57,9 @@ renderer probeは、このbundleに固定した受入済みSDK/manifest proofと
 一覧は現在ページの最大16件だけを読み、表示・再読込だけでは再送しない。新規追加は1件ずつ、再開には既存intentを使い、必要な場合だけ同じファイルを選び直す。本人確認中・オフラインではmutationを止め、scope失効・画面終了では進行中の処理をabortして遅着結果を捨てる。通常終了で永続journalを消さない。
 
 最終compositionは実controllerの進行中操作を離脱/PWA guardへ含め、受け入れた結果で一覧と容量を再確認する必要がある。取消と保存が競合し `failed` / `stored` が返った場合も保存済みとして再確認し、再確認の失敗で保存結果を失敗へ書き換えない。進行中操作の取消ボタンと正式接続後の実機受入は、この操作面だけで完了した扱いにしない。
+
+## 本人captureと受信stream
+
+`src/browser/session-client.ts` はC01 controllerとC02の実clientをつなぐ。identity portは通常refresh中も同じ本人tupleを保ち、新規requestはC01のcapture入口で止める。開始済みrequestの成功値とC00 errorは、通常refreshの確認barrierを通して返す。contentは原本全体をbufferせず、EOF/error/cancelまでscope signalを保ち、失効後のchunk公開を止める。
+
+正式compositionでは、固定Photo BFFへのfetchで得た401をruntimeのfence・peer通知・本人再確認へつなぐ。providerへの送信失敗はC02の再開・renewで扱う。helperの単体成功だけではこのHTTP接続、失効時の両journal消去、preview解放、実producer・SDK・memory budgetの受入は完了しない。
