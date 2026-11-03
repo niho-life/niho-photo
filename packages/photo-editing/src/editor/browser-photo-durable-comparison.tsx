@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef } from "react";
+import { X } from "lucide-react";
 
 import type { DevelopFrame } from "../develop-engine/develop-engine-client";
 import { paintDevelopFrame } from "../develop-engine/develop-frame";
@@ -58,11 +59,20 @@ export function BrowserPhotoDurableComparisonDialog(props: { model: BrowserPhoto
   const model = props.model;
   return (
     <Dialog open={model !== null} onOpenChange={(open) => { if (!open && !model?.busy) model?.onClose(); }}>
-      <DialogContent className="max-h-[calc(100dvh-24px)] w-[calc(100vw-24px)] max-w-4xl overflow-y-auto rounded-2xl">
-        <DialogHeader>
+      <DialogContent hideClose mobileSafeArea className="w-[calc(100vw-24px)] max-w-4xl overflow-y-auto rounded-2xl sm:max-h-[calc(100dvh-24px)]">
+        <button
+          type="button"
+          aria-label={PHOTO_EDITING_DURABLE_DRAFT_COPY.close}
+          disabled={model?.busy}
+          onClick={model?.onClose}
+          className="absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-sm text-niho-text-sub hover:text-niho-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-niho-accent-ink focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+        >
+          <X aria-hidden="true" className="h-4 w-4" />
+        </button>
+        <DialogHeader className="min-w-0 pr-6">
           <DialogTitle className="text-body font-bold text-niho-text">{PHOTO_EDITING_DURABLE_DRAFT_COPY.comparisonTitle}</DialogTitle>
           <DialogDescription className="space-y-1 text-left text-sub text-niho-text-sub">
-            <span className="block font-bold text-niho-text">{model?.photoName}</span>
+            <span className="block break-words font-bold text-niho-text [overflow-wrap:anywhere]">{model?.photoName}</span>
             <span className="block">{PHOTO_EDITING_DURABLE_DRAFT_COPY.comparisonDescription}</span>
           </DialogDescription>
         </DialogHeader>

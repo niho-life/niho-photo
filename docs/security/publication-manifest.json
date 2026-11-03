@@ -2602,9 +2602,10 @@
         "C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録",
         "独立Photo WebとPWAの日本語copy・容量表記を共通の正本へ集約する。",
         "mainの本人cloud共通copyとA作成のPhoto Web共通copy・容量表示を両方保持して通常mergeを解消。",
-        "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する"
+        "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
+        "比較画面の閉じる操作の日本語ラベルを追加"
       ],
-      "outputSha256": "d4e505e63eafd27b7056131c440980520f1f4db842c6be40f292cabc9205f35b"
+      "outputSha256": "f14a51cd811350026c544f08848e0cbbe3691899728c2155250dcfdd252f3ba9"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-crop.test.ts",
@@ -13090,8 +13091,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-durable-comparison.tsx",
-      "sha256": "a1d6c58e339a66e17a28f00f581a9bd4988299d006a83ab3b220d3250b3cb8a9",
-      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "7baf9384f3d2c361cd66d7dc4aa7793dc8c82c87799ae0462614ae1dfb701119",
+      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 比較画面の閉じる操作を日本語と24px以上にし、safe areaと長い写真名に対応"
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-durable-comparison.test.tsx",
