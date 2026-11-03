@@ -47,11 +47,10 @@ export function createPersonalPhotoCloudProxy(
   const now = options.now ?? Date.now;
   const trustedUploadOrigin = options.trustedUploadOrigin ?? TRUSTED_GCS_UPLOAD_ORIGIN;
   return async (request): Promise<Response | null> => {
-    let encoded: EncodedOperation | null;
     try {
-      encoded = parseIncomingOperation(request);
-      if (encoded === null) return null;
-      encoded = await readAndEncodeIncomingBody(request, encoded);
+      const route = parseIncomingOperation(request);
+      if (route === null) return null;
+      const encoded = await readAndEncodeIncomingBody(request, route);
       const capture = readCapture(request.headers);
       let upstream: Response;
       const dispatchLink = linkedAbortController(request.signal);
@@ -64,13 +63,13 @@ export function createPersonalPhotoCloudProxy(
             [PHOTO_CAPTURE_HEADERS.sessionId]: actor.sessionId,
             [PHOTO_CAPTURE_HEADERS.sessionEpoch]: actor.sessionEpoch,
           });
-          if (encoded?.body !== null) headers.set("Content-Type", "application/json");
-          if (encoded?.range !== null) headers.set("Range", encoded.range);
-          if (encoded?.idempotencyKey !== null) headers.set(PHOTO_IDEMPOTENCY_HEADER, encoded.idempotencyKey);
-          return await awaitBounded(Promise.resolve().then(async () => await fetchFn(`${options.upstreamOrigin}${prefix}${encoded?.suffix}${encoded?.query === "" ? "" : `?${encoded?.query}`}`, {
-              method: encoded?.method,
+          if (encoded.body !== null) headers.set("Content-Type", "application/json");
+          if (encoded.range !== null) headers.set("Range", encoded.range);
+          if (encoded.idempotencyKey !== null) headers.set(PHOTO_IDEMPOTENCY_HEADER, encoded.idempotencyKey);
+          return await awaitBounded(Promise.resolve().then(async () => await fetchFn(`${options.upstreamOrigin}${prefix}${encoded.suffix}${encoded.query === "" ? "" : `?${encoded.query}`}`, {
+              method: encoded.method,
               headers,
-              body: encoded?.body,
+              body: encoded.body,
               signal: dispatchLink.controller.signal,
               cache: "no-store",
               credentials: "omit",
@@ -94,7 +93,7 @@ export function createPersonalPhotoCloudProxy(
       } finally { dispatchLink.dispose(); }
       if (encoded.operation === "content.get") return await publishContent(request, capture, encoded, upstream, options.authService);
       const limit = upstream.ok ? responseJsonLimit(encoded.operation) : JSON_LIMITS.error;
-      let parsed: { readonly bytes: Uint8Array; readonly value: unknown };
+      let parsed: { readonly bytes: Uint8Array<ArrayBuffer>; readonly value: unknown };
       try { parsed = await readBoundedJson(upstream, limit, request.signal); }
       catch { void upstream.body?.cancel().catch(() => undefined); return closedError("temporarily_unavailable", 503); }
       try {

@@ -57,7 +57,7 @@ export type EncodedOperation = {
   readonly method: "GET" | "POST" | "DELETE";
   readonly suffix: string;
   readonly query: string;
-  readonly body: Uint8Array | null;
+  readonly body: Uint8Array<ArrayBuffer> | null;
   readonly range: string | null;
   readonly idempotencyKey: string | null;
   readonly responseContext?: ResponseValidationContext;
@@ -72,7 +72,7 @@ export function encodeOperation(
   request: unknown,
   idempotencyKey: string | undefined,
 ): EncodedOperation {
-  const body = (value: unknown): Uint8Array => textEncoder.encode(JSON.stringify(value));
+  const body = (value: unknown): Uint8Array<ArrayBuffer> => textEncoder.encode(JSON.stringify(value));
   const noKey = (): null => {
     if (idempotencyKey !== undefined) invalidRequest();
     return null;
@@ -286,7 +286,7 @@ export function validateTicket(
   return Object.freeze({ ...ticket, headers: Object.freeze(contentType === undefined ? {} : { "Content-Type": contentType }) });
 }
 
-export async function readBoundedJson(response: Response, maximumBytes: number, signal: AbortSignal): Promise<{ readonly bytes: Uint8Array; readonly value: unknown }> {
+export async function readBoundedJson(response: Response, maximumBytes: number, signal: AbortSignal): Promise<{ readonly bytes: Uint8Array<ArrayBuffer>; readonly value: unknown }> {
   try {
     const contentType = response.headers.get("Content-Type");
     if (contentType === null || contentType.includes(",") || !/^application\/json(?:\s*;\s*charset=utf-8)?$/iu.test(contentType)) invalidResponse();
@@ -300,7 +300,7 @@ export async function readBoundedJson(response: Response, maximumBytes: number, 
   }
 }
 
-export async function readBoundedBody(stream: ReadableStream<Uint8Array> | null, maximumBytes: number, signal: AbortSignal): Promise<Uint8Array> {
+export async function readBoundedBody(stream: ReadableStream<Uint8Array> | null, maximumBytes: number, signal: AbortSignal): Promise<Uint8Array<ArrayBuffer>> {
   if (stream === null) invalidResponse();
   const reader = stream.getReader();
   const chunks: Uint8Array[] = [];

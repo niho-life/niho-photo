@@ -15,7 +15,7 @@ const TICKET_EXPIRES = "2026-11-03T00:10:00.000Z";
 const UPLOAD_ORIGIN = "https://upload.example.test";
 
 function locks(): LockManager {
-  return { request: async (...parameters: unknown[]) => await (parameters.at(-1) as () => Promise<unknown>)({ name: "synthetic", mode: "exclusive" }) } as unknown as LockManager;
+  return { request: async (...parameters: unknown[]) => await (parameters.at(-1) as (lock: Lock) => Promise<unknown>)({ name: "synthetic", mode: "exclusive" }) } as unknown as LockManager;
 }
 
 function uuids() {
@@ -115,7 +115,7 @@ describe("IndexedDB transfer journal", () => {
     const seen: string[] = [];
     let cursor: string | undefined;
     do {
-      const page = await journal.list(scope, { cursor, limit: 16 });
+      const page = await journal.list(scope, { ...(cursor === undefined ? {} : { cursor }), limit: 16 });
       expect(page.entries.reduce((total, entry) => total + new TextEncoder().encode(JSON.stringify(entry)).byteLength, 0)).toBeLessThanOrEqual(4 * 1024 ** 2);
       seen.push(...page.entries.map((entry) => entry.intentId));
       cursor = page.nextCursor ?? undefined;

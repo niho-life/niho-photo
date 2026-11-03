@@ -123,7 +123,7 @@ export async function createBrowserPersonalPhotoCloudClient(
 function requestInit(
   actor: VerifiedPhotoActor,
   method: string,
-  body: Uint8Array | null,
+  body: Uint8Array<ArrayBuffer> | null,
   range: string | null,
   key: string | null,
   signal: AbortSignal,

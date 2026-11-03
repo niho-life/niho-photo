@@ -218,7 +218,7 @@ class TransferController implements BrowserPersonalPhotoTransferController {
         if (entry.phase !== "cancel-pending") entry = await this.update(entry, { phase: "cancel-pending" });
       }
       try {
-        const receipt = await this.options.client.request("uploads.cancel", { uploadId: entry.uploadId }, { signal: operationSignal, idempotencyKey: entry.cancelKey });
+        const receipt = await this.options.client.request("uploads.cancel", { uploadId: requiredUploadId(entry) }, { signal: operationSignal, idempotencyKey: entry.cancelKey });
         const upload = receipt.value;
         assertUploadBinding(entry, upload);
         if (upload.state === "cancelled") entry = await this.update(entry, { phase: "cancelled" });
@@ -313,11 +313,12 @@ class TransferController implements BrowserPersonalPhotoTransferController {
       }
       const endExclusive = Math.min(entry.uploadedBytes + GCS_CHUNK_BYTES, entry.sizeBytes);
       const endInclusive = endExclusive - 1;
+      const uploadUrl = ticket.url;
       let response: Response;
       try {
         const providerLink = linkedAbortController(signal);
         try {
-          response = await awaitBounded(Promise.resolve().then(async () => await this.fetchFn(ticket.url, {
+          response = await awaitBounded(Promise.resolve().then(async () => await this.fetchFn(uploadUrl, {
           method: "PUT",
           headers: { "Content-Type": entry.contentType, "Content-Range": `bytes ${entry.uploadedBytes}-${endInclusive}/${entry.sizeBytes}` },
           body: file.slice(entry.uploadedBytes, endExclusive),
