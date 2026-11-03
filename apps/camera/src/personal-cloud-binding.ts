@@ -50,13 +50,14 @@ type Connection = {
   scope: MacPhotoCloudScope;
   currentScope: () => MacPhotoCloudScope | null;
   subscribeScopeChange: (listener: () => void) => () => void;
-  native: MacPhotoCopyNative;
+  /** Absent until the native journal/upload authority is installed; read/edit remains connected without copy UI. */
+  native?: MacPhotoCopyNative;
   /** P08's immutable, verified adapter is supplied by the trusted host; no mutable source import. */
   library: PersonalCloudPhotoBinding["library"];
   host: PersonalCloudPhotoBinding["host"];
 };
 
-/** No production connection exists until P01/P03/P08 provide all of these dependencies. */
+/** Connects the proof-bound read/edit facade; copy is added only when a real native authority is supplied. */
 export function createMacPersonalCloudPhotoBinding(connection: Connection | null): {
   state: "not_connected";
   binding: undefined;
@@ -88,7 +89,10 @@ export function createMacPersonalCloudPhotoBinding(connection: Connection | null
   const binding: PersonalCloudPhotoBinding = {
     library, host, actorId: scope.actorId,
     scopeKey: JSON.stringify([scope.actorId, scope.libraryId, scope.sessionId, scope.sessionEpoch, scope.transport]),
-    async copyLocalPhoto(photoId, options) {
+  };
+  const copyNative = native;
+  if (copyNative !== undefined) {
+    binding.copyLocalPhoto = async (photoId, options) => {
       assertCurrent();
       if (options.signal.aborted) throw new MacPhotoCopyError("cancelled");
       // A second click cannot create a second operation. UI retries reuse the native journal key.
@@ -103,7 +107,7 @@ export function createMacPersonalCloudPhotoBinding(connection: Connection | null
         if (cancelSent || requestId === null) return;
         cancelSent = true;
         // Always address the captured scope; never cancel a new user's operation.
-        void native.cancel(scope, requestId).catch(() => {});
+        void copyNative.cancel(scope, requestId).catch(() => {});
       };
       controller.signal.addEventListener("abort", abortNative, { once: true });
       const check = () => {
@@ -113,14 +117,14 @@ export function createMacPersonalCloudPhotoBinding(connection: Connection | null
       try {
         check();
         if (requestId === null) {
-          const recovered = await abortable(native.recover(scope, photoId), controller.signal);
+          const recovered = await abortable(copyNative.recover(scope, photoId), controller.signal);
           check();
           if (recovered && (recovered.photoId !== photoId || !recovered.requestId.trim())) throw new MacPhotoCopyError("invalid_result");
           requestId = recovered?.requestId ?? crypto.randomUUID();
           pending.set(photoId, requestId);
         }
         // This lookup also covers an unknown result after network loss or UI remount/retry.
-        let status = await abortable(native.status(scope, requestId), controller.signal);
+        let status = await abortable(copyNative.status(scope, requestId), controller.signal);
         check();
         if (status && (status.requestId !== requestId || status.photoId !== photoId)) throw new MacPhotoCopyError("invalid_result");
         if (status?.phase === "cancelled") {
@@ -130,12 +134,12 @@ export function createMacPersonalCloudPhotoBinding(connection: Connection | null
           status = null;
         }
         if (status === null || status.phase === "failed") {
-          await abortable(native.start(scope, { requestId, photoId }), controller.signal);
+          await abortable(copyNative.start(scope, { requestId, photoId }), controller.signal);
           check();
           status = null;
         }
         for (;;) {
-          if (status === null) status = await abortable(native.status(scope, requestId), controller.signal);
+          if (status === null) status = await abortable(copyNative.status(scope, requestId), controller.signal);
           check();
           if (!status || status.requestId !== requestId || status.photoId !== photoId ||
             !["pending", "copying", "verifying", "stored", "cancelled", "failed"].includes(status.phase)) throw new MacPhotoCopyError("invalid_result");
@@ -162,8 +166,8 @@ export function createMacPersonalCloudPhotoBinding(connection: Connection | null
         controller.signal.removeEventListener("abort", abortNative);
         active.delete(photoId);
       }
-    },
-  };
+    };
+  }
   return {
     state: "connected", binding,
     dispose() {

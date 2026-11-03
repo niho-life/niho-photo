@@ -39,6 +39,19 @@ const options = (controller = new AbortController()) => ({ signal: controller.si
 afterEach(() => vi.useRealTimers());
 
 describe("Mac personal cloud binding (synthetic native port only)", () => {
+  it("keeps read/edit connected but omits copy when native authority is absent", () => {
+    const connection = createMacPersonalCloudPhotoBinding({
+      scope,
+      currentScope: () => scope,
+      subscribeScopeChange: () => () => undefined,
+      library,
+      host,
+    });
+    expect(connection.state).toBe("connected");
+    expect(connection.binding?.copyLocalPhoto).toBeUndefined();
+    connection.dispose();
+  });
+
   it("keeps unconfigured production local-only and does no work at construction/login", () => {
     expect(createMacPersonalCloudPhotoBinding(null)).toMatchObject({ state: "not_connected", binding: undefined });
     const { binding, native } = fixture();

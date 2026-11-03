@@ -9,7 +9,7 @@ use std::io::{Read, Seek, SeekFrom, Write};
 use std::os::unix::fs::{MetadataExt, OpenOptionsExt};
 use std::path::PathBuf;
 
-const MAX_BYTES: u64 = 256 * 1024 * 1024;
+const MAX_BYTES: u64 = 200 * 1024 * 1024;
 
 #[derive(Debug, PartialEq, Eq)]
 pub(crate) enum CopySourceError {
@@ -58,6 +58,12 @@ pub(crate) struct CloudCopySource {
 impl CloudCopySource {
   pub(crate) fn capture(photos: &CameraPhotos, photo_id: &str) -> Result<Self, CopySourceError> {
     let photo = photos.get(photo_id).ok_or(CopySourceError::Missing)?;
+    Self::open(&photo)
+  }
+
+  /// UI passes a library entryId. Resolve it through the native opened-photo map; never treat it as a path.
+  pub(crate) fn capture_entry(photos: &CameraPhotos, entry_id: &str) -> Result<Self, CopySourceError> {
+    let (_, photo) = photos.find_by_entry_id(entry_id).ok_or(CopySourceError::Missing)?;
     Self::open(&photo)
   }
 
@@ -267,5 +273,16 @@ mod tests {
       .set_len(MAX_BYTES + 1)
       .unwrap();
     assert!(matches!(CloudCopySource::open(&photo), Err(CopySourceError::TooLarge)));
+  }
+
+  #[test]
+  fn library_entry_id_resolves_to_the_native_open_photo_without_becoming_a_path() {
+    let fixture = Fixture::new();
+    let photo = fixture.photo();
+    let photos = CameraPhotos::new(None);
+    let (opened_id, _) = photos.open("library-entry", &photo.path).unwrap();
+    assert!(CloudCopySource::capture_entry(&photos, "library-entry").is_ok());
+    assert!(CloudCopySource::capture_entry(&photos, &opened_id).is_err());
+    assert!(CloudCopySource::capture_entry(&photos, "../synthetic.png").is_err());
   }
 }

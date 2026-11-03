@@ -98,7 +98,7 @@ function PhotoSourceTabs(props: {
 }
 
 let defaultCommands: CameraCommands | null = null;
-function cameraCommands(): CameraCommands {
+export function cameraCommands(): CameraCommands {
   defaultCommands ??= createCameraCommands();
   return defaultCommands;
 }

@@ -134,6 +134,7 @@ pub fn run() {
       photo_cloud::camera_photo_content_read,
       photo_cloud::camera_photo_content_close,
       photo_cloud::camera_photo_content_cancel,
+      photo_cloud::camera_photo_original_save,
       library::camera_library_add_folder,
       library::camera_library_add_photos,
       library::camera_library_remembered,

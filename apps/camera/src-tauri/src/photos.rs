@@ -203,6 +203,15 @@ impl CameraPhotos {
     self.lock().photos.get(photo_id).cloned()
   }
 
+  /// Resolve the public library entry ID to the newest still-open native photo ID.
+  pub(crate) fn find_by_entry_id(&self, entry_id: &str) -> Option<(String, OpenedPhoto)> {
+    let opened = self.lock();
+    opened.order.iter().rev().find_map(|photo_id| {
+      let photo = opened.photos.get(photo_id)?;
+      (photo.entry_id == entry_id).then(|| (photo_id.clone(), photo.clone()))
+    })
+  }
+
   /// 開いた後も元ファイルが同じ中身かを SHA-256 で確かめて返す。背景除去のようにパスを native の道具へ渡す直前・直後に使い、
   /// Finder などで置き換わった写真へ古いマスクや結果を保存しない。
   pub fn verified(&self, photo_id: &str) -> Result<OpenedPhoto, CameraError> {

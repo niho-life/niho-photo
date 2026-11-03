@@ -189,7 +189,8 @@ pub fn decode_surface_png(png: &[u8]) -> Result<MaskSurface, SurfaceError> {
     if png.len() > MAX_SURFACE_PNG_BYTES {
         return Err(SurfaceError::TooLarge { bytes: png.len() });
     }
-    let mut decoder = png::Decoder::new(Cursor::new(png));
+    let mut cursor = Cursor::new(png);
+    let mut decoder = png::Decoder::new(&mut cursor);
     decoder.set_transformations(png::Transformations::IDENTITY);
     // The header first: refuse a size or format before reading the rest.
     let header = decoder.read_header_info().map_err(png_error)?;
@@ -215,6 +216,12 @@ pub fn decode_surface_png(png: &[u8]) -> Result<MaskSurface, SurfaceError> {
     }
     reader.next_frame(&mut data).map_err(png_error)?;
     reader.finish().map_err(png_error)?;
+    // png::Reader::finish stops at IEND, even when more input follows.
+    // Cursor consumes only the bytes the decoder parsed, including the IEND CRC.
+    drop(reader);
+    if cursor.position() != png.len() as u64 {
+        return Err(png_error("bytes after IEND"));
+    }
     MaskSurface::new(width, height, data)
 }
 
@@ -346,6 +353,29 @@ mod tests {
             surface_id(b"abc"),
             "ba7816bf8f01cfea414140de5dae2223b00361a396177a9cb410ff61f20015ad"
         );
+    }
+
+    #[test]
+    fn a_surface_must_end_at_iend_even_when_its_hash_matches() {
+        let png = encode_surface_png(&surface(2, 2, &[0, 128, 255, 7])).unwrap();
+        for suffix in [&[0][..], b"trailing bytes", png.as_slice()] {
+            let mut appended = png.clone();
+            appended.extend_from_slice(suffix);
+            let id = surface_id(&appended);
+            assert!(verify_surface_id(&id, &appended).is_ok());
+            assert!(matches!(
+                load_surface(&id, &appended),
+                Err(SurfaceError::Png(_))
+            ));
+        }
+        let interlaced = interlaced_gray_png(2, 2, &[0, 128, 255, 7]);
+        assert!(decode_surface_png(&interlaced).is_ok());
+        let mut appended = interlaced;
+        appended.push(0);
+        assert!(matches!(
+            decode_surface_png(&appended),
+            Err(SurfaceError::Png(_))
+        ));
     }
 
     /// An Adam7-interlaced 8-bit gray PNG written by hand (the png crate's

@@ -1,7 +1,7 @@
 use crate::connect::{equal, secret_43, Pending};
 use crate::photo_cloud::{
-  content_request, native_request, original_metadata, read_json_response, stream_verified_content,
-  CapturedPhotoAuthority, HttpPhotoCloud, PhotoHttpTransport,
+  content_request, native_request, original_metadata, original_metadata_for_photo, read_json_response,
+  stream_verified_content, CapturedPhotoAuthority, HttpPhotoCloud, PhotoHttpTransport,
 };
 use crate::photo_session::{parse_response, parse_strict_iso, HttpPhotoSession, PhotoSessionTransport};
 use crate::{
@@ -836,6 +836,47 @@ impl Account {
     Ok(metadata)
   }
 
+  /// Native Save As専用。fresh Photoからoriginal IDをnative内で解決し、検証済み全bytesだけをwriterへ渡す。
+  pub fn photo_original_download<W: Write>(
+    &self,
+    capture: &PhotoScopeCapture,
+    photo_id: &str,
+    writer: &mut W,
+    cancel: &PhotoDownloadCancel,
+  ) -> Result<(PhotoContentMetadata, String), AccountError> {
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    let authority = self.capture_photo_authority(adapters, capture)?;
+    let get = PhotoRequest::parse(
+      PhotoOperation::PhotosGet,
+      serde_json::json!({ "photoId": photo_id }),
+      None,
+    )?;
+    let photo = self.send_photo_json(adapters, &authority, &get)?;
+    if photo.status == 401 {
+      self.invalidate_photo_identity(adapters, authority.generation, AccountError::Expired)?;
+      return Err(AccountError::Expired);
+    }
+    if photo.status != 200 {
+      return Err(AccountError::Rejected);
+    }
+    let (metadata, file_name) = original_metadata_for_photo(&photo.body, photo_id)?;
+    self.ensure_photo_authority(adapters, &authority)?;
+    cancel.check()?;
+    let request = content_request(&adapters.config, &authority.scope, photo_id, &metadata.asset_id);
+    let response = adapters
+      .photo_http
+      .send(&adapters.config, &authority.access, &request, true)?;
+    if response.status == 401 {
+      self.invalidate_photo_identity(adapters, authority.generation, AccountError::Expired)?;
+      return Err(AccountError::Expired);
+    }
+    stream_verified_content(response, &metadata, writer, cancel, || {
+      self.ensure_photo_authority(adapters, &authority)
+    })?;
+    self.ensure_photo_authority(adapters, &authority)?;
+    Ok((metadata, file_name))
+  }
+
   fn send_photo_json(
     &self,
     adapters: &Adapters,
@@ -904,6 +945,36 @@ impl Account {
       user_id: connection.user_id,
       scope: capture.clone(),
     })
+  }
+
+  /// Runs a short native commit under the same lock as logout, refresh and
+  /// session revocation. The callback must not call back into this Account.
+  pub fn with_current_photo_scope<T>(
+    &self,
+    capture: &PhotoScopeCapture,
+    commit: impl FnOnce() -> Result<T, AccountError>,
+  ) -> Result<T, AccountError> {
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    let inner = self.inner.lock().map_err(|_| AccountError::Internal)?;
+    let now = self.clock.now_ms()?;
+    if adapters.config.client != ClientId::Camera
+      || inner.phase != AccountPhase::Connected
+      || inner.cancel.is_some()
+      || inner.access.is_none()
+      || now >= inner.expires_at_ms
+      || now >= inner.photo_identity_expires_at_ms
+      || inner.photo_identity.as_ref().is_none_or(|identity| {
+        identity.user_id != capture.user_id
+          || identity.session_id != capture.session_id
+          || identity.session_epoch != capture.session_epoch
+          || identity.transport != capture.transport
+      })
+    {
+      return Err(AccountError::Cancelled);
+    }
+    let result = commit();
+    drop(inner);
+    result
   }
 
   fn ensure_photo_authority(

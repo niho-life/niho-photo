@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { accountMessage, LOCAL_ACCOUNT, parseAccountSnapshot, type AccountBridge } from "niho-desktop-account";
-import { invalidateNativePhotoIdentity } from "./native-photo-session";
+import { accountMessage, LOCAL_ACCOUNT, parseAccountSnapshot, type AccountBridge, type AccountSnapshot } from "niho-desktop-account";
+import { invalidateNativePhotoIdentity, notifyNativePhotoIdentityMayHaveChanged } from "./native-photo-session";
 
 async function invoke(command: string): Promise<unknown> {
   if (!("__TAURI_INTERNALS__" in window)) return LOCAL_ACCOUNT;
@@ -20,10 +20,17 @@ export function CameraAccount({ bridge = nativeAccount }: { bridge?: AccountBrid
   const [state, setState] = useState(LOCAL_ACCOUNT);
   useEffect(() => {
     let active = true;
+    let observedPhase: AccountSnapshot["phase"] | null = null;
     const read = async () => {
       try {
         const value = parseAccountSnapshot(await bridge.read());
-        if (active) setState(value);
+        if (active) {
+          setState(value);
+          if (observedPhase !== value.phase) {
+            observedPhase = value.phase;
+            notifyNativePhotoIdentityMayHaveChanged();
+          }
+        }
       } catch {
         if (active) setState({ ...LOCAL_ACCOUNT });
       }
@@ -37,7 +44,10 @@ export function CameraAccount({ bridge = nativeAccount }: { bridge?: AccountBrid
   const act = async (action: () => Promise<void>) => {
     // IPCの生error文字列を画面・consoleへ出さず、nativeの固定分類snapshotを読み直す。
     try { await action(); } catch { /* read()で固定エラーを表示する */ }
-    try { setState(parseAccountSnapshot(await bridge.read())); } catch { setState({ ...LOCAL_ACCOUNT }); }
+    try {
+      setState(parseAccountSnapshot(await bridge.read()));
+      notifyNativePhotoIdentityMayHaveChanged();
+    } catch { setState({ ...LOCAL_ACCOUNT }); }
   };
   const logout = () => {
     invalidateNativePhotoIdentity();

@@ -794,6 +794,21 @@ pub(crate) fn original_metadata(
   })
 }
 
+pub(crate) fn original_metadata_for_photo(
+  value: &Value,
+  photo_id: &str,
+) -> Result<(PhotoContentMetadata, String), AccountError> {
+  validate_photo(value)?;
+  let photo = object(value)?;
+  if string(photo, "id")? != photo_id {
+    return Err(AccountError::InvalidResponse);
+  }
+  let file_name = string(photo, "fileName")?.to_owned();
+  let original = object(photo.get("original").ok_or(AccountError::InvalidResponse)?)?;
+  let asset_id = string(original, "id")?;
+  Ok((original_metadata(value, photo_id, asset_id)?, file_name))
+}
+
 fn validate_success(operation: PhotoOperation, value: &Value) -> Result<(), AccountError> {
   match operation {
     PhotoOperation::LibraryGet => validate_library(value),
@@ -1660,6 +1675,23 @@ mod tests {
     let mut rejected = photo;
     rejected["original"]["kind"] = serde_json::json!("preview");
     assert!(read_json_response(response(200, "application/json", rejected), PhotoOperation::PhotosGet).is_err());
+  }
+
+  #[test]
+  fn native_original_metadata_is_bound_to_the_requested_photo_and_safe_name() {
+    let photo = serde_json::json!({
+      "id":"photo","libraryId":"library","storageState":"stored","lifecycle":"active",
+      "fileName":"synthetic.JPG","format":"jpeg","hasEdits":false,"addedAt":"2026-11-01T00:00:00.000Z",
+      "capturedAt":null,"width":10,"height":10,
+      "original":{"id":"asset","kind":"original","sha256":"a".repeat(64),"sizeBytes":4,"contentType":"image/jpeg","width":10,"height":10},
+      "recipe":{"revision":0,"settings":{"v":1,"engine":"niho-14"},"settingsSha256":"b".repeat(64),"baseVersion":null,"maskSurfaceIds":[],"updatedAt":"2026-11-01T00:00:00.000Z"},
+      "media":{"state":"pending"}
+    });
+    let (metadata, name) = original_metadata_for_photo(&photo, "photo").unwrap();
+    assert_eq!(metadata.asset_id, "asset");
+    assert_eq!(metadata.size_bytes, 4);
+    assert_eq!(name, "synthetic.JPG");
+    assert!(original_metadata_for_photo(&photo, "another-photo").is_err());
   }
 
   #[test]
