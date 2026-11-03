@@ -14,14 +14,6 @@ import {
 } from "@niho/photo-personal-cloud-contract";
 import { BrowserPhotoSourceError } from "niho-photo-editing/browser-photo-source";
 import { PHOTO_EDITING_PERSONAL_CLOUD_COPY } from "niho-photo-editing/photo-editing-copy";
-import {
-  hasDevelopGeometry,
-  readDevelopSettings,
-  supportsDevelopSettingsWrite,
-  type DevelopSettings,
-} from "niho-photo-editing/develop-engine/develop-settings";
-import { readDevelopMasks } from "niho-photo-editing/develop-engine/develop-masks";
-import { hasPhotoEditingColorGradingNativeExportUnsupportedLuminance } from "niho-photo-editing/photo-editing-color-grading";
 import type {
   PhotoLibrary,
   PhotoLibraryCapabilities,
@@ -43,6 +35,7 @@ import { contentBytes, readCheckedAsset } from "./content";
 import { PersonalPhotoCloudError, isAbortError, personalPhotoCloudErrors, publicError } from "./errors";
 import { MaterializationBudget, conservativeBytes, type MemoryLease } from "./memory";
 import { PersonalPhotoScope } from "./scope";
+import { projectRecipeSettings, rendererIntersection } from "./recipe";
 import type {
   CreatePersonalPhotoCloudLibraryOptions,
   PersonalPhotoCloudLibraryHandle,
@@ -411,7 +404,7 @@ class Adapter {
         this.requirePhoto(photoId, { signal: operation.signal }),
         this.loadLibrary(operation.signal),
       ]);
-      if (!projectSettings(photo, cloud, this.options.hostRenderer)) throw new PersonalPhotoCloudError("unsupported");
+      if (!projectRecipeSettings(photo, cloud, this.options.hostRenderer)) throw new PersonalPhotoCloudError("unsupported");
       operation.assertCurrent();
       const source = this.issueRef({
         kind: "original",
@@ -484,7 +477,7 @@ class Adapter {
         this.loadLibrary(operation.signal),
       ]);
       const renderer = rendererIntersection(cloud.capabilities.renderer, this.options.hostRenderer);
-      if (!projectSettings(photo, cloud, this.options.hostRenderer)) {
+      if (!projectRecipeSettings(photo, cloud, this.options.hostRenderer)) {
         return { kind: "incompatible", message: PHOTO_EDITING_PERSONAL_CLOUD_COPY.readOnlySettings };
       }
       const format = cloud.capabilities.formats.find((candidate) => candidate.format === photo.format);
@@ -634,7 +627,7 @@ class Adapter {
   }
 
   private toPhoto(photo: Photo, cloud: PersonalPhotoLibrary): PhotoLibraryPhoto {
-    const settings = projectSettings(photo, cloud, this.options.hostRenderer);
+    const settings = projectRecipeSettings(photo, cloud, this.options.hostRenderer);
     const derivative = currentDerivative(photo, cloud, this.options.hostRenderer);
     return {
       id: photo.id,
@@ -1153,57 +1146,13 @@ function sharedUsage(value: QuotaUsage): PhotoLibraryUsage {
   return { usedBytes: value.usedBytes + value.reservedBytes, quotaBytes: value.quotaBytes };
 }
 
-function projectSettings(
-  photo: Photo,
-  cloud: PersonalPhotoLibrary,
-  host: RenderCapability,
-): DevelopSettings | null {
-  const settings = readDevelopSettings(photo.recipe.settings);
-  if (!settings || !supportsDevelopSettingsWrite(settings)) return null;
-  const renderer = rendererIntersection(cloud.capabilities.renderer, host);
-  if (
-    !renderer ||
-    !renderer.settingsVersions.includes(settings.v) ||
-    !renderer.engines.includes(settings.engine)
-  ) {
-    return null;
-  }
-  if (hasDevelopGeometry(settings) && !renderer.features.includes("geometry")) return null;
-  if (
-    hasPhotoEditingColorGradingNativeExportUnsupportedLuminance(settings) &&
-    !renderer.features.includes("colorGradingLuminance")
-  ) {
-    return null;
-  }
-  const masks = readDevelopMasks(settings);
-  if (masks.length > 0 || photo.recipe.maskSurfaceIds.length > 0) {
-    if (!renderer.features.includes("masks")) return null;
-    if (masks.some((mask) => !renderer.maskKinds.includes(mask.kind))) return null;
-    const settingsSurfaceIds = masks.flatMap((mask) => ("surface" in mask ? [mask.surface.id] : []));
-    if (
-      new Set(settingsSurfaceIds).size !== settingsSurfaceIds.length ||
-      settingsSurfaceIds.length !== photo.recipe.maskSurfaceIds.length ||
-      settingsSurfaceIds.some((id) => !photo.recipe.maskSurfaceIds.includes(id))
-    ) {
-      return null;
-    }
-    const needsSurfaces =
-      photo.recipe.maskSurfaceIds.length > 0 ||
-      masks.some((mask) => mask.kind === "brush" || mask.kind === "subject" || mask.kind === "sky");
-    if (needsSurfaces && (!renderer.maskSurfaces || !cloud.capabilities.maskSurfaces)) return null;
-    // C03 may enable these recipes only after this adapter exposes an actual bitmap mask reader.
-    if (needsSurfaces) return null;
-  }
-  return settings;
-}
-
 function currentDerivative(
   photo: Photo,
   cloud: PersonalPhotoLibrary,
   host: RenderCapability,
 ): Extract<MediaState, { state: "ready" }> | null {
   if (
-    projectSettings(photo, cloud, host) === null ||
+    projectRecipeSettings(photo, cloud, host) === null ||
     photo.media.state !== "ready" ||
     photo.media.recipeRevision !== photo.recipe.revision ||
     photo.media.rendererManifestSha256 !== cloud.capabilities.renderer.manifestSha256 ||
@@ -1282,36 +1231,6 @@ function mediaResult(media: MediaState): PhotoLibraryWorkingCopyResult {
     return { kind: "notReady", workStatus: "rendering", workQueuedAt: null, lastErrorCode: null };
   }
   return { kind: "incompatible", message: PHOTO_EDITING_PERSONAL_CLOUD_COPY.unsupported };
-}
-
-function rendererIntersection(server: RenderCapability, host: RenderCapability): RenderCapability | null {
-  validateRenderer(server);
-  validateRenderer(host);
-  if (
-    server.sdkVersion !== host.sdkVersion ||
-    server.crateVersion !== host.crateVersion ||
-    server.manifestSha256 !== host.manifestSha256
-  ) {
-    return null;
-  }
-  const settingsVersions = intersection(server.settingsVersions, host.settingsVersions);
-  const engines = intersection(server.engines, host.engines);
-  if (settingsVersions.length === 0 || engines.length === 0) return null;
-  return {
-    sdkVersion: server.sdkVersion,
-    crateVersion: server.crateVersion,
-    manifestSha256: server.manifestSha256,
-    settingsVersions,
-    engines,
-    features: intersection(server.features, host.features),
-    maskKinds: intersection(server.maskKinds, host.maskKinds),
-    maskSurfaces: server.maskSurfaces && host.maskSurfaces,
-  };
-}
-
-function intersection<T extends string | number>(left: readonly T[], right: readonly T[]): T[] {
-  const accepted = new Set(right);
-  return left.filter((value) => accepted.has(value));
 }
 
 async function logicalKey(namespace: string, ownerId: string, libraryId: string, photoId: string, revision?: number): Promise<string> {

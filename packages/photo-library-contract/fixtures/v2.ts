@@ -210,6 +210,7 @@ export const responses = {
   "versions.get": versions,
   "versions.put": { value: { revision: 1, versions: [] }, replayed: false },
   "recipe-conflicts.list": recipeConflictPage,
+  "recipe-conflicts.get": recipeConflict,
   "recipe-conflicts.resolve": {
     value: { conflict: adoptedRecipeConflict, recipe: adoptedConflictRecipe }, replayed: false,
   },

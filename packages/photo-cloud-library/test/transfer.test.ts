@@ -1,6 +1,6 @@
 import { IDBFactory } from "fake-indexeddb";
 import "fake-indexeddb/auto";
-import { PHOTO_LIMITS, type RecipeCandidate, type StartUploadRequest, type Upload } from "@niho/photo-personal-cloud-contract";
+import { PHOTO_LIMITS, type Json, type RecipeCandidate, type StartUploadRequest, type Upload } from "@niho/photo-personal-cloud-contract";
 import { IDS, responses } from "@niho/photo-personal-cloud-contract/fixtures";
 import { describe, expect, it, vi } from "vitest";
 
@@ -68,6 +68,39 @@ function candidate(overrides: Partial<RecipeCandidate> = {}): RecipeCandidate {
 }
 
 describe("IndexedDB transfer journal", () => {
+  it("separates a near-1MiB settings leaf from its larger candidate envelope", async () => {
+    const factory = new IDBFactory();
+    const journal = new IndexedDbTransferJournal(factory, "journal-recipe-envelope");
+    const scope: JournalScope = { actorId: "a", libraryId: "l", sessionId: "s", sessionEpoch: "e" };
+    const settings = { ...responses["photos.get"].recipe.settings, retained: "" };
+    const retained = "x".repeat(PHOTO_LIMITS.maxRecipeBytes - new TextEncoder().encode(JSON.stringify(settings)).byteLength - 32);
+    const full = candidate({ settings: { ...settings, retained } });
+    expect(new TextEncoder().encode(JSON.stringify(full)).byteLength).toBeGreaterThan(PHOTO_LIMITS.maxRecipeBytes);
+    await expect(journal.add({ ...journalEntry(scope), candidate: full })).resolves.toBeUndefined();
+    await expect(journal.add({
+      ...journalEntry(scope),
+      id: makeEntryId(scope, "duplicate-mask"),
+      intentId: "duplicate-mask",
+      candidate: candidate({ maskSurfaceIds: ["d".repeat(64), "d".repeat(64)] }),
+    })).rejects.toBeTruthy();
+    journal.dispose();
+  });
+
+  it.each([31, 32, 33])("keeps depth-%i settings valid through the transfer candidate wrapper", async (depth) => {
+    const factory = new IDBFactory();
+    const journal = new IndexedDbTransferJournal(factory, `journal-depth-${depth}`);
+    const scope: JournalScope = { actorId: "a", libraryId: "l", sessionId: "s", sessionEpoch: "e" };
+    let nested: Json = null;
+    for (let index = 1; index < depth; index += 1) nested = { next: nested };
+    const entry = {
+      ...journalEntry(scope),
+      candidate: candidate({ settings: { ...responses["photos.get"].recipe.settings, future: nested } }),
+    };
+    if (depth <= 32) await expect(journal.add(entry)).resolves.toBeUndefined();
+    else await expect(journal.add(entry)).rejects.toBeTruthy();
+    journal.dispose();
+  });
+
   it("commits, CASes, reopens, and never persists secret-shaped fields", async () => {
     const factory = new IDBFactory();
     const scope: JournalScope = { actorId: "actor", libraryId: "library", sessionId: "session", sessionEpoch: "epoch" };

@@ -397,6 +397,8 @@ export interface PhotoOperationMap {
     readonly versions: readonly NamedVersion[];
   }, MutationReceipt<VersionSet>>;
   readonly "recipe-conflicts.list": Operation<Id & { readonly cursor?: string; readonly limit?: number }, RecipeConflictPage>;
+  /** Direct owner-bound lookup of both retained branches, independent of list cursor/page count. */
+  readonly "recipe-conflicts.get": Operation<Id & { readonly conflictId: RecipeConflictId }, RecipeConflict>;
   readonly "recipe-conflicts.resolve": Operation<Id & {
     readonly conflictId: RecipeConflictId;
     readonly expectedRevision: number;

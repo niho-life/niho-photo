@@ -1,0 +1,28 @@
+{
+  "name": "@niho/photo-cloud-sync",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "本人写真 recipe の durable draft・exact ACK・明示競合選択 core",
+  "exports": {
+    ".": "./src/index.ts",
+    "./browser": "./src/browser/index.ts"
+  },
+  "scripts": {
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json"
+  },
+  "dependencies": {
+    "@niho/photo-cloud-library": "*",
+    "@niho/photo-personal-cloud-contract": "*",
+    "@noble/hashes": "2.4.0",
+    "niho-photo-editing": "*"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.7"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}
