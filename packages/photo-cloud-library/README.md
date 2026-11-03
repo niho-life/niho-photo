@@ -12,7 +12,7 @@ handleの `library` は既存PhotoLibrary、`usage` は予約・削除待ちを�
 
 File/Blobを要求する共通口だけを明示的な予算内で実体化する。大きな原本のMacコピー/書出しはnative側、ブラウザの保存はhost側のstream経路へ接続する。空のBlobで保存成功を偽装しない。予算はadapterの一時的な実体化と保持資源を管理するもので、ブラウザ全体のRSSを保証する値ではない。返したFile/Blobの寿命は呼出し元が管理する。
 
-一覧の現在版の派生画像は `editedPreview` として返し、未補正の `previewUrl` と混同しない。hostは表示を終えた写真のIDを `releasePreviewResources(photoIds)` へ渡し、表示中のURLを解放しない。解放したURLを保持するquery/page cacheも無効化し、再表示時は一覧または写真を再取得する。省略時は全previewを解放する。scope離脱・purge時は即時に破棄する。保持中URLと処理中の予約が上限を占める場合、追加取得を開始する前に拒否する。実hostからの解放hookの接続と実機測定はC05/C06/C07の残作業である。
+一覧の現在版の派生画像は `editedPreview` として返し、未補正の `previewUrl` と混同しない。hostは表示を終えた写真のIDを `releasePreviewResources(photoIds)` へ渡し、表示中のURLを解放しない。解放したURLを保持するquery/page cacheも無効化し、再表示時は一覧または写真を再取得する。省略時は全previewを解放する。scope離脱・purge時は即時に破棄する。 同じ未取得previewの同時要求は1回の取得を共有し、各要求の取消しは個別に扱う。全利用者が離れた場合だけ取得を止め、未公開URLも利用中の要求が残る間は保持する。保持中URLと処理中の予約が上限を占める場合、追加取得を開始する前に拒否する。実hostからの解放hookの接続と実機測定はC05/C06/C07の残作業である。
 
 ## 実装境界
 

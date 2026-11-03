@@ -12484,8 +12484,8 @@
     },
     {
       "path": "packages/photo-cloud-library/README.md",
-      "sha256": "2d923d1d8e6a62aa017d08567d8909121a14175d31495e937e59c31686dc859f",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する"
+      "sha256": "a7f8d976d56703394f1c9543f97e0fc60130ea66bff5248fb66e6298bcccefa6",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する"
     },
     {
       "path": "packages/photo-cloud-library/eslint.config.mjs",
@@ -12499,8 +12499,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/adapter.ts",
-      "sha256": "9d6eabf8c183eb2106da7aff9321c74cdd91f9c4f80d1e1380a432f8cd0d54ae",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する"
+      "sha256": "8f9620e41f7fd7523d1091125912f16827bf420191a4ef0623c004f4e23ab290",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: C02の共有preview取得と各要求の取消し・未公開URL所有を分離する"
     },
     {
       "path": "packages/photo-cloud-library/src/content.ts",
@@ -12626,6 +12626,11 @@
       "path": "scripts/candidate/prepare-published-sdk.mjs",
       "sha256": "bfc66d61b9a6cfc2c0089594e216d551200f96f0aaf2e4138dfbb1e06d593086",
       "origin": "NIHO所有の公開済みcandidate/SDK proof用CLI。公開commit 7a98b3467e22a3e538090f36f7117d2c3ccf019f の scripts/candidate/prepare-published-sdk.mjs（SHA-256 fccbce57eb3276cde6f88e323b4161c7281d48c18ce48bf3c88828ef5836f82e）を出発点にC00 SDK profile接続を更新する。秘密・内部URL・実利用データを含まない。\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/preview-waiters.test.ts",
+      "sha256": "441fad1c2f628673c9e876f7b848213ff51498f2357569486822f219ed7695d9",
+      "origin": "NIHO所有のC02同時プレビュー取得と個別取消しの合成回帰試験。実写真・資格情報・内部URLを含まない。"
     }
   ],
   "excludedSources": [

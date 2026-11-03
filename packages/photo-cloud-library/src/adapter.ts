@@ -95,6 +95,7 @@ type UrlEntry = {
   assetKey: string;
   lease: MemoryLease;
   published: boolean;
+  claims: Set<PreviewClaim>;
 };
 
 type PhotoState = {
@@ -115,9 +116,20 @@ type PhotoOperationLifetime = {
 type PreviewProjection = {
   editedPreview: PhotoLibraryEditedPreview | null;
   leaseKey: string | null;
-  created: boolean;
+  claim: PreviewClaim | null;
 };
-type PendingPreview = { photoId: string; controller: AbortController; promise: Promise<UrlEntry> };
+type PreviewClaim = {
+  key: string;
+  pending: PendingPreview | null;
+  entry: UrlEntry | null;
+  released: boolean;
+};
+type PendingPreview = {
+  photoId: string;
+  controller: AbortController;
+  promise: Promise<UrlEntry>;
+  claims: Set<PreviewClaim>;
+};
 
 export function createPersonalPhotoCloudLibrary(
   options: CreatePersonalPhotoCloudLibraryOptions,
@@ -221,8 +233,7 @@ class Adapter {
     );
     this.scope.assertCurrent(options?.signal);
     this.assertLifecycleVersion(lifecycleVersion);
-    const createdLeaseKeys = new Set<string>();
-    const usedLeaseKeys = new Set<string>();
+    const previewClaims: PreviewClaim[] = [];
     const operations: PhotoOperationLifetime[] = [];
     try {
       const items: (PhotoLibraryItem & { contentSha256: string })[] = [];
@@ -232,21 +243,17 @@ class Adapter {
         operations.push(operation);
         this.observePhoto(photo, operation.fence);
         const item = await this.toItem(photo, cloud, operation.fence, operation.signal);
+        if (item.claim) previewClaims.push(item.claim);
         operation.assertCurrent();
-        if (item.leaseKey) usedLeaseKeys.add(item.leaseKey);
-        if (item.createdLease && item.leaseKey) createdLeaseKeys.add(item.leaseKey);
         items.push(item.item);
       }
       this.scope.assertCurrent(options?.signal);
       this.assertLifecycleVersion(lifecycleVersion);
       for (const operation of operations) operation.assertCurrent();
-      for (const key of usedLeaseKeys) {
-        const entry = this.urlCache.get(key);
-        if (entry) entry.published = true;
-      }
+      this.publishPreviewClaims(previewClaims);
       return { items, next: page.nextCursor, usage: sharedUsage(page.usage), counts: null };
     } catch (error) {
-      this.releaseUnpublished(createdLeaseKeys);
+      for (const claim of previewClaims) this.releasePreviewClaim(claim);
       throw error;
     } finally {
       for (const operation of operations) operation.release();
@@ -255,6 +262,7 @@ class Adapter {
 
   private async get(photoId: string, options?: PhotoLibraryRequestOptions): Promise<(PhotoLibraryItem & { contentSha256: string }) | null> {
     const operation = this.beginPhotoOperation(photoId, options?.signal);
+    let previewClaim: PreviewClaim | null = null;
     try {
       const [photo, cloud] = await Promise.all([
         this.rawPhoto(photoId, { signal: operation.signal }),
@@ -265,16 +273,15 @@ class Adapter {
         return null;
       }
       const projected = await this.toItem(photo, cloud, operation.fence, operation.signal);
+      previewClaim = projected.claim;
       operation.assertCurrent();
-      if (projected.leaseKey) {
-        const entry = this.urlCache.get(projected.leaseKey);
-        if (entry) entry.published = true;
-      }
+      this.publishPreviewClaims(previewClaim ? [previewClaim] : []);
       return projected.item;
     } catch (error) {
       if (error instanceof PersonalPhotoCloudError && error.code === "not_found") return null;
       throw error;
     } finally {
+      if (previewClaim) this.releasePreviewClaim(previewClaim);
       operation.release();
     }
   }
@@ -605,7 +612,7 @@ class Adapter {
   ): Promise<{
     item: PhotoLibraryItem & { contentSha256: string };
     leaseKey: string | null;
-    createdLease: boolean;
+    claim: PreviewClaim | null;
   }> {
     const projection = await this.previewProjection(photo, cloud, fence, signal);
     try {
@@ -618,10 +625,10 @@ class Adapter {
           editedPreview: projection.editedPreview,
         },
         leaseKey: projection.leaseKey,
-        createdLease: projection.created,
+        claim: projection.claim,
       };
     } catch (error) {
-      if (projection.created && projection.leaseKey) this.releaseUnpublished(new Set([projection.leaseKey]));
+      if (projection.claim) this.releasePreviewClaim(projection.claim);
       throw error;
     }
   }
@@ -672,11 +679,11 @@ class Adapter {
     signal?: AbortSignal,
   ): Promise<PreviewProjection> {
     const derivative = currentDerivative(photo, cloud, this.options.hostRenderer);
-    if (!derivative) return { editedPreview: null, leaseKey: null, created: false };
+    if (!derivative) return { editedPreview: null, leaseKey: null, claim: null };
     const asset = derivative.thumbnail;
     const key = previewKey(photo.id, asset);
     const cached = this.urlCache.get(key);
-    if (cached) {
+    if (cached?.published) {
       this.assertPhotoFence(fence);
       return {
         editedPreview: {
@@ -687,13 +694,12 @@ class Adapter {
           thumbUrl: cached.url,
         },
         leaseKey: key,
-        created: false,
+        claim: null,
       };
     }
-    const pending = this.pendingPreviews.get(key);
-    const created = pending === undefined;
+    const claim = cached ? this.claimPreviewEntry(key, cached) : this.claimPendingPreview(photo.id, asset, key, fence);
     try {
-      const entry = await (pending?.promise ?? this.createPreviewEntry(photo.id, asset, key, fence, signal).promise);
+      const entry = claim.entry ?? (await this.waitForPendingPreview(claim.pending!, signal));
       this.scope.assertCurrent(signal);
       this.assertPhotoFence(fence);
       return {
@@ -705,12 +711,30 @@ class Adapter {
           thumbUrl: entry.url,
         },
         leaseKey: key,
-        created,
+        claim,
       };
     } catch (error) {
-      if (created) this.releaseUnpublished(new Set([key]));
+      this.releasePreviewClaim(claim);
       throw error;
     }
+  }
+
+  private claimPreviewEntry(key: string, entry: UrlEntry): PreviewClaim {
+    const claim: PreviewClaim = { key, pending: null, entry, released: false };
+    entry.claims.add(claim);
+    return claim;
+  }
+
+  private claimPendingPreview(photoId: string, asset: PhotoAsset, key: string, fence: PhotoFence): PreviewClaim {
+    let pending = this.pendingPreviews.get(key);
+    if (pending?.controller.signal.aborted) {
+      if (this.pendingPreviews.get(key) === pending) this.pendingPreviews.delete(key);
+      pending = undefined;
+    }
+    pending ??= this.createPreviewEntry(photoId, asset, key, fence);
+    const claim: PreviewClaim = { key, pending, entry: null, released: false };
+    pending.claims.add(claim);
+    return claim;
   }
 
   private createPreviewEntry(
@@ -718,25 +742,32 @@ class Adapter {
     asset: PhotoAsset,
     key: string,
     fence: PhotoFence,
-    externalSignal?: AbortSignal,
   ): PendingPreview {
     if (this.urlCache.size + this.pendingPreviews.size >= MAX_URL_ENTRIES) {
       throw new PersonalPhotoCloudError("too_large");
     }
     const lease = this.previewMemory.reserve(conservativeBytes(asset.sizeBytes, 3));
     const controller = new AbortController();
-    const abortFromExternal = (): void => controller.abort(externalSignal?.reason);
-    if (externalSignal?.aborted) abortFromExternal();
-    else externalSignal?.addEventListener("abort", abortFromExternal, { once: true });
-    const promise = (async (): Promise<UrlEntry> => {
+    const claims = new Set<PreviewClaim>();
+    let pending: PendingPreview;
+    const promise = Promise.resolve().then(async (): Promise<UrlEntry> => {
       let url: string | null = null;
       try {
         const content = await this.readAsset(photoId, asset, undefined, { signal: controller.signal });
         const bytes = await contentBytes(content);
+        this.scope.assertCurrent(controller.signal);
         this.assertPhotoFence(fence);
         url = this.urls.createObjectURL(new Blob([bytes], { type: asset.contentType }));
+        this.scope.assertCurrent(controller.signal);
+        this.assertPhotoFence(fence);
         lease.resize(asset.sizeBytes);
-        const entry: UrlEntry = { url, photoId, assetKey: key, lease, published: false };
+        const entry: UrlEntry = { url, photoId, assetKey: key, lease, published: false, claims: new Set() };
+        for (const claim of pending.claims) {
+          claim.pending = null;
+          claim.entry = entry;
+          entry.claims.add(claim);
+        }
+        pending.claims.clear();
         this.urlCache.set(key, entry);
         return entry;
       } catch (error) {
@@ -744,13 +775,66 @@ class Adapter {
         lease.release();
         throw error;
       } finally {
-        externalSignal?.removeEventListener("abort", abortFromExternal);
-        this.pendingPreviews.delete(key);
+        if (this.pendingPreviews.get(key) === pending) this.pendingPreviews.delete(key);
       }
-    })();
-    const pending = { photoId, controller, promise };
+    });
+    pending = { photoId, controller, promise, claims };
     this.pendingPreviews.set(key, pending);
+    void pending.promise.catch(() => undefined);
     return pending;
+  }
+
+  private async waitForPendingPreview(pending: PendingPreview, signal?: AbortSignal): Promise<UrlEntry> {
+    if (!signal) return await pending.promise;
+    if (signal.aborted) throw abortReason(signal);
+    return await new Promise<UrlEntry>((resolve, reject) => {
+      let settled = false;
+      const finish = (callback: () => void): void => {
+        if (settled) return;
+        settled = true;
+        signal.removeEventListener("abort", abort);
+        callback();
+      };
+      const abort = (): void => finish(() => reject(abortReason(signal)));
+      signal.addEventListener("abort", abort, { once: true });
+      void pending.promise.then(
+        (entry) => finish(() => resolve(entry)),
+        (error: unknown) => finish(() => reject(error)),
+      );
+    });
+  }
+
+  private publishPreviewClaims(claims: readonly PreviewClaim[]): void {
+    for (const claim of claims) {
+      const entry = claim.entry;
+      if (claim.released || !entry || this.urlCache.get(claim.key) !== entry) {
+        throw new PersonalPhotoCloudError("unavailable");
+      }
+    }
+    for (const claim of claims) claim.entry!.published = true;
+    for (const claim of claims) this.releasePreviewClaim(claim);
+  }
+
+  private releasePreviewClaim(claim: PreviewClaim): void {
+    if (claim.released) return;
+    claim.released = true;
+    const pending = claim.pending;
+    claim.pending = null;
+    if (pending) {
+      pending.claims.delete(claim);
+      if (pending.claims.size === 0) {
+        if (this.pendingPreviews.get(claim.key) === pending) this.pendingPreviews.delete(claim.key);
+        pending.controller.abort(new DOMException("Aborted", "AbortError"));
+      }
+    }
+    const entry = claim.entry;
+    claim.entry = null;
+    if (!entry) return;
+    entry.claims.delete(claim);
+    if (entry.published || entry.claims.size > 0 || this.urlCache.get(claim.key) !== entry) return;
+    this.urls.revokeObjectURL(entry.url);
+    entry.lease.release();
+    this.urlCache.delete(claim.key);
   }
 
   private readyWorkingCopy(
@@ -1011,22 +1095,13 @@ class Adapter {
 
   private releasePreviewResources(photoIds?: readonly string[]): void {
     const selected = photoIds === undefined ? null : new Set(photoIds);
-    for (const pending of this.pendingPreviews.values()) {
+    for (const [key, pending] of this.pendingPreviews) {
       if (selected && !selected.has(pending.photoId)) continue;
+      if (this.pendingPreviews.get(key) === pending) this.pendingPreviews.delete(key);
       pending.controller.abort(new DOMException("Aborted", "AbortError"));
     }
     for (const [key, entry] of this.urlCache) {
       if (selected && !selected.has(entry.photoId)) continue;
-      this.urls.revokeObjectURL(entry.url);
-      entry.lease.release();
-      this.urlCache.delete(key);
-    }
-  }
-
-  private releaseUnpublished(keys: ReadonlySet<string>): void {
-    for (const key of keys) {
-      const entry = this.urlCache.get(key);
-      if (!entry || entry.published) continue;
       this.urls.revokeObjectURL(entry.url);
       entry.lease.release();
       this.urlCache.delete(key);
