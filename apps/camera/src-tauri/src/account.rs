@@ -16,7 +16,7 @@ struct PhotoIdentityInvalidated {
 }
 
 pub(crate) struct SharedAccount {
-  account: Account,
+  pub(crate) account: Account,
   photo_identity: PhotoIdentityFence,
 }
 
@@ -164,13 +164,44 @@ impl SharedAccount {
   }
 
   fn emit_invalidated(&self, app: &AppHandle) {
+    if let Some(cache) = app.try_state::<Arc<crate::photo_cloud::PhotoCloudState>>() {
+      cache.abort_all();
+    }
     let _ = app.emit(
       PHOTO_IDENTITY_INVALIDATED_EVENT,
       PhotoIdentityInvalidated { invalidated: true },
     );
   }
 
-  fn observe(&self, app: &AppHandle) -> AccountSnapshot {
+  pub(crate) fn begin_photo_operation(&self) -> Result<u64, niho_desktop_account::AccountError> {
+    self.photo_identity.begin_read()
+  }
+
+  pub(crate) fn ensure_photo_operation_current(
+    &self,
+    generation: u64,
+  ) -> Result<(), niho_desktop_account::AccountError> {
+    if self.photo_identity.read_is_current(generation) {
+      Ok(())
+    } else {
+      Err(niho_desktop_account::AccountError::Cancelled)
+    }
+  }
+
+  pub(crate) fn read_photo_chunk_guarded(
+    &self,
+    read: impl FnOnce() -> Result<Vec<u8>, niho_desktop_account::AccountError>,
+  ) -> Result<Vec<u8>, niho_desktop_account::AccountError> {
+    let generation = self.begin_photo_operation()?;
+    let bytes = read()?;
+    self.ensure_photo_operation_current(generation)?;
+    Ok(bytes)
+  }
+
+  pub(crate) fn observe(&self, app: &AppHandle) -> AccountSnapshot {
+    if let Some(cache) = app.try_state::<Arc<crate::photo_cloud::PhotoCloudState>>() {
+      cache.purge_expired();
+    }
     let generation = self.photo_identity.generation().ok();
     let snapshot = self.account.snapshot();
     if (snapshot.phase == AccountPhase::Failed
@@ -419,5 +450,37 @@ pub async fn camera_photo_identity(
     Ok(identity) if account.photo_identity.read_is_current(read_generation) => Ok(identity),
     Ok(_) => Err(niho_desktop_account::AccountError::Cancelled),
     Err(error) => Err(error),
+  }
+}
+
+#[cfg(test)]
+mod photo_operation_integration_tests {
+  use super::SharedAccount;
+  use niho_desktop_account::{Account, AccountError};
+  use std::cell::Cell;
+
+  #[test]
+  fn a_terminal_photo_fence_blocks_chunks_before_native_logout_cleanup() {
+    let shared = SharedAccount::new(Account::disabled());
+    let called = Cell::new(false);
+    shared.photo_identity.invalidate_terminal();
+    assert_eq!(
+      shared.read_photo_chunk_guarded(|| {
+        called.set(true);
+        Ok(vec![1])
+      }),
+      Err(AccountError::Expired)
+    );
+    assert!(!called.get());
+  }
+
+  #[test]
+  fn bytes_read_during_logout_are_withheld_before_ipc_publication() {
+    let shared = SharedAccount::new(Account::disabled());
+    let result = shared.read_photo_chunk_guarded(|| {
+      shared.photo_identity.invalidate_terminal();
+      Ok(vec![1, 2, 3])
+    });
+    assert_eq!(result, Err(AccountError::Cancelled));
   }
 }

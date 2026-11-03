@@ -76,6 +76,8 @@ export interface CreatePhotoWebRuntimeOptions {
     readonly signal: AbortSignal;
     readonly host: ScopedPhotoWebEditingHost;
     readonly session: PhotoSessionController;
+    /** Notify only a known authentication rejection from the fixed Photo BFF. */
+    readonly onAuthenticationRejected: () => void;
   }) => Promise<PhotoWebConnection>;
   readonly guards: PhotoWebRuntimeGuards;
   readonly cancelDialogs: () => void;

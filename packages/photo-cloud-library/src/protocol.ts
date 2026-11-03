@@ -20,3 +20,12 @@ export {
   validateRecipeConflictResolution,
   validateRenderer,
 } from "./validation";
+export {
+  encodeOperation,
+  validateOperationResponse,
+  parsePhotoError,
+  responseJsonLimit,
+  JSON_LIMITS,
+  TRANSPORT_TIMEOUT_MS,
+  type WireOperation,
+} from "./wire";

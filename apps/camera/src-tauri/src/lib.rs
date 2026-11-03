@@ -34,6 +34,7 @@ mod library;
 mod mask_detection;
 mod mask_surfaces;
 mod photo_bench;
+mod photo_cloud;
 mod photos;
 mod presets;
 #[cfg(any(feature = "official-updates", test))]
@@ -103,6 +104,7 @@ pub fn run() {
     .setup(move |app| {
       // フォルダは最初の「フォルダを追加」か覚えたフォルダの一覧まで読まない。現像の sidecar は裏で 1 回だけ確かめる
       account::install(app.handle());
+      photo_cloud::install(app.handle());
       library::install(app.handle());
       photos::install(app.handle());
       flags::install(app.handle());
@@ -127,6 +129,11 @@ pub fn run() {
       account::camera_account_logout,
       account::camera_account_refresh,
       account::camera_photo_identity,
+      photo_cloud::camera_photo_request,
+      photo_cloud::camera_photo_content_open,
+      photo_cloud::camera_photo_content_read,
+      photo_cloud::camera_photo_content_close,
+      photo_cloud::camera_photo_content_cancel,
       library::camera_library_add_folder,
       library::camera_library_add_photos,
       library::camera_library_remembered,
