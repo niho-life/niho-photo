@@ -230,18 +230,34 @@ describe("durable recipe sync", () => {
   });
 
   it("persists a terminal fence when the fresh Photo for a server-only conflict is gone", async () => {
-    const setup = harness({ handler: async (operation) => {
+    const databaseName = `terminal-conflict-${crypto.randomUUID()}`;
+    const handler: Handler = async (operation) => {
       if (operation === "photos.get") throw { error: { code: "not_found", requestId: "synthetic", retryable: false } };
       return defaultResponse(operation);
-    } });
+    };
+    const setup = harness({ databaseName, handler });
     const writer = begin(setup);
     try {
       await expect(writer.resolveConflict({ intentId: "remote-photo-gone", conflictId: IDS.recipeConflict,
         decision: "adopt", expectedRevision: 1 })).resolves.toEqual({ status: "terminal", reason: "not-found" });
-      const reopened = await setup.sync.reopen(writer.token);
-      await expect(reopened.writer.retryResolution()).resolves.toEqual({ status: "terminal", reason: "not-found" });
       expect(setup.calls.filter((call) => call.operation === "recipe-conflicts.resolve")).toHaveLength(0);
     } finally { setup.sync.dispose(); }
+
+    const reopenedSync = harness({ databaseName, handler });
+    try {
+      const page = await reopenedSync.sync.listPending();
+      expect(page.writers).toContainEqual(expect.objectContaining({
+        token: writer.token,
+        hasLatest: false,
+        hasUnknownAttempt: false,
+        conflictIds: [],
+        terminalReason: "not-found",
+      }));
+      const reopened = await reopenedSync.sync.reopen(writer.token);
+      await expect(reopened.writer.retryResolution()).resolves.toEqual({ status: "terminal", reason: "not-found" });
+      await reopened.writer.discard();
+      await expect(reopenedSync.sync.listPending()).resolves.toEqual({ writers: [], nextCursor: null });
+    } finally { reopenedSync.sync.dispose(); }
   });
 
   it.each([false, true])("distinguishes a missing server-only conflict from parent Photo purge (purged=%s)", async (purged) => {
@@ -497,6 +513,43 @@ describe("durable recipe sync", () => {
     expect(setup.calls.filter((call) => call.operation === "recipe-conflicts.get")).toHaveLength(1);
     expect(setup.calls.filter((call) => call.operation === "recipe-conflicts.list")).toHaveLength(0);
     setup.sync.dispose();
+  });
+
+  it("reopens a finalized conflict by its retained ID without creating another PUT", async () => {
+    const conflict = responses["recipe-conflicts.get"];
+    const databaseName = `conflict-reopen-${crypto.randomUUID()}`;
+    let puts = 0;
+    let conflictReads = 0;
+    const handler: Handler = async (operation) => {
+      if (operation === "recipes.put") {
+        puts += 1;
+        throw { error: { code: "revision_conflict", requestId: "synthetic", retryable: false,
+          currentRevision: conflict.currentRevision, conflictId: conflict.id } };
+      }
+      if (operation === "recipe-conflicts.get") {
+        conflictReads += 1;
+        return conflict;
+      }
+      return defaultResponse(operation);
+    };
+    const first = harness({ databaseName, handler });
+    const writer = begin(first);
+    const ref = writer.stage(localCandidate(conflict.conflictingRecipe));
+    await expect(writer.save(ref)).resolves.toMatchObject({ status: "conflict", conflict: { id: conflict.id } });
+    await expect(writer.retry()).resolves.toMatchObject({ status: "conflict", conflict: { id: conflict.id } });
+    expect(puts).toBe(1);
+    writer.dispose();
+    first.sync.dispose();
+
+    const second = harness({ databaseName, handler });
+    try {
+      const page = await second.sync.listPending();
+      expect(page.writers).toContainEqual(expect.objectContaining({ token: writer.token, conflictIds: [conflict.id] }));
+      const reopened = await second.sync.reopen(writer.token);
+      await expect(reopened.writer.retry()).resolves.toMatchObject({ status: "conflict", conflict: { id: conflict.id } });
+      expect(puts).toBe(1);
+      expect(conflictReads).toBe(3);
+    } finally { second.sync.dispose(); }
   });
 
   it("keeps an unknown resolve on one intent/key and permits a new key only after known stale", async () => {

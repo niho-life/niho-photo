@@ -13001,8 +13001,8 @@
     },
     {
       "path": "packages/photo-cloud-sync/README.md",
-      "sha256": "b6c29b15dd2942d7cfca02bb42244f8ab83215706536e0ce78a828e9b06da798",
-      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。"
+      "sha256": "b47e033fe60fb4f73c0780f529d8b10412ab5fea4c9a4708eab69b6b1892054c",
+      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: Restore retained conflicts and discover terminal draft fences"
     },
     {
       "path": "packages/photo-cloud-sync/eslint.config.mjs",
@@ -13021,8 +13021,8 @@
     },
     {
       "path": "packages/photo-cloud-sync/src/browser/journal.ts",
-      "sha256": "cdb2175e059524d851f62fffcd016975997c7aae64df3fa329c863528e88e42d",
-      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。"
+      "sha256": "b6f29684e23f8e5c594a51a61055441a29f80bd8e992fe9de40e4794376adf6d",
+      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: Restore retained conflicts and discover terminal draft fences"
     },
     {
       "path": "packages/photo-cloud-sync/src/index.ts",
@@ -13031,18 +13031,18 @@
     },
     {
       "path": "packages/photo-cloud-sync/src/sync.ts",
-      "sha256": "df91c329522fe35db9820688e878a06359852222c41bd740e85d5248a16430be",
-      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: 非同期journal callbackで競合IDの検証済み非null snapshotを使い厳格型を保持\n変更理由: 本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する"
+      "sha256": "26f71956dfd9ef2c4c4aac3a3ad948a6415f6dc699f35bef0386f0d6e08397b3",
+      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: 非同期journal callbackで競合IDの検証済み非null snapshotを使い厳格型を保持\n変更理由: 本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する\n変更理由: Restore retained conflicts and discover terminal draft fences"
     },
     {
       "path": "packages/photo-cloud-sync/src/types.ts",
-      "sha256": "7a16bf14d5b9f13cf143b72fdbae211a23b1f6a8d6ab3e450930f02f8fb93730",
-      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: 本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する"
+      "sha256": "4448270465bdcdb85f0089e101317cb61112d295aeeb575251c1e04e37d31f53",
+      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: 本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する\n変更理由: Restore retained conflicts and discover terminal draft fences"
     },
     {
       "path": "packages/photo-cloud-sync/test/sync.test.ts",
-      "sha256": "20046fb90d0c322f1ce7e89d3ce4902d1daadca302b16c2328742e88ed3ba7f5",
-      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: 遅延保存応答の合成Promiseを実receipt型で宣言し厳格型へ整合"
+      "sha256": "3fc161eadc7c6e748778363b216d7e0a7a04cec552353518d633d3846a9056d8",
+      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: 遅延保存応答の合成Promiseを実receipt型で宣言し厳格型へ整合\n変更理由: Restore retained conflicts and discover terminal draft fences"
     },
     {
       "path": "packages/photo-cloud-sync/tsconfig.json",
