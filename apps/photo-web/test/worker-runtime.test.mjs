@@ -295,12 +295,23 @@ describe("installPhotoStaticWorker static boundary", () => {
     await assert.rejects(hostile.fire("fetch", { request: staticRequest("/assets/app.js") }), /timed out/);
     assert.equal(cancelled, true);
 
+    const cacheOnlyDeadlineTimer = {
+      setTimeout(callback, milliseconds) {
+        return setTimeout(callback, milliseconds === 1_000 ? 0 : milliseconds);
+      },
+      clearTimeout,
+    };
     const hangingCache = fakeScope(
       async () => basic(bodies["/assets/app.js"], { headers: safeHeaders("application/javascript") }),
       new Map(),
-      fastDeadlineTimer,
+      cacheOnlyDeadlineTimer,
     );
     hangingCache.scope.caches.open = async () => new Promise(() => undefined);
+    // A healthy native digest may outlive the accelerated cache deadline.
+    hangingCache.scope.crypto = { subtle: { async digest(...args) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return await crypto.subtle.digest(...args);
+    } } };
     installPhotoStaticWorker(hangingCache.scope, manifest);
     const response = await hangingCache.fire("fetch", { request: staticRequest("/assets/app.js") });
     assert.equal(await response.text(), bodies["/assets/app.js"]);
@@ -353,8 +364,10 @@ describe("installPhotoStaticWorker static boundary", () => {
     const bytes = new TextEncoder().encode(bodies["/assets/app.js"]);
     const releases = [];
     let fetches = 0;
+    let notifyThirdRead;
+    const thirdReadStarted = new Promise((resolve) => { notifyThirdRead = resolve; });
     const worker = fakeScope(async () => {
-      fetches += 1;
+      const fetchIndex = ++fetches;
       let delivered = false;
       return {
         status: 200,
@@ -367,10 +380,13 @@ describe("installPhotoStaticWorker static boundary", () => {
             return {
               read() {
                 if (delivered) return Promise.resolve({ done: true });
-                return new Promise((resolve) => releases.push(() => {
-                  delivered = true;
-                  resolve({ done: false, value: bytes });
-                }));
+                return new Promise((resolve) => {
+                  releases.push(() => {
+                    delivered = true;
+                    resolve({ done: false, value: bytes });
+                  });
+                  if (fetchIndex === 3) notifyThirdRead();
+                });
               },
               cancel() { return Promise.resolve(); },
               releaseLock() {},
@@ -380,6 +396,11 @@ describe("installPhotoStaticWorker static boundary", () => {
       };
     });
     worker.scope.caches.open = async () => { throw new Error("disabled for admission test"); };
+    // Keep real digest work asynchronous beyond the old fixed ten-turn wait.
+    worker.scope.crypto = { subtle: { async digest(...args) {
+      for (let turn = 0; turn < 25; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+      return await crypto.subtle.digest(...args);
+    } } };
     installPhotoStaticWorker(worker.scope, manifest);
     const pending = [1, 2].map(() => worker.fire("fetch", { request: staticRequest("/assets/app.js") }));
     await new Promise((resolve) => setImmediate(resolve));
@@ -389,15 +410,21 @@ describe("installPhotoStaticWorker static boundary", () => {
     const third = worker.fire("fetch", { request: staticRequest("/assets/app.js") });
     void third.then(() => { thirdSettled = true; }, () => { thirdSettled = true; });
     pending.push(third);
+    const outcomesPromise = Promise.allSettled(pending);
     await new Promise((resolve) => setImmediate(resolve));
     const thirdQueued = !thirdSettled && fetches === 2;
 
-    releases.shift()();
-    for (let turn = 0; turn < 10 && (fetches < 3 || releases.length < 2); turn += 1) {
-      await new Promise((resolve) => setImmediate(resolve));
+    let outcomes;
+    try {
+      releases.shift()();
+      await Promise.race([
+        thirdReadStarted,
+        third.then(() => { throw new Error("Third response settled before its body was read"); }),
+      ]);
+    } finally {
+      while (releases.length) releases.shift()();
+      outcomes = await outcomesPromise;
     }
-    while (releases.length) releases.shift()();
-    const outcomes = await Promise.allSettled(pending);
     assert.equal(thirdQueued, true, "a later request must wait for ordinary body verification");
     assert.equal(fetches, 3);
     assert.ok(outcomes.every((outcome) => outcome.status === "fulfilled"));
