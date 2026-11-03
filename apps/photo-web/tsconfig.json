@@ -7,15 +7,14 @@
       "DOM.Iterable"
     ],
     "types": [
-      "node"
+      "node",
+      "react/experimental"
     ],
     "module": "ESNext",
     "moduleResolution": "Bundler",
     "allowImportingTsExtensions": true,
     "strict": true,
     "verbatimModuleSyntax": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
     "noEmit": true,
     "jsx": "react-jsx",
     "resolveJsonModule": true
