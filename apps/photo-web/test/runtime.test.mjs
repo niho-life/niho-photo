@@ -888,3 +888,32 @@ it("fences host authority before invoking synchronous dialog cancellation on log
   assert.deepEqual(observed[0], [false, true]);
   test.runtime.dispose();
 });
+
+it("keeps an open accepted scope editable offline and reverifies before online recovery", async () => {
+  const test = harness();
+  await test.runtime.start();
+  await eventually(() => assert.ok(test.runtime.getSnapshot().binding));
+  const original = test.runtime.getSnapshot().binding;
+  const host = test.hosts[0];
+  test.window.navigator.onLine = false;
+  test.window.dispatchEvent(new Event("offline"));
+  test.window.dispatchEvent(new Event("focus"));
+  test.document.dispatchEvent(new Event("visibilitychange"));
+  test.clock.tick(60_001);
+  await Promise.resolve();
+  assert.equal(test.bridge.refreshes, 0);
+  assert.equal(test.runtime.getSnapshot().binding, original);
+  assert.equal(host.scopeSignal.aborted, false);
+  assert.equal(host.isScopeCurrent(), true);
+  const recovered = deferred();
+  test.bridge.refreshQueue.push(recovered.promise);
+  test.window.navigator.onLine = true;
+  test.window.dispatchEvent(new Event("online"));
+  assert.equal(test.runtime.getSnapshot().session.phase, "verifying");
+  assert.equal(test.runtime.getSnapshot().binding, original);
+  recovered.resolve(identity("owner-a", { expiresAt: new Date(BASE_TIME + 240_000).toISOString() }));
+  await eventually(() => assert.equal(test.runtime.getSnapshot().session.phase, "ready"));
+  assert.equal(test.bridge.refreshes, 1);
+  assert.equal(test.runtime.getSnapshot().binding, original);
+  test.runtime.dispose();
+});

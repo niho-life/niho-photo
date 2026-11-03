@@ -544,6 +544,9 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
 
   const requestVerification = (fence: boolean, initial = false): Promise<void> => {
     if (!cloudEnabled || disposed) return Promise.resolve();
+    const accepted = session.getSnapshot();
+    if (!fence && !initial && !online() && accepted.phase === "ready" && accepted.identity !== null
+      && !isPhotoIdentityExpired(accepted.identity, now())) return Promise.resolve();
     if (fence) {
       fenceGeneration += 1;
       suppressConnection = true;
@@ -592,7 +595,7 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
     proactiveTimer = setTimer(() => {
       proactiveTimer = null;
       const latest = session.getSnapshot();
-      if (disposed || documentTarget.visibilityState !== "visible" || latest.phase !== "ready"
+      if (disposed || !online() || documentTarget.visibilityState !== "visible" || latest.phase !== "ready"
         || latest.identity?.expiresAt !== expiresAt || proactiveAttemptedExpiresAt === expiresAt) return;
       proactiveAttemptedExpiresAt = expiresAt;
       void requestVerification(false);
@@ -641,9 +644,12 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
     addDocumentEventListener(type, listener);
     removers.push(() => removeDocumentEventListener(type, listener));
   };
-  const onOnlineState = () => publish();
+  const onOnlineState = () => {
+    if (online()) void requestVerification(false);
+    publish();
+  };
   const onNormalReverify = () => {
-    if (documentTarget.visibilityState === "visible") void requestVerification(false);
+    if (online() && documentTarget.visibilityState === "visible") void requestVerification(false);
   };
   const onBeforeUnload = (event: Event) => {
     if (!cloudEnabled) return;

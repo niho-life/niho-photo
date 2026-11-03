@@ -381,19 +381,93 @@ describe("installPhotoStaticWorker static boundary", () => {
     });
     worker.scope.caches.open = async () => { throw new Error("disabled for admission test"); };
     installPhotoStaticWorker(worker.scope, manifest);
-    const pending = [1, 2, 3].map(() => worker.fire("fetch", { request: staticRequest("/assets/app.js") }));
+    const pending = [1, 2].map(() => worker.fire("fetch", { request: staticRequest("/assets/app.js") }));
     await new Promise((resolve) => setImmediate(resolve));
     assert.equal(fetches, 2);
     assert.equal(releases.length, 2);
+    let thirdSettled = false;
+    const third = worker.fire("fetch", { request: staticRequest("/assets/app.js") });
+    void third.then(() => { thirdSettled = true; }, () => { thirdSettled = true; });
+    pending.push(third);
+    await new Promise((resolve) => setImmediate(resolve));
+    const thirdQueued = !thirdSettled && fetches === 2;
 
     releases.shift()();
-    for (let turn = 0; turn < 10 && fetches < 3; turn += 1) {
+    for (let turn = 0; turn < 10 && (fetches < 3 || releases.length < 2); turn += 1) {
       await new Promise((resolve) => setImmediate(resolve));
     }
-    assert.equal(fetches, 3);
     while (releases.length) releases.shift()();
-    const responses = await Promise.all(pending);
+    const outcomes = await Promise.allSettled(pending);
+    assert.equal(thirdQueued, true, "a later request must wait for ordinary body verification");
+    assert.equal(fetches, 3);
+    assert.ok(outcomes.every((outcome) => outcome.status === "fulfilled"));
+    const responses = outcomes.map((outcome) => outcome.value);
     assert.deepEqual(await Promise.all(responses.map((response) => response.text())), [bodies["/assets/app.js"], bodies["/assets/app.js"], bodies["/assets/app.js"]]);
+  });
+
+  it("queues a later static fetch after two ordinary network requests are already pending", async () => {
+    const { manifest, bodies } = await fixture();
+    const releases = [];
+    let fetches = 0;
+    const worker = fakeScope(() => {
+      fetches += 1;
+      return new Promise((resolve) => releases.push(() => resolve(basic(bodies["/assets/app.js"], {
+        headers: safeHeaders("application/javascript"),
+      }))));
+    });
+    worker.scope.caches.open = async () => { throw new Error("disabled for fetch admission test"); };
+    installPhotoStaticWorker(worker.scope, manifest);
+    const first = worker.fire("fetch", { request: staticRequest("/assets/app.js") });
+    const second = worker.fire("fetch", { request: staticRequest("/assets/app.js") });
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(fetches, 2);
+    let thirdSettled = false;
+    const third = worker.fire("fetch", { request: staticRequest("/assets/app.js") });
+    void third.then(() => { thirdSettled = true; }, () => { thirdSettled = true; });
+    await new Promise((resolve) => setImmediate(resolve));
+    const thirdQueued = !thirdSettled && fetches === 2;
+    releases.shift()();
+    await first;
+    for (let turn = 0; turn < 20 && fetches < 3; turn += 1) await new Promise((resolve) => setImmediate(resolve));
+    while (releases.length) releases.shift()();
+    const outcomes = await Promise.allSettled([first, second, third]);
+    assert.equal(thirdQueued, true, "a later request must wait for ordinary fetches");
+    assert.equal(fetches, 3);
+    assert.ok(outcomes.every((outcome) => outcome.status === "fulfilled"));
+  });
+
+  it("queues healthy work in the remaining slot after one timed-out fetch is retained", async () => {
+    const { manifest, bodies } = await fixture();
+    let firstDeadline = true;
+    const timer = {
+      setTimeout(callback, milliseconds) { return setTimeout(callback, firstDeadline ? 0 : milliseconds); },
+      clearTimeout,
+    };
+    let fetches = 0;
+    let releaseSecond;
+    const response = () => basic(bodies["/assets/app.js"], { headers: safeHeaders("application/javascript") });
+    const worker = fakeScope(() => {
+      fetches += 1;
+      if (fetches === 1) return new Promise(() => {});
+      if (fetches === 2) return new Promise((resolve) => { releaseSecond = () => resolve(response()); });
+      return Promise.resolve(response());
+    }, new Map(), timer);
+    worker.scope.caches.open = async () => { throw new Error("no cache"); };
+    installPhotoStaticWorker(worker.scope, manifest);
+    await assert.rejects(worker.fire("fetch", { request: staticRequest("/assets/app.js") }));
+    firstDeadline = false;
+    const second = worker.fire("fetch", { request: staticRequest("/assets/app.js") });
+    await new Promise((resolve) => setImmediate(resolve));
+    let thirdSettled = false;
+    const third = worker.fire("fetch", { request: staticRequest("/assets/app.js") });
+    void third.then(() => { thirdSettled = true; }, () => { thirdSettled = true; });
+    await new Promise((resolve) => setImmediate(resolve));
+    const queued = !thirdSettled && fetches === 2;
+    releaseSecond();
+    const results = await Promise.allSettled([second, third]);
+    assert.equal(queued, true);
+    assert.ok(results.every((result) => result.status === "fulfilled"));
+    assert.equal(fetches, 3);
   });
 
   it("pre-caches only verified anonymous offline HTML without auto-activation", async () => {

@@ -112,6 +112,8 @@ export function installPhotoStaticWorker(scope, manifest) {
   let activeBodyReads = 0;
   let retainedVerifications = 0;
   let pendingFetches = 0;
+  let abandonedVerifications = 0;
+  let abandonedFetches = 0;
   const bodyWaiters = [];
   let cacheMutationActive = false;
   let cacheDisabled = false;
@@ -119,25 +121,43 @@ export function installPhotoStaticWorker(scope, manifest) {
 
   const timeoutRace = (promise, milliseconds, onTimeout) => {
     let timer;
+    let finished = false;
     const task = Promise.resolve(promise);
     task.catch(() => undefined);
     const timeout = new Promise((_, reject) => {
       timer = scope.setTimeout(() => {
+        if (finished) return;
         try {
           onTimeout?.();
         } finally {
-          reject(new Error("Operation timed out"));
+          const error = new Error("Operation timed out");
+          error.name = "PhotoStaticTimeoutError";
+          reject(error);
         }
       }, Math.max(0, milliseconds));
     });
-    return Promise.race([task, timeout]).finally(() => scope.clearTimeout(timer));
+    return Promise.race([task, timeout]).finally(() => {
+      finished = true;
+      scope.clearTimeout(timer);
+    });
+  };
+
+  const availableBodySlots = () => Math.max(0, MAX_BODY_READS - abandonedVerifications - abandonedFetches);
+  const wakeBodyWaiters = () => {
+    const available = availableBodySlots();
+    if (available === 0) {
+      while (bodyWaiters.length) bodyWaiters.shift().fail();
+      return;
+    }
+    while (bodyWaiters.length && activeBodyReads < available) bodyWaiters.shift().run();
   };
 
   const acquireBodySlot = (deadlineAt) => {
-    if (retainedVerifications >= MAX_BODY_READS || pendingFetches >= MAX_BODY_READS) {
+    const available = availableBodySlots();
+    if (available === 0) {
       return Promise.reject(new Error("Unsettled static operations exhausted the budget"));
     }
-    if (activeBodyReads < MAX_BODY_READS) {
+    if (activeBodyReads < available) {
       activeBodyReads += 1;
       return Promise.resolve();
     }
@@ -149,6 +169,10 @@ export function installPhotoStaticWorker(scope, manifest) {
           scope.clearTimeout(waiter.timer);
           activeBodyReads += 1;
           resolve();
+        },
+        fail: () => {
+          scope.clearTimeout(waiter.timer);
+          reject(new Error("Unsettled static operations exhausted the budget"));
         },
       };
       waiter.timer = scope.setTimeout(() => {
@@ -162,8 +186,7 @@ export function installPhotoStaticWorker(scope, manifest) {
 
   const releaseBodySlot = () => {
     activeBodyReads -= 1;
-    const waiter = bodyWaiters.shift();
-    if (waiter) waiter.run();
+    wakeBodyWaiters();
   };
 
   const safeHeaders = (response, descriptor, network) => {
@@ -204,6 +227,8 @@ export function installPhotoStaticWorker(scope, manifest) {
     }
     let reader;
     let stopped = false;
+    let verificationSettled = false;
+    let abandonedVerification = false;
     const stop = () => {
       if (stopped) return;
       stopped = true;
@@ -240,10 +265,23 @@ export function installPhotoStaticWorker(scope, manifest) {
           return bytes;
         } finally {
           // Count the actual task, even if a deadline won its public race.
+          verificationSettled = true;
           retainedVerifications -= 1;
+          if (abandonedVerification) {
+            abandonedVerification = false;
+            abandonedVerifications -= 1;
+            wakeBodyWaiters();
+          }
         }
       };
-      return await timeoutRace(readAndDigest(), deadlineAt - Date.now(), stop);
+      return await timeoutRace(readAndDigest(), deadlineAt - Date.now(), () => {
+        if (!verificationSettled && !abandonedVerification) {
+          abandonedVerification = true;
+          abandonedVerifications += 1;
+          wakeBodyWaiters();
+        }
+        stop();
+      });
     } finally {
       stop();
       try {
@@ -301,8 +339,10 @@ export function installPhotoStaticWorker(scope, manifest) {
     try {
       const bytes = await verifyResponse(cached, descriptor, deadlineAt, false);
       return { bytes, response: verifiedResponse(bytes, cached), cache };
-    } catch {
+    } catch (error) {
       deleteCacheEntry(cache, absoluteUrl);
+      // A timed-out cached body must release its public slot, not start another read beside it.
+      if (error?.name === "PhotoStaticTimeoutError") throw error;
       return null;
     }
   };
@@ -358,17 +398,32 @@ export function installPhotoStaticWorker(scope, manifest) {
     if (pendingFetches >= MAX_BODY_READS) throw new Error("Static fetch budget exhausted");
     pendingFetches += 1;
     let expired = false;
+    let fetchSettled = false;
+    let abandonedFetch = false;
     const attempt = Promise.resolve().then(() => scope.fetch(request)).then((response) => {
       if (expired) {
         try { Promise.resolve(response.body?.cancel()).catch(() => undefined); } catch { /* Best effort. */ }
         throw new Error("Static fetch expired");
       }
       return response;
-    }).finally(() => { pendingFetches -= 1; });
+    }).finally(() => {
+      fetchSettled = true;
+      pendingFetches -= 1;
+      if (abandonedFetch) {
+        abandonedFetch = false;
+        abandonedFetches -= 1;
+        wakeBodyWaiters();
+      }
+    });
     let response;
     try {
       response = await timeoutRace(attempt, deadlineAt - Date.now(), () => {
         expired = true;
+        if (!fetchSettled && !abandonedFetch) {
+          abandonedFetch = true;
+          abandonedFetches += 1;
+          wakeBodyWaiters();
+        }
         abortController.abort();
       });
     } catch (error) {
