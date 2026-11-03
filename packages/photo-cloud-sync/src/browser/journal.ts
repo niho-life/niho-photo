@@ -372,7 +372,7 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
         try {
           const record = validateRecord(cursor.value);
           if (!sameScope(record, scope)) unavailable();
-          if (!hasPending(record)) { cursor.continue(); return; }
+          if (!hasRetainedState(record)) { cursor.continue(); return; }
           const item = tokenOf(record);
           const itemBytes = jsonBytes(item);
           if (itemBytes > MAX_LIST_BYTES) unavailable();
@@ -448,7 +448,7 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     if (currentRaw !== undefined) {
       const current = validateRecord(currentRaw);
       if (!sameBinding(current, binding)) { abort(transaction); unavailable(); }
-      if (!hasPending(current) && current.terminalReason === null) {
+      if (!hasRetainedState(current) && current.terminalReason === null) {
         await updateBudgets(transaction.objectStore(META), binding, current, null, signal, transaction);
         store.delete(current.id);
         released = true;
@@ -685,8 +685,8 @@ function sameKnownIntent(attempt: JournalKnownResolution, intent: RecipeConflict
   return attempt.intentId === intent.intentId && attempt.conflictId === intent.conflictId && attempt.decision === intent.decision && attempt.expectedRevision === intent.expectedRevision;
 }
 
-function hasPending(record: WriterRecord): boolean {
-  return record.latest !== null || record.attempt !== null || record.resolution !== null || record.conflicts.length > 0;
+function hasRetainedState(record: WriterRecord): boolean {
+  return record.latest !== null || record.attempt !== null || record.resolution !== null || record.conflicts.length > 0 || record.terminalReason !== null;
 }
 
 function tokenOf(record: WriterRecord): PendingWriterToken {
@@ -696,6 +696,7 @@ function tokenOf(record: WriterRecord): PendingWriterToken {
     hasUnknownAttempt: record.attempt !== null || record.resolution !== null,
     hasLatest: record.latest !== null,
     conflictIds: record.conflicts.map((conflict) => conflict.conflictId),
+    terminalReason: record.terminalReason,
   };
 }
 

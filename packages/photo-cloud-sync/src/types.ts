@@ -31,6 +31,7 @@ export interface PendingWriterToken {
   readonly hasUnknownAttempt: boolean;
   readonly hasLatest: boolean;
   readonly conflictIds: readonly string[];
+  readonly terminalReason: "not-found" | "photo-deleted" | null;
 }
 
 export interface PendingWriterPage {

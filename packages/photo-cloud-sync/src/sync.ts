@@ -42,6 +42,7 @@ import type {
   RecipeStageRef,
   RecipeWriterBinding,
   ReopenedPersonalPhotoRecipeWriter,
+  ReopenedJournalWriter,
   ResolveRecipeConflictResult,
   SaveRecipeResult,
   StageCommitResult,
@@ -588,6 +589,8 @@ class Writer implements PersonalPhotoRecipeWriter {
       if (old.status === "unknown" || old.status === "terminal") return old;
       if (reopened.attempt.generation === stage.generation) return old;
     }
+    const knownConflict = reopened.conflicts.find((conflict) => conflict.generation === stage.generation);
+    if (knownConflict !== undefined) return await this.restoreKnownConflict(stage, knownConflict, signal, assertCurrent);
     const retainedAttempt = refState?.attempt;
     if (retainedAttempt !== undefined && retainedAttempt !== null) return await this.sendAttempt(retainedAttempt, signal, assertCurrent);
     try {
@@ -615,6 +618,40 @@ class Writer implements PersonalPhotoRecipeWriter {
     assertCurrent();
     if (refState !== undefined) refState.attempt = attempt;
     return await this.sendAttempt(attempt, signal, assertCurrent);
+  }
+
+  private async restoreKnownConflict(
+    stage: JournalStage,
+    metadata: ReopenedJournalWriter["conflicts"][number],
+    signal: AbortSignal,
+    assertCurrent: () => void,
+  ): Promise<SaveRecipeResult> {
+    if (metadata.candidateSha256 === null || metadata.candidateSha256 !== jsonStructuralFingerprint(stage.candidate)) {
+      return { status: "unknown", generation: stage.generation };
+    }
+    try {
+      const conflict = await this.sync.request("recipe-conflicts.get", {
+        photoId: this.binding.photoId,
+        conflictId: metadata.conflictId,
+      }, { signal }, signal);
+      assertCurrent();
+      validateRecipeConflict(conflict);
+      if (
+        conflict.id !== metadata.conflictId || jsonStructuralFingerprint(conflict) !== metadata.snapshotSha256 ||
+        !recipeCandidateBodyMatches(stage.candidate, conflict.conflictingRecipe)
+      ) return { status: "unknown", generation: stage.generation };
+      return { status: "conflict", generation: stage.generation, conflict };
+    } catch (error) {
+      const backend = readPhotoError(error);
+      let terminal: ResolveRecipeConflictResult | null = null;
+      if (backend?.code === "photo_deleted") {
+        terminal = await this.terminalConflictFromPhotoError(metadata.generation, metadata.conflictId, error, signal, assertCurrent);
+      } else if (backend?.code === "not_found") {
+        terminal = await this.confirmConflictPurge(metadata.generation, metadata.conflictId, signal, assertCurrent);
+      }
+      if (terminal?.status === "terminal") return { status: "terminal", generation: stage.generation, reason: terminal.reason };
+      return { status: "unknown", generation: stage.generation };
+    }
   }
 
   private async sendAttempt(
