@@ -299,7 +299,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine-client.test.ts",
         "sha256": "ab57eb9cc53aee5fc1ca937830d4eb7c979bf9da92b32c220bdeab772e8db065"
       },
-      "outputSha256": "619494114333c94acbbbae3899a8fb584fe6e5096b77518b2b70275c8abd0776",
+      "outputSha256": "cdbe155d5e0bf8e1d44f2b8bc0039b36afbfe4be31b2ad3e60380b153794fa9b",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -321,7 +321,9 @@
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
         "Issue #152 の runtime 診断を既存の描画時間テストの期待値へ追加。",
         "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
-        "#171 答えの遅い要求の診断の試験"
+        "#171 答えの遅い要求の診断の試験",
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。",
+        "native失効時はWASM読込より先に旧renderer宣言を失効させる"
       ]
     },
     {
@@ -358,9 +360,11 @@
         "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
         "Issue #151 のスレッド版と #155 の論理予算を同じ client に統合",
         "#171 正規切替の停止箇所を同じ試行IDで記録する診断",
-        "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み"
+        "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み",
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。",
+        "native失効時はWASM読込より先に旧renderer宣言を失効させる"
       ],
-      "outputSha256": "0f4e73b8f8fce7b2c0f3a8237a906fc77c776bb504bbc337a6e636ce8999d7cf"
+      "outputSha256": "87a6b67fb3ec443c3eaca28102bc2937772fdadc73502d63e097cb82a199b4ea"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-manifest.ts",
@@ -496,9 +500,12 @@
         "Issue #155: 切り抜いた JPEG / PNG の書き出しを、切り抜きが届くデコードの大きさで見積もる",
         "WKWebView を WebKit と判定し、SharedArrayBuffer の無い分離をスレッド版の対象にしない（#175）",
         "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み",
-        "#141 Mac アプリの native でも同梱の manifest から空のモデルを読む"
+        "#141 Mac アプリの native でも同梱の manifest から空のモデルを読む",
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。",
+        "mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。",
+        "native失効時はWASM読込より先に旧renderer宣言を失効させる"
       ],
-      "outputSha256": "7eb2f71aa94ef5c8bbb41554f7bbbac2eca6fa14343c42ab44ea04c731c7e6fe"
+      "outputSha256": "e6fc37f95a09d6acb2e6152d86b8589902c609e1845599a6f3f815c0397b1857"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -5984,7 +5991,7 @@
         "path": "packages/develop-engine/crates/niho-develop-render/src/lib.rs",
         "sha256": "a9ac3a784a2eb9250747dc2eaabc10c958c1a10d71c7ca16ffdd0d96b40456bc"
       },
-      "outputSha256": "d05879d4d79615ab91cf0bea878053501ce0a3898ffb260d0e01e619836d0849",
+      "outputSha256": "7ccb2dd92093a4b49f48d7a4d3231ceb5b9430bc6063399eca6aa2df7dc61268",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
@@ -6005,7 +6012,8 @@
         "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
         "niho-photo#132: 原寸の書き出しの native の読み込みの上限を 1 億画素に広げる（ブラウザの wasm は 4000 万画素のまま）。",
-        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。"
+        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
       ]
     },
     {
@@ -6027,7 +6035,7 @@
         "path": "packages/develop-engine/crates/niho-develop-render/tests/cli.rs",
         "sha256": "8ddf42804ccd8202fb8834bc499d2d03a331eb0ff96e020421a776f2286ef9bd"
       },
-      "outputSha256": "371a62d1b869fcfc7f3106b74ff11022f2f33804ce4c8c3021a6efa2aad3d951",
+      "outputSha256": "ba2dddc4f7929308e2e31cc70f0c08db881185ef803434f94b3a5ebdb572b43f",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "新engine受入と未知版拒否の境界を更新し、既存wasm CIで候補のFinal/Interactive固定画素を検証する。",
@@ -6053,7 +6061,8 @@
         "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
         "niho-photo#132: 原寸の書き出しの native の読み込みの上限を 1 億画素に広げる（ブラウザの wasm は 4000 万画素のまま）。",
-        "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。"
+        "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。",
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
       ]
     },
     {
@@ -6077,7 +6086,7 @@
         "path": "packages/develop-engine/crates/niho-develop-wasm/src/lib.rs",
         "sha256": "bb2c416ce23b4e3ca3208f32736f22254ed82276b24fd7f49f1a022e4eb85fbd"
       },
-      "outputSha256": "030ac6c9b5f7e9e98d382936534e17d8a95aa02f4a896e4f0172fded9b19fc68",
+      "outputSha256": "1c3317cd1ea63148cb85e91b451c4592dccb03d87dea1b08ccea3e555764be76",
       "modifications": [
         "Issue #30 Oklch色ミキサーとengine 10/11対応を反映",
         "部分補正（マスク）#65: validateSettingsのマスク読み取り回帰テストを追加",
@@ -6099,7 +6108,8 @@
         "niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。",
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
         "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
-        "#141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験"
+        "#141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験",
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
       ]
     },
     {
@@ -11426,8 +11436,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-surfaces.test.ts",
-      "sha256": "7e9611d696463155f414e68ce1cf6f1f0568fcb575b8d668db1a28bbc477cd9a",
-      "origin": "Issue #68のため新規作成した、Workerの面の受け渡し（能力・渡す/手放す・見本・面の作成・一時的なDeveloperの書き出し）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: #141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み\n変更理由: #141 native で空のモデルを渡す試験を足す"
+      "sha256": "689833fa20995c8fd5713e79d1786bba2e378cd8b119eda71dc3fd5ef5fce621",
+      "origin": "Issue #68のため新規作成した、Workerの面の受け渡し（能力・渡す/手放す・見本・面の作成・一時的なDeveloperの書き出し）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: #141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み\n変更理由: #141 native で空のモデルを渡す試験を足す\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。\n変更理由: native失効時はWASM読込より先に旧renderer宣言を失効させる"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-mask-brush.ts",
@@ -11861,8 +11871,8 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/api.rs",
-      "sha256": "b3b83572ece7143b5b09eabda876742bb9063a79dc29b8cca64877932ef20bca",
-      "origin": "公開Issue #152 のため新規作成。wasm と native が共有する現像 API。既存の公開実装を移動。\n変更理由: #141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験"
+      "sha256": "bdf189cc0088fc5196d70ad857f43eb9711969e5adf91fd3b4eed1d0e381b07e",
+      "origin": "公開Issue #152 のため新規作成。wasm と native が共有する現像 API。既存の公開実装を移動。\n変更理由: #141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/api_cross_target.rs",
@@ -11951,8 +11961,8 @@
     },
     {
       "path": "scripts/sdk/release-set-lib.mjs",
-      "sha256": "795ada7c7df275247edbca4374411b5595269542788026fbcdaa8856e2c01ce2",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
+      "sha256": "3ba6dbb4cf3684e738d692fe7a5c91b7b3af9e19e19c90930b88a00eda8d9ca6",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する"
     },
     {
       "path": "scripts/sdk/release-set.test.mjs",
@@ -12096,8 +12106,8 @@
     },
     {
       "path": "sdk/release-set.json",
-      "sha256": "a19ed74544f84a689969ae3105e21144b339fad9f6fc39e222e25c94035ef117",
-      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
+      "sha256": "e9311547d911f59bafd5d3cc4516331a9629412fee0537b981d1d5ca249b0a27",
+      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する"
     },
     {
       "path": "apps/camera/src-tauri/src/cloud_copy_source.rs",
@@ -12121,8 +12131,8 @@
     },
     {
       "path": "scripts/sdk/smoke-consumer.mjs",
-      "sha256": "4e16fd75fb5fb0750bc17ae735d3d3e128502a5f0d64a112af6e53bdad02b82c",
-      "origin": "公開SDKの外部consumer smoke。React 19 declarationsと型export境界の検証を追加。\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加"
+      "sha256": "4e74d5f6b53180e762aec67ea75283616af31a18d24507358fa4614839cd8f8b",
+      "origin": "公開SDKの外部consumer smoke。React 19 declarationsと型export境界の検証を追加。\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する"
     },
     {
       "path": "sdk/README.md",
@@ -12211,8 +12221,8 @@
     },
     {
       "path": "docs/architecture/personal-photo-cloud.md",
-      "sha256": "1a84a11104e3ae93ef96de3f5c692d87d1e78eeff10701ba54a888ad9575985b",
-      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消\n変更理由: 親sessionと通常refreshを区別し端末間の独立性と失効時の旧scope破棄を明確化"
+      "sha256": "d47de27ecbb1c0316aa43ad0df3e7a16a2c4d018a3fe735c500fda5dd5c0725b",
+      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消\n変更理由: 親sessionと通常refreshを区別し端末間の独立性と失効時の旧scope破棄を明確化\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。\n変更理由: native失効時はWASM読込より先に旧renderer宣言を失効させる\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する"
     },
     {
       "path": "scripts/ci/personal-photo-contract.test.mjs",
@@ -12853,6 +12863,16 @@
       "path": "apps/photo-web/test/browser-renderer.test.ts",
       "sha256": "7165ec854d0a9cde4e5e50b5b904cf0336d947eb0fdee2a573f377ea664b7fa9",
       "origin": "NIHO所有の独立Photo Web renderer probeと合成対象試験。C00構造と既存共通engine getterを利用し、能力の静的推測・第二のWASM loader・C02交差計算・private sourceを含まない。C06/Bがownerの自作PR修復許可でleaf公開整合を担当（Issue201 comment6596048972）。"
+    },
+    {
+      "path": "packages/photo-editing/src/develop-engine/develop-renderer-capabilities.ts",
+      "sha256": "c25f8f3464498c6dcb78f093e390a1059f4e1ac59c010e91cc1d31029b6173a0",
+      "origin": "NIHOが公開runtimeのschema 1宣言を検証するため新規実装。公開Rust/WASMの能力だけを扱い、非公開source・資格情報・利用者データを含まない。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。"
+    },
+    {
+      "path": "packages/photo-editing/src/develop-engine/develop-renderer-capabilities.test.ts",
+      "sha256": "16c993c9727c4b8ed35a10b4b80c0f8dfc8e1325f596d64f2415519646881e84",
+      "origin": "NIHOがschema 1の不正入力・readonly snapshotを検証するため新規作成した合成unit test。実写真・利用者データ・第三者資産を含まない。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。"
     }
   ],
   "excludedSources": [

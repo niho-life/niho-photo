@@ -1187,6 +1187,15 @@ fn capabilities_name_what_this_build_renders() {
     );
     assert_eq!(capabilities["maxMasks"], 8);
     assert_eq!(capabilities["maxPixels"], 100_000_000);
+    assert_eq!(
+        capabilities["renderer"],
+        niho_develop::api::renderer_capabilities()
+    );
+    // The renderer proof is additive: legacy native root fields stay unchanged.
+    assert_eq!(
+        capabilities["features"],
+        serde_json::json!(["colorGradingLuminance"])
+    );
 
     let extra = run(&["capabilities", "--json"]);
     assert_eq!(extra.code, 1);

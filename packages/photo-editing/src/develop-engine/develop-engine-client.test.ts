@@ -15,6 +15,15 @@ import type {
 } from "./develop-engine-worker-core";
 
 const MANIFEST_URL = "https://photo.example.test/develop-engine/niho-2/manifest.json";
+const RENDERER_CAPABILITIES = {
+  schemaVersion: 1,
+  crateVersion: "0.23.0",
+  settingsVersions: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+  engines: ["niho-1", "niho-14"],
+  features: ["geometry", "masks", "colorGradingLuminance"],
+  maskKinds: ["linear", "radial", "brush", "subject", "sky"],
+  maskSurfaces: true,
+} as const;
 
 /** Worker の代わり（送った要求を持ち、応答をテストから返す）。 */
 class FakeWorker extends EventTarget {
@@ -94,6 +103,88 @@ afterEach(() => {
 });
 
 describe("createDevelopEngine", () => {
+  it("renderCapabilities は ready を開始せず、ready 後だけ actual 宣言の defensive snapshot を返す", async () => {
+    const worker = new FakeWorker();
+    const createWorker = vi.fn(() => worker as unknown as Worker);
+    const engine = createDevelopEngine({ createWorker, manifestUrl: MANIFEST_URL });
+
+    expect(await engine.renderCapabilities?.()).toBeNull();
+    expect(createWorker).not.toHaveBeenCalled();
+
+    const ready = engine.ready();
+    worker.respond({
+      type: "ready",
+      id: worker.lastRequest("init").id,
+      version: "display text is not a capability",
+      runtime: "wasm",
+      rendererCapabilities: RENDERER_CAPABILITIES,
+    });
+    expect(await ready).toBe(true);
+    const first = await engine.renderCapabilities?.();
+    expect(first).toEqual(RENDERER_CAPABILITIES);
+    expect(() => (first!.engines as string[]).push("changed")).toThrow();
+    const second = await engine.renderCapabilities?.();
+    expect(second).toEqual(RENDERER_CAPABILITIES);
+    expect(second).not.toBe(first);
+    expect(second?.engines).not.toBe(first?.engines);
+  });
+
+  it("renderCapabilities は client でも再検証し、dispose・旧 ready・再初期化をまたいで cache を返さない", async () => {
+    const invalidWorker = new FakeWorker();
+    const invalid = createDevelopEngine({ createWorker: () => invalidWorker as unknown as Worker, manifestUrl: MANIFEST_URL });
+    const invalidReady = invalid.ready();
+    invalidWorker.respond({
+      type: "ready",
+      id: invalidWorker.lastRequest("init").id,
+      version: "0.23.0",
+      runtime: "wasm",
+      rendererCapabilities: { ...RENDERER_CAPABILITIES, crateVersion: "niho-develop 0.23.0" },
+    });
+    expect(await invalidReady).toBe(true);
+    expect(await invalid.renderCapabilities?.()).toBeNull();
+
+    const loadingWorker = new FakeWorker();
+    const loading = createDevelopEngine({ createWorker: () => loadingWorker as unknown as Worker, manifestUrl: MANIFEST_URL });
+    const oldReady = loading.ready();
+    const pending = loading.renderCapabilities!();
+    const oldInitId = loadingWorker.lastRequest("init").id;
+    loading.dispose();
+    loadingWorker.respond({
+      type: "ready",
+      id: oldInitId,
+      version: "0.23.0",
+      runtime: "wasm",
+      rendererCapabilities: RENDERER_CAPABILITIES,
+    });
+    expect(await oldReady).toBe(false);
+    expect(await pending).toBeNull();
+    expect(await loading.renderCapabilities?.()).toBeNull();
+
+    const readyEngineResult = await readyEngine({ features: { rendererCapabilities: RENDERER_CAPABILITIES } });
+    const racesDispose = readyEngineResult.engine.renderCapabilities!();
+    readyEngineResult.engine.dispose();
+    expect(await racesDispose).toBeNull();
+
+    const restarted = await readyEngine({ features: { rendererCapabilities: RENDERER_CAPABILITIES } });
+    expect(await restarted.engine.renderCapabilities?.()).toEqual(RENDERER_CAPABILITIES);
+  });
+
+  it("runtime 交換通知は pending getter も失効させ、後続の要求応答で旧宣言を復活させない", async () => {
+    const { engine, worker } = await readyEngine({ features: { rendererCapabilities: RENDERER_CAPABILITIES } });
+    expect(await engine.renderCapabilities?.()).toEqual(RENDERER_CAPABILITIES);
+    const pending = engine.renderCapabilities!();
+    worker.respond({ type: "rendererInvalidated", id: 0 });
+    expect(await pending).toBeNull();
+    expect(await engine.renderCapabilities?.()).toBeNull();
+    expect(await engine.ready()).toBe(true);
+    const open = engine.open(new Uint8Array([1]).buffer, 640);
+    await flushPromises();
+    worker.respond({ type: "opened", id: worker.lastRequest("open").id, width: 1, height: 1 });
+    await open;
+    expect(await engine.renderCapabilities?.()).toBeNull();
+    engine.dispose();
+  });
+
   it("端末 class を既定 PC / 明示 mobile として Worker init に渡す", async () => {
     const pc = await readyEngine();
     expect(pc.worker.lastRequest("init")).toMatchObject({ deviceClass: "pc" });

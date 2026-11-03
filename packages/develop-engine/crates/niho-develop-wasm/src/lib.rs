@@ -205,10 +205,13 @@ mod tests {
         let value: serde_json::Value = serde_json::from_str(&capabilities()).unwrap();
         assert_eq!(
             value,
-            serde_json::json!({"masks": {
-                "kinds": ["linear", "radial", "brush", "subject", "sky"],
-                "max": 8, "maskPlane": true, "surfaces": true, "skyDetection": true
-            }})
+            serde_json::json!({
+                "masks": {
+                    "kinds": ["linear", "radial", "brush", "subject", "sky"],
+                    "max": 8, "maskPlane": true, "surfaces": true, "skyDetection": true
+                },
+                "renderer": niho_develop::api::renderer_capabilities(),
+            })
         );
     }
 
