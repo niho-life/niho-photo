@@ -221,6 +221,7 @@ function responseLibraryId(value: unknown): string {
   if (Array.isArray(value.items)) return isRecord(value.items[0]) && typeof value.items[0].libraryId === "string" ? value.items[0].libraryId : "";
   if (isRecord(value.value)) return responseLibraryId(value.value);
   if (isRecord(value.photo)) return responseLibraryId(value.photo);
+  if (isRecord(value.upload)) return responseLibraryId(value.upload);
   if (isRecord(value.result) && isRecord(value.result.photo)) return responseLibraryId(value.result.photo);
   return "";
 }

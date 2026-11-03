@@ -368,8 +368,8 @@ function parseJsonBytes(bytes: Uint8Array): unknown {
   try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { invalidResponse(); }
   try {
     const value: unknown = JSON.parse(text);
-    // A stored-upload receipt nests recipe.settings five levels below its JSON root.
-    validateJsonDepth(value, PHOTO_LIMITS.maxJsonDepth + 5);
+    // A replayed start receipt nests settings at value.upload.result.photo.recipe.settings.
+    validateJsonDepth(value, PHOTO_LIMITS.maxJsonDepth + 6);
     return value;
   } catch { invalidResponse(); }
 }

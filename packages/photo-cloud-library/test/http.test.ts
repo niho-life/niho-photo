@@ -72,7 +72,7 @@ describe("same-origin HTTP client and BFF", () => {
     } finally { client.dispose(); }
   });
 
-  it("preserves a depth-32 recipe inside the deepest stored-upload receipt", async () => {
+  it("preserves a depth-32 recipe inside a stored-upload completion receipt", async () => {
     let nested: unknown = null;
     for (let index = 1; index < 32; index += 1) nested = { next: nested };
     const photo = { ...responses["photos.get"], recipe: { ...responses["photos.get"].recipe,
@@ -88,6 +88,27 @@ describe("same-origin HTTP client and BFF", () => {
       await expect(client.request("uploads.complete", { uploadId: "depth-upload" }, {
         signal: new AbortController().signal, idempotencyKey: "depth-completion",
       })).resolves.toEqual(receipt);
+    } finally { client.dispose(); }
+  });
+  it.each([31, 32, 33])("bounds depth-%i recipes in a replayed stored-upload start receipt", async (depth) => {
+    let nested: unknown = null;
+    for (let index = 1; index < depth; index += 1) nested = { next: nested };
+    const photo = { ...responses["photos.get"], recipe: { ...responses["photos.get"].recipe,
+      settings: { ...responses["photos.get"].recipe.settings, future: nested } } };
+    const upload = {
+      id: "depth-start-upload", target: { kind: "original", fileName: photo.fileName, format: photo.format },
+      sha256: photo.original.sha256, sizeBytes: photo.original.sizeBytes, expiresAt: "2026-11-03T00:30:00.000Z",
+      state: "stored", result: { kind: "original", photo },
+    };
+    const receipt = { replayed: true, value: { kind: "upload", upload, ticket: null } };
+    const harness = setup((request) => request.url.endsWith("/library") ? json(responses["library.get"]) : json(receipt));
+    const client = await clientFor(harness);
+    try {
+      const result = client.request("uploads.start", {
+        target: upload.target, sizeBytes: upload.sizeBytes, sha256: upload.sha256, contentType: photo.original.contentType,
+      }, { signal: new AbortController().signal, idempotencyKey: "depth-start-key" });
+      if (depth <= 32) await expect(result).resolves.toEqual(receipt);
+      else await expect(result).rejects.toBeTruthy();
     } finally { client.dispose(); }
   });
   it("accepts an existing photo start response without an upload ticket", async () => {
