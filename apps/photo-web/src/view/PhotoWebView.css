@@ -131,6 +131,150 @@
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
+.photo-web-workspace-stack,
+.photo-web-workbench {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+}
+
+.photo-web-workspace-stack {
+  flex-direction: column;
+}
+
+.photo-web-transfer {
+  flex: none;
+  border-bottom: 1px solid var(--niho-border);
+  background: var(--niho-card, #fcfbf9);
+  color: var(--niho-text);
+}
+
+.photo-web-transfer-toolbar,
+.photo-web-transfer-toolbar-actions,
+.photo-web-transfer-row-heading,
+.photo-web-transfer-row-actions,
+.photo-web-transfer-pages {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.photo-web-transfer-toolbar {
+  justify-content: space-between;
+  padding: 0.5rem max(0.75rem, env(safe-area-inset-right, 0px)) 0.5rem max(0.75rem, env(safe-area-inset-left, 0px));
+}
+
+.photo-web-transfer-toolbar > strong,
+.photo-web-transfer-row-heading > strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-web-transfer button {
+  min-height: 2.25rem;
+  border: 1px solid var(--niho-border);
+  border-radius: var(--radius, 0.5rem);
+  padding: 0.375rem 0.75rem;
+  background: var(--niho-surface-subtle);
+  color: var(--niho-text);
+  font: inherit;
+  font-size: 0.8125rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.photo-web-transfer button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.photo-web-transfer button:focus-visible,
+.photo-web-transfer summary:focus-visible {
+  outline: 2px solid var(--niho-accent-ink);
+  outline-offset: 2px;
+}
+
+.photo-web-transfer-file-input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.photo-web-transfer-status {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  margin: 0;
+  padding: 0 0.75rem 0.5rem;
+  color: var(--niho-text-sub);
+  font-size: 0.8125rem;
+}
+
+.photo-web-transfer-busy-progress {
+  width: min(8rem, 35vw);
+  height: 0.375rem;
+  accent-color: var(--niho-accent-ink);
+}
+
+.photo-web-transfer-details {
+  border-top: 1px solid var(--niho-border);
+}
+
+.photo-web-transfer-details > summary {
+  min-height: 2.25rem;
+  padding: 0.5rem 0.75rem;
+  color: var(--niho-text-sub);
+  cursor: pointer;
+  font-size: 0.8125rem;
+  font-weight: 700;
+}
+
+.photo-web-transfer-list {
+  display: grid;
+  max-height: min(32vh, 16rem);
+  overflow: auto;
+  overscroll-behavior: contain;
+}
+
+.photo-web-transfer-row {
+  display: grid;
+  gap: 0.375rem;
+  padding: 0.625rem 0.75rem;
+  border-top: 1px solid var(--niho-border);
+}
+
+.photo-web-transfer-row-heading {
+  justify-content: space-between;
+  font-size: 0.8125rem;
+}
+
+.photo-web-transfer-row-heading > span {
+  flex: none;
+  color: var(--niho-text-sub);
+}
+
+.photo-web-transfer-row progress {
+  width: 100%;
+  height: 0.375rem;
+  accent-color: var(--niho-accent-ink);
+}
+
+.photo-web-transfer-row-actions,
+.photo-web-transfer-pages {
+  justify-content: flex-end;
+}
+
+.photo-web-transfer-pages {
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--niho-border);
+}
+
 .photo-web-empty {
   display: grid;
   min-width: 0;
@@ -184,6 +328,11 @@
   .photo-web-empty-action button,
   .photo-web-update-notice button,
   .photo-web-primary-button {
+    min-height: 44px;
+  }
+
+  .photo-web-transfer button,
+  .photo-web-transfer-details > summary {
     min-height: 44px;
   }
 
