@@ -1,0 +1,19 @@
+# 本人写真のMac接続
+
+Refs #198 / #192。既存の無料ローカル閲覧・補正・原寸書き出しを保ち、本人クラウドは既存Accountと同じ認証へ接続する。
+
+## 認証と表示用セッション
+
+nativeだけが既存Camera accessを使い、固定のPhoto mac-session APIを呼ぶ。Camera以外、無効・期限切れのaccess、未知field、不正なclient/audience/expiryを拒否する。APIの7fieldをnativeで検証し、画面へはuserId/sessionId/sessionEpoch/transport/expiresAtの5fieldだけを返す。これは表示や遅着処理を止めるmetadataであり、認可の証明ではない。token、任意URL、pathを受け渡す口を作らない。
+
+要求開始と応答公開時にAccountのgenerationとfresh clockを照合し、途中のlogout/reconnect/refreshで古くなった結果を返さない。generationは要求のrace fence専用で、通常refreshで論理scopeを変える用途には使わない。論理scopeはcanonical本人、library、sessionId、sessionEpoch、transportのtupleとし、expiry更新だけなら維持する。
+
+同梱main windowにだけsafeidentity commandを許可する。通常のこのMacとクラウドの切替は未保存編集のguardを使う。logout・本人/session/epoch/transportの変更はguardの結果を待たず、最初のrenderから旧cloud bindingを除外する。永続下書きは旧namespaceに保持し、新しい本人やepochへ自動送信しない。
+
+## 転送と起動時の接続
+
+固定C00 native transport、検証済み原本cache/stream、native copy journal、共有同期factoryと実rendererの起動時注入は後続で接続する。セッションmetadataの取得だけでcloud接続・コピー成功・正式出荷とは扱わない。UploadTicketやbearerはnative response memory内だけとし、IPCや永続journalへ出さない。原本・全参照mask・完全recipeの照合前にコピー完了を返さない。
+
+正式配布は実SDK/source/runtime manifestを同じ証跡で固定し、署名・公証・updater・実インストールとMac/iPhoneの実backend/storage受入を通す。未接続capabilityを成功stubで開かない。
+
+固定C00 transportは既存wire encoder/response validatorを共用する。nativeのoperation enumは任意URLやheadersを受けず、既存の認証済み本人とsessionを毎操作で照合する。JSONと原本streamは上限を分け、upload ticketを返す操作は高位native copy内だけに閉じる。原本は固定asset IDをbackendの実世代へ照合し、nativeでfull SHA・size・EOFを検証した後、scopeに束縛した一時handleから最大1MiBずつ読み取る。pathや原本全量をIPC JSON/base64へ載せない。

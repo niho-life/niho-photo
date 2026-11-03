@@ -1,10 +1,13 @@
 use super::*;
 use crate::account::Clock;
 use crate::connect::{Pending, PENDING_TTL_MS};
+use crate::photo_cloud::{NativePhotoRequest, PhotoHttpResponse, PhotoHttpTransport};
+use crate::photo_session::{PhotoSessionResponse, PhotoSessionTransport};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use std::io::Cursor;
 use std::sync::{
   atomic::{AtomicBool, AtomicU64, Ordering},
   Arc, Mutex,
@@ -176,6 +179,9 @@ struct Fixture {
 }
 impl Fixture {
   fn new() -> Self {
+    Self::with_photo_session(Arc::new(StaticPhotoSession::valid()))
+  }
+  fn with_photo_session(photo_session: Arc<dyn PhotoSessionTransport>) -> Self {
     let config = Config::mock("http://127.0.0.1:12345");
     let store = Arc::new(MemoryStore::default());
     let browser = Arc::new(CaptureBrowser::default());
@@ -186,7 +192,34 @@ impl Fixture {
       browser: browser.clone(),
     });
     let account = Arc::new(
-      Account::with_adapters(config.clone(), store.clone(), browser.clone(), server.clone()).with_clock(clock.clone()),
+      Account::with_adapters(config.clone(), store.clone(), browser.clone(), server.clone())
+        .with_photo_session(photo_session)
+        .with_clock(clock.clone()),
+    );
+    Self {
+      account,
+      store,
+      browser,
+      server,
+      clock,
+      config,
+    }
+  }
+  fn with_photo_http(photo_http: Arc<dyn PhotoHttpTransport>) -> Self {
+    let config = Config::mock("http://127.0.0.1:12345");
+    let store = Arc::new(MemoryStore::default());
+    let browser = Arc::new(CaptureBrowser::default());
+    let clock = Arc::new(TestClock(AtomicU64::new(1_000_000)));
+    let server = Arc::new(MockServer {
+      state: Mutex::new(ServerState::default()),
+      store: store.clone(),
+      browser: browser.clone(),
+    });
+    let account = Arc::new(
+      Account::with_adapters(config.clone(), store.clone(), browser.clone(), server.clone())
+        .with_photo_session(Arc::new(StaticPhotoSession::valid()))
+        .with_photo_http(photo_http)
+        .with_clock(clock.clone()),
     );
     Self {
       account,
@@ -212,6 +245,51 @@ impl Fixture {
     self.account.login().unwrap();
     self.account.handle_callback(&self.callback()).unwrap();
   }
+}
+
+struct StaticPhotoSession {
+  status: u16,
+  body: String,
+  calls: AtomicU64,
+}
+impl StaticPhotoSession {
+  fn valid() -> Self {
+    Self::new(200, valid_photo_identity())
+  }
+  fn new(status: u16, body: Value) -> Self {
+    Self {
+      status,
+      body: body.to_string(),
+      calls: AtomicU64::new(0),
+    }
+  }
+}
+impl PhotoSessionTransport for StaticPhotoSession {
+  fn send(&self, config: &Config, bearer: &Secret) -> Result<PhotoSessionResponse, AccountError> {
+    assert_eq!(config.client, ClientId::Camera);
+    assert_eq!(
+      config.api_url("/api/auth/photo-connect/mac-session").path(),
+      "/api/auth/photo-connect/mac-session"
+    );
+    assert_eq!(bearer.expose(), "synthetic-id-token");
+    self.calls.fetch_add(1, Ordering::SeqCst);
+    Ok(PhotoSessionResponse {
+      status: self.status,
+      body: Secret::new(self.body.clone()),
+    })
+  }
+}
+
+fn valid_photo_identity() -> Value {
+  json!({
+    "actor": { "id": "synthetic-user" },
+    "sessionId": "synthetic-connection",
+    "sessionEpoch": "synthetic-epoch",
+    "expiresAt": "1970-01-01T01:00:00.000Z",
+    "clientId": "niho-camera",
+    "audience": "niho-photo",
+    "refreshRequired": false
+  })
 }
 #[test]
 fn real_contract_config_is_fixed_https_and_public_key_is_not_a_client_secret() {
@@ -487,6 +565,391 @@ fn rust_contract_matches_photo_docs_versioned_spec() {
     AccountError::Internal,
   ];
   assert_eq!(serde_json::to_value(errors).unwrap(), contract["errorCodes"]);
+}
+
+#[test]
+fn photo_identity_accepts_only_the_closed_safe_camera_dto() {
+  let photo = Arc::new(StaticPhotoSession::valid());
+  let f = Fixture::with_photo_session(photo.clone());
+  f.login();
+  let identity = f.account.photo_identity().unwrap();
+  assert_eq!(
+    serde_json::to_value(identity).unwrap(),
+    json!({
+      "userId": "synthetic-user",
+      "sessionId": "synthetic-connection",
+      "sessionEpoch": "synthetic-epoch",
+      "transport": "mac-bearer",
+      "expiresAt": "1970-01-01T01:00:00.000Z"
+    })
+  );
+  assert_eq!(photo.calls.load(Ordering::SeqCst), 1);
+}
+
+#[test]
+fn photo_identity_rejects_unknown_secret_missing_malformed_expired_and_wrong_contract_fields() {
+  let mut secret_extra = valid_photo_identity();
+  secret_extra["token"] = json!("synthetic-secret-must-not-cross");
+  let mut actor_extra = valid_photo_identity();
+  actor_extra["actor"]["email"] = json!("private@example.invalid");
+  let mut missing = valid_photo_identity();
+  missing.as_object_mut().unwrap().remove("sessionEpoch");
+  let mut malformed_date = valid_photo_identity();
+  malformed_date["expiresAt"] = json!("1970-02-30T01:00:00.000Z");
+  let mut expired = valid_photo_identity();
+  expired["expiresAt"] = json!("1970-01-01T00:16:40.000Z");
+  let mut too_far = valid_photo_identity();
+  too_far["expiresAt"] = json!("1970-02-02T00:16:40.001Z");
+  let mut audience = valid_photo_identity();
+  audience["audience"] = json!("another-audience");
+  let mut client = valid_photo_identity();
+  client["clientId"] = json!("niho-docs");
+  let mut refresh = valid_photo_identity();
+  refresh["refreshRequired"] = json!(true);
+  let mut wrong_actor = valid_photo_identity();
+  wrong_actor["actor"]["id"] = json!("another-user");
+  let mut format_character = valid_photo_identity();
+  format_character["sessionId"] = json!("hidden\u{200b}separator");
+
+  for body in [
+    secret_extra,
+    actor_extra,
+    missing,
+    malformed_date,
+    expired,
+    too_far,
+    audience,
+    client,
+    refresh,
+    wrong_actor,
+    format_character,
+    json!([]),
+  ] {
+    let f = Fixture::with_photo_session(Arc::new(StaticPhotoSession::new(200, body)));
+    f.login();
+    assert_eq!(f.account.photo_identity().unwrap_err(), AccountError::InvalidResponse);
+    assert_eq!(f.account.snapshot().phase, AccountPhase::Connected);
+  }
+}
+
+#[test]
+fn photo_identity_rejects_a_different_native_connection_session() {
+  let mut value = valid_photo_identity();
+  value["sessionId"] = json!("different-connection");
+  let f = Fixture::with_photo_session(Arc::new(StaticPhotoSession::new(200, value)));
+  f.login();
+  assert_eq!(f.account.photo_identity().unwrap_err(), AccountError::InvalidResponse);
+}
+
+#[test]
+fn photo_identity_feature_pause_preserves_the_native_connection() {
+  let photo = Arc::new(StaticPhotoSession::new(
+    401,
+    json!({"code":"UNAUTHORIZED","details":{"reason":"app_connect_disabled"}}),
+  ));
+  let f = Fixture::with_photo_session(photo);
+  f.login();
+  assert_eq!(f.account.photo_identity().unwrap_err(), AccountError::Paused);
+  assert_eq!(f.account.snapshot().phase, AccountPhase::Connected);
+  assert!(f.store.load(SecretKind::RefreshToken).unwrap().is_some());
+}
+
+#[test]
+fn photo_identity_rejects_oversize_and_revocation_invalidates_the_account() {
+  let oversize = Arc::new(StaticPhotoSession {
+    status: 200,
+    body: "x".repeat(64 * 1024 + 1),
+    calls: AtomicU64::new(0),
+  });
+  let f = Fixture::with_photo_session(oversize);
+  f.login();
+  assert_eq!(f.account.photo_identity().unwrap_err(), AccountError::InvalidResponse);
+
+  for reason in [
+    "app_connection_revoked",
+    "session_revoked",
+    "mac_connection_rejected",
+    "mac_token_invalid",
+    "mac_token_expired",
+    "mac_token_scope_invalid",
+    "mac_auth_time_invalid",
+  ] {
+    let photo = Arc::new(StaticPhotoSession::new(
+      401,
+      json!({"code":"UNAUTHORIZED","details":{"reason":reason},"message":"synthetic-sensitive"}),
+    ));
+    let f = Fixture::with_photo_session(photo.clone());
+    f.login();
+    assert_eq!(f.account.photo_identity().unwrap_err(), AccountError::Expired);
+    assert_eq!(f.account.snapshot().phase, AccountPhase::Failed);
+    assert_eq!(f.account.snapshot().error, Some(AccountError::Expired));
+    assert!(f.store.load(SecretKind::RefreshToken).unwrap().is_none());
+    assert_eq!(f.account.photo_identity().unwrap_err(), AccountError::Expired);
+    assert_eq!(photo.calls.load(Ordering::SeqCst), 1);
+  }
+}
+
+#[test]
+fn disabled_and_docs_accounts_never_call_photo_http() {
+  let photo = Arc::new(StaticPhotoSession::valid());
+  assert_eq!(
+    Account::disabled().photo_identity().unwrap_err(),
+    AccountError::NotConfigured
+  );
+
+  let mut config = Config::mock("http://127.0.0.1:12345");
+  config.client = ClientId::Docs;
+  let account = Account::with_adapters(
+    config,
+    Arc::new(MemoryStore::default()),
+    Arc::new(CaptureBrowser::default()),
+    Arc::new(MockServer {
+      state: Mutex::new(ServerState::default()),
+      store: Arc::new(MemoryStore::default()),
+      browser: Arc::new(CaptureBrowser::default()),
+    }),
+  )
+  .with_photo_session(photo.clone());
+  assert_eq!(account.photo_identity().unwrap_err(), AccountError::NotConfigured);
+  assert_eq!(photo.calls.load(Ordering::SeqCst), 0);
+}
+
+struct DelayedPhotoSession {
+  received: AtomicBool,
+  release: AtomicBool,
+}
+impl PhotoSessionTransport for DelayedPhotoSession {
+  fn send(&self, _: &Config, bearer: &Secret) -> Result<PhotoSessionResponse, AccountError> {
+    assert_eq!(bearer.expose(), "synthetic-id-token");
+    self.received.store(true, Ordering::SeqCst);
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while !self.release.load(Ordering::SeqCst) {
+      assert!(Instant::now() < deadline);
+      std::thread::sleep(Duration::from_millis(2));
+    }
+    Ok(PhotoSessionResponse {
+      status: 200,
+      body: Secret::new(valid_photo_identity().to_string()),
+    })
+  }
+}
+
+#[test]
+fn delayed_photo_identity_cannot_survive_logout_or_refresh_generation_changes() {
+  for logout in [true, false] {
+    let photo = Arc::new(DelayedPhotoSession {
+      received: AtomicBool::new(false),
+      release: AtomicBool::new(false),
+    });
+    let f = Fixture::with_photo_session(photo.clone());
+    f.login();
+    let account = Arc::clone(&f.account);
+    let pending = std::thread::spawn(move || account.photo_identity());
+    let deadline = Instant::now() + Duration::from_secs(3);
+    while !photo.received.load(Ordering::SeqCst) {
+      assert!(Instant::now() < deadline);
+      std::thread::sleep(Duration::from_millis(2));
+    }
+    if logout {
+      f.account.logout().unwrap();
+    } else {
+      f.account.refresh().unwrap();
+    }
+    photo.release.store(true, Ordering::SeqCst);
+    assert_eq!(pending.join().unwrap().unwrap_err(), AccountError::Cancelled);
+  }
+}
+
+struct RotatingExpiryPhotoSession(AtomicU64);
+impl PhotoSessionTransport for RotatingExpiryPhotoSession {
+  fn send(&self, _: &Config, _: &Secret) -> Result<PhotoSessionResponse, AccountError> {
+    let mut body = valid_photo_identity();
+    if self.0.fetch_add(1, Ordering::SeqCst) > 0 {
+      body["expiresAt"] = json!("1970-01-01T01:00:01.000Z");
+    }
+    Ok(PhotoSessionResponse {
+      status: 200,
+      body: Secret::new(body.to_string()),
+    })
+  }
+}
+
+#[test]
+fn expiry_refresh_keeps_the_same_logical_photo_identity_scope() {
+  let f = Fixture::with_photo_session(Arc::new(RotatingExpiryPhotoSession(AtomicU64::new(0))));
+  f.login();
+  let first = f.account.photo_identity().unwrap();
+  let second = f.account.photo_identity().unwrap();
+  assert_eq!(first.user_id, second.user_id);
+  assert_eq!(first.session_id, second.session_id);
+  assert_eq!(first.session_epoch, second.session_epoch);
+  assert_eq!(first.transport, second.transport);
+  assert_ne!(first.expires_at, second.expires_at);
+}
+
+fn photo_scope(identity: &PhotoIdentity) -> PhotoScopeCapture {
+  PhotoScopeCapture {
+    user_id: identity.user_id.clone(),
+    session_id: identity.session_id.clone(),
+    session_epoch: identity.session_epoch.clone(),
+    transport: identity.transport,
+  }
+}
+
+fn native_photo_value() -> Value {
+  json!({
+    "id":"photo","libraryId":"library","storageState":"stored","lifecycle":"active",
+    "fileName":"synthetic.jpg","format":"jpeg","hasEdits":false,"addedAt":"1970-01-01T00:16:40.000Z",
+    "capturedAt":null,"width":1,"height":1,
+    "original":{"id":"upa_opaque","kind":"original","sha256":format!("{:x}", Sha256::digest(b"x")),
+      "sizeBytes":1,"contentType":"image/jpeg","width":1,"height":1},
+    "recipe":{"revision":0,"settings":{"v":1,"engine":"niho-14"},"settingsSha256":"b".repeat(64),
+      "baseVersion":null,"maskSurfaceIds":[],"updatedAt":"1970-01-01T00:16:40.000Z"},
+    "media":{"state":"pending"}
+  })
+}
+
+struct ContentStatusPhotoHttp {
+  status: u16,
+  received: Arc<AtomicBool>,
+  release: Arc<AtomicBool>,
+}
+
+impl ContentStatusPhotoHttp {
+  fn immediate(status: u16) -> Self {
+    Self {
+      status,
+      received: Arc::new(AtomicBool::new(false)),
+      release: Arc::new(AtomicBool::new(true)),
+    }
+  }
+}
+
+impl PhotoHttpTransport for ContentStatusPhotoHttp {
+  fn send(
+    &self,
+    _: &Config,
+    bearer: &Secret,
+    request: &NativePhotoRequest,
+    content: bool,
+  ) -> Result<PhotoHttpResponse, AccountError> {
+    assert_eq!(bearer.expose(), "synthetic-id-token");
+    if content {
+      self.received.store(true, Ordering::SeqCst);
+      let deadline = Instant::now() + Duration::from_secs(3);
+      while !self.release.load(Ordering::SeqCst) {
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(2));
+      }
+      if self.status == 0 {
+        return Err(AccountError::Network);
+      }
+      return Ok(PhotoHttpResponse {
+        status: self.status,
+        content_length: Some(0),
+        content_type: Some("application/json".into()),
+        sha256: None,
+        total_bytes: None,
+        body: Box::new(Cursor::new(Vec::<u8>::new())),
+      });
+    }
+    assert!(request.url.path().ends_with("/photos/photo"));
+    let bytes = serde_json::to_vec(&native_photo_value()).unwrap();
+    Ok(PhotoHttpResponse {
+      status: 200,
+      content_length: Some(bytes.len() as u64),
+      content_type: Some("application/json".into()),
+      sha256: None,
+      total_bytes: None,
+      body: Box::new(Cursor::new(bytes)),
+    })
+  }
+}
+
+#[test]
+fn guarded_cache_read_rejects_bytes_if_logout_or_refresh_occurs_during_io() {
+  for refresh in [false, true] {
+    let f = Fixture::new();
+    f.login();
+    let scope = photo_scope(&f.account.photo_identity().unwrap());
+    let result = f.account.photo_content_read_guarded(&scope, || {
+      if refresh {
+        f.account.refresh().unwrap();
+      } else {
+        f.account.logout().unwrap();
+      }
+      Ok(vec![7_u8])
+    });
+    assert_eq!(result, Err(AccountError::Cancelled));
+  }
+}
+
+#[test]
+fn content_401_invalidates_only_its_captured_generation() {
+  let http = Arc::new(ContentStatusPhotoHttp::immediate(401));
+  let f = Fixture::with_photo_http(http);
+  f.login();
+  let scope = photo_scope(&f.account.photo_identity().unwrap());
+  let metadata = f.account.photo_content_metadata(&scope, "photo", "upa_opaque").unwrap();
+  assert_eq!(
+    f.account
+      .photo_content_download(&scope, &metadata, &mut Vec::new(), &PhotoDownloadCancel::default(),),
+    Err(AccountError::Expired)
+  );
+  assert_eq!(f.account.snapshot().phase, AccountPhase::Failed);
+  assert!(f.store.load(SecretKind::RefreshToken).unwrap().is_none());
+  assert_eq!(
+    f.account.photo_content_read_guarded(&scope, || Ok(vec![1_u8])),
+    Err(AccountError::Expired)
+  );
+
+  let received = Arc::new(AtomicBool::new(false));
+  let release = Arc::new(AtomicBool::new(false));
+  let http = Arc::new(ContentStatusPhotoHttp {
+    status: 401,
+    received: Arc::clone(&received),
+    release: Arc::clone(&release),
+  });
+  let f = Fixture::with_photo_http(http);
+  f.login();
+  let scope = photo_scope(&f.account.photo_identity().unwrap());
+  let metadata = f.account.photo_content_metadata(&scope, "photo", "upa_opaque").unwrap();
+  let account = Arc::clone(&f.account);
+  let pending = std::thread::spawn(move || {
+    account.photo_content_download(&scope, &metadata, &mut Vec::new(), &PhotoDownloadCancel::default())
+  });
+  let deadline = Instant::now() + Duration::from_secs(3);
+  while !received.load(Ordering::SeqCst) {
+    assert!(Instant::now() < deadline);
+    std::thread::sleep(Duration::from_millis(2));
+  }
+  f.account.refresh().unwrap();
+  release.store(true, Ordering::SeqCst);
+  assert_eq!(pending.join().unwrap(), Err(AccountError::Cancelled));
+  assert_eq!(f.account.snapshot().phase, AccountPhase::Connected);
+  assert!(f.store.load(SecretKind::RefreshToken).unwrap().is_some());
+}
+
+#[test]
+fn content_transient_status_does_not_permanently_logout() {
+  for status in [0, 429, 503] {
+    let f = Fixture::with_photo_http(Arc::new(ContentStatusPhotoHttp::immediate(status)));
+    f.login();
+    let scope = photo_scope(&f.account.photo_identity().unwrap());
+    let metadata = f.account.photo_content_metadata(&scope, "photo", "upa_opaque").unwrap();
+    let expected = if status == 0 {
+      AccountError::Network
+    } else {
+      AccountError::InvalidResponse
+    };
+    assert_eq!(
+      f.account
+        .photo_content_download(&scope, &metadata, &mut Vec::new(), &PhotoDownloadCancel::default(),),
+      Err(expected)
+    );
+    assert_eq!(f.account.snapshot().phase, AccountPhase::Connected);
+    assert!(f.store.load(SecretKind::RefreshToken).unwrap().is_some());
+  }
 }
 
 struct PausedTransport {

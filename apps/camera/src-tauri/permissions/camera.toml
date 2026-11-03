@@ -47,3 +47,13 @@ commands.allow = ["camera_update_status"]
 identifier = "allow-camera-account"
 description = "同梱のmain画面に固定分類のアカウント状態と操作だけを許可する。URL、token、プロフィール、権限claimは受け渡さない。"
 commands.allow = ["camera_account_state", "camera_account_login", "camera_account_cancel", "camera_account_logout", "camera_account_refresh"]
+
+[[permission]]
+identifier = "allow-camera-photo-session"
+description = "同梱のmain画面だけに、既存Camera認証で照合した本人写真セッションの安全な表示用metadataを読むことを許可する。入力、token、任意URL、path、権限の証明は受け渡さない。"
+commands.allow = ["camera_photo_identity"]
+
+[[permission]]
+identifier = "allow-camera-photo-cloud"
+description = "同梱のmain画面だけに、native認証に束縛した固定本人写真操作と、検証済み一時原本handleの最大1MiB読取・取消・解放を許可する。URL、header、token、path、upload ticketは受け渡さない。"
+commands.allow = ["camera_photo_request", "camera_photo_content_open", "camera_photo_content_read", "camera_photo_content_close", "camera_photo_content_cancel"]

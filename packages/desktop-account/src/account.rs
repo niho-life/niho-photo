@@ -1,9 +1,16 @@
 use crate::connect::{equal, secret_43, Pending};
+use crate::photo_cloud::{
+  content_request, native_request, original_metadata, read_json_response, stream_verified_content,
+  CapturedPhotoAuthority, HttpPhotoCloud, PhotoHttpTransport,
+};
+use crate::photo_session::{parse_response, parse_strict_iso, HttpPhotoSession, PhotoSessionTransport};
 use crate::{
-  AccountError, Browser, Cancel, Config, CredentialStore, ExternalBrowser, HttpTransport, Request, Response, Secret,
-  SecretKind, Transport, SAFETY_CONTRACT_VERSION,
+  AccountError, Browser, Cancel, ClientId, Config, CredentialStore, ExternalBrowser, HttpTransport,
+  PhotoContentMetadata, PhotoDownloadCancel, PhotoIdentity, PhotoJsonResponse, PhotoOperation, PhotoRequest,
+  PhotoScopeCapture, Request, Response, Secret, SecretKind, Transport, SAFETY_CONTRACT_VERSION,
 };
 use serde::{Deserialize, Serialize};
+use std::io::Write;
 use std::sync::{Arc, Mutex};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -33,6 +40,8 @@ struct Inner {
   generation: u64,
   cancel: Option<Cancel>,
   access: Option<Secret>,
+  photo_identity: Option<PhotoIdentity>,
+  photo_identity_expires_at_ms: u64,
   expires_at_ms: u64,
   next_attempt_ms: u64,
   retry_delay_ms: u64,
@@ -42,6 +51,8 @@ struct Adapters {
   store: Arc<dyn CredentialStore>,
   browser: Arc<dyn Browser>,
   transport: Arc<dyn Transport>,
+  photo_session: Arc<dyn PhotoSessionTransport>,
+  photo_http: Arc<dyn PhotoHttpTransport>,
 }
 pub(crate) trait Clock: Send + Sync {
   fn now_ms(&self) -> Result<u64, AccountError>;
@@ -179,6 +190,8 @@ impl Account {
         store,
         browser,
         transport,
+        photo_session: Arc::new(HttpPhotoSession),
+        photo_http: Arc::new(HttpPhotoCloud),
       }),
       Arc::new(SystemClock),
     )
@@ -186,6 +199,16 @@ impl Account {
   #[cfg(test)]
   pub(crate) fn with_clock(mut self, clock: Arc<dyn Clock>) -> Self {
     self.clock = clock;
+    self
+  }
+  #[cfg(test)]
+  pub(crate) fn with_photo_session(mut self, photo_session: Arc<dyn PhotoSessionTransport>) -> Self {
+    self.adapters.as_mut().expect("configured test account").photo_session = photo_session;
+    self
+  }
+  #[cfg(test)]
+  pub(crate) fn with_photo_http(mut self, photo_http: Arc<dyn PhotoHttpTransport>) -> Self {
+    self.adapters.as_mut().expect("configured test account").photo_http = photo_http;
     self
   }
   fn preflight_error(&self, error: AccountError) -> AccountError {
@@ -216,6 +239,8 @@ impl Account {
         generation: 0,
         cancel: None,
         access: None,
+        photo_identity: None,
+        photo_identity_expires_at_ms: 0,
         expires_at_ms: 0,
         next_attempt_ms: u64::MAX,
         retry_delay_ms: 1000,
@@ -624,6 +649,325 @@ impl Account {
       Ok(())
     }
   }
+  /// Camera専用の固定server endpointから、安全な本人session metadataだけを読む。
+  pub fn photo_identity(&self) -> Result<PhotoIdentity, AccountError> {
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    if adapters.config.client != ClientId::Camera {
+      return Err(AccountError::NotConfigured);
+    }
+    let (generation, access, connection) = {
+      let inner = self.inner.lock().map_err(|_| AccountError::Internal)?;
+      let now = self.clock.now_ms()?;
+      if inner.phase != AccountPhase::Connected || inner.cancel.is_some() || now >= inner.expires_at_ms {
+        return Err(AccountError::Expired);
+      }
+      let access = inner.access.as_ref().cloned().ok_or(AccountError::Expired)?;
+      let raw = adapters
+        .store
+        .load(SecretKind::RefreshToken)?
+        .ok_or(AccountError::Expired)?;
+      let connection: StoredConnection = serde_json::from_str(raw.expose()).map_err(|_| AccountError::Storage)?;
+      if connection.version != SAFETY_CONTRACT_VERSION
+        || connection.client != ClientId::Camera
+        || !opaque_id(&connection.connection_id)
+        || !opaque_id(&connection.user_id)
+      {
+        return Err(AccountError::Storage);
+      }
+      (inner.generation, access, connection)
+    };
+
+    let response = adapters.photo_session.send(&adapters.config, &access)?;
+    let identity = match parse_response(
+      response,
+      self.clock.now_ms()?,
+      &connection.user_id,
+      &connection.connection_id,
+    ) {
+      Ok(identity) => identity,
+      Err(error @ (AccountError::Expired | AccountError::AccountUnavailable)) => {
+        self.invalidate_photo_identity(adapters, generation, error)?;
+        return Err(error);
+      }
+      Err(error) => return Err(error),
+    };
+
+    let fresh_now = self.clock.now_ms()?;
+    let mut inner = self.inner.lock().map_err(|_| AccountError::Internal)?;
+    if inner.generation != generation
+      || inner.phase != AccountPhase::Connected
+      || inner.cancel.is_some()
+      || fresh_now >= inner.expires_at_ms
+      || inner
+        .access
+        .as_ref()
+        .is_none_or(|fresh| !equal(fresh.expose(), access.expose()))
+    {
+      return Err(AccountError::Cancelled);
+    }
+    let raw = adapters
+      .store
+      .load(SecretKind::RefreshToken)?
+      .ok_or(AccountError::Cancelled)?;
+    let fresh: StoredConnection = serde_json::from_str(raw.expose()).map_err(|_| AccountError::Storage)?;
+    if fresh.version != connection.version
+      || fresh.client != connection.client
+      || fresh.user_id != connection.user_id
+      || fresh.connection_id != connection.connection_id
+    {
+      return Err(AccountError::Cancelled);
+    }
+    inner.photo_identity_expires_at_ms = parse_strict_iso(&identity.expires_at).ok_or(AccountError::InvalidResponse)?;
+    inner.photo_identity = Some(identity.clone());
+    Ok(identity)
+  }
+
+  /// Camera専用の固定C00 operation。URL・headers・credentialはcallerから受け取らない。
+  pub fn photo_request(
+    &self,
+    capture: &PhotoScopeCapture,
+    request: &PhotoRequest,
+  ) -> Result<PhotoJsonResponse, AccountError> {
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    let authority = self.capture_photo_authority(adapters, capture)?;
+    let response = self.send_photo_json(adapters, &authority, request)?;
+    self.ensure_photo_authority(adapters, &authority)?;
+    if response.status == 401
+      && response
+        .body
+        .get("error")
+        .and_then(|value| value.get("code"))
+        .and_then(|value| value.as_str())
+        == Some("unauthenticated")
+    {
+      self.invalidate_photo_identity(adapters, authority.generation, AccountError::Expired)?;
+    }
+    Ok(response)
+  }
+
+  pub fn photo_scope_current(&self, capture: &PhotoScopeCapture) -> Result<(), AccountError> {
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    self.capture_photo_authority(adapters, capture).map(|_| ())
+  }
+
+  /// Cache bytes may cross IPC only when the same native authority is current both before and after the file read.
+  pub fn photo_content_read_guarded(
+    &self,
+    capture: &PhotoScopeCapture,
+    read: impl FnOnce() -> Result<Vec<u8>, AccountError>,
+  ) -> Result<Vec<u8>, AccountError> {
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    let authority = self.capture_photo_authority(adapters, capture)?;
+    let value = read()?;
+    self.ensure_photo_authority(adapters, &authority)?;
+    Ok(value)
+  }
+
+  pub fn photo_content_metadata(
+    &self,
+    capture: &PhotoScopeCapture,
+    photo_id: &str,
+    asset_id: &str,
+  ) -> Result<PhotoContentMetadata, AccountError> {
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    let authority = self.capture_photo_authority(adapters, capture)?;
+    let get = PhotoRequest::parse(
+      PhotoOperation::PhotosGet,
+      serde_json::json!({ "photoId": photo_id }),
+      None,
+    )?;
+    let photo = self.send_photo_json(adapters, &authority, &get)?;
+    if photo.status == 401 {
+      self.invalidate_photo_identity(adapters, authority.generation, AccountError::Expired)?;
+      return Err(AccountError::Expired);
+    }
+    if photo.status != 200 {
+      return Err(AccountError::Rejected);
+    }
+    original_metadata(&photo.body, photo_id, asset_id)
+  }
+
+  /// 実STORED originalをfresh Photo metadataへ束縛し、全bytes/SHA/EOF検証しながらnative writerへ流す。
+  pub fn photo_content_download<W: Write>(
+    &self,
+    capture: &PhotoScopeCapture,
+    expected: &PhotoContentMetadata,
+    writer: &mut W,
+    cancel: &PhotoDownloadCancel,
+  ) -> Result<PhotoContentMetadata, AccountError> {
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    let authority = self.capture_photo_authority(adapters, capture)?;
+    let get = PhotoRequest::parse(
+      PhotoOperation::PhotosGet,
+      serde_json::json!({ "photoId": expected.photo_id }),
+      None,
+    )?;
+    let photo = self.send_photo_json(adapters, &authority, &get)?;
+    if photo.status == 401 {
+      self.invalidate_photo_identity(adapters, authority.generation, AccountError::Expired)?;
+      return Err(AccountError::Expired);
+    }
+    if photo.status != 200 {
+      return Err(AccountError::Rejected);
+    }
+    let metadata = original_metadata(&photo.body, &expected.photo_id, &expected.asset_id)?;
+    if &metadata != expected {
+      return Err(AccountError::InvalidResponse);
+    }
+    self.ensure_photo_authority(adapters, &authority)?;
+    cancel.check()?;
+    let request = content_request(
+      &adapters.config,
+      &authority.scope,
+      &expected.photo_id,
+      &expected.asset_id,
+    );
+    let response = adapters
+      .photo_http
+      .send(&adapters.config, &authority.access, &request, true)?;
+    if response.status == 401 {
+      self.invalidate_photo_identity(adapters, authority.generation, AccountError::Expired)?;
+      return Err(AccountError::Expired);
+    }
+    stream_verified_content(response, expected, writer, cancel, || {
+      self.ensure_photo_authority(adapters, &authority)
+    })?;
+    self.ensure_photo_authority(adapters, &authority)?;
+    Ok(metadata)
+  }
+
+  fn send_photo_json(
+    &self,
+    adapters: &Adapters,
+    authority: &CapturedPhotoAuthority,
+    request: &PhotoRequest,
+  ) -> Result<PhotoJsonResponse, AccountError> {
+    self.ensure_photo_authority(adapters, authority)?;
+    let native = native_request(&adapters.config, &authority.scope, request);
+    let response = adapters
+      .photo_http
+      .send(&adapters.config, &authority.access, &native, false)?;
+    let response = read_json_response(response, request.operation())?;
+    self.ensure_photo_authority(adapters, authority)?;
+    Ok(response)
+  }
+
+  fn capture_photo_authority(
+    &self,
+    adapters: &Adapters,
+    capture: &PhotoScopeCapture,
+  ) -> Result<CapturedPhotoAuthority, AccountError> {
+    if adapters.config.client != ClientId::Camera
+      || capture.transport != crate::PhotoIdentityTransport::MacBearer
+      || !opaque_id(&capture.user_id)
+      || !opaque_id(&capture.session_id)
+      || !opaque_id(&capture.session_epoch)
+    {
+      return Err(AccountError::Rejected);
+    }
+    let inner = self.inner.lock().map_err(|_| AccountError::Internal)?;
+    let now = self.clock.now_ms()?;
+    if inner.phase != AccountPhase::Connected
+      || inner.cancel.is_some()
+      || now >= inner.expires_at_ms
+      || now >= inner.photo_identity_expires_at_ms
+    {
+      return Err(AccountError::Expired);
+    }
+    let identity = inner.photo_identity.as_ref().ok_or(AccountError::Expired)?;
+    if identity.user_id != capture.user_id
+      || identity.session_id != capture.session_id
+      || identity.session_epoch != capture.session_epoch
+      || identity.transport != capture.transport
+    {
+      return Err(AccountError::Rejected);
+    }
+    let access = inner.access.as_ref().cloned().ok_or(AccountError::Expired)?;
+    let raw = adapters
+      .store
+      .load(SecretKind::RefreshToken)?
+      .ok_or(AccountError::Expired)?;
+    let connection: StoredConnection = serde_json::from_str(raw.expose()).map_err(|_| AccountError::Storage)?;
+    if connection.version != SAFETY_CONTRACT_VERSION
+      || connection.client != ClientId::Camera
+      || !opaque_id(&connection.connection_id)
+      || !opaque_id(&connection.user_id)
+      || connection.user_id != capture.user_id
+      || connection.connection_id != capture.session_id
+    {
+      return Err(AccountError::Rejected);
+    }
+    Ok(CapturedPhotoAuthority {
+      generation: inner.generation,
+      access,
+      connection_id: connection.connection_id,
+      user_id: connection.user_id,
+      scope: capture.clone(),
+    })
+  }
+
+  fn ensure_photo_authority(
+    &self,
+    adapters: &Adapters,
+    authority: &CapturedPhotoAuthority,
+  ) -> Result<(), AccountError> {
+    let inner = self.inner.lock().map_err(|_| AccountError::Internal)?;
+    let now = self.clock.now_ms()?;
+    if inner.generation != authority.generation
+      || inner.phase != AccountPhase::Connected
+      || inner.cancel.is_some()
+      || now >= inner.expires_at_ms
+      || now >= inner.photo_identity_expires_at_ms
+      || inner.photo_identity.as_ref().is_none_or(|identity| {
+        identity.user_id != authority.scope.user_id
+          || identity.session_id != authority.scope.session_id
+          || identity.session_epoch != authority.scope.session_epoch
+          || identity.transport != authority.scope.transport
+      })
+      || inner
+        .access
+        .as_ref()
+        .is_none_or(|fresh| !equal(fresh.expose(), authority.access.expose()))
+    {
+      return Err(AccountError::Cancelled);
+    }
+    let raw = adapters
+      .store
+      .load(SecretKind::RefreshToken)?
+      .ok_or(AccountError::Cancelled)?;
+    let fresh: StoredConnection = serde_json::from_str(raw.expose()).map_err(|_| AccountError::Storage)?;
+    if fresh.client != ClientId::Camera
+      || fresh.connection_id != authority.connection_id
+      || fresh.user_id != authority.user_id
+      || authority.scope.user_id != fresh.user_id
+      || authority.scope.session_id != fresh.connection_id
+    {
+      return Err(AccountError::Cancelled);
+    }
+    Ok(())
+  }
+
+  fn invalidate_photo_identity(
+    &self,
+    adapters: &Adapters,
+    generation: u64,
+    error: AccountError,
+  ) -> Result<(), AccountError> {
+    let mut inner = self.inner.lock().map_err(|_| AccountError::Internal)?;
+    if inner.generation != generation {
+      return Err(AccountError::Cancelled);
+    }
+    inner.generation = inner.generation.checked_add(1).ok_or(AccountError::Internal)?;
+    inner.access = None;
+    inner.photo_identity = None;
+    inner.photo_identity_expires_at_ms = 0;
+    inner.cancel = None;
+    inner.next_attempt_ms = u64::MAX;
+    inner.phase = AccountPhase::Failed;
+    inner.error = Some(error);
+    adapters.store.clear(SecretKind::RefreshToken)?;
+    Ok(())
+  }
   pub fn cancel(&self) -> Result<(), AccountError> {
     self.cancel_inner().map_err(|error| self.preflight_error(error))
   }
@@ -649,6 +993,8 @@ impl Account {
     };
     inner.error = Some(AccountError::Cancelled);
     inner.access = None;
+    inner.photo_identity = None;
+    inner.photo_identity_expires_at_ms = 0;
     Ok(())
   }
   /// このMacの資格を削除する。server側の全接続失効を意味しない。
@@ -665,6 +1011,8 @@ impl Account {
     }
     inner.generation = inner.generation.checked_add(1).ok_or(AccountError::Internal)?;
     inner.access = None;
+    inner.photo_identity = None;
+    inner.photo_identity_expires_at_ms = 0;
     if let Some(adapters) = &self.adapters {
       if adapters
         .store
