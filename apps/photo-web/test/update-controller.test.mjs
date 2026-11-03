@@ -59,6 +59,43 @@ function setup(canLeave = async () => true) {
 }
 
 describe("createPhotoPwaUpdateController", () => {
+  it("clears an initial waiting snapshot when first installation activates without claiming the page", () => {
+    const test = setup();
+    test.registration.waiting = null;
+    test.worker.state = "activating";
+    test.worker.dispatchEvent(new Event("statechange"));
+    test.worker.state = "activated";
+    test.worker.dispatchEvent(new Event("statechange"));
+    assert.equal(test.controller.getSnapshot().phase, "up-to-date");
+    assert.equal(test.reloads(), 0);
+    assert.equal(test.worker.messages.length, 0);
+    test.controller.dispose();
+  });
+
+  it("clears the first-install available phase after an installing worker activates", () => {
+    const worker = new FakeWorker();
+    worker.state = "installing";
+    const registration = new FakeRegistration(null);
+    registration.installing = worker;
+    const serviceWorker = new FakeContainer();
+    let reloads = 0;
+    let guards = 0;
+    const controller = createPhotoPwaUpdateController({ registration, serviceWorker, origin: ORIGIN,
+      canLeave: async () => { guards += 1; return true; }, reload: () => { reloads += 1; } });
+    registration.waiting = worker;
+    worker.state = "installed";
+    worker.dispatchEvent(new Event("statechange"));
+    assert.equal(controller.getSnapshot().phase, "available");
+    registration.waiting = null;
+    worker.state = "activated";
+    worker.dispatchEvent(new Event("statechange"));
+    assert.equal(controller.getSnapshot().phase, "up-to-date");
+    assert.equal(reloads, 0);
+    assert.equal(guards, 0);
+    assert.equal(worker.messages.length, 0);
+    controller.dispose();
+  });
+
   it("exposes immutable snapshots and deduplicates a double request", async () => {
     const test = setup();
     assert.equal(test.controller.getSnapshot().phase, "available");

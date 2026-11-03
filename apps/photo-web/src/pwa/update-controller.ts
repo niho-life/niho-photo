@@ -342,9 +342,14 @@ export function createPhotoPwaUpdateController(options: PhotoPwaUpdateOptions): 
         if (target && configuration.registration.waiting !== target.worker) finish(target, "failed");
         if (!pending) publish("available");
       }
+      if ((worker.state === "activating" || worker.state === "activated") && !pending) {
+        // First installation can activate without controllerchange because this page is unclaimed.
+        publish(configuration.registration.waiting ? "available" : "up-to-date");
+      }
       if (worker.state === "redundant") {
         const target = pending;
         if (target?.worker === worker && !target.approved) finish(target, "failed");
+        else if (!pending) publish(configuration.registration.waiting ? "available" : "up-to-date");
       }
     };
     worker.addEventListener("statechange", onStateChange);
@@ -361,6 +366,8 @@ export function createPhotoPwaUpdateController(options: PhotoPwaUpdateOptions): 
   configuration.serviceWorker.addEventListener("controllerchange", onControllerChange);
   configuration.registration.addEventListener("updatefound", onUpdateFound);
   if (configuration.registration.installing) watchInstalling(configuration.registration.installing);
+  // A first install may already be waiting when the host starts observing it.
+  if (configuration.registration.waiting) watchInstalling(configuration.registration.waiting);
 
   const requestUpdate = (): Promise<"applied" | "blocked" | "failed"> => {
     if (disposed) return Promise.resolve("failed");
