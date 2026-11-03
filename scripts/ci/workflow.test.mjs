@@ -29,10 +29,10 @@ test("native（Client）は廃止される macos-14 ではなく macos-26 で検
   deprecated.jobs.native["runs-on"] = "macos-14";
   assert.ok(workflowFailures(deprecated).length > 0);
 });
-test("native（Client）の timeout は 45 分まで（macos-26 の develop-engine は 16〜24 分。ほかの job は 30 分まで）", () => {
-  assert.equal(workflow.jobs.native?.["timeout-minutes"], 45);
+test("native（Client）の timeout は 90 分まで（Mac nativeの全scope検証に余裕を持たせる）", () => {
+  assert.equal(workflow.jobs.native?.["timeout-minutes"], 90);
   const tooLong = structuredClone(workflow);
-  tooLong.jobs.native["timeout-minutes"] = 46;
+  tooLong.jobs.native["timeout-minutes"] = 91;
   assert.ok(workflowFailures(tooLong).length > 0);
   const otherTooLong = structuredClone(workflow);
   otherTooLong.jobs["photo-editing"]["timeout-minutes"] = 31;
