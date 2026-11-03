@@ -12946,7 +12946,6 @@
       "origin": "NIHO所有のC02転送で、deadline/abort/late responseの解放を同じ境界へ閉じる小さい補助実装。既存公開契約を再利用し、資格情報・内部URL・実写真は含まない。"
     },
     {
-<<<<<<< HEAD
       "path": "docs/architecture/personal-photo-sync.md",
       "sha256": "8f3bec3b59b2398cb306e85b91fde51e782ddccfa00224924c47bd2b90879d9e",
       "origin": "NIHO所有の本人補正同期coreの新規設計。完全draft、actor scope、同一key再送、CAS/競合と後続の実受入境界を公開可能な範囲で記述。\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証"
@@ -13010,11 +13009,11 @@
       "path": "packages/photo-cloud-sync/tsconfig.json",
       "sha256": "4b6495e7817607609b6b069250904b735ffd65b1a1523eb452ba655b6b36ff1b",
       "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。"
-=======
+    },
+    {
       "path": "packages/photo-editing/src/editor/photo-editing-image-cors.tsx",
       "sha256": "78da7f47dd3cec72d40a7b11b2d85ee088b767eaa3e48956f8c6058a84bbf862",
       "origin": "niho-photo #219 の分離ブラウザ文書向け画像CORS opt-in を実装するため、この公開リポジトリで新規作成。第三者コード・fixture・実データを含まない。"
->>>>>>> origin/feature/personal-photo-transfers
     }
   ],
   "excludedSources": [
