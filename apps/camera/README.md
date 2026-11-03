@@ -43,6 +43,10 @@ Mac アプリの WKWebView は独自の scheme（`tauri://localhost`）の画面
 - 口と画素は wasm と同じです（どちらも `niho_develop::api` を呼ぶ）。sidecar が無い・`serve` を知らない古い版・版（`hello` の `crateVersion` と `engine`）が画面の `DEVELOP_ENGINE_CRATE_VERSION`・`DEVELOP_ENGINE_VERSION` と違う・起動に失敗したときは、今の wasm で描きます
 - 開発の debug build は `NIHO_DEVELOP_RENDER_PATH` で sidecar を差し替えられます。Mac アプリの中で native と wasm の画素と時間を比べる E2E は `scripts/e2e/native-develop.sh <作業フォルダ>`、画面で合成 PNG の露光・プリセットを操作して `runtime: native` を確かめる E2E は続けて `scripts/e2e/native-develop-ui.sh <同じ作業フォルダ>`（Mac Studio で `studio-exec.sh run --class heavy` から）。
 
+## 写真pickerの自動E2E（#210）
+
+Node.js 24 と macOS が必要です。`npm -C apps/camera run e2e:photo-picker` は一時HOME・合成写真・試験専用identifierを使い、フォルダと複数写真の選択、再起動、重複・取消、移動後の再表示、参照を外して再追加したときの補正復元、編集・JPEG書き出し、パスを含まない報告を確認します。署名済みDMGの手動画面受け入れは含みません。
+
 ## 公式candidateのSDK runtime
 
 公式配布は`npm run candidate:build`から作成します。選択したSDKのruntimeとmanifestを専用Mach-O sectionへ埋め込み、Tauriのasset providerは同じtable/payloadから返します。署名前の検証は候補プログラムを起動せず、sectionの実bytes・path・size・SHA-256をSDKへ照合します。`official-updates` featureの直接buildにはこの固定bundleが必要です。通常の開発buildは従来のfrontend assetsを使います。
