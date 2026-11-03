@@ -10,7 +10,7 @@ import {
 
 import { createPhotoPwaUpdateController } from "../pwa/update-controller.ts";
 import type { PhotoPwaUpdateController } from "../pwa/types.ts";
-import type { PhotoWebViewBinding } from "../view/types.ts";
+import type { PhotoWebTransferBinding, PhotoWebViewBinding } from "../view/types.ts";
 import type {
   CreatePhotoWebRuntimeOptions,
   PhotoWebBroadcastChannel,
@@ -28,6 +28,37 @@ const REFRESH_EARLY_MS = 60_000;
 const MAX_BOUND_KEY_BYTES = 8_192;
 const MAX_DOWNLOAD_ENTRIES = 16;
 const MAX_DOWNLOAD_BYTES = 512 * 1024 * 1024;
+const PHOTO_FORMATS = new Set(["jpeg", "png", "heic", "heif", "tiff", "raw"]);
+const TRANSFER_PHASES = [
+  "start-pending",
+  "uploading",
+  "complete-pending",
+  "verifying",
+  "pending-recipe",
+  "done",
+  "cancel-pending",
+  "cancelled",
+  "expired",
+  "rejected",
+  "purged",
+  "failed",
+  "needs-file",
+] as const;
+const TRANSFER_COPY_FIELDS = [
+  "toolbar",
+  "pendingTitle",
+  "add",
+  "resume",
+  "chooseSameFile",
+  "cancel",
+  "refresh",
+  "next",
+  "first",
+  "busy",
+  "failed",
+  "unsupported",
+  "refreshFailed",
+] as const;
 
 type LeaveGuard = (options?: { readonly release?: boolean }) => Promise<boolean>;
 type ScopeReason = Extract<PhotoSessionEvent, { type: "scope-invalidated" }>["reason"];
@@ -82,6 +113,59 @@ function copyUsage(value: PhotoWebViewBinding["usage"]): PhotoWebViewBinding["us
     pendingPurgeBytes: value.pendingPurgeBytes,
     reservedBytes: value.reservedBytes,
     availableBytes: value.availableBytes,
+  });
+}
+
+function copyTransferBinding(value: unknown): PhotoWebTransferBinding | undefined {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return undefined;
+  const candidate = value as PhotoWebTransferBinding;
+  const controller = candidate.controller;
+  if (typeof controller !== "object" || controller === null
+    || typeof controller.checkCapability !== "function"
+    || typeof controller.start !== "function"
+    || typeof controller.resume !== "function"
+    || typeof controller.cancel !== "function"
+    || typeof controller.list !== "function"
+    || typeof controller.readPendingRecipe !== "function"
+    || typeof controller.dispose !== "function"
+    || typeof candidate.describeError !== "function"
+    || typeof candidate.onSettled !== "function"
+    || !Array.isArray(candidate.formats)
+    || typeof candidate.copy !== "object"
+    || candidate.copy === null) return undefined;
+  if (!TRANSFER_COPY_FIELDS.every((field) => typeof candidate.copy[field] === "string" && candidate.copy[field].length > 0)
+    || typeof candidate.copy.phaseLabels !== "object"
+    || candidate.copy.phaseLabels === null
+    || !TRANSFER_PHASES.every((phase) => typeof candidate.copy.phaseLabels[phase] === "string"
+      && candidate.copy.phaseLabels[phase].length > 0)) return undefined;
+
+  const formats = candidate.formats.map((format) => {
+    if (typeof format !== "object" || format === null
+      || !PHOTO_FORMATS.has(format.format)
+      || !Array.isArray(format.extensions)
+      || !format.extensions.every((extension: unknown) => typeof extension === "string" && /^[a-z0-9]+$/u.test(extension))
+      || typeof format.ingest !== "boolean"
+      || typeof format.workingCopy !== "boolean") throw new TypeError("invalid transfer format");
+    return Object.freeze({
+      format: format.format,
+      extensions: Object.freeze([...format.extensions]),
+      ingest: format.ingest,
+      workingCopy: format.workingCopy,
+    });
+  });
+  const phaseLabels = Object.freeze(Object.fromEntries(
+    TRANSFER_PHASES.map((phase) => [phase, candidate.copy.phaseLabels[phase]]),
+  )) as PhotoWebTransferBinding["copy"]["phaseLabels"];
+  const copy = Object.freeze({
+    ...Object.fromEntries(TRANSFER_COPY_FIELDS.map((field) => [field, candidate.copy[field]])),
+    phaseLabels,
+  }) as PhotoWebTransferBinding["copy"];
+  return Object.freeze({
+    controller,
+    formats: Object.freeze(formats),
+    copy,
+    describeError: candidate.describeError,
+    onSettled: candidate.onSettled,
   });
 }
 
@@ -177,6 +261,7 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
   const ownedUrls = new Map<string, { timer: unknown; readonly bytes: number }>();
   const removers: Array<() => void> = [];
   const cleanupEligibleScopes = new Set<string>();
+  let transferProjections = new WeakMap<object, PhotoWebTransferBinding>();
   let ownedUrlBytes = 0;
 
   let disposed = false;
@@ -289,6 +374,7 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
     connectionUnsubscribe = null;
     connection = null;
     acceptedCore = null;
+    transferProjections = new WeakMap<object, PhotoWebTransferBinding>();
     binding = null;
     routeGuard = null;
     guardCancel = null;
@@ -413,6 +499,17 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
         || typeof candidate.disableCloudDelete !== "boolean") return null;
       const usage = copyUsage(candidate.usage);
       if (usage === undefined) return null;
+      let transfer: PhotoWebTransferBinding | undefined;
+      if (candidate.transfer !== undefined) {
+        const source = candidate.transfer as unknown;
+        if (typeof source !== "object" || source === null) return null;
+        transfer = transferProjections.get(source);
+        if (transfer === undefined) {
+          transfer = copyTransferBinding(source);
+          if (transfer === undefined) return null;
+          transferProjections.set(source, transfer);
+        }
+      }
       if (expected !== null && (
         candidate.actorId !== expected.actorId
         || candidate.key !== expected.key
@@ -429,6 +526,7 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
         mobileEditingAllowed: candidate.mobileEditingAllowed,
         disableCloudDelete: candidate.disableCloudDelete,
         usage,
+        ...(transfer === undefined ? {} : { transfer }),
       });
     } catch {
       return null;

@@ -49,3 +49,11 @@ UI型検査は既存cameraと同じstrict設定を使う。PWA・build・server�
 静的storeが保持するのは現在のbuildだけ。過去のファイルをdiskに残すだけでは、このexact mapから過去pathは配信されない。C08の静的配信層で旧content-addressed assetも配信し、passive画面が閉じるまで保持する。SWの2版cache上限をserver側の保持版数と同一視せず、root/SW/manifestは現在版だけを返す。
 
 renderer probeは、このbundleに固定した受入済みSDK/manifest proofと、共通getterが検証した実WASMの能力を組み合わせる。mutableな現在の`photo-build.json`から旧画面の能力identityを作らない。probeの破棄が完了してから、同じimmutable manifestをC02/Workbenchへ渡す。失効・遅着・不一致・破棄失敗ではbindingを返さず、getterの無い旧runtimeや実能力宣言の無いSDKを対応済みとしない。能力のserver/host交差はC02だけが計算する。
+
+## 転送の操作面
+
+接続が `PhotoWebViewBinding.transfer` を提供し、runtimeのscope portが有効な場合だけ、共通編集面の上に原本追加と未完了転送の操作面を表示する。表示文言は共有copy、転送・再開・ファイル照合・取消はC02の実controllerを使う。共有の `PhotoLibrary.addFile` に架空の成功を返さず、画面内に原本bytesや別のjournalを保持しない。
+
+一覧は現在ページの最大16件だけを読み、表示・再読込だけでは再送しない。新規追加は1件ずつ、再開には既存intentを使い、必要な場合だけ同じファイルを選び直す。本人確認中・オフラインではmutationを止め、scope失効・画面終了では進行中の処理をabortして遅着結果を捨てる。通常終了で永続journalを消さない。
+
+最終compositionは実controllerの進行中操作を離脱/PWA guardへ含め、受け入れた結果で一覧と容量を再確認する必要がある。取消と保存が競合し `failed` / `stored` が返った場合も保存済みとして再確認し、再確認の失敗で保存結果を失敗へ書き換えない。進行中操作の取消ボタンと正式接続後の実機受入は、この操作面だけで完了した扱いにしない。
