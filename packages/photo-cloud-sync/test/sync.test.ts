@@ -27,7 +27,9 @@ class Identity {
 
 class Locks implements RecipeSyncLocks {
   private tails = new Map<string, Promise<void>>();
+  readonly names: string[] = [];
   async request<T>(name: string, options: { readonly mode: "exclusive"; readonly signal: AbortSignal }, callback: () => Promise<T>): Promise<T> {
+    this.names.push(name);
     const prior = this.tails.get(name) ?? Promise.resolve();
     let release!: () => void;
     const next = new Promise<void>((resolve) => { release = resolve; });
@@ -89,6 +91,43 @@ function begin(setup: ReturnType<typeof harness>) {
 }
 
 describe("durable recipe sync", () => {
+  it.each(["logout", "owner-change", "dispose"] as const)("persists already captured latest input after %s without sending or exposing it to the new owner", async (transition) => {
+    const databaseName = `captured-${crypto.randomUUID()}`;
+    const setup = harness({ databaseName });
+    const writer = begin(setup);
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const originalStage = setup.journal.stage.bind(setup.journal);
+    const captures: RecipeWriterBinding[] = [];
+    vi.spyOn(setup.journal, "stage").mockImplementation(async (captured, stage, signal) => {
+      captures.push(captured);
+      await gate;
+      await originalStage(captured, stage, signal);
+    });
+    const observer = new IndexedDbRecipeSyncJournal(indexedDB, databaseName);
+    try {
+      const first = writer.stage(candidate({ settings: { ...candidate().settings, exposure: 0.25 } }));
+      const latest = writer.stage(candidate({ settings: { ...candidate().settings, exposure: 1.25 } }));
+      if (transition === "dispose") setup.sync.dispose();
+      else setup.identity.set(transition === "logout" ? null : defaultActor({ userId: IDS.userB }));
+      expect(() => writer.stage(candidate())).toThrow();
+      release();
+      await expect(first.committed).resolves.toMatchObject({ status: "committed" });
+      await expect(latest.committed).resolves.toMatchObject({ status: "committed" });
+      const binding = captures[0];
+      if (binding === undefined) throw new Error("captured binding missing");
+      const stored = await observer.reopen(binding, writer.token);
+      expect(stored?.latest?.candidate.settings.exposure).toBe(1.25);
+      const foreign = await observer.list({ ...binding, actorId: IDS.userB });
+      expect(foreign.writers).toHaveLength(0);
+      expect(setup.calls).toHaveLength(0);
+    } finally {
+      release();
+      setup.sync.dispose();
+      observer.dispose();
+    }
+  });
+
   it.each(["adopt", "keep-current"] as const)("resolves another device's retained conflict with %s without staging or PUT", async (decision) => {
     const conflict = responses["recipe-conflicts.get"];
     const setup = harness({ handler: async (operation) => {
@@ -314,6 +353,43 @@ describe("durable recipe sync", () => {
     } finally { setup.sync.dispose(); vi.useRealTimers(); }
   });
 
+  it("times out a never-settling captured write before disposing its journal connection", async () => {
+    vi.useFakeTimers();
+    const setup = harness({ timeoutMs: 10 });
+    const disposed = vi.spyOn(setup.journal, "dispose");
+    vi.spyOn(setup.journal, "stage").mockImplementation(() => new Promise<never>(() => undefined));
+    const ref = begin(setup).stage(candidate());
+    setup.sync.dispose();
+    expect(disposed).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(25);
+    await expect(ref.committed).resolves.toEqual({ status: "unsaved", reason: "unavailable" });
+    await vi.waitFor(() => expect(disposed).toHaveBeenCalledTimes(1));
+    vi.useRealTimers();
+  });
+
+  it("keeps its journal connection open until captured A and queued B are committed and cleaned", async () => {
+    const setup = harness();
+    const original = setup.journal.stage.bind(setup.journal);
+    const disposed = vi.spyOn(setup.journal, "dispose");
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    let calls = 0;
+    vi.spyOn(setup.journal, "stage").mockImplementation(async (...parameters) => {
+      calls += 1;
+      if (calls === 1) await gate;
+      await original(...parameters);
+    });
+    const writer = begin(setup);
+    const first = writer.stage(candidate({ settings: { ...candidate().settings, exposure: 0.5 } }));
+    const latest = writer.stage(candidate({ settings: { ...candidate().settings, exposure: 1.5 } }));
+    setup.sync.dispose();
+    expect(disposed).not.toHaveBeenCalled();
+    release();
+    await expect(first.committed).resolves.toMatchObject({ status: "committed" });
+    await expect(latest.committed).resolves.toMatchObject({ status: "committed" });
+    await vi.waitFor(() => expect(disposed).toHaveBeenCalledTimes(1));
+  });
+
   it("releases ACKed empty writer records on dispose so later photos can be edited", async () => {
     let revision = 0;
     const setup = harness({ handler: async (operation, request) => {
@@ -454,6 +530,237 @@ describe("durable recipe sync", () => {
     await expect(next.sync.listPending()).resolves.toEqual({ writers: [], nextCursor: null });
     expect(next.calls).toHaveLength(0);
     next.sync.dispose();
+  });
+
+  it("lists only previous canonical scopes with instance-bound tokens and keeps normal recovery separate", async () => {
+    const databaseName = `previous-list-${crypto.randomUUID()}`;
+    const first = harness({ databaseName });
+    const firstWriter = begin(first);
+    await firstWriter.stage(candidate({ settings: { ...candidate().settings, exposure: 0.1 } })).committed;
+    first.sync.dispose();
+
+    const second = harness({
+      databaseName,
+      identity: new Identity(defaultActor({ sessionId: "parent-2", sessionEpoch: "epoch-2" })),
+      epoch: "epoch-2",
+    });
+    const secondWriter = begin(second);
+    await secondWriter.stage(candidate({ settings: { ...candidate().settings, exposure: 0.2 } })).committed;
+    expect(secondWriter.token).toBe(firstWriter.token);
+    second.sync.dispose();
+
+    const current = harness({
+      databaseName,
+      identity: new Identity(defaultActor({ sessionId: "parent-3", sessionEpoch: "epoch-3" })),
+      epoch: "epoch-3",
+    });
+    try {
+      await current.journal.stage({
+        actorId: IDS.userB,
+        libraryId: IDS.library,
+        sessionId: "foreign-user",
+        sessionEpoch: "epoch-1",
+        transport: "browser-session",
+        token: firstWriter.token,
+        writerId: "foreign-user-writer",
+        photoId: IDS.photo,
+        sourceSha256: responses["photos.get"].original.sha256,
+        initialRevision: 0,
+      }, { generation: 0, candidate: candidate() });
+      await current.journal.stage({
+        actorId: IDS.userA,
+        libraryId: "foreign-library",
+        sessionId: "foreign-library-session",
+        sessionEpoch: "epoch-1",
+        transport: "browser-session",
+        token: firstWriter.token,
+        writerId: "foreign-library-writer",
+        photoId: IDS.photo,
+        sourceSha256: responses["photos.get"].original.sha256,
+        initialRevision: 0,
+      }, { generation: 0, candidate: candidate() });
+      await expect(current.sync.listPending()).resolves.toEqual({ writers: [], nextCursor: null });
+      const page = await current.sync.previous!.listPending();
+      expect(page.writers).toHaveLength(2);
+      expect(page.writers[0]!.token).not.toBe(page.writers[1]!.token);
+      expect(page.writers.map((item) => item.photoId)).toEqual([IDS.photo, IDS.photo]);
+      expect(current.calls.filter((call) => call.operation === "recipes.put")).toHaveLength(0);
+      await expect(current.sync.previous!.reopen(firstWriter.token as never)).rejects.toBeDefined();
+      await expect(current.sync.reopen(page.writers[0]!.token as never)).rejects.toBeDefined();
+      const reopened = await current.sync.previous!.reopen(page.writers[0]!.token);
+      expect(() => reopened.writer.stage(candidate())).toThrow();
+    } finally { current.sync.dispose(); }
+  });
+
+  it("replays a previous unknown attempt with its exact key/body and old-tuple lock without clearing current B", async () => {
+    const databaseName = `previous-replay-${crypto.randomUUID()}`;
+    const locks = new Locks();
+    let originalPut: { request: unknown; key: string | null } | null = null;
+    const old = harness({ databaseName, locks, handler: async (operation, request, options) => {
+      if (operation === "recipes.put") {
+        originalPut = {
+          request: structuredClone(request),
+          key: "idempotencyKey" in options ? options.idempotencyKey ?? null : null,
+        };
+        throw new Error("response lost");
+      }
+      return defaultResponse(operation);
+    } });
+    const oldWriter = begin(old);
+    const oldStage = oldWriter.stage(candidate({ settings: { ...candidate().settings, exposure: 0.75 } }));
+    await expect(oldWriter.save(oldStage)).resolves.toMatchObject({ status: "unknown" });
+    const originalLock = locks.names.at(-1);
+    old.sync.dispose();
+
+    let replayPut: { request: unknown; key: string | null } | null = null;
+    const current = harness({
+      databaseName,
+      locks,
+      identity: new Identity(defaultActor({ sessionId: "parent-2", sessionEpoch: "epoch-2" })),
+      epoch: "epoch-2",
+      handler: async (operation, request, options) => {
+        if (operation === "photos.get") return {
+          ...responses["photos.get"],
+          recipe: { ...responses["photos.get"].recipe, settings: { v: 999, engine: "niho-future", future: { preserve: true } } },
+        } as never;
+        if (operation === "recipes.put") {
+          replayPut = {
+            request: structuredClone(request),
+            key: "idempotencyKey" in options ? options.idempotencyKey ?? null : null,
+          };
+          const put = request as PhotoOperationMap["recipes.put"]["request"];
+          return recipeReceipt(put.expectedRevision + 1, put.settings) as never;
+        }
+        return defaultResponse(operation);
+      },
+    });
+    try {
+      const currentWriter = begin(current);
+      await currentWriter.stage(candidate({ settings: { ...candidate().settings, exposure: 2 } })).committed;
+      const page = await current.sync.previous!.listPending();
+      expect(page.writers).toHaveLength(1);
+      const recovered = await current.sync.previous!.reopen(page.writers[0]!.token);
+      await expect(recovered.writer.retry()).resolves.toMatchObject({ status: "saved", replayed: false });
+      expect(replayPut).toEqual(originalPut);
+      expect(locks.names.at(-1)).toBe(originalLock);
+      expect((await current.sync.listPending()).writers).toContainEqual(expect.objectContaining({ token: currentWriter.token, hasLatest: true }));
+      expect(current.calls.filter((call) => call.operation === "recipes.put")).toHaveLength(1);
+    } finally { current.sync.dispose(); }
+  });
+
+  it("reads retained previous conflicts and keeps an unsupported current recipe without adopting it", async () => {
+    const databaseName = `previous-unknown-current-${crypto.randomUUID()}`;
+    const conflict = responses["recipe-conflicts.get"];
+    const old = harness({ databaseName, handler: async (operation) => {
+      if (operation === "recipes.put") throw { error: { code: "revision_conflict", conflictId: conflict.id, requestId: "old-conflict", retryable: false } };
+      return defaultResponse(operation);
+    } });
+    const oldWriter = begin(old);
+    const stage = oldWriter.stage(candidate({ settings: conflict.conflictingRecipe.settings }));
+    await expect(oldWriter.save(stage)).resolves.toMatchObject({ status: "conflict" });
+    old.sync.dispose();
+    const currentRecipe = { ...conflict.currentRecipe, settings: { v: 999, engine: "niho-future", future: { preserve: true } } };
+    const current = harness({ databaseName,
+      identity: new Identity(defaultActor({ sessionId: "parent-2", sessionEpoch: "epoch-2" })), epoch: "epoch-2",
+      handler: async (operation) => {
+        if (operation === "photos.get") return { ...responses["photos.get"], recipe: currentRecipe } as never;
+        if (operation === "recipe-conflicts.resolve") return { replayed: false, value: {
+          conflict: { ...conflict, resolution: "keep-current", resultingRevision: currentRecipe.revision, resolvedAt: conflict.createdAt },
+          recipe: currentRecipe,
+        } } as never;
+        return defaultResponse(operation);
+      },
+    });
+    try {
+      const page = await current.sync.previous!.listPending();
+      const recovered = await current.sync.previous!.reopen(page.writers[0]!.token);
+      await expect(recovered.writer.getConflict(conflict.id)).resolves.toMatchObject({ id: conflict.id });
+      await expect(recovered.writer.resolveConflict({ intentId: "keep-unknown-current", conflictId: conflict.id,
+        decision: "keep-current", expectedRevision: currentRecipe.revision })).resolves.toMatchObject({ status: "resolved" });
+      expect(current.calls.filter((call) => call.operation === "recipes.put")).toHaveLength(0);
+    } finally { current.sync.dispose(); }
+  });
+
+  it("keeps previous JSON readonly on source mismatch and terminal on purge without PUT", async () => {
+    const databaseName = `previous-source-${crypto.randomUUID()}`;
+    const old = harness({ databaseName });
+    const oldWriter = begin(old);
+    await oldWriter.stage(candidate({ settings: { ...candidate().settings, futureSetting: { version: 9 } } })).committed;
+    old.sync.dispose();
+
+    let purged = false;
+    const current = harness({
+      databaseName,
+      identity: new Identity(defaultActor({ sessionId: "parent-2", sessionEpoch: "epoch-2" })),
+      epoch: "epoch-2",
+      handler: async (operation) => {
+        if (operation === "photos.get") {
+          if (purged) throw { error: { code: "not_found", requestId: "previous", retryable: false } };
+          return { ...responses["photos.get"], original: { ...responses["photos.get"].original, sha256: "f".repeat(64) } } as never;
+        }
+        return defaultResponse(operation);
+      },
+    });
+    try {
+      const page = await current.sync.previous!.listPending();
+      const recovered = await current.sync.previous!.reopen(page.writers[0]!.token);
+      await expect(recovered.writer.retry()).resolves.toMatchObject({ status: "unsupported" });
+      expect((await recovered.writer.readDraft()).latest?.candidate.settings.futureSetting).toEqual({ version: 9 });
+      expect(current.calls.filter((call) => call.operation === "recipes.put")).toHaveLength(0);
+      purged = true;
+      await expect(recovered.writer.retry()).resolves.toMatchObject({ status: "terminal", reason: "not-found" });
+      const terminal = await recovered.writer.readDraft();
+      expect(terminal.terminalReason).toBe("not-found");
+      expect(terminal.latest?.candidate.settings.futureSetting).toEqual({ version: 9 });
+      expect(current.calls.filter((call) => call.operation === "recipes.put")).toHaveLength(0);
+    } finally { current.sync.dispose(); }
+  });
+
+  it("rejects expired and late-revoked current actors for previous list/open", async () => {
+    const databaseName = `previous-identity-${crypto.randomUUID()}`;
+    const old = harness({ databaseName });
+    await begin(old).stage(candidate()).committed;
+    old.sync.dispose();
+
+    const identity = new Identity(defaultActor({ sessionId: "parent-2", sessionEpoch: "epoch-2" }));
+    const current = harness({ databaseName, identity, epoch: "epoch-2" });
+    try {
+      identity.set(defaultActor({ sessionId: "parent-2", sessionEpoch: "epoch-2", expiresAt: "2026-11-02T00:00:00.000Z" }));
+      await expect(current.sync.previous!.listPending()).rejects.toBeDefined();
+    } finally { current.sync.dispose(); }
+
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => { release = resolve; });
+    const lateIdentity = new Identity(defaultActor({ sessionId: "parent-3", sessionEpoch: "epoch-3" }));
+    const late = harness({ databaseName, identity: lateIdentity, epoch: "epoch-3", handler: async (operation) => {
+      if (operation === "library.get") { await gate; return defaultResponse(operation); }
+      return defaultResponse(operation);
+    } });
+    const listing = late.sync.previous!.listPending();
+    lateIdentity.set(null);
+    release();
+    await expect(listing).rejects.toBeDefined();
+    late.sync.dispose();
+  });
+
+  it("binds previous cursors to one recovery instance", async () => {
+    const databaseName = `previous-cursor-${crypto.randomUUID()}`;
+    for (let index = 0; index < 2; index += 1) {
+      const epoch = `epoch-${index + 1}`;
+      const old = harness({ databaseName, identity: new Identity(defaultActor({ sessionId: `old-${index}`, sessionEpoch: epoch })), epoch });
+      await begin(old).stage(candidate()).committed;
+      old.sync.dispose();
+    }
+    const identity = new Identity(defaultActor({ sessionId: "current", sessionEpoch: "epoch-3" }));
+    const first = harness({ databaseName, identity, epoch: "epoch-3" });
+    const second = harness({ databaseName, identity, epoch: "epoch-3" });
+    try {
+      const page = await first.sync.previous!.listPending({ limit: 1 });
+      expect(page.nextCursor).not.toBeNull();
+      await expect(second.sync.previous!.listPending({ cursor: page.nextCursor! })).rejects.toBeDefined();
+      await expect(first.sync.previous!.listPending({ cursor: "forged" })).rejects.toBeDefined();
+      await expect(first.sync.previous!.listPending({ cursor: page.nextCursor! })).resolves.toMatchObject({ writers: [expect.any(Object)] });
+    } finally { first.sync.dispose(); second.sync.dispose(); }
   });
 
   it("allows local staging after expiry but closes on logout", async () => {
@@ -890,7 +1197,7 @@ describe("durable recipe sync", () => {
     setup.sync.dispose();
   });
 
-  it("aborts a delayed stage on logout without a late journal mutation", async () => {
+  it("finishes a stage captured before logout without accepting later input", async () => {
     const setup = harness();
     const original = setup.journal.stage.bind(setup.journal);
     let release!: () => void;
@@ -899,9 +1206,10 @@ describe("durable recipe sync", () => {
     const writer = begin(setup);
     const ref = writer.stage(candidate());
     setup.identity.set(null);
+    expect(() => writer.stage(candidate())).toThrow();
     release();
-    await expect(ref.committed).resolves.toMatchObject({ status: "unsaved" });
-    await expect(setup.journal.reopen({ actorId: IDS.userA, libraryId: IDS.library, sessionId: "parent-1", sessionEpoch: "epoch-1", transport: "browser-session" }, writer.token)).resolves.toBeNull();
+    await expect(ref.committed).resolves.toMatchObject({ status: "committed" });
+    await expect(setup.journal.reopen({ actorId: IDS.userA, libraryId: IDS.library, sessionId: "parent-1", sessionEpoch: "epoch-1", transport: "browser-session" }, writer.token)).resolves.toMatchObject({ latest: { generation: 0 } });
     setup.sync.dispose();
   });
 
@@ -1025,6 +1333,8 @@ describe("durable recipe sync", () => {
     setups.push(fifth);
     const overflow = fifth.sync.beginEditing({ photoId: "overflow", sourceSha256: "a".repeat(64), expectedRevision: 0 }).stage(candidate());
     await expect(overflow.committed).resolves.toMatchObject({ status: "unsaved", reason: "quota" });
+    await expect(fifth.sync.previous!.listPending()).resolves.toMatchObject({ writers: expect.arrayContaining([expect.any(Object)]) });
+    await expect(setups[0]!.sync.listPending()).resolves.toMatchObject({ writers: expect.arrayContaining([expect.any(Object)]) });
     for (const setup of setups) setup.sync.dispose();
   });
 

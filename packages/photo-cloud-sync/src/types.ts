@@ -94,7 +94,26 @@ export interface ReopenedPersonalPhotoRecipeWriter {
   readonly pendingResolution: RecipeConflictIntent | null;
 }
 
+/** 現在の再認証世代と旧record全体に束縛するobject identity。raw tokenとは交換できない。 */
+export type PreviousRecipeWriterToken = Readonly<{ kind: "previous-recipe-writer" }>;
+
+export type PreviousPendingWriter = Omit<PendingWriterToken, "token"> & {
+  readonly token: PreviousRecipeWriterToken;
+};
+
+export interface PreviousPendingWriterPage {
+  readonly writers: readonly PreviousPendingWriter[];
+  readonly nextCursor: string | null;
+}
+
+export interface PreviousRecipeRecovery {
+  listPending(options?: { readonly cursor?: string; readonly limit?: number }, signal?: AbortSignal): Promise<PreviousPendingWriterPage>;
+  /** 明示して開いた旧入力だけを扱う。返るwriterのstageは拒否する。 */
+  reopen(token: PreviousRecipeWriterToken, signal?: AbortSignal): Promise<ReopenedPersonalPhotoRecipeWriter>;
+}
+
 export interface PersonalPhotoRecipeSync {
+  readonly previous?: PreviousRecipeRecovery;
   beginEditing(input: { readonly photoId: string; readonly sourceSha256: string; readonly expectedRevision: number }): PersonalPhotoRecipeWriter;
   listPending(options?: { readonly cursor?: string; readonly limit?: number }, signal?: AbortSignal): Promise<PendingWriterPage>;
   reopen(token: string, signal?: AbortSignal): Promise<ReopenedPersonalPhotoRecipeWriter>;
@@ -203,7 +222,20 @@ export interface ReopenedJournalWriter {
   readonly terminalReason: "not-found" | "photo-deleted" | null;
 }
 
+/** journal内部だけの旧record識別。UIへbindingやraw tokenを公開しない。 */
+export interface JournalPreviousPendingWriter {
+  readonly binding: RecipeWriterBinding;
+  readonly summary: PendingWriterToken;
+}
+
+export interface JournalPreviousPendingWriterPage {
+  readonly writers: readonly JournalPreviousPendingWriter[];
+  readonly nextCursor: string | null;
+}
+
 export interface RecipeSyncJournal {
+  /** 同canonical user/libraryの旧tupleを最大16件/4MiBで返す。通常listのscope条件は変えない。 */
+  listPrevious?(scope: RecipeJournalScope, options?: { readonly cursor?: string; readonly limit?: number }, signal?: AbortSignal): Promise<JournalPreviousPendingWriterPage>;
   stage(binding: RecipeWriterBinding, stage: JournalStage, signal?: AbortSignal): Promise<void>;
   createAttempt(binding: RecipeWriterBinding, stage: JournalStage, attemptId: string, idempotencyKey: string, signal?: AbortSignal): Promise<JournalPutAttempt>;
   acknowledgeAttempt(binding: RecipeWriterBinding, attemptId: string, generation: number, revision: number, signal?: AbortSignal): Promise<boolean>;

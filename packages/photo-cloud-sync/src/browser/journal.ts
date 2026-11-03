@@ -9,6 +9,8 @@ import type {
   JournalResolutionAttempt,
   JournalResolutionProof,
   JournalStage,
+  JournalPreviousPendingWriter,
+  JournalPreviousPendingWriterPage,
   PendingWriterPage,
   PendingWriterToken,
   RecipeConflictIntent,
@@ -392,6 +394,58 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     return { writers, nextCursor };
   }
 
+  async listPrevious(
+    scope: RecipeJournalScope,
+    options: { readonly cursor?: string; readonly limit?: number } = {},
+    signal?: AbortSignal,
+  ): Promise<JournalPreviousPendingWriterPage> {
+    validateScope(scope);
+    const limit = options.limit ?? MAX_LIST_COUNT;
+    if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIST_COUNT) unavailable();
+    const prefix: [string, string] = [scope.actorId, scope.libraryId];
+    const after = options.cursor === undefined ? null : parsePreviousCursor(options.cursor, scope);
+    const database = await this.database(signal);
+    const transaction = strictTransaction(database, [WRITERS], "readonly");
+    const barrier = transactionBarrier(transaction);
+    void barrier.catch(() => undefined);
+    const range = after === null
+      ? IDBKeyRange.bound(prefix, [...prefix, []])
+      : IDBKeyRange.bound(after, [...prefix, []], true, false);
+    const writers: JournalPreviousPendingWriter[] = [];
+    let bytes = 0;
+    let lastKey: PreviousIndexKey | null = null;
+    let nextCursor: string | null = null;
+    const walked = new Promise<void>((resolve, reject) => {
+      const request = transaction.objectStore(WRITERS).index(SCOPE_TOKEN).openCursor(range, "next");
+      request.onerror = () => reject(idbError(request.error));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor === null) { resolve(); return; }
+        try {
+          const record = validateRecord(cursor.value);
+          if (!sameCanonicalScope(record, scope)) unavailable();
+          if (sameScope(record, scope) || !hasRetainedState(record)) { cursor.continue(); return; }
+          const item = { binding: bindingOf(record), summary: tokenOf(record) } satisfies JournalPreviousPendingWriter;
+          const itemBytes = jsonBytes(item);
+          if (itemBytes > MAX_LIST_BYTES) unavailable();
+          if (writers.length >= limit || writers.length > 0 && bytes + itemBytes > MAX_LIST_BYTES) {
+            if (lastKey === null) unavailable();
+            nextCursor = JSON.stringify(lastKey);
+            resolve();
+            return;
+          }
+          writers.push(clone(item));
+          bytes += itemBytes;
+          lastKey = indexKey(record);
+          cursor.continue();
+        } catch (error) { reject(error); }
+      };
+    });
+    await transactionWait(walked, transaction, signal);
+    await transactionWait(barrier, transaction, signal);
+    return { writers, nextCursor };
+  }
+
   async reopen(scope: RecipeJournalScope, token: string, signal?: AbortSignal): Promise<ReopenedJournalWriter | null> {
     validateScope(scope);
     validateOpaque(token);
@@ -764,12 +818,36 @@ function scopeKey(scope: RecipeJournalScope): [string, string, string, string, s
   return [scope.actorId, scope.libraryId, scope.sessionId, scope.sessionEpoch, scope.transport];
 }
 
+type PreviousIndexKey = [string, string, string, string, string, string];
+
+function indexKey(binding: RecipeWriterBinding): PreviousIndexKey {
+  return [...scopeKey(binding), binding.token];
+}
+
+function parsePreviousCursor(value: string, scope: RecipeJournalScope): PreviousIndexKey {
+  if (typeof value !== "string" || value.length === 0 || new TextEncoder().encode(value).byteLength > 4096) unavailable();
+  let parsed: unknown;
+  try { parsed = JSON.parse(value) as unknown; } catch { unavailable(); }
+  if (!Array.isArray(parsed) || parsed.length !== 6 || !parsed.every(nonEmpty)) unavailable();
+  const cursor = parsed as PreviousIndexKey;
+  if (cursor[0] !== scope.actorId || cursor[1] !== scope.libraryId) unavailable();
+  if (
+    cursor[2] === scope.sessionId && cursor[3] === scope.sessionEpoch && cursor[4] === scope.transport ||
+    cursor[4] !== "browser-session" && cursor[4] !== "mac-bearer"
+  ) unavailable();
+  return cursor;
+}
+
 function recordId(binding: RecipeWriterBinding): string {
   return JSON.stringify([...scopeKey(binding), binding.writerId]);
 }
 
 function sameScope(record: WriterRecord, scope: RecipeJournalScope): boolean {
   return record.actorId === scope.actorId && record.libraryId === scope.libraryId && record.sessionId === scope.sessionId && record.sessionEpoch === scope.sessionEpoch && record.transport === scope.transport;
+}
+
+function sameCanonicalScope(record: WriterRecord, scope: RecipeJournalScope): boolean {
+  return record.actorId === scope.actorId && record.libraryId === scope.libraryId;
 }
 
 function sameBinding(record: WriterRecord, binding: RecipeWriterBinding): boolean {

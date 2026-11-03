@@ -35,8 +35,12 @@ import type {
   JournalStage,
   LocalRecipeCandidate,
   PendingWriterPage,
+  PendingWriterToken,
   PersonalPhotoRecipeSync,
   PersonalPhotoRecipeWriter,
+  PreviousPendingWriterPage,
+  PreviousRecipeRecovery,
+  PreviousRecipeWriterToken,
   RecipeDraftSnapshot,
   RecipeConflictIntent,
   RecipeJournalScope,
@@ -70,6 +74,7 @@ class Sync implements PersonalPhotoRecipeSync {
   readonly scope: RecipeJournalScope;
   readonly networkScope: PersonalPhotoScope;
   readonly timeoutMs: number;
+  readonly previous?: PreviousRecipeRecovery;
 
   private readonly now: () => number;
   private readonly randomId: () => string;
@@ -98,6 +103,7 @@ class Sync implements PersonalPhotoRecipeSync {
     });
     this.networkScope = new PersonalPhotoScope(options.client, options.identity, this.now);
     this.unsubscribeIdentity = options.identity.subscribe(() => this.identityChanged());
+    if (typeof options.journal.listPrevious === "function") this.previous = new PreviousRecovery(this);
   }
 
   beginEditing(input: { readonly photoId: string; readonly sourceSha256: string; readonly expectedRevision: number }): PersonalPhotoRecipeWriter {
@@ -151,8 +157,7 @@ class Sync implements PersonalPhotoRecipeSync {
     this.localLifecycle.abort(new PersonalPhotoCloudError("disposed"));
     this.networkScope.dispose();
     this.writers.clear();
-    const releases = [...this.releaseTasks];
-    void Promise.allSettled(releases).then(() => this.options.journal.dispose());
+    void this.disposeJournalWhenSettled();
   }
 
   createRef(writer: Writer, stage: JournalStage, alreadyCommitted = false): RecipeStageRef {
@@ -192,11 +197,11 @@ class Sync implements PersonalPhotoRecipeSync {
     const scoped = this.networkScope.begin(externalSignal);
     const operation = linkedAbortController(scoped.signal, writer.signal);
     const lockName = `niho-photo-recipe:${digest(JSON.stringify([
-      this.scope.actorId,
-      this.scope.libraryId,
-      this.scope.sessionId,
-      this.scope.sessionEpoch,
-      this.scope.transport,
+      writer.binding.actorId,
+      writer.binding.libraryId,
+      writer.binding.sessionId,
+      writer.binding.sessionEpoch,
+      writer.binding.transport,
       writer.binding.writerId,
     ]))}`;
     try {
@@ -246,11 +251,20 @@ class Sync implements PersonalPhotoRecipeSync {
     } finally { operation.dispose(); }
   }
 
-  releaseCompleted(binding: RecipeWriterBinding): void {
+  async capturedJournal<T>(invoke: (operationSignal: AbortSignal) => Promise<T>): Promise<T> {
+    const controller = new AbortController();
+    return await awaitBounded(invoke(controller.signal), {
+      signal: controller.signal,
+      timeoutMs: this.timeoutMs,
+      onTimeout: () => controller.abort(new PersonalPhotoCloudError("unavailable")),
+    });
+  }
+
+  releaseCompleted(binding: RecipeWriterBinding): Promise<void> {
     const controller = new AbortController();
     let release: Promise<boolean>;
     try { release = this.options.journal.releaseCompleted(binding, controller.signal); }
-    catch { return; }
+    catch { return Promise.resolve(); }
     const task = awaitBounded(release, {
       signal: controller.signal,
       timeoutMs: this.timeoutMs,
@@ -258,11 +272,41 @@ class Sync implements PersonalPhotoRecipeSync {
     }).then(() => undefined, () => undefined);
     this.releaseTasks.add(task);
     void task.finally(() => this.releaseTasks.delete(task));
+    return task;
+  }
+
+  trackCleanup(task: Promise<void>): void {
+    const settled = task.catch(() => undefined);
+    this.releaseTasks.add(settled);
+    void settled.finally(() => this.releaseTasks.delete(settled));
+  }
+
+  async proveCurrentOwner(signal?: AbortSignal): Promise<void> {
+    this.assertRecoveryCurrent();
+    const scoped = this.networkScope.begin(signal);
+    try {
+      const raw = await this.request("library.get", {}, { signal: scoped.signal }, scoped.signal);
+      scoped.assertCurrent();
+      this.assertRecoveryCurrent();
+      validateLibrary(raw, this.scope.actorId, this.scope.libraryId);
+    } finally { scoped.release(); }
   }
 
   async preflight(
     binding: RecipeWriterBinding,
     candidate: LocalRecipeCandidate,
+    signal: AbortSignal,
+    assertCurrent: () => void,
+  ): Promise<{ readonly library: PersonalPhotoLibrary; readonly photo: Photo } | null> {
+    const verified = await this.verifyManualTarget(binding, candidate, signal, assertCurrent);
+    return verified !== null && projectRecipeSettings(verified.photo, verified.library, this.options.hostRenderer) !== null
+      ? verified
+      : null;
+  }
+
+  async verifyManualTarget(
+    binding: RecipeWriterBinding,
+    candidate: LocalRecipeCandidate | null,
     signal: AbortSignal,
     assertCurrent: () => void,
   ): Promise<{ readonly library: PersonalPhotoLibrary; readonly photo: Photo } | null> {
@@ -272,8 +316,8 @@ class Sync implements PersonalPhotoRecipeSync {
     const photoRaw = await this.request("photos.get", { photoId: binding.photoId }, { signal }, signal);
     assertCurrent();
     const photo = validatePhoto(photoRaw, this.scope.libraryId);
-    if (photo.id !== binding.photoId || photo.original.sha256 !== binding.sourceSha256 || !library.capabilities.edits) return null;
-    if (projectRecipeSettings(photo, library, this.options.hostRenderer) === null || !candidateUsable(candidate, photo, library, this.options.hostRenderer)) return null;
+    if (photo.id !== binding.photoId || photo.original.sha256 !== binding.sourceSha256) return null;
+    if (candidate !== null && (!library.capabilities.edits || !candidateUsable(candidate, photo, library, this.options.hostRenderer))) return null;
     return { library, photo };
   }
 
@@ -298,6 +342,10 @@ class Sync implements PersonalPhotoRecipeSync {
 
   private register(writer: Writer): Writer { this.writers.add(writer); return writer; }
 
+  registerRecovered(binding: RecipeWriterBinding, nextGeneration: number): Writer {
+    return this.register(new Writer(this, binding, nextGeneration, true));
+  }
+
   private assertBeginAllowed(): void {
     this.assertLocal();
     requiredActor(this.options.identity.getSnapshot(), this.now());
@@ -319,6 +367,92 @@ class Sync implements PersonalPhotoRecipeSync {
     this.localLifecycle.abort(new PersonalPhotoCloudError("scope_changed"));
     for (const writer of this.writers) writer.close(new PersonalPhotoCloudError("scope_changed"));
   }
+
+  private assertRecoveryCurrent(): void {
+    this.assertLocal();
+    const actor = requiredActor(this.options.identity.getSnapshot(), this.now());
+    if (!sameActorScope(actor, this.scope) || !sameClientScope(this.options.client.scope, this.scope)) invalidIdentity();
+  }
+
+  private async disposeJournalWhenSettled(): Promise<void> {
+    while (this.releaseTasks.size > 0) await Promise.allSettled([...this.releaseTasks]);
+    try { this.options.journal.dispose(); } catch { /* cleanup failures must not escape disposal */ }
+  }
+}
+
+class PreviousRecovery implements PreviousRecipeRecovery {
+  private readonly tokens = new WeakMap<PreviousRecipeWriterToken, RecipeWriterBinding>();
+  private readonly cursors = new Map<string, string>();
+
+  constructor(private readonly sync: Sync) {}
+
+  async listPending(
+    options: { readonly cursor?: string; readonly limit?: number } = {},
+    signal?: AbortSignal,
+  ): Promise<PreviousPendingWriterPage> {
+    await this.sync.proveCurrentOwner(signal);
+    const listPrevious = this.sync.options.journal.listPrevious;
+    if (listPrevious === undefined) invalid();
+    let journalCursor: string | undefined;
+    if (options.cursor !== undefined) {
+      journalCursor = this.cursors.get(options.cursor);
+      if (journalCursor === undefined) invalid();
+    }
+    const link = signal === undefined
+      ? linkedAbortController(new AbortController().signal)
+      : linkedAbortController(signal);
+    try {
+      const page = await this.sync.journal(link.controller.signal, (journalSignal) => listPrevious.call(
+        this.sync.options.journal,
+        this.sync.scope,
+        {
+          ...(journalCursor === undefined ? {} : { cursor: journalCursor }),
+          ...(options.limit === undefined ? {} : { limit: options.limit }),
+        },
+        journalSignal,
+      ));
+      await this.sync.proveCurrentOwner(signal);
+      const writers = page.writers.map(({ binding, summary }) => {
+        if (!sameCanonicalScope(binding, this.sync.scope) || sameScope(binding, this.sync.scope) || !summaryMatchesBinding(summary, binding)) invalidResponse();
+        const token = Object.freeze({ kind: "previous-recipe-writer" as const });
+        this.tokens.set(token, clone(binding));
+        return Object.freeze({ ...clone(summary), token });
+      });
+      let nextCursor: string | null = null;
+      if (page.nextCursor !== null) {
+        nextCursor = this.sync.newId();
+        this.cursors.set(nextCursor, page.nextCursor);
+      }
+      return Object.freeze({ writers: Object.freeze(writers), nextCursor });
+    } finally { link.dispose(); }
+  }
+
+  async reopen(token: PreviousRecipeWriterToken, signal?: AbortSignal): Promise<ReopenedPersonalPhotoRecipeWriter> {
+    const binding = this.tokens.get(token);
+    if (binding === undefined) invalid();
+    await this.sync.proveCurrentOwner(signal);
+    const link = signal === undefined
+      ? linkedAbortController(new AbortController().signal)
+      : linkedAbortController(signal);
+    try {
+      const record = await this.sync.journal(link.controller.signal, (journalSignal) => this.sync.options.journal.reopen(
+        scopeOf(binding),
+        binding.token,
+        journalSignal,
+      ));
+      await this.sync.proveCurrentOwner(signal);
+      if (record === null) throw new PersonalPhotoCloudError("not_found");
+      if (!sameBinding(record.binding, binding)) invalidResponse();
+      const writer = this.sync.registerRecovered(record.binding, record.nextGeneration);
+      const latest = record.latest === null ? null : writer.hydrate(record.latest);
+      return {
+        writer,
+        latest,
+        hasUnknownAttempt: record.attempt !== null || record.resolution !== null,
+        pendingResolution: record.resolution === null ? null : publicIntent(record.resolution),
+      };
+    } finally { link.dispose(); }
+  }
 }
 
 class Writer implements PersonalPhotoRecipeWriter {
@@ -330,14 +464,18 @@ class Writer implements PersonalPhotoRecipeWriter {
   private activeStage = false;
   private queuedStage: RefState | null = null;
   private disposed = false;
+  private closeStarted = false;
+  private finishCapture!: () => void;
+  private readonly captureDone = new Promise<void>((resolve) => { this.finishCapture = resolve; });
 
-  constructor(readonly sync: Sync, readonly binding: RecipeWriterBinding, nextGeneration: number) {
+  constructor(readonly sync: Sync, readonly binding: RecipeWriterBinding, nextGeneration: number, private readonly recovered = false) {
     this.token = binding.token;
     this.nextGeneration = nextGeneration;
   }
 
   stage(input: LocalRecipeCandidate): RecipeStageRef {
     this.assertOpen();
+    if (this.recovered) throw new PersonalPhotoCloudError("unsupported");
     this.sync.assertLocal();
     const candidate = validateCandidate(input);
     const stage = { generation: this.nextGeneration, candidate };
@@ -363,8 +501,10 @@ class Writer implements PersonalPhotoRecipeWriter {
       ? linkedAbortController(this.signal)
       : linkedAbortController(this.signal, signal);
     try {
+      if (this.recovered) await this.sync.proveCurrentOwner(link.controller.signal);
       const reopened = await this.sync.journal(link.controller.signal, (journalSignal) =>
-        this.sync.options.journal.reopen(this.sync.scope, this.token, journalSignal));
+        this.sync.options.journal.reopen(scopeOf(this.binding), this.token, journalSignal));
+      if (this.recovered) await this.sync.proveCurrentOwner(link.controller.signal);
       this.sync.assertLocal();
       this.assertOpen();
       if (reopened === null) throw new PersonalPhotoCloudError("not_found");
@@ -411,7 +551,7 @@ class Writer implements PersonalPhotoRecipeWriter {
     this.assertOpen();
     try {
       return await this.sync.withWriterLock(this, signal, async (operationSignal, assertCurrent) => {
-        const reopened = await this.sync.journal(operationSignal, (journalSignal) => this.sync.options.journal.reopen(this.sync.scope, this.token, journalSignal));
+        const reopened = await this.sync.journal(operationSignal, (journalSignal) => this.sync.options.journal.reopen(scopeOf(this.binding), this.token, journalSignal));
         assertCurrent();
         if (reopened === null) throw new PersonalPhotoCloudError("not_found");
         if (reopened.terminalReason !== null) {
@@ -433,7 +573,7 @@ class Writer implements PersonalPhotoRecipeWriter {
     this.assertOpen();
     try {
       return await this.sync.withWriterLock(this, signal, async (operationSignal, assertCurrent) => {
-        const reopened = await this.sync.journal(operationSignal, (journalSignal) => this.sync.options.journal.reopen(this.sync.scope, this.token, journalSignal));
+        const reopened = await this.sync.journal(operationSignal, (journalSignal) => this.sync.options.journal.reopen(scopeOf(this.binding), this.token, journalSignal));
         assertCurrent();
         if (reopened === null) throw new PersonalPhotoCloudError("not_found");
         if (reopened.terminalReason !== null) return { status: "terminal", reason: reopened.terminalReason };
@@ -450,6 +590,9 @@ class Writer implements PersonalPhotoRecipeWriter {
   async getConflict(conflictId: string, signal?: AbortSignal): Promise<RecipeConflict> {
     validateOpaque(conflictId);
     return await this.sync.withWriterLock(this, signal, async (operationSignal, assertCurrent) => {
+      if (this.recovered && await this.sync.verifyManualTarget(this.binding, null, operationSignal, assertCurrent) === null) {
+        throw new PersonalPhotoCloudError("unsupported");
+      }
       const conflict = await this.sync.request("recipe-conflicts.get", { photoId: this.binding.photoId, conflictId }, { signal: operationSignal }, operationSignal);
       assertCurrent();
       validateRecipeConflict(conflict);
@@ -462,7 +605,7 @@ class Writer implements PersonalPhotoRecipeWriter {
     validateConflictIntent(intent);
     try {
       return await this.sync.withWriterLock(this, signal, async (operationSignal, assertCurrent) => {
-        const reopened = await this.sync.journal(operationSignal, (journalSignal) => this.sync.options.journal.reopen(this.sync.scope, this.token, journalSignal));
+        const reopened = await this.sync.journal(operationSignal, (journalSignal) => this.sync.options.journal.reopen(scopeOf(this.binding), this.token, journalSignal));
         assertCurrent();
         if (reopened?.terminalReason !== undefined && reopened.terminalReason !== null) return { status: "terminal", reason: reopened.terminalReason };
         if (reopened?.resolution !== undefined && reopened.resolution !== null) {
@@ -475,7 +618,7 @@ class Writer implements PersonalPhotoRecipeWriter {
           if (prior.status === "unknown") return { status: "unknown" };
           if (prior.status === "terminal") return { status: "terminal", reason: prior.reason };
         }
-        const refreshed = await this.sync.journal(operationSignal, (journalSignal) => this.sync.options.journal.reopen(this.sync.scope, this.token, journalSignal));
+        const refreshed = await this.sync.journal(operationSignal, (journalSignal) => this.sync.options.journal.reopen(scopeOf(this.binding), this.token, journalSignal));
         assertCurrent();
         const metadata = refreshed?.conflicts.find((item) => item.conflictId === intent.conflictId);
         const originGeneration = metadata?.generation ?? null;
@@ -561,6 +704,14 @@ class Writer implements PersonalPhotoRecipeWriter {
 
   async discard(signal?: AbortSignal): Promise<void> {
     this.assertOpen();
+    if (this.recovered) {
+      await this.sync.withWriterLock(this, signal, async (operationSignal, assertCurrent) => {
+        await this.sync.proveCurrentOwner(operationSignal);
+        await this.sync.journal(operationSignal, (journalSignal) => this.sync.options.journal.discard(this.binding, journalSignal));
+        assertCurrent();
+      });
+      return;
+    }
     const link = signal === undefined ? linkedAbortController(this.signal) : linkedAbortController(this.signal, signal);
     try { await this.sync.journal(link.controller.signal, (journalSignal) => this.sync.options.journal.discard(this.binding, journalSignal)); }
     finally { link.dispose(); }
@@ -572,10 +723,12 @@ class Writer implements PersonalPhotoRecipeWriter {
     if (this.disposed) return;
     this.disposed = true;
     this.lifecycle.abort(error);
-    this.queuedStage?.settle({ status: "unsaved", reason: "unavailable" });
-    this.queuedStage = null;
     this.sync.unregister(this);
-    this.sync.releaseCompleted(this.binding);
+    if (!this.activeStage && this.queuedStage === null) this.finishCapture();
+    if (!this.closeStarted) {
+      this.closeStarted = true;
+      this.sync.trackCleanup(this.captureDone.then(() => this.sync.releaseCompleted(this.binding)));
+    }
   }
 
   assertOpen(): void {
@@ -588,18 +741,17 @@ class Writer implements PersonalPhotoRecipeWriter {
       this.activeStage = false;
       const next = this.queuedStage;
       this.queuedStage = null;
-      if (next !== null && !this.disposed) this.startStage(next);
-      else if (next !== null) next.settle({ status: "unsaved", reason: "unavailable" });
+      if (next !== null) this.startStage(next);
+      else if (this.disposed) this.finishCapture();
     });
   }
 
   private async commitStage(state: RefState): Promise<void> {
     try {
-      await this.sync.journal(this.signal, (journalSignal) => this.sync.options.journal.stage(this.binding, {
+      await this.sync.capturedJournal((journalSignal) => this.sync.options.journal.stage(this.binding, {
         generation: state.generation,
         candidate: state.candidate,
       }, journalSignal));
-      if (this.signal.aborted) throw this.signal.reason;
       state.settle({ status: "committed", generation: state.generation });
     } catch (error) {
       state.settle({ status: "unsaved", reason: isQuota(error) ? "quota" : "unavailable" });
@@ -612,7 +764,7 @@ class Writer implements PersonalPhotoRecipeWriter {
     assertCurrent: () => void,
     refState?: RefState,
   ): Promise<SaveRecipeResult> {
-    const reopened = await this.sync.journal(signal, (journalSignal) => this.sync.options.journal.reopen(this.sync.scope, this.token, journalSignal));
+    const reopened = await this.sync.journal(signal, (journalSignal) => this.sync.options.journal.reopen(scopeOf(this.binding), this.token, journalSignal));
     assertCurrent();
     if (reopened === null) throw new PersonalPhotoCloudError("not_found");
     if (reopened.terminalReason !== null) {
@@ -630,7 +782,10 @@ class Writer implements PersonalPhotoRecipeWriter {
     const retainedAttempt = refState?.attempt;
     if (retainedAttempt !== undefined && retainedAttempt !== null) return await this.sendAttempt(retainedAttempt, signal, assertCurrent);
     try {
-      if (await this.sync.preflight(this.binding, stage.candidate, signal, assertCurrent) === null) {
+      const verified = this.recovered
+        ? await this.sync.verifyManualTarget(this.binding, stage.candidate, signal, assertCurrent)
+        : await this.sync.preflight(this.binding, stage.candidate, signal, assertCurrent);
+      if (verified === null) {
         return { status: "unsupported", generation: stage.generation };
       }
     } catch (error) {
@@ -666,6 +821,9 @@ class Writer implements PersonalPhotoRecipeWriter {
       return { status: "unknown", generation: stage.generation };
     }
     try {
+      if (this.recovered && await this.sync.verifyManualTarget(this.binding, null, signal, assertCurrent) === null) {
+        return { status: "unsupported", generation: stage.generation };
+      }
       const conflict = await this.sync.request("recipe-conflicts.get", {
         photoId: this.binding.photoId,
         conflictId: metadata.conflictId,
@@ -696,6 +854,29 @@ class Writer implements PersonalPhotoRecipeWriter {
     assertCurrent: () => void,
   ): Promise<SaveRecipeResult> {
     verifyPutAttempt(attempt);
+    if (this.recovered) {
+      try {
+        if (await this.sync.verifyManualTarget(this.binding, attempt.conflictId === null ? attempt.candidate : null, signal, assertCurrent) === null) {
+          return { status: "unsupported", generation: attempt.generation };
+        }
+      } catch (error) {
+        const backend = readPhotoError(error);
+        if (backend?.code !== "not_found" && backend?.code !== "photo_deleted") throw error;
+        assertCurrent();
+        const reason = backend.code === "not_found" ? "not-found" as const : "photo-deleted" as const;
+        const terminal = await this.sync.journal(signal, (journalSignal) => this.sync.options.journal.terminalAttempt(
+          this.binding,
+          attempt.attemptId,
+          attempt.generation,
+          reason,
+          journalSignal,
+        ));
+        assertCurrent();
+        return terminal
+          ? { status: "terminal", generation: attempt.generation, reason }
+          : { status: "unknown", generation: attempt.generation };
+      }
+    }
     if (attempt.conflictId !== null) return await this.finishConflict(attempt, attempt.conflictId, signal, assertCurrent);
     const body = parseRecord(attempt.requestBody);
     try {
@@ -848,6 +1029,33 @@ class Writer implements PersonalPhotoRecipeWriter {
     assertCurrent: () => void,
   ): Promise<ResolveRecipeConflictResult> {
     verifyResolutionAttempt(attempt);
+    if (this.recovered) {
+      const candidate = attempt.proof.decision === "adopt"
+        ? {
+          settings: clone(attempt.proof.selectedCandidate.settings),
+          baseVersion: attempt.proof.selectedCandidate.baseVersion,
+          maskSurfaceIds: clone(attempt.proof.selectedCandidate.maskSurfaceIds),
+        }
+        : null;
+      try {
+        if (await this.sync.verifyManualTarget(this.binding, candidate, signal, assertCurrent) === null) return { status: "unsupported" };
+      } catch (error) {
+        const backend = readPhotoError(error);
+        if (backend?.code !== "not_found" && backend?.code !== "photo_deleted") throw error;
+        assertCurrent();
+        const outcome = backend.code === "not_found" ? "terminal-not-found" as const : "terminal-photo-deleted" as const;
+        const settled = await this.sync.journal(signal, (journalSignal) => this.sync.options.journal.settleResolution(
+          this.binding,
+          attempt.attemptId,
+          outcome,
+          journalSignal,
+        ));
+        assertCurrent();
+        return settled
+          ? { status: "terminal", reason: backend.code === "not_found" ? "not-found" : "photo-deleted" }
+          : { status: "unknown" };
+      }
+    }
     const body = parseRecord(attempt.requestBody);
     try {
       const receipt = await this.sync.request("recipe-conflicts.resolve", {
@@ -995,6 +1203,30 @@ function sameClientScope(
   scope: RecipeJournalScope,
 ): boolean {
   return client.actorId === scope.actorId && client.libraryId === scope.libraryId && client.sessionEpoch === scope.sessionEpoch;
+}
+
+function scopeOf(binding: RecipeWriterBinding): RecipeJournalScope {
+  const { actorId, libraryId, sessionId, sessionEpoch, transport } = binding;
+  return { actorId, libraryId, sessionId, sessionEpoch, transport };
+}
+
+function sameCanonicalScope(left: RecipeJournalScope, right: RecipeJournalScope): boolean {
+  return left.actorId === right.actorId && left.libraryId === right.libraryId;
+}
+
+function sameScope(left: RecipeJournalScope, right: RecipeJournalScope): boolean {
+  return sameCanonicalScope(left, right) && left.sessionId === right.sessionId &&
+    left.sessionEpoch === right.sessionEpoch && left.transport === right.transport;
+}
+
+function sameBinding(left: RecipeWriterBinding, right: RecipeWriterBinding): boolean {
+  return sameScope(left, right) && left.token === right.token && left.writerId === right.writerId &&
+    left.photoId === right.photoId && left.sourceSha256 === right.sourceSha256 &&
+    left.initialRevision === right.initialRevision;
+}
+
+function summaryMatchesBinding(summary: PendingWriterToken, binding: RecipeWriterBinding): boolean {
+  return summary.token === binding.token && summary.photoId === binding.photoId;
 }
 
 function validatePhotoBinding(photoId: string, sourceSha256: string, expectedRevision: number): void {

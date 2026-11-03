@@ -41,6 +41,7 @@ import type {
   LocalRecipeCandidate,
   PersonalPhotoRecipeSync,
   PersonalPhotoRecipeWriter,
+  PreviousRecipeWriterToken,
   RecipeConflictIntent,
   RecipeStageRef,
   ResolveRecipeConflictResult,
@@ -116,6 +117,7 @@ class DurableBinding {
   private readonly actor: VerifiedPhotoActor;
   private readonly tokens = new WeakMap<PhotoLibraryDevelopDraftToken, string>();
   private readonly publicTokens = new Map<string, PhotoLibraryDevelopDraftToken>();
+  private readonly previousTokens = new WeakMap<PhotoLibraryDevelopDraftToken, PreviousRecipeWriterToken>();
   private readonly stages = new WeakMap<PhotoLibraryDevelopDraftStage, StageBinding>();
   private readonly conflicts = new WeakMap<PhotoLibraryDevelopConflictToken, ConflictBinding>();
   private readonly choices = new WeakMap<PhotoLibraryDevelopChoiceToken, ChoiceBinding>();
@@ -133,6 +135,12 @@ class DurableBinding {
     this.actor = actor;
     this.unsubscribeIdentity = options.identity.subscribe(() => this.changed());
     this.port = {
+      ...(sync.previous === undefined ? {} : {
+        previous: {
+          list: (query, requestOptions) => this.listPrevious(query, requestOptions),
+          reopen: (token, requestOptions) => this.reopenPrevious(token, requestOptions),
+        },
+      }),
       isCurrent: () => this.isCurrent(),
       subscribe: (listener) => this.subscribe(listener),
       open: (input) => this.open(input),
@@ -266,6 +274,47 @@ class DurableBinding {
     this.assertCurrent();
     const snapshot = await reopened.writer.readDraft(options?.signal);
     this.assertCurrent();
+    return new BoundWriter(this, reopened.writer, snapshot.photoId, snapshot.sourceSha256, token);
+  }
+
+  private async listPrevious(
+    query: { cursor?: string; limit?: number } = {},
+    options?: PhotoLibraryRequestOptions,
+  ): Promise<{ items: readonly PhotoLibraryDevelopDraftSummary[]; nextCursor: string | null }> {
+    this.assertNetworkCurrent();
+    const previous = this.sync.previous;
+    if (previous === undefined) invalid();
+    const limit = Math.min(LIST_LIMIT, query.limit ?? LIST_LIMIT);
+    const page = await previous.listPending({ ...query, limit }, options?.signal);
+    this.assertNetworkCurrent();
+    return {
+      items: page.writers.map((item) => {
+        const token = Object.freeze({ kind: "develop-draft" as const });
+        this.previousTokens.set(token, item.token);
+        return Object.freeze({
+          token,
+          photoId: item.photoId,
+          hasLatest: item.hasLatest,
+          hasUnknownAttempt: item.hasUnknownAttempt,
+          conflictCount: item.conflictIds.length,
+        });
+      }),
+      nextCursor: page.nextCursor,
+    };
+  }
+
+  private async reopenPrevious(
+    token: PhotoLibraryDevelopDraftToken,
+    options?: PhotoLibraryRequestOptions,
+  ): Promise<PhotoLibraryDevelopDraftWriter> {
+    this.assertNetworkCurrent();
+    const previous = this.sync.previous;
+    const coreToken = this.previousTokens.get(token);
+    if (previous === undefined || coreToken === undefined) invalid();
+    const reopened = await previous.reopen(coreToken, options?.signal);
+    this.assertNetworkCurrent();
+    const snapshot = await reopened.writer.readDraft(options?.signal);
+    this.assertNetworkCurrent();
     return new BoundWriter(this, reopened.writer, snapshot.photoId, snapshot.sourceSha256, token);
   }
 
