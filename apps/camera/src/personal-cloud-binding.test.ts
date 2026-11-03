@@ -7,7 +7,13 @@ import {
   type MacPhotoCopyStatus,
 } from "./personal-cloud-binding";
 
-const scope: MacPhotoCloudScope = { actorId: "synthetic-user", libraryId: "synthetic-library", sessionEpoch: "session-1" };
+const scope: MacPhotoCloudScope = {
+  actorId: "synthetic-user",
+  libraryId: "synthetic-library",
+  sessionId: "synthetic-session",
+  sessionEpoch: "session-1",
+  transport: "mac-bearer",
+};
 const library = { place: "cloud" } as PersonalCloudPhotoBinding["library"];
 const host = {} as PersonalCloudPhotoBinding["host"];
 const photoId = "opaque-photo";
@@ -36,7 +42,13 @@ describe("Mac personal cloud binding (synthetic native port only)", () => {
   it("keeps unconfigured production local-only and does no work at construction/login", () => {
     expect(createMacPersonalCloudPhotoBinding(null)).toMatchObject({ state: "not_connected", binding: undefined });
     const { binding, native } = fixture();
-    expect(binding.scopeKey).toBe("personal:synthetic-library:synthetic-user");
+    expect(binding.scopeKey).toBe(JSON.stringify([
+      "synthetic-user",
+      "synthetic-library",
+      "synthetic-session",
+      "session-1",
+      "mac-bearer",
+    ]));
     expect(native.start).not.toHaveBeenCalled();
     expect(native.recover).not.toHaveBeenCalled();
     expect(native.status).not.toHaveBeenCalled();
@@ -133,8 +145,10 @@ describe("Mac personal cloud binding (synthetic native port only)", () => {
 
   it.each([
     { ...scope, sessionEpoch: "session-2" },
+    { ...scope, sessionId: "another-session" },
     { ...scope, libraryId: "another-library" },
     { ...scope, actorId: "another-user" },
+    { ...scope, transport: "browser-session" } as unknown as MacPhotoCloudScope,
     null,
   ])("isolates pending results on account/library/session change (%j)", async (next) => {
     let finish: (value: MacPhotoCopyStatus) => void = () => {};

@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { accountMessage, LOCAL_ACCOUNT, parseAccountSnapshot, type AccountBridge } from "niho-desktop-account";
+import { invalidateNativePhotoIdentity } from "./native-photo-session";
 
 async function invoke(command: string): Promise<unknown> {
   if (!("__TAURI_INTERNALS__" in window)) return LOCAL_ACCOUNT;
@@ -38,6 +39,10 @@ export function CameraAccount({ bridge = nativeAccount }: { bridge?: AccountBrid
     try { await action(); } catch { /* read()で固定エラーを表示する */ }
     try { setState(parseAccountSnapshot(await bridge.read())); } catch { setState({ ...LOCAL_ACCOUNT }); }
   };
+  const logout = () => {
+    invalidateNativePhotoIdentity();
+    return bridge.logout();
+  };
   return (
     <details className="relative shrink-0 text-sm">
       <summary className="cursor-pointer rounded-lg px-2 py-1 text-niho-text-sub focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-niho-accent-ink">
@@ -50,7 +55,7 @@ export function CameraAccount({ bridge = nativeAccount }: { bridge?: AccountBrid
             {state.phase === "waiting" || state.phase === "refreshing" ? (
               <button type="button" onClick={() => void act(() => bridge.cancel())}>ログインを取り消す</button>
             ) : state.phase === "connected" || state.phase === "offline" ? (
-              <button type="button" onClick={() => void act(() => bridge.logout())}>このMacからログアウト</button>
+              <button type="button" onClick={() => void act(logout)}>このMacからログアウト</button>
             ) : (
               <button type="button" onClick={() => { setState({ ...state, phase: "waiting", error: null }); void act(() => bridge.login()); }}>ブラウザでログイン</button>
             )}
@@ -58,7 +63,7 @@ export function CameraAccount({ bridge = nativeAccount }: { bridge?: AccountBrid
               <button type="button" onClick={() => void act(() => bridge.refresh())}>接続を再試行</button>
             ) : null}
             {state.error === "storage" || state.error === "network" || state.error === "expired" || state.error === "rejected" ? (
-              <button type="button" onClick={() => void act(() => bridge.logout())}>保存した接続を削除</button>
+              <button type="button" onClick={() => void act(logout)}>保存した接続を削除</button>
             ) : null}
           </div>
         ) : <p className="mt-2 text-niho-text-muted">クラウド共有は準備中です。</p>}
