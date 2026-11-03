@@ -126,6 +126,7 @@ pub fn run() {
       account::camera_account_cancel,
       account::camera_account_logout,
       account::camera_account_refresh,
+      account::camera_photo_identity,
       library::camera_library_add_folder,
       library::camera_library_add_photos,
       library::camera_library_remembered,

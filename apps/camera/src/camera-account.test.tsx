@@ -1,8 +1,9 @@
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { LOCAL_ACCOUNT, type AccountBridge, type AccountSnapshot } from "niho-desktop-account";
 import { CameraAccount } from "./camera-account";
+import { watchNativePhotoIdentityInvalidation } from "./native-photo-session";
 
 (globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 const mounted: Array<() => Promise<void>> = [];
@@ -50,9 +51,13 @@ describe("Camera account", () => {
     expect(container.textContent).toContain("ブラウザでログイン");
   });
   it("offers logout only for the current Mac and clears the connected view", async () => {
+    const invalidated = vi.fn();
+    const stop = await watchNativePhotoIdentityInvalidation(invalidated, { listen: async () => () => {} });
     const { container, calls, click } = await render({ ...LOCAL_ACCOUNT, available: true, phase: "connected" });
     await click("ログアウト"); expect(calls).toEqual(["logout"]);
+    expect(invalidated).toHaveBeenCalledTimes(1);
     expect(container.textContent).toContain("ログインせずに");
+    stop();
   });
 });
 
