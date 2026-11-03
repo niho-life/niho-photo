@@ -125,10 +125,11 @@ function enqueue<T>(build: (settle: (value: T) => void) => DistributiveOmit<AppD
   });
 }
 
-function cancelAllRequests() {
+function cancelAllRequests(clearShown = false) {
   const pending = queue;
-  if (pending.length === 0) return;
+  if (pending.length === 0 && !clearShown) return;
   queue = [];
+  if (clearShown) snapshot = { active: null, shown: null };
   for (const request of pending) {
     if (request.kind === "confirm") request.settle(false);
     else if (request.kind === "confirmWithCheckbox") request.settle(null);
@@ -139,6 +140,10 @@ function cancelAllRequests() {
 }
 
 export const appDialog = {
+  /** 本人/接続の失効時に全依頼を取消し、閉じるアニメーション用の内容も同期的に消す。hostは引き続き使える。 */
+  cancelAll(): void {
+    cancelAllRequests(true);
+  },
   /** 確認ダイアログ。確定で true、キャンセル・閉じるで false。 */
   confirm(options: AppConfirmOptions): Promise<boolean> {
     return enqueue<boolean>((settle) => ({ kind: "confirm", options, settle }));

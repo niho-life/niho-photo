@@ -30,15 +30,28 @@ export type PhotoSaveEnv = {
   navigator: ShareNavigator | null;
   nativeFileSaveAvailable: () => boolean;
   saveFile: PhotoEditingHost["saveFile"];
-};
+} & Pick<PhotoEditingHost, "scopeSignal" | "isScopeCurrent">;
 
 function currentNavigator(): ShareNavigator | null {
   return typeof navigator === "undefined" ? null : navigator;
 }
 
 /** このページの共有シートと、アプリの端末への保存（`PhotoEditingHost`。移行元設計）。 */
-export function photoSaveEnv(host: Pick<PhotoEditingHost, "nativeFileSaveAvailable" | "saveFile">): PhotoSaveEnv {
-  return { navigator: currentNavigator(), nativeFileSaveAvailable: host.nativeFileSaveAvailable, saveFile: host.saveFile };
+export function photoSaveEnv(host: Pick<PhotoEditingHost, "nativeFileSaveAvailable" | "saveFile" | "scopeSignal" | "isScopeCurrent">): PhotoSaveEnv {
+  const { scopeSignal, isScopeCurrent } = host;
+  return {
+    navigator: currentNavigator(), nativeFileSaveAvailable: host.nativeFileSaveAvailable, saveFile: host.saveFile,
+    ...(scopeSignal ? { scopeSignal } : {}),
+    ...(isScopeCurrent ? { isScopeCurrent: isScopeCurrent.bind(host) } : {}),
+  };
+}
+
+function scopeIsCurrent(env: Pick<PhotoSaveEnv, "scopeSignal" | "isScopeCurrent">): boolean {
+  try {
+    return !env.scopeSignal?.aborted && (env.isScopeCurrent === undefined || env.isScopeCurrent() === true);
+  } catch {
+    return false;
+  }
 }
 
 const PROBE_FILE_NAME = "niho-photo.jpg";
@@ -90,8 +103,9 @@ function errorName(error: unknown): string {
 export async function savePhotosToDevice(
   files: File[],
   route: PhotoSaveRoute,
-  env: Pick<PhotoSaveEnv, "navigator" | "saveFile">,
+  env: Pick<PhotoSaveEnv, "navigator" | "saveFile" | "scopeSignal" | "isScopeCurrent">,
 ): Promise<PhotoSaveOutcome> {
+  if (!scopeIsCurrent(env)) return { kind: "cancelled" };
   if (files.length === 0) return { kind: "saved", saved: 0 };
   if (files.length > PHOTO_SAVE_MAX_FILES) {
     throw new Error(`一度に保存できるのは ${PHOTO_SAVE_MAX_FILES} 枚までです。`);
@@ -101,10 +115,13 @@ export async function savePhotosToDevice(
     const nav = env.navigator;
     if (!nav || typeof nav.share !== "function") throw new Error(SAVE_FAILED_MESSAGE);
     if (nav.userActivation && !nav.userActivation.isActive) return { kind: "needs-tap" };
+    if (!scopeIsCurrent(env)) return { kind: "cancelled" };
     try {
       await nav.share({ files });
+      if (!scopeIsCurrent(env)) return { kind: "cancelled" };
       return { kind: "shared" };
     } catch (error) {
+      if (!scopeIsCurrent(env)) return { kind: "cancelled" };
       const name = errorName(error);
       if (name === "AbortError") return { kind: "cancelled" };
       if (name === "NotAllowedError") return { kind: "needs-tap" };
@@ -114,7 +131,15 @@ export async function savePhotosToDevice(
 
   let saved = 0;
   for (const file of files) {
-    const result = await env.saveFile({ blob: file, fileName: file.name });
+    if (!scopeIsCurrent(env)) return { kind: "cancelled" };
+    let result: Awaited<ReturnType<PhotoSaveEnv["saveFile"]>>;
+    try {
+      result = await env.saveFile({ blob: file, fileName: file.name });
+    } catch (error) {
+      if (!scopeIsCurrent(env)) return { kind: "cancelled" };
+      throw error;
+    }
+    if (!scopeIsCurrent(env)) return { kind: "cancelled" };
     if (result === "cancelled") return saved === 0 ? { kind: "cancelled" } : { kind: "saved", saved };
     saved += 1;
   }
