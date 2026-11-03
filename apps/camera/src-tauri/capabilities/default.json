@@ -10,6 +10,7 @@
   ],
   "permissions": [
     "allow-camera-account",
+    "allow-camera-photo-session",
     "allow-camera-app-info",
     "allow-camera-library",
     "allow-camera-photos",

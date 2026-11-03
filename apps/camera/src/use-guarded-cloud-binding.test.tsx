@@ -32,86 +32,79 @@ function setup(leaveGuard: PhotoEditingLeaveGuard) {
         <output data-testid="marker">{state.binding?.marker ?? "none"}</output>
         <output data-testid="switching">{String(state.switching)}</output>
         <output data-testid="failed">{String(state.failed)}</output>
-        <button type="button" onClick={() => void state.retry()}>retry</button>
       </div>
     );
   }
 
-  return { Harness, leaveGuardRef, onOwnerChange };
+  return { Harness, onOwnerChange };
 }
 
 describe("useGuardedCloudBinding", () => {
-  it("keeps the old owner until the edit guard accepts, and lets the owner retry after a save failure", async () => {
-    let finishGuard: (canLeave: boolean) => void = () => undefined;
-    const guard = vi.fn(() => new Promise<boolean>((resolve) => { finishGuard = resolve; }));
-    const { Harness, leaveGuardRef, onOwnerChange } = setup(guard);
-
-    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "old" }} />));
-    await act(async () => root.render(<Harness incoming={{ actorId: "owner-b", marker: "new" }} />));
-    expect(container.querySelector('[data-testid="owner"]')?.textContent).toBe("owner-a");
-    expect(container.querySelector('[data-testid="switching"]')?.textContent).toBe("true");
-
-    await act(async () => finishGuard?.(false));
-    expect(container.querySelector('[data-testid="owner"]')?.textContent).toBe("owner-a");
-    expect(container.querySelector('[data-testid="failed"]')?.textContent).toBe("true");
-    expect(onOwnerChange).not.toHaveBeenCalled();
-
-    leaveGuardRef.current = vi.fn(async () => true);
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>("button")?.click();
-      await Promise.resolve();
-    });
-    expect(container.querySelector('[data-testid="owner"]')?.textContent).toBe("owner-b");
-    expect(container.querySelector('[data-testid="failed"]')?.textContent).toBe("false");
-    expect(onOwnerChange).toHaveBeenCalledTimes(1);
-    expect(guard).toHaveBeenCalledWith({ release: false });
-  });
-
-  it("refreshes a binding for the same owner without leaving the active edit session", async () => {
-    const guard = vi.fn(async () => true);
-    const { Harness } = setup(guard);
-    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "old" }} />));
-    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "refreshed" }} />));
-
-    expect(container.querySelector('[data-testid="owner"]')?.textContent).toBe("owner-a");
-    expect(container.querySelector('[data-testid="marker"]')?.textContent).toBe("refreshed");
-    expect(guard).not.toHaveBeenCalled();
-  });
-
-  it("guards a library scope change for the same actor before replacing the binding", async () => {
-    const guard = vi.fn(async () => false);
-    const { Harness, leaveGuardRef, onOwnerChange } = setup(guard);
-
-    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "library-a", scopeKey: "personal:library-a:owner-a" }} />));
-    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "library-b", scopeKey: "personal:library-b:owner-a" }} />));
-
-    expect(container.querySelector('[data-testid="owner"]')?.textContent).toBe("owner-a");
-    expect(container.querySelector('[data-testid="marker"]')?.textContent).toBe("library-a");
-    expect(container.querySelector('[data-testid="failed"]')?.textContent).toBe("true");
-    expect(guard).toHaveBeenCalledTimes(1);
-    expect(onOwnerChange).not.toHaveBeenCalled();
-
-    leaveGuardRef.current = vi.fn(async () => true);
-    await act(async () => {
-      container.querySelector<HTMLButtonElement>("button")?.click();
-      await Promise.resolve();
-    });
-    expect(container.querySelector('[data-testid="marker"]')?.textContent).toBe("library-b");
-    expect(onOwnerChange).toHaveBeenCalledTimes(1);
-  });
-
-  it("does not report a failed transition if the incoming binding returns to the current owner", async () => {
-    let finishGuard: (canLeave: boolean) => void = () => undefined;
-    const guard = vi.fn(() => new Promise<boolean>((resolve) => { finishGuard = resolve; }));
+  it.each([
+    ["false", vi.fn(async () => false)],
+    ["reject", vi.fn(async () => { throw new Error("synthetic guard failure"); })],
+    ["never", vi.fn(() => new Promise<boolean>(() => undefined))],
+  ])("removes the old owner on the first security render when the leave guard is %s", async (_name, guard) => {
     const { Harness, onOwnerChange } = setup(guard);
-    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "old" }} />));
-    await act(async () => root.render(<Harness incoming={{ actorId: "owner-b", marker: "pending" }} />));
-    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "current" }} />));
-    await act(async () => finishGuard(false));
+    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "old", scopeKey: "scope-a" }} />));
+    await act(async () => root.render(<Harness incoming={{ actorId: "owner-b", marker: "new", scopeKey: "scope-b" }} />));
 
-    expect(container.querySelector('[data-testid="owner"]')?.textContent).toBe("owner-a");
-    expect(container.querySelector('[data-testid="marker"]')?.textContent).toBe("current");
+    expect(container.querySelector('[data-testid="owner"]')?.textContent).toBe("owner-b");
+    expect(container.querySelector('[data-testid="marker"]')?.textContent).toBe("new");
+    expect(container.querySelector('[data-testid="switching"]')?.textContent).toBe("false");
     expect(container.querySelector('[data-testid="failed"]')?.textContent).toBe("false");
+    expect(guard).not.toHaveBeenCalled();
+    expect(onOwnerChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("removes a revoked binding on the first render without waiting for a guard", async () => {
+    const guard = vi.fn(() => new Promise<boolean>(() => undefined));
+    const { Harness, onOwnerChange } = setup(guard);
+    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "old", scopeKey: "scope-a" }} />));
+    await act(async () => root.render(<Harness incoming={null} />));
+
+    expect(container.querySelector('[data-testid="owner"]')?.textContent).toBe("local");
+    expect(container.querySelector('[data-testid="marker"]')?.textContent).toBe("none");
+    expect(guard).not.toHaveBeenCalled();
+    expect(onOwnerChange).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(["owner", "session", "epoch", "transport"])("immediately fences a %s scope change", async (part) => {
+    const guard = vi.fn(async () => false);
+    const { Harness, onOwnerChange } = setup(guard);
+    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "old", scopeKey: "scope-before" }} />));
+    await act(async () => root.render(<Harness incoming={{
+      actorId: part === "owner" ? "owner-b" : "owner-a",
+      marker: part,
+      scopeKey: `scope-after-${part}`,
+    }} />));
+
+    expect(container.querySelector('[data-testid="marker"]')?.textContent).toBe(part);
+    expect(guard).not.toHaveBeenCalled();
+    expect(onOwnerChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("keeps the editor scope for a same-logical-scope expiry refresh", async () => {
+    const guard = vi.fn(async () => false);
+    const { Harness, onOwnerChange } = setup(guard);
+    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "expires-1", scopeKey: "same-five-tuple" }} />));
+    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "expires-2", scopeKey: "same-five-tuple" }} />));
+
+    expect(container.querySelector('[data-testid="marker"]')?.textContent).toBe("expires-2");
+    expect(guard).not.toHaveBeenCalled();
     expect(onOwnerChange).not.toHaveBeenCalled();
+  });
+
+  it("cannot be restored by a late result associated with the previous owner", async () => {
+    let finish: (value: boolean) => void = () => undefined;
+    const guard = vi.fn(() => new Promise<boolean>((resolve) => { finish = resolve; }));
+    const { Harness } = setup(guard);
+    await act(async () => root.render(<Harness incoming={{ actorId: "owner-a", marker: "old", scopeKey: "scope-a" }} />));
+    await act(async () => root.render(<Harness incoming={{ actorId: "owner-b", marker: "new", scopeKey: "scope-b" }} />));
+    await act(async () => finish(true));
+
+    expect(container.querySelector('[data-testid="owner"]')?.textContent).toBe("owner-b");
+    expect(container.querySelector('[data-testid="marker"]')?.textContent).toBe("new");
+    expect(guard).not.toHaveBeenCalled();
   });
 });
