@@ -1976,7 +1976,7 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-develop.ts",
         "sha256": "491153dcf3675cfd0b822a008f101a77125411c9e18966ea7b7fb96e18ce8228"
       },
-      "outputSha256": "6cdbf955412902f653ff446e1e239630ff318d294116c7ec63c016f09b5185d6",
+      "outputSha256": "135343f07506c24451df485d6435d2b7da326dc290eeef7f79c7c9a1ce652730",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -1989,7 +1989,8 @@
         "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
         "Add backwards-compatible personal photo library scope key",
         "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
-        "自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する"
+        "自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する",
+        "永続下書きの復旧保存後に現行補正で編集セッションを再開し、通常の自動保存中は編集操作を継続可能にする。"
       ]
     },
     {
@@ -13093,8 +13094,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-durable-recovery.test.tsx",
-      "sha256": "f5b49f4c78d4d174fa845bf86c4e00d4533ba389d5110d3d6b2a55200ba33540",
-      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する"
+      "sha256": "a339d90dcb5c4bf725b913d1c963f6b56d140fcf18338d7a5a922c1f05d40106",
+      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する\n変更理由: 復旧後の編集再開と通常自動保存中の操作継続を固定する回帰試験を追加。"
     },
     {
       "path": "packages/photo-editing/src/library/photo-library-durable-drafts.ts",

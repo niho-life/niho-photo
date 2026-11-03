@@ -772,8 +772,9 @@ export function useBrowserPhotoDevelop(params: {
         : current);
     }
     await refreshDurableRecovery();
-    // 選択を確定した後だけ採用版で開き直す。遅着の読取で、その後の入力を上書きしない。
-    if (result.kind === "resolved" && empty) {
+    // 復旧保存・競合の選択が確定した後は採用版で開き直し、保存係も現行版で作り直す。
+    // 遅着の読取で、その後の入力を上書きしない。
+    if ((result.kind === "saved" || result.kind === "resolved") && empty) {
       const selected = developSessionRef.current;
       const saver = selected?.saver;
       const mayReload = () => selected !== null && selected !== undefined &&
@@ -1123,6 +1124,7 @@ export function useBrowserPhotoDevelop(params: {
   const durableCurrentSaver = developSessionRef.current?.saver ?? null;
   const durableCurrentSaverBinding = durableCurrentSaver ? durableSaversRef.current.get(durableCurrentSaver) : undefined;
   const durableCurrentSaverPending = durableCurrentSaverBinding !== undefined && durableCurrentSaver?.hasPendingWork() === true;
+  const durableCurrentSaverToken = durableCurrentSaverBinding?.writer.token;
   const durableRecoveryPending = durableRecovery.summaries.length > 0 || durableRecovery.writer !== null || durableCurrentSaverPending;
   const durableRecoveryMessage = durableRecovery.message ?? (
     durableComparison
@@ -1194,8 +1196,8 @@ export function useBrowserPhotoDevelop(params: {
       pending: durableRecoveryPending,
       blocksCurrentPhoto: durableCurrentPhotoId !== undefined && (
         durableRecovery.writer?.photoId === durableCurrentPhotoId ||
-        durableRecovery.summaries.some((summary) => summary.photoId === durableCurrentPhotoId) ||
-        durableCurrentSaverBinding?.photoId === durableCurrentPhotoId && durableCurrentSaverPending
+        durableRecovery.summaries.some((summary) => summary.photoId === durableCurrentPhotoId &&
+          summary.token !== durableCurrentSaverToken)
       ),
       count: durableRecovery.summaries.length,
       busy: durableRecovery.busy,
