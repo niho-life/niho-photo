@@ -1021,3 +1021,147 @@ it("keeps an open accepted scope editable offline and reverifies before online r
   assert.equal(test.runtime.getSnapshot().binding, original);
   test.runtime.dispose();
 });
+
+
+function authenticationHarness(options = {}) {
+  const contexts = [];
+  const connections = [];
+  const test = harness({ ...options, async connect(context) {
+    contexts.push(context);
+    if (options.beforeConnect) await options.beforeConnect(context, contexts.length);
+    const connection = new FakeConnection(binding(context.identity.userId));
+    connections.push(connection);
+    return connection;
+  } });
+  return { ...test, contexts, acceptedConnections: connections };
+}
+
+describe("connection authentication rejection", () => {
+  it("fences synchronously, broadcasts anonymously and waits for explicit retry after same-user verification", async () => {
+    const verification = deferred();
+    let dialogCancels = 0;
+    const test = authenticationHarness({ cancelDialogs() { dialogCancels += 1; } });
+    try {
+      await test.runtime.start();
+      await eventually(() => assert.ok(test.runtime.getSnapshot().binding));
+      const context = test.contexts[0];
+      const clears = test.queryClient.clears;
+      const cancelled = dialogCancels;
+      const messages = test.channel.sent.length;
+      test.bridge.refreshQueue.push(verification.promise);
+      context.onAuthenticationRejected();
+      assert.equal(test.runtime.getSnapshot().binding, null);
+      assert.equal(context.signal.aborted, true);
+      assert.equal(context.host.isScopeCurrent(), false);
+      assert.equal(test.acceptedConnections[0].disposed, 1);
+      assert.ok(test.queryClient.clears > clears);
+      assert.ok(dialogCancels > cancelled);
+      assert.deepEqual(test.channel.sent.slice(messages), [{ type: "session-changed" }]);
+      context.onAuthenticationRejected();
+      assert.equal(test.channel.sent.length, messages + 1);
+      verification.resolve(identity());
+      await eventually(() => assert.equal(test.runtime.getSnapshot().session.phase, "ready"));
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(test.contexts.length, 1);
+      assert.equal(test.runtime.getSnapshot().binding, null);
+      await test.runtime.retry();
+      await eventually(() => assert.ok(test.runtime.getSnapshot().binding));
+      assert.equal(test.contexts.length, 2);
+    } finally { verification.resolve(identity()); test.runtime.dispose(); }
+  });
+
+  it("queues fresh verification when rejection arrives during a normal refresh", async () => {
+    const normal = deferred();
+    const fresh = deferred();
+    const test = authenticationHarness();
+    try {
+      await test.runtime.start();
+      await eventually(() => assert.ok(test.runtime.getSnapshot().binding));
+      test.bridge.refreshQueue.push(normal.promise, fresh.promise);
+      const refreshing = test.runtime.retry();
+      assert.equal(test.runtime.getSnapshot().session.phase, "verifying");
+      test.contexts[0].onAuthenticationRejected();
+      assert.equal(test.runtime.getSnapshot().binding, null);
+      normal.resolve(identity());
+      await eventually(() => assert.equal(test.bridge.refreshes, 2));
+      assert.equal(test.runtime.getSnapshot().session.phase, "verifying");
+      fresh.resolve(identity());
+      await refreshing;
+      assert.equal(test.contexts.length, 1);
+      assert.equal(test.runtime.getSnapshot().binding, null);
+    } finally { normal.resolve(identity()); fresh.resolve(identity()); test.runtime.dispose(); }
+  });
+
+  it("ignores an old connection rejection after another generation has connected", async () => {
+    const test = authenticationHarness();
+    try {
+      await test.runtime.start();
+      await eventually(() => assert.ok(test.runtime.getSnapshot().binding));
+      const old = test.contexts[0];
+      test.channel.receive({ type: "session-changed" });
+      await eventually(() => assert.equal(test.contexts.length, 2));
+      await eventually(() => assert.ok(test.runtime.getSnapshot().binding));
+      const accepted = test.runtime.getSnapshot().binding;
+      const refreshes = test.bridge.refreshes;
+      const messages = test.channel.sent.length;
+      old.onAuthenticationRejected();
+      assert.equal(test.runtime.getSnapshot().binding, accepted);
+      assert.equal(test.bridge.refreshes, refreshes);
+      assert.equal(test.channel.sent.length, messages);
+    } finally { test.runtime.dispose(); }
+  });
+
+  it("ignores a rejection after runtime disposal", async () => {
+    const test = authenticationHarness();
+    try {
+      await test.runtime.start();
+      await eventually(() => assert.ok(test.runtime.getSnapshot().binding));
+      const context = test.contexts[0];
+      test.runtime.dispose();
+      const refreshes = test.bridge.refreshes;
+      const messages = test.channel.sent.length;
+      context.onAuthenticationRejected();
+      assert.equal(test.bridge.refreshes, refreshes);
+      assert.equal(test.channel.sent.length, messages);
+      assert.equal(test.runtime.getSnapshot().session.phase, "disposed");
+    } finally { test.runtime.dispose(); }
+  });
+
+  it("fences a rejected bootstrap without an automatic reconnect loop", async () => {
+    const test = authenticationHarness({ beforeConnect(context, count) {
+      if (count === 1) {
+        context.onAuthenticationRejected();
+        throw new Error("synthetic bootstrap authentication rejection");
+      }
+    } });
+    try {
+      await test.runtime.start();
+      await eventually(() => assert.equal(test.bridge.refreshes, 1));
+      await eventually(() => assert.equal(test.runtime.getSnapshot().session.phase, "ready"));
+      await new Promise((resolve) => setImmediate(resolve));
+      assert.equal(test.contexts.length, 1);
+      assert.equal(test.runtime.getSnapshot().binding, null);
+      await test.runtime.retry();
+      await eventually(() => assert.ok(test.runtime.getSnapshot().binding));
+      assert.equal(test.contexts.length, 2);
+    } finally { test.runtime.dispose(); }
+  });
+
+  it("allows a newly verified identity to connect without restoring the rejected user", async () => {
+    const verification = deferred();
+    const test = authenticationHarness();
+    try {
+      await test.runtime.start();
+      await eventually(() => assert.ok(test.runtime.getSnapshot().binding));
+      const old = test.contexts[0];
+      test.bridge.refreshQueue.push(verification.promise);
+      old.onAuthenticationRejected();
+      verification.resolve(identity("owner-b"));
+      await eventually(() => assert.equal(test.runtime.getSnapshot().binding?.actorId, "owner-b"));
+      assert.equal(test.contexts.length, 2);
+      old.onAuthenticationRejected();
+      assert.equal(test.runtime.getSnapshot().binding.actorId, "owner-b");
+      assert.equal(test.bridge.refreshes, 1);
+    } finally { verification.resolve(identity("owner-b")); test.runtime.dispose(); }
+  });
+});

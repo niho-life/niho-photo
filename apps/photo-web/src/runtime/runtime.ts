@@ -554,7 +554,24 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
         capture.signal.addEventListener("abort", abort, { once: true });
         if (capture.signal.aborted) controller.abort();
         try {
-          constructed.value = await connectPort({ identity: capture.identity, signal: controller.signal, host: scopedHost, session });
+          constructed.value = await connectPort({
+            identity: capture.identity,
+            signal: controller.signal,
+            host: scopedHost,
+            session,
+            onAuthenticationRejected: () => {
+              const current = session.getSnapshot();
+              if (disposed || generation !== resourceGeneration || controller.signal.aborted
+                || (current.phase !== "ready" && current.phase !== "verifying")
+                || current.identity === null || isPhotoIdentityExpired(current.identity, now())
+                || !samePhotoIdentityScope(identity, current.identity)) return;
+              const verification = requestVerification(true);
+              // A same-user refresh must not immediately retry a persistently rejected BFF.
+              rejectedGeneration = resourceGeneration;
+              notifyPeers();
+              void verification.catch(() => undefined);
+            },
+          });
           return constructed.value;
         } finally {
           capture.signal.removeEventListener("abort", abort);
