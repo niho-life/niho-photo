@@ -19,8 +19,8 @@ import type {
 import { resolveReloadSettings } from "./browser-photo-editing-open-flow";
 import type { BrowserPhotoDevelop } from "./use-browser-photo-develop";
 
-/** 読み直すきっかけ（保存が断られた・画面に戻った）。 */
-type ReloadReason = "saveStale" | "refresh";
+/** 読み直すきっかけ（保存の競合・復旧保存・画面に戻った）。 */
+type ReloadReason = "saveStale" | "durableRecovery" | "refresh";
 
 /**
  * 別の端末で直した補正を黙って上書きしない（版の照合。NIHO Photo 段 1 F1 移行元設計・API 移行元設計）の画面側。wasm で直している 1 枚を
@@ -41,7 +41,7 @@ export function useBrowserPhotoDevelopReload(params: {
   latestAccessRef: MutableRefObject<BrowserPhotoAccess>;
   develop: Pick<
     BrowserPhotoDevelop,
-    "engineRef" | "developSessionRef" | "leavingRef" | "saveStaleHandlerRef" | "startSession" | "createSaver"
+    "engineRef" | "developSessionRef" | "leavingRef" | "saveStaleHandlerRef" | "saveDurableRecoveryHandlerRef" | "startSession" | "createSaver"
   >;
   openedRef: MutableRefObject<OpenedSource | null>;
   setOpened: (opened: OpenedSource) => void;
@@ -73,7 +73,7 @@ export function useBrowserPhotoDevelopReload(params: {
     replaceCloudPhoto,
     setStatus,
   } = params;
-  const { engineRef, developSessionRef, leavingRef, saveStaleHandlerRef, startSession, createSaver } = params.develop;
+  const { engineRef, developSessionRef, leavingRef, saveStaleHandlerRef, saveDurableRecoveryHandlerRef, startSession, createSaver } = params.develop;
   /** 画面に戻ったときの今の行を読んでいる（visibilitychange と focus が続けて来ても重ねない） */
   // 写真の出どころ（今の行を中身で探す。移行元設計）
   const library = usePhotoLibrary();
@@ -91,6 +91,7 @@ export function useBrowserPhotoDevelopReload(params: {
     session: DevelopSession,
     photo: PhotoLibraryPhoto,
     resolved: { settings: DevelopSettings; settingsSource: DevelopSession["settingsSource"] },
+    announceReload: boolean,
   ) => {
     const previousSaver = session.saver;
     const next: DevelopSession = {
@@ -113,7 +114,7 @@ export function useBrowserPhotoDevelopReload(params: {
     // 取り消しの履歴は捨て、読み込んだ補正から始め直す（一覧に戻っている間は、1 枚に戻ったときに始める）
     loadSettings(resolved.settings, { history: viewModeRef.current === "loupe" });
     replaceCloudPhoto(photo);
-    setStatus({ kind: "notice", text: BROWSER_PHOTO_EDITING_DEVELOP_RELOADED_TEXT });
+    if (announceReload) setStatus({ kind: "notice", text: BROWSER_PHOTO_EDITING_DEVELOP_RELOADED_TEXT });
   };
 
   /**
@@ -123,7 +124,7 @@ export function useBrowserPhotoDevelopReload(params: {
   const reload = async (session: DevelopSession, photo: PhotoLibraryPhoto, reason: ReloadReason): Promise<void> => {
     // 写真を離れる処理（保存を送り終えて補正後のプレビューを上げ始める）は前の編集のまま終え、その後にまだ開いていれば読み直す
     const leaving = leavingRef.current;
-    if (leaving && reason === "saveStale") {
+    if (leaving && reason !== "refresh") {
       void leaving.then(
         () => reloadRef.current(session, photo, reason),
         () => undefined,
@@ -152,8 +153,8 @@ export function useBrowserPhotoDevelopReload(params: {
       );
     };
     if (!engineRef.current || isStale()) return;
-    const isStaleSaveReload = reason === "saveStale";
-    if (isStaleSaveReload) setStaleReloading(true);
+    const blocksEditing = reason !== "refresh";
+    if (blocksEditing) setStaleReloading(true);
     try {
       const resolved = resolveReloadSettings(photo, session.input);
       if (resolved.kind === "locked") {
@@ -165,7 +166,7 @@ export function useBrowserPhotoDevelopReload(params: {
         // 切り抜いてもプレビューの大きさに届く作業サイズで描く（足りなければ、同じオリジナルを開き直してから入れる）
         if (!(await ensureDevelopWorkingSize(resolved.settings)) || isStale()) return;
         const leavingAfterResize = leavingRef.current;
-        if (leavingAfterResize && reason === "saveStale") {
+        if (leavingAfterResize && reason !== "refresh") {
           void leavingAfterResize.then(
             () => reloadRef.current(session, photo, reason),
             () => undefined,
@@ -173,20 +174,22 @@ export function useBrowserPhotoDevelopReload(params: {
           return;
         }
       }
-      apply(session, photo, resolved);
+      apply(session, photo, resolved, reason !== "durableRecovery");
     } finally {
-      if (isStaleSaveReload && mountedRef.current) setStaleReloading(false);
+      if (blocksEditing && mountedRef.current) setStaleReloading(false);
     }
   };
   const reloadRef = useRef(reload);
   reloadRef.current = reload;
 
   // 保存係が別の端末の保存に断られた（その写真を開いている保存係のときだけ呼ばれる）
-  saveStaleHandlerRef.current = (photo) => {
+  const scheduleReload = (photo: PhotoLibraryPhoto, reason: ReloadReason) => {
     const session = developSessionRef.current;
     if (!session || session.photoId !== photo.id) return;
-    void reloadRef.current(session, photo, "saveStale");
+    void reloadRef.current(session, photo, reason);
   };
+  saveStaleHandlerRef.current = (photo) => scheduleReload(photo, "saveStale");
+  saveDurableRecoveryHandlerRef.current = (photo) => scheduleReload(photo, "durableRecovery");
 
   const deferRefreshUntilLeavingFinishes = (leaving: Promise<boolean>) => {
     if (refreshAfterLeavingRef.current === leaving) return;
