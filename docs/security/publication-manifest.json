@@ -1981,7 +1981,7 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-develop.ts",
         "sha256": "491153dcf3675cfd0b822a008f101a77125411c9e18966ea7b7fb96e18ce8228"
       },
-      "outputSha256": "bd00e3bf20e5e30a86dc8c33db0015296d1a823178f6298e19960383487d0c90",
+      "outputSha256": "9e83007e35fc50afe1ca1c56d6a66498cf5a060b4856725f593dd6b37c6951b0",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -1997,7 +1997,8 @@
         "自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する",
         "永続下書きの復旧保存後に現行補正で編集セッションを再開し、通常の自動保存中は編集操作を継続可能にする。",
         "復旧保存後の編集再開に専用reload経路を使い、別端末通知を誤表示しない。",
-        "以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続"
+        "以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続",
+        "未対応の以前の補正は理由を表示し、保存操作を止めてデータ書き出しを残す"
       ]
     },
     {
@@ -2609,9 +2610,10 @@
         "mainの本人cloud共通copyとA作成のPhoto Web共通copy・容量表示を両方保持して通常mergeを解消。",
         "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
         "以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続",
-        "strict commit後にも自動送信停止を確認し、以前の下書き一覧の閉じる操作を画面内に保持"
+        "strict commit後にも自動送信停止を確認し、以前の下書き一覧の閉じる操作を画面内に保持",
+        "以前の補正が現在の写真や端末で保存不可の場合の日本語説明を追加"
       ],
-      "outputSha256": "c3113dbf34a2bcbdd6d3f1b1d645fcac4cb062a9ca51f2bbfd5e6151578e78ee"
+      "outputSha256": "78de206c86a9117801d94d2d6b10876c5c05bfc24da431eb2b454965a406c795"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-crop.test.ts",
@@ -13174,8 +13176,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-previous-drafts.test.tsx",
-      "sha256": "f9a98e14009b9c11f7e9e1910c597e3f6c2c3af4f9899438af97e7c87145a444",
-      "origin": "NIHO original explicit previous-draft recovery UI and synthetic regression tests for C03."
+      "sha256": "f09cd3cf1097e46286fdc613dbbdf2aa23b0713107a665a81db75971b39d21e6",
+      "origin": "NIHO original explicit previous-draft recovery UI and synthetic regression tests for C03.\n変更理由: 以前の補正の保存不可表示・再保存抑止・JSON書き出し保持の回帰テストを追加\n変更理由: 以前の補正の保存不可表示・再保存抑止・JSON書き出し保持の回帰テストを追加"
     }
   ],
   "excludedSources": [

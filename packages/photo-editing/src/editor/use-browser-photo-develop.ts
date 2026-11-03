@@ -90,6 +90,7 @@ type PreviousDraftsState = {
   comparisonPreview: DurableComparisonPreview | null;
   photoName: string;
   busy: boolean;
+  saveUnsupported: boolean;
   message: string | null;
 };
 
@@ -130,6 +131,7 @@ const EMPTY_PREVIOUS_DRAFTS: PreviousDraftsState = {
   comparisonPreview: null,
   photoName: PHOTO_EDITING_DURABLE_DRAFT_COPY.photoFallback,
   busy: false,
+  saveUnsupported: false,
   message: null,
 };
 
@@ -1016,6 +1018,7 @@ export function useBrowserPhotoDevelop(params: {
       comparisonPreview: null,
       photoName: PHOTO_EDITING_DURABLE_DRAFT_COPY.photoFallback,
       busy: false,
+      saveUnsupported: false,
       message: null,
     }));
   }, []);
@@ -1049,6 +1052,7 @@ export function useBrowserPhotoDevelop(params: {
       comparisonPreview: null,
       photoName: PHOTO_EDITING_DURABLE_DRAFT_COPY.photoFallback,
       busy: true,
+      saveUnsupported: false,
       message: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousChecking,
     }));
     try {
@@ -1113,6 +1117,7 @@ export function useBrowserPhotoDevelop(params: {
     setPreviousDrafts((current) => ({
       ...current,
       busy: true,
+      saveUnsupported: false,
       message: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousChecking,
       photoName: entry.photoName,
     }));
@@ -1322,8 +1327,16 @@ export function useBrowserPhotoDevelop(params: {
     if (result.kind === "conflict") {
       const snapshot = await writer.read(previousRequestOptions);
       if (!isPreviousGenerationCurrent(generation)) return;
-      setPreviousDrafts((current) => ({ ...current, snapshot, busy: false, message: null }));
+      setPreviousDrafts((current) => ({ ...current, snapshot, busy: false, saveUnsupported: false, message: null }));
       return;
+    }
+    const unsupported = result.kind === "unsupported";
+    if (unsupported) {
+      setPreviousDrafts((current) => ({
+        ...current,
+        saveUnsupported: true,
+        message: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousUnsupported,
+      }));
     }
     const snapshot = await writer.read(previousRequestOptions);
     if (!isPreviousGenerationCurrent(generation)) return;
@@ -1335,7 +1348,8 @@ export function useBrowserPhotoDevelop(params: {
       comparison: snapshot.hasPendingResolution ? current.comparison : null,
       comparisonPreview: snapshot.hasPendingResolution ? current.comparisonPreview : null,
       busy: false,
-      message: null,
+      saveUnsupported: unsupported,
+      message: unsupported ? PHOTO_EDITING_DURABLE_DRAFT_COPY.previousUnsupported : null,
     }));
     if (empty && (result.kind === "saved" || result.kind === "resolved")) {
       await finishPreviousKnownSettlement(writer, result.revision, result.kind);
@@ -1344,7 +1358,8 @@ export function useBrowserPhotoDevelop(params: {
 
   const savePreviousDraft = useCallback(async (): Promise<void> => {
     const { writer, snapshot } = previousDraftsRef.current;
-    if (!writer || !snapshot || previousDraftsRef.current.busy || !isDurableScopeCurrent()) return;
+    if (!writer || !snapshot || previousDraftsRef.current.busy || previousDraftsRef.current.saveUnsupported ||
+        !isDurableScopeCurrent()) return;
     const generation = previousGenerationRef.current;
     setPreviousDrafts((current) => ({
       ...current, busy: true, message: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousChecking,
@@ -1362,7 +1377,11 @@ export function useBrowserPhotoDevelop(params: {
     } catch {
       if (!isPreviousGenerationCurrent(generation)) return;
       setPreviousDrafts((current) => ({
-        ...current, busy: false, message: PHOTO_EDITING_DURABLE_DRAFT_COPY.failed,
+        ...current,
+        busy: false,
+        message: current.saveUnsupported
+          ? PHOTO_EDITING_DURABLE_DRAFT_COPY.previousUnsupported
+          : PHOTO_EDITING_DURABLE_DRAFT_COPY.failed,
       }));
     }
   }, [handlePreviousSaveResult, isDurableScopeCurrent, isPreviousGenerationCurrent, previousRequestOptions]);
@@ -1715,7 +1734,7 @@ export function useBrowserPhotoDevelop(params: {
       label: PHOTO_EDITING_DURABLE_DRAFT_COPY.compare,
       onClick: () => void comparePreviousDraft(),
     }] : []),
-    ...(!previousSnapshot?.terminalReason ? [{
+    ...(!previousSnapshot?.terminalReason && !previousDrafts.saveUnsupported ? [{
       label: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousSave,
       onClick: () => void savePreviousDraft(),
     }] : []),

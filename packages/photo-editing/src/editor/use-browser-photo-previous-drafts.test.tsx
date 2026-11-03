@@ -405,3 +405,63 @@ it("drops late previous list and open results after scope revocation and dispose
     } finally { await openFixture.unmount(); }
   } finally { await fixture.unmount(); }
 });
+
+it("explains unsupported previous saves and keeps the draft available for export", async () => {
+  const token = Object.freeze({ kind: "develop-draft" as const });
+  const snapshot: PhotoLibraryDevelopDraftSnapshot = {
+    latest: { settings: { v: 1, engine: "niho-1", exposure: 0.2 }, baseVersion: null, maskSurfaceIds: [] },
+    latestStage: { committed: Promise.resolve("committed") },
+    attempted: null,
+    conflicts: [],
+    hasUnknownAttempt: false,
+    hasPendingResolution: false,
+    terminalReason: null,
+  };
+  const writer: PhotoLibraryDevelopDraftWriter = {
+    photoId: "photo", sourceSha256: "a".repeat(64), token,
+    stage: vi.fn(),
+    save: vi.fn(async () => ({ kind: "unsupported" as const })),
+    retry: vi.fn(), read: vi.fn(async () => snapshot),
+    compare: vi.fn(), resolve: vi.fn(), retryResolution: vi.fn(),
+    discard: vi.fn(), dispose: vi.fn(),
+  };
+  const port: PhotoLibraryDurableDevelopDrafts = {
+    isCurrent: () => true, subscribe: () => () => undefined, open: vi.fn(),
+    list: async () => ({ items: [], nextCursor: null }), reopen: vi.fn(),
+    previous: {
+      list: async () => ({
+        items: [{ token, photoId: "photo", hasLatest: true, hasUnknownAttempt: false, conflictCount: 0 }],
+        nextCursor: null,
+      }),
+      reopen: vi.fn(async () => writer),
+    },
+  };
+  const fixture = renderDevelop({ port });
+  try {
+    await fixture.mount();
+    await act(async () => {
+      fixture.current.previousDrafts.entryAction?.onClick();
+      for (let n = 0; n < 20; n++) await Promise.resolve();
+    });
+    await act(async () => {
+      fixture.current.previousDrafts.dialog?.items[0]?.onOpen();
+      for (let n = 0; n < 20; n++) await Promise.resolve();
+    });
+    expect(fixture.current.previousDrafts.dialog?.selected?.actions.some((action) =>
+      action.label === PHOTO_EDITING_DURABLE_DRAFT_COPY.previousSave)).toBe(true);
+
+    await act(async () => {
+      fixture.current.previousDrafts.dialog?.selected?.actions.find((action) =>
+        action.label === PHOTO_EDITING_DURABLE_DRAFT_COPY.previousSave)?.onClick();
+      for (let n = 0; n < 30; n++) await Promise.resolve();
+    });
+
+    const selected = fixture.current.previousDrafts.dialog?.selected;
+    expect(writer.save).toHaveBeenCalledOnce();
+    expect(fixture.current.previousDrafts.dialog?.message).toBe(PHOTO_EDITING_DURABLE_DRAFT_COPY.previousUnsupported);
+    expect(selected?.actions.some((action) => action.label === PHOTO_EDITING_DURABLE_DRAFT_COPY.previousSave)).toBe(false);
+    expect(selected?.actions.some((action) => action.label === PHOTO_EDITING_DURABLE_DRAFT_COPY.saveData)).toBe(true);
+    expect(writer.read).toHaveBeenCalledTimes(2);
+    expect(writer.discard).not.toHaveBeenCalled();
+  } finally { await fixture.unmount(); }
+});
