@@ -27,6 +27,7 @@ export class FakeClient implements PersonalPhotoCloudClient {
   };
   readonly calls: RecordedCall[] = [];
   disposeCount = 0;
+  libraryResponse: PhotoOperationMap["library.get"]["response"] | null = null;
   dispatch: ((operation: PhotoOperation, request: unknown, options: { signal: AbortSignal; idempotencyKey: string | null }) => Promise<unknown>) | null = null;
 
   async request<K extends PhotoOperation>(
@@ -36,6 +37,7 @@ export class FakeClient implements PersonalPhotoCloudClient {
   ): Promise<PhotoOperationMap[K]["response"]> {
     const idempotencyKey = "idempotencyKey" in options ? options.idempotencyKey ?? null : null;
     this.calls.push({ operation, request, signal: options.signal, idempotencyKey });
+    if (operation === "library.get" && this.libraryResponse !== null) return this.libraryResponse as PhotoOperationMap[K]["response"];
     const value = this.dispatch
       ? await this.dispatch(operation, request, { signal: options.signal, idempotencyKey })
       : defaultResponse(operation, request);

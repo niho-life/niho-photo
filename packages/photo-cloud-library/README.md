@@ -2,7 +2,13 @@
 
 C02 / Photo #195。既存の `niho-photo-editing` の編集面を、`@niho/photo-personal-cloud-contract` v2の本人用portへ接続する。原本・owner・容量・補正revision・物理purgeの正本は既存backendに置く。
 
-read/delete/content adapterを実装し、合成fixture53件で検証している。実backend transport、原本転送の実storage照合、補正・mask・名前付き版の書込み、Mac native IPC、正式host・端末受入は完了していない。
+read/delete/content adapter、same-origin HTTP client/BFF、IndexedDBの送信前journalと明示コピーcontrollerを実装している。実backend/GCSの転送照合、補正・mask・名前付き版の書込み、Mac native IPC、正式host・端末受入は未完了。HTTP wire・期限・公開前の再認証・容量境界の正本は [転送接続契約](../../docs/architecture/personal-photo-transfers.md)。
+
+`@niho/photo-cloud-library/browser` は `createBrowserPersonalPhotoCloudClient({identity})` で実libraryをprobeし、`createBrowserPersonalPhotoTransferController({client, identity})` で明示コピーを扱う。controllerのstartはintentId/File/format/完全recipe候補を受け、resume/cancelは同じintentを使う。`list({cursor, limit})` は `{items, nextCursor}` を返し、`readPendingRecipe(intentId)` はC03へ引き継ぐ両snapshotを返す。IDB/Web Lockを利用できなければ転送を始めない。disposeで要求・reader・購読を解放する。
+
+`@niho/photo-cloud-library/server` の `createPersonalPhotoCloudProxy` は、既存C01のauthService、trustedなupstreamOrigin/upstreamPathPrefixを受け、C06のcloudHandlerへ渡せる `Request => Promise<Response | null>` を返す。credentialはserver callback内だけに置く。`PERSONAL_PHOTO_CLOUD_HOST_LIMITS` をC08のNode設定へ明示し、既定64MiB/120秒のまま実接続を受け入れない。
+
+最終unitは同package内の合成試験で確認する。原本保存後でも、候補の補正・実maskの照合が終わるまではpending-recipe。ticket/URL/credentialはjournal・UIへ保存せず、元写真を移動/削除しない。addFile capabilityの有効化とWeb/Macのcompositionは後続担当が接続する。
 
 ## ホストの責任
 

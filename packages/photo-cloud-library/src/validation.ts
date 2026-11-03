@@ -11,6 +11,9 @@ import {
   type QuotaUsage,
   type RecipeDocument,
   type RenderCapability,
+  type StartUploadResponse,
+  type Upload,
+  type UploadTicket,
   type WorkingCopy,
 } from "@niho/photo-personal-cloud-contract";
 
@@ -164,6 +167,68 @@ export function validateInfo(value: PhotoInfo): PhotoInfo {
   return value;
 }
 
+export function validateUpload(value: Upload, libraryId: string): Upload {
+  if (
+    !isRecord(value) ||
+    !boundedString(value.id, 1, 512) ||
+    !isRecord(value.target) ||
+    !positiveInteger(value.sizeBytes) ||
+    value.sizeBytes > PHOTO_LIMITS.maxFileBytes ||
+    !sha256(value.sha256) ||
+    !instant(value.expiresAt)
+  ) invalid();
+  if (value.target.kind === "original") {
+    if (!boundedString(value.target.fileName, 1, PHOTO_LIMITS.maxFileNameBytes) || !isPhotoFormat(value.target.format)) invalid();
+  } else if (value.target.kind === "mask") {
+    if (!boundedString(value.target.photoId, 1, 512) || value.sizeBytes > PHOTO_LIMITS.maxMaskBytes) invalid();
+  } else invalid();
+  if (value.state === "reserved") {
+    if (!safeNonNegative(value.uploadedBytes) || value.uploadedBytes > value.sizeBytes) invalid();
+  } else if (value.state === "verifying") {
+    if (!boundedString(value.jobId, 1, 512)) invalid();
+  } else if (value.state === "stored") {
+    if (!isRecord(value.result)) invalid();
+    if (value.result.kind === "original") validatePhoto(value.result.photo, libraryId);
+    else if (value.result.kind === "mask") {
+      if (!boundedString(value.result.photoId, 1, 512)) invalid();
+      validateAsset(value.result.asset, "mask");
+    } else invalid();
+  } else if (value.state === "rejected") {
+    if (!["content_rejected", "unsupported_format", "pixel_limit_exceeded"].includes(value.code)) invalid();
+  } else if (value.state !== "cancelled" && value.state !== "expired") invalid();
+  return value;
+}
+
+export function validateStartUploadResponse(value: StartUploadResponse, libraryId: string): StartUploadResponse {
+  if (!isRecord(value)) invalid();
+  if (value.kind === "existing") {
+    validatePhoto(value.photo, libraryId);
+  } else if (value.kind === "upload") {
+    validateUpload(value.upload, libraryId);
+    if (value.ticket !== null && !isUploadTicketShape(value.ticket)) invalid();
+  } else invalid();
+  return value;
+}
+
+export function isUploadTicketShape(value: unknown): value is UploadTicket {
+  return isRecord(value)
+    && boundedString(value.url, 1, 8192)
+    && value.method === "PUT"
+    && isRecord(value.headers)
+    && Object.values(value.headers).every((item) => boundedString(item, 0, 1024))
+    && instant(value.expiresAt)
+    && safeNonNegative(value.resumeOffsetBytes);
+}
+
+export function validateJsonValue(value: unknown, maximumBytes: number): void {
+  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 0 || jsonBytes(value) > maximumBytes) invalid();
+  validateJson(value, 0);
+}
+
+export function validateJsonDepth(value: unknown, maximumDepth: number = PHOTO_LIMITS.maxJsonDepth): void {
+  validateJson(value, 0, maximumDepth);
+}
+
 export function validateRenderer(value: RenderCapability): RenderCapability {
   if (
     !isRecord(value) ||
@@ -256,19 +321,19 @@ function validateWorkingCopy(value: WorkingCopy): void {
   validateJson(value.meta, 0);
 }
 
-function validateJson(value: unknown, depth: number): void {
-  if (depth > PHOTO_LIMITS.maxJsonDepth) invalid();
+function validateJson(value: unknown, depth: number, maximumDepth: number = PHOTO_LIMITS.maxJsonDepth): void {
+  if (depth > maximumDepth) invalid();
   if (value === null || typeof value === "string" || typeof value === "boolean") return;
   if (typeof value === "number") {
     if (!Number.isFinite(value)) invalid();
     return;
   }
   if (Array.isArray(value)) {
-    for (const item of value) validateJson(item, depth + 1);
+    for (const item of value) validateJson(item, depth + 1, maximumDepth);
     return;
   }
   if (!isRecord(value)) invalid();
-  for (const item of Object.values(value)) validateJson(item, depth + 1);
+  for (const item of Object.values(value)) validateJson(item, depth + 1, maximumDepth);
 }
 
 function jsonBytes(value: unknown): number {
