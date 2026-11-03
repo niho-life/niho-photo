@@ -13084,7 +13084,7 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-settings-autosave.test.ts",
-      "sha256": "fa4e2ccae7fb3e9dd8829ea4790dc811054afead9201d5f36e3a5728cb2dbebf",
+      "sha256": "7a7ec53f29ac78a7472500bdf8f7fccaee0844f43a6b97ebaa113f64549dd1e0",
       "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続\n変更理由: strict commit後にも自動送信停止を確認し、以前の下書き一覧の閉じる操作を画面内に保持"
     },
     {
@@ -13159,7 +13159,7 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-previous-drafts.test.tsx",
-      "sha256": "bf1161f072ad27905bca8893e1e6b71da43aa876207cac8b0679b021f0bd6cce",
+      "sha256": "7dbabbbef52abedfbdc39e3d11a74ae26ea7ce28b041db4489c1d987d2d6564a",
       "origin": "NIHO original explicit previous-draft recovery UI and synthetic regression tests for C03."
     }
   ],

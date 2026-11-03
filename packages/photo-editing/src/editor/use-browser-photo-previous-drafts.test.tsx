@@ -128,8 +128,8 @@ it("opens only the chosen previous writer, retries unknown with its fixed reques
     compare: vi.fn(async () => comparison), resolve: vi.fn(), retryResolution: vi.fn(),
     discard: vi.fn(), dispose: vi.fn(),
   };
-  const previousReopen = vi.fn(async () => writer);
-  const saveFile = vi.fn(async () => "saved" as const);
+  const previousReopen = vi.fn<PhotoLibraryDurableDevelopDrafts["reopen"]>(async () => writer);
+  const saveFile = vi.fn<PhotoEditingHost["saveFile"]>(async () => "saved");
   const port: PhotoLibraryDurableDevelopDrafts = {
     isCurrent: () => true, subscribe: () => () => undefined, open: vi.fn(),
     list: async () => ({ items: [], nextCursor: null }), reopen: vi.fn(),
