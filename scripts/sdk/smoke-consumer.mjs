@@ -155,6 +155,7 @@ import {
   developSettingsEngineIdentifiers,
   developSettingsOnWorkingCopy,
   isEditableDevelopSettings,
+  isNeutralDevelopSettings,
   newDevelopSettingsEngine,
   neutralDevelopSettings,
   readDevelopSettings,
@@ -169,6 +170,10 @@ assert.ok(DEVELOP_SETTINGS_LOOKS.includes("niho-standard-1"));
 assert.ok(NIHO6_DEVELOP_SETTINGS_LOOKS.includes("niho-interim-1"));
 assert.equal(newDevelopSettingsEngine("raster.d1"), "niho-14");
 assert.equal(neutralDevelopSettings("raster.d1").engine, "niho-14");
+assert.equal(isNeutralDevelopSettings(neutralDevelopSettings(null)), true);
+assert.equal(isNeutralDevelopSettings({ ...neutralDevelopSettings(null), whiteBalance: { mode: "relative" } }), true);
+assert.equal(isNeutralDevelopSettings({ ...neutralDevelopSettings(null), exposure: 0.1 }), false);
+assert.equal(isNeutralDevelopSettings({ ...neutralDevelopSettings(null), futureDrawingFeature: 0 }), false);
 assert.equal(signedWorkingCopyState("raster.d1", null), "unsigned");
 for (const v of supportedDevelopSettingsVersions) assert.ok(readDevelopSettings({ v, engine: "niho-1" }));
 const unknown = { v: 1, engine: "niho-1", futureTopLevel: { keep: true } };

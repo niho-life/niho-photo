@@ -11961,8 +11961,8 @@
     },
     {
       "path": "scripts/sdk/release-set-lib.mjs",
-      "sha256": "795ada7c7df275247edbca4374411b5595269542788026fbcdaa8856e2c01ce2",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
+      "sha256": "3ba6dbb4cf3684e738d692fe7a5c91b7b3af9e19e19c90930b88a00eda8d9ca6",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する"
     },
     {
       "path": "scripts/sdk/release-set.test.mjs",
@@ -12106,8 +12106,8 @@
     },
     {
       "path": "sdk/release-set.json",
-      "sha256": "a19ed74544f84a689969ae3105e21144b339fad9f6fc39e222e25c94035ef117",
-      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
+      "sha256": "e9311547d911f59bafd5d3cc4516331a9629412fee0537b981d1d5ca249b0a27",
+      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する"
     },
     {
       "path": "apps/camera/src-tauri/src/cloud_copy_source.rs",
@@ -12131,8 +12131,8 @@
     },
     {
       "path": "scripts/sdk/smoke-consumer.mjs",
-      "sha256": "4e16fd75fb5fb0750bc17ae735d3d3e128502a5f0d64a112af6e53bdad02b82c",
-      "origin": "公開SDKの外部consumer smoke。React 19 declarationsと型export境界の検証を追加。\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加"
+      "sha256": "4e74d5f6b53180e762aec67ea75283616af31a18d24507358fa4614839cd8f8b",
+      "origin": "公開SDKの外部consumer smoke。React 19 declarationsと型export境界の検証を追加。\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する"
     },
     {
       "path": "sdk/README.md",
@@ -12221,8 +12221,8 @@
     },
     {
       "path": "docs/architecture/personal-photo-cloud.md",
-      "sha256": "690f4be445494791ec1c7d841238f2333520bb9b36a2dbaaa27e8ccaf7ea87a9",
-      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消\n変更理由: 親sessionと通常refreshを区別し端末間の独立性と失効時の旧scope破棄を明確化\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。\n変更理由: native失効時はWASM読込より先に旧renderer宣言を失効させる"
+      "sha256": "d47de27ecbb1c0316aa43ad0df3e7a16a2c4d018a3fe735c500fda5dd5c0725b",
+      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消\n変更理由: 親sessionと通常refreshを区別し端末間の独立性と失効時の旧scope破棄を明確化\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。\n変更理由: native失効時はWASM読込より先に旧renderer宣言を失効させる\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する"
     },
     {
       "path": "scripts/ci/personal-photo-contract.test.mjs",

@@ -99,6 +99,8 @@ start前に本人/epoch・requestId・原本identity/hash・payloadをdurable jo
 
 browser hostは既存engineの `ready()` を確認してから `renderCapabilities?.()` を呼ぶ。getterは既存ready経路だけを読み、新しいWorkerやloaderを起動しない。未対応・不正なschema・実glueとの不一致・dispose中/終了・旧readyはnullとし、返値は変更できないsnapshotとする。nativeからWASMへのfallback開始時も旧宣言を失効させ、次のengineのreadyまでnullを返す。読込・再生成が失敗しても旧宣言は復活しない。schema 1の非空maskKindsはmasks featureと実効mask能力の両方を必要とする。renderer宣言が不正でも既存のローカル編集/mask能力は維持する。
 
+C00の `hasEdits` は、Nodeの正式 `niho-photo-contract` で公開する既存 `isNeutralDevelopSettings` を使って判定する。単なるrevision番号や別実装の初期値比較で判定せず、未知fieldを落として未編集にしない。初期recipeも同じ契約の `neutralDevelopSettings` で作る。これらの追加と実runtime getterはSDK 0.1.9向けであり、既存0.1.8のtag/assetsを変更しない。正式公開とconsumer選択は別途実artifact/source/署名の一致を検証する。
+
 hostは取得した `crateVersion` と正式に固定したbuild metadataのcrateを完全一致で照合し、そのmetadataの `sdkVersion` / `manifestSha256` と実runtimeの設定version/engine/feature/maskをC00 `RenderCapability`へ明示投影する。schemaVersionはruntimeの検証用でありC00へ足さない。固定metadataが無い・不一致ならcloud編集を閉じる。接続probeは本人scopeの取消を確認してdisposeし、受入した同じmanifestでWorkbenchを起動する。getterの追加だけで端末接続・正式SDK配布・実機受入を完了にしない。
 
 完全recipe JSON・version・engine・baseVersion・参照mask hash・revisionを保持する。保存はexpectedRevision必須、冪等keyは本人/操作/写真に拘束。競合時は両snapshotを永続保持し、本人の明示adopt/keep-currentだけをCASで反映。名前付き版は独立versions revisionで管理する。
