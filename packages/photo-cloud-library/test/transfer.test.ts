@@ -1,6 +1,6 @@
 import { IDBFactory } from "fake-indexeddb";
 import "fake-indexeddb/auto";
-import { PHOTO_LIMITS, type RecipeCandidate, type StartUploadRequest, type Upload } from "@niho/photo-personal-cloud-contract";
+import { PHOTO_LIMITS, type Json, type RecipeCandidate, type StartUploadRequest, type Upload } from "@niho/photo-personal-cloud-contract";
 import { IDS, responses } from "@niho/photo-personal-cloud-contract/fixtures";
 import { describe, expect, it, vi } from "vitest";
 
@@ -90,7 +90,7 @@ describe("IndexedDB transfer journal", () => {
     const factory = new IDBFactory();
     const journal = new IndexedDbTransferJournal(factory, `journal-depth-${depth}`);
     const scope: JournalScope = { actorId: "a", libraryId: "l", sessionId: "s", sessionEpoch: "e" };
-    let nested: unknown = null;
+    let nested: Json = null;
     for (let index = 1; index < depth; index += 1) nested = { next: nested };
     const entry = {
       ...journalEntry(scope),

@@ -1,3 +1,4 @@
+import type { Json } from "@niho/photo-personal-cloud-contract";
 import type { CapturedPhotoActor, PhotoAuthService } from "@niho/photo-cloud-session/server";
 import { NIHO_PRODUCTION_ORIGIN, PhotoAuthorizationError } from "@niho/photo-cloud-session/server";
 import { IDS, HASH, responses } from "@niho/photo-personal-cloud-contract/fixtures";
@@ -170,7 +171,7 @@ describe("same-origin HTTP client and BFF", () => {
   });
 
   it.each([32, 33])("bounds the recipe itself at depth %i independently of HTTP envelopes", async (depth) => {
-    let nested: unknown = null;
+    let nested: Json = null;
     for (let index = 1; index < depth; index += 1) nested = { next: nested };
     const photo = { ...responses["photos.get"], recipe: { ...responses["photos.get"].recipe,
       settings: { ...responses["photos.get"].recipe.settings, future: nested } } };
@@ -184,7 +185,7 @@ describe("same-origin HTTP client and BFF", () => {
   });
 
   it.each([31, 32, 33])("sends a depth-%i settings leaf through the real PUT client and BFF boundary", async (depth) => {
-    let nested: unknown = null;
+    let nested: Json = null;
     for (let index = 1; index < depth; index += 1) nested = { next: nested };
     const settings = { ...responses["photos.get"].recipe.settings, future: nested };
     const receipt = {
@@ -220,7 +221,7 @@ describe("same-origin HTTP client and BFF", () => {
   });
 
   it("preserves a depth-32 recipe inside a stored-upload completion receipt", async () => {
-    let nested: unknown = null;
+    let nested: Json = null;
     for (let index = 1; index < 32; index += 1) nested = { next: nested };
     const photo = { ...responses["photos.get"], recipe: { ...responses["photos.get"].recipe,
       settings: { ...responses["photos.get"].recipe.settings, future: nested } } };
@@ -238,7 +239,7 @@ describe("same-origin HTTP client and BFF", () => {
     } finally { client.dispose(); }
   });
   it.each([31, 32, 33])("bounds depth-%i recipes in a replayed stored-upload start receipt", async (depth) => {
-    let nested: unknown = null;
+    let nested: Json = null;
     for (let index = 1; index < depth; index += 1) nested = { next: nested };
     const photo = { ...responses["photos.get"], recipe: { ...responses["photos.get"].recipe,
       settings: { ...responses["photos.get"].recipe.settings, future: nested } } };

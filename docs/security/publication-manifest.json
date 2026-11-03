@@ -12932,13 +12932,13 @@
     },
     {
       "path": "packages/photo-cloud-library/test/http.test.ts",
-      "sha256": "023d7708021c9f9017a00631a5ae588051c13d3aaa927121ba7d90823fb6d5e3",
-      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: depth32完全JSONとstored receiptの実HTTP往復およびdepth33拒否を検証\n変更理由: stored start再送depth31と32成功33拒否のBFF回帰\n変更理由: start回帰のtarget kindを契約のliteral型へ固定\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証"
+      "sha256": "605f0eab5fd9d221bcde40c5f70e90ce04c41ea662d03e5add75adee38211bad",
+      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: depth32完全JSONとstored receiptの実HTTP往復およびdepth33拒否を検証\n変更理由: stored start再送depth31と32成功33拒否のBFF回帰\n変更理由: start回帰のtarget kindを契約のliteral型へ固定\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: depth境界の合成値を実際のJSON型で宣言し自然CIの厳格型へ整合"
     },
     {
       "path": "packages/photo-cloud-library/test/transfer.test.ts",
-      "sha256": "6d45332e12ac6d587109302eb7a892c7a6270cac978c39ad3459d2968f20c815",
-      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 公開CIの厳格型に合わせ、所有ArrayBufferと非同期callbackの非null snapshotを明示する\n変更理由: 期限後照合と取消復旧とID期限差替えを拒否する9件の回帰を追加\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: 開始欠落と保存済み取消六経路の両補正保持と再起動復旧の合成回帰を追加\n変更理由: 親の保存済み取消六経路とC03の補正境界回帰を両側保持して統合"
+      "sha256": "825a69d8eb74a1976949dcf69e4a1fb984509e1f4ecdf89204161414b81adf53",
+      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 公開CIの厳格型に合わせ、所有ArrayBufferと非同期callbackの非null snapshotを明示する\n変更理由: 期限後照合と取消復旧とID期限差替えを拒否する9件の回帰を追加\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: 開始欠落と保存済み取消六経路の両補正保持と再起動復旧の合成回帰を追加\n変更理由: 親の保存済み取消六経路とC03の補正境界回帰を両側保持して統合\n変更理由: depth境界の合成値を実際のJSON型で宣言し自然CIの厳格型へ整合"
     },
     {
       "path": "packages/photo-cloud-library/src/await.ts",
