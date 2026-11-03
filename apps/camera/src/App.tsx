@@ -225,10 +225,10 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
   const activeSource: PhotoSource = cloud ? source : "local";
   const library = activeSource === "cloud" && cloud ? cloud.library : localLibrary;
   const host = activeSource === "cloud" && cloud ? cloud.host : localHost;
-  const sourceKey = cloud ? personalPhotoScope(cloud.actorId, activeSource) : "local";
+  const sourceKey = activeSource === "cloud" && cloud ? personalPhotoScope(cloud.actorId, activeSource) : "local";
   const queryScopeKey = activeSource === "cloud" ? cloud?.scopeKey : undefined;
   const libraryKey = queryScopeKey === undefined ? sourceKey : `${sourceKey}:scope:${queryScopeKey}`;
-  const actorId = cloud ? cloud.actorId : "local";
+  const actorId = activeSource === "cloud" && cloud ? cloud.actorId : "local";
   const copyToCloud = useMemo<BrowserPhotoCopyToCloudBinding | undefined>(() =>
     cloud && !cloudBindingTransition.switching && !cloudBindingTransition.failed ? {
       copyLocalPhoto: cloud.copyLocalPhoto,
