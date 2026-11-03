@@ -35,3 +35,15 @@ recipeの文書上限は1MiB/depth32、PUT本文は2MiB、選択本文は64KiB�
 共有autosaverからdebounce前のstageを開始し、その世代の永続commitを待ってから保存するportを後段で接続する。既存のローカル編集と32KiB draftの契約はそのまま使い、本人クラウドの完全補正をそこへ詰めない。mask/base/RAWの実保存・描画bindingが揃うまで、該当する新規採用は閉じる。
 
 合成fixtureによるrace/再起動/失効/容量/深さ/競合の試験と、正式backend/storage・実Mac/iPhone/Safari/PWAの受入は別に記録する。最終配布では変更後の共有sourceを含む新しい公式SDKを固定し、既存SDK tagや配布物を上書きしない。
+
+## 共通編集面との接続
+
+`PhotoLibrary.durableDevelopDrafts`をoptionalな構造型の接続口にする。編集面はC00、IndexedDB、同期コアへ直接依存しない。接続factoryは同じclient・identity・rendererから読取adapterと同期コアを作り、本人scopeをまたぐ別のadapterや資格情報を混ぜない。WebやMacはこのlibraryを既存の共通編集面へ渡す。
+
+この口がある場合は、autosaverが入力を同期cloneしてstageを開始し、strict commitを待ってから固定要求を送る。旧32KiB localStorage draftへ完全補正を詰めない。commitできなかった入力は未保存のまま残し、通信・保存成功表示・離脱へ進めない。ローカル専用libraryは従来の保存と下書きを使う。
+
+競合したAの後にBを入力していれば、Bのcommitを待ってから送信を止めて比較へ進む。Aの応答でBを削除したり、現在版へ自動でrebaseしたりしない。本人が選んだ時点の採用版を固定して解決し、選択の結果が不明なら元intentを照合する。競合発生時の採用版と、いま比較している採用版は別のsnapshotとして扱う。
+
+復旧は同じ本人scopeの小さいpageからwriterを明示的に開く。結果不明のPUTや選択がある場合は、結果を確認してから次の操作へ進み、破棄で要求を消さない。未知設定を読めない画面でも完全JSONを保持する。「補正データを保存」は選択した補正JSONの保存であり、原本や参照maskを含む完全な移送bundleではない。ログアウトや本人変更の後に旧scopeの候補を表示・送信しない。
+
+この接続だけでは、未接続のmask、版管理、RAW/mediaや本番の編集capabilityを有効にしない。正式backend/storageおよび実Mac/iPhone Safari/PWAでの受入は、合成の下書き・競合試験と分けて記録する。

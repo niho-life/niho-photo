@@ -1,5 +1,10 @@
 import { PHOTO_EDITING_AUTOSAVE_DELAY_MS } from "../photo-editing-settings-autosave";
 import type { DevelopSettings } from "./develop-settings";
+import type {
+  PhotoLibraryDevelopConflictToken,
+  PhotoLibraryDevelopDraftSaveResult,
+  PhotoLibraryDevelopDraftStage,
+} from "../library/photo-library-durable-drafts";
 import type { PhotoLibraryPhoto, PhotoLibrarySaveResult } from "../library/photo-library";
 
 /**
@@ -48,8 +53,21 @@ export type DevelopSettingsSaver = {
   hasPendingWork: () => boolean;
   /** 直し始めた版（保存が通るたびに応答の版へ進む）。版を渡さずに作った保存係は undefined */
   getExpectedRevision: () => number | undefined;
+  /** durable の結果確認で、その送信値だけを確定する。後発入力は保持する。 */
+  acknowledgeDurableInput?: (settings: Readonly<Record<string, unknown>>) => boolean;
   /** まとめる待ちを止める（以後の変更は受けず、まだ送っていない値は flush されない限り送らない。送信中の保存は捨てない） */
   dispose: () => void;
+};
+
+export type DevelopSettingsDurableMode = {
+  /** 同期clone済みの完全設定を、debounce・通信より前に永続化し始める。 */
+  stage(settings: DevelopSettings): PhotoLibraryDevelopDraftStage;
+  /** stage と同じsnapshotだけを送る。 */
+  save(settings: DevelopSettings, stage: PhotoLibraryDevelopDraftStage): Promise<PhotoLibraryDevelopDraftSaveResult>;
+  onConflict?: (conflict: PhotoLibraryDevelopConflictToken) => void;
+  onBlocked?: (result: Exclude<PhotoLibraryDevelopDraftSaveResult, { kind: "saved" | "conflict" | "superseded" }>) => void;
+  /** 外部portの strict commit を待つ上限。超過後のlate完了はUIを開かない。 */
+  stageTimeoutMs?: number;
 };
 
 export function createDevelopSettingsSaver(options: {
@@ -74,7 +92,10 @@ export function createDevelopSettingsSaver(options: {
   onDropped?: (error: unknown) => void;
   /** 別の端末が先に保存していたので断られ、まだ送っていない値を捨てて止まったとき（今の写真。1 回だけ） */
   onStale?: (photo: PhotoLibraryPhoto) => void;
+  /** cloud の strict durable 経路。指定時は legacy save / stale破棄 / onScheduled を使わない。 */
+  durable?: DevelopSettingsDurableMode;
 }): DevelopSettingsSaver {
+  if (options.durable !== undefined) return createDurableDevelopSettingsSaver(options, options.durable);
   const delayMs = options.delayMs ?? PHOTO_EDITING_AUTOSAVE_DELAY_MS;
   /** 直し始めた版（保存が通るたびに応答の版へ進む） */
   let expectedRevision = options.expectedRevision;
@@ -249,10 +270,360 @@ export function createDevelopSettingsSaver(options: {
     getLastError: () => lastError,
     hasPendingWork: () => currentState() !== "idle",
     getExpectedRevision: () => expectedRevision,
+    acknowledgeDurableInput: () => false,
     dispose() {
       disposed = true;
       stopTimer();
       notify();
     },
   };
+}
+
+function createDurableDevelopSettingsSaver(
+  options: Parameters<typeof createDevelopSettingsSaver>[0],
+  durable: DevelopSettingsDurableMode,
+): DevelopSettingsSaver {
+  const delayMs = options.delayMs ?? PHOTO_EDITING_AUTOSAVE_DELAY_MS;
+  const stageTimeoutMs = durable.stageTimeoutMs ?? 15_000;
+  type Scheduled = {
+    settings: DevelopSettings;
+    stage: PhotoLibraryDevelopDraftStage | null;
+    stageError: unknown;
+    stageStatus: "new" | "committed" | "superseded" | "unsaved" | "failed";
+  };
+  let expectedRevision = options.expectedRevision;
+  let pending: Scheduled | null = null;
+  let blockedRequest: Scheduled | null = null;
+  let pendingConflict: PhotoLibraryDevelopConflictToken | null = null;
+  let blockedInput = false;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let sending = false;
+  let failure: "stage" | "save" | null = null;
+  let frozen = false;
+  let holdPending = false;
+  let disposed = false;
+  let lastSaved: DevelopSettingsLastSaved | null = null;
+  let lastError: unknown = null;
+  let flushWaiters: Array<(result: DevelopSettingsFlushResult) => void> = [];
+  let notifiedState: DevelopSettingsSaverState = "idle";
+  let notifiedLastSaved: DevelopSettingsLastSaved | null = null;
+
+  const currentState = (): DevelopSettingsSaverState => {
+    if (sending) return "saving";
+    if (failure !== null || frozen || blockedInput || holdPending) return "failed";
+    if (timer !== null || pending !== null) return "waiting";
+    return "idle";
+  };
+  const notify = () => {
+    const state = currentState();
+    if (state === notifiedState && lastSaved === notifiedLastSaved) return;
+    notifiedState = state;
+    notifiedLastSaved = lastSaved;
+    try { options.onChange?.(); } catch { /* observers do not change durable state */ }
+  };
+  const stopTimer = () => {
+    if (timer !== null) clearTimeout(timer);
+    timer = null;
+  };
+  const settleWaiters = () => {
+    if (flushWaiters.length === 0 || sending || timer !== null) return;
+    if (pending !== null && failure === null && !frozen && !holdPending) return;
+    const result: DevelopSettingsFlushResult = failure !== null || frozen || blockedInput || holdPending || pending !== null
+      ? { ok: false, error: lastError ?? new Error("補正をまだ保存できていません") }
+      : { ok: true, saved: lastSaved };
+    const waiters = flushWaiters;
+    flushWaiters = [];
+    for (const resolve of waiters) resolve(result);
+  };
+
+  const reportBlocked = (
+    scheduled: Scheduled,
+    error: unknown,
+    result?: Exclude<PhotoLibraryDevelopDraftSaveResult, { kind: "saved" | "conflict" | "superseded" }>,
+  ) => {
+    lastError = error;
+    failure = result?.kind === "unsaved" ? "stage" : "save";
+    if (result !== undefined && result.kind !== "unsaved") {
+      frozen = true;
+      blockedRequest = scheduled;
+    }
+    if (pending === null) pending = scheduled;
+    if (result !== undefined) {
+      try { durable.onBlocked?.(result); } catch { /* observers do not change durable state */ }
+    }
+  };
+
+  const waitForStage = async (scheduled: Scheduled): Promise<"committed" | "superseded" | "unsaved"> => {
+    if (scheduled.stageStatus === "committed") return "committed";
+    if (scheduled.stageStatus === "superseded") return "superseded";
+    if (scheduled.stageStatus === "unsaved") return "unsaved";
+    if (scheduled.stageStatus === "failed") throw scheduled.stageError;
+    if (scheduled.stage === null) throw scheduled.stageError;
+    let timeout: ReturnType<typeof setTimeout> | null = null;
+    try {
+      const outcome = await Promise.race([
+        scheduled.stage.committed,
+        new Promise<never>((_resolve, reject) => {
+          timeout = setTimeout(() => reject(new Error("補正の端末保存を確認できませんでした")), stageTimeoutMs);
+        }),
+      ]);
+      scheduled.stageStatus = outcome;
+      return outcome;
+    } finally {
+      if (timeout !== null) clearTimeout(timeout);
+    }
+  };
+
+  const observeStage = (scheduled: Scheduled): void => {
+    const stage = scheduled.stage;
+    if (stage === null) return;
+    void stage.committed.then(
+      (outcome) => {
+        if (scheduled.stage !== stage) return;
+        scheduled.stageStatus = outcome;
+        if (pending === scheduled && outcome === "unsaved") {
+          failure = "stage";
+          lastError = new Error("補正をこの端末に保存できていません");
+          notify();
+          settleWaiters();
+        }
+      },
+      (error: unknown) => {
+        if (scheduled.stage !== stage) return;
+        scheduled.stageStatus = "failed";
+        scheduled.stageError = error;
+        if (pending === scheduled) {
+          failure = "stage";
+          lastError = error;
+          notify();
+          settleWaiters();
+        }
+      },
+    );
+  };
+
+  const revealConflictAfterLatestCommit = async (
+    sent: Scheduled,
+    conflict: PhotoLibraryDevelopConflictToken,
+  ): Promise<void> => {
+    blockedRequest = sent;
+    pendingConflict = conflict;
+    for (;;) {
+      const latest = pending;
+      if (latest === null) break;
+      let outcome: "committed" | "superseded" | "unsaved";
+      try {
+        outcome = await waitForStage(latest);
+      } catch (error) {
+        failure = "stage";
+        lastError = error;
+        return;
+      }
+      if (outcome === "unsaved") {
+        failure = "stage";
+        lastError = new Error("後の補正をこの端末に保存できていません");
+        try { durable.onBlocked?.({ kind: "unsaved" }); } catch { /* observers do not change durable state */ }
+        return;
+      }
+      // superseded と、待っている間にさらに新しい入力が来た場合は、常に最新を追う。
+      if (outcome === "superseded" || pending !== latest) continue;
+      break;
+    }
+    if (pendingConflict !== conflict || blockedRequest !== sent) return;
+    failure = null;
+    frozen = true;
+    holdPending = pending !== null;
+    lastError = new Error("別の端末の補正と競合しています");
+    try { durable.onConflict?.(conflict); } catch { /* durable state remains frozen */ }
+  };
+
+  function pump(): void {
+    if (sending || timer !== null || failure !== null || frozen || holdPending || blockedInput || pending === null || (disposed && flushWaiters.length === 0)) {
+      settleWaiters();
+      notify();
+      return;
+    }
+    const scheduled = pending;
+    pending = null;
+    sending = true;
+    notify();
+    void Promise.resolve()
+      .then(async () => {
+        const stage = scheduled.stage;
+        if (stage === null) throw scheduled.stageError;
+        const committed = await waitForStage(scheduled);
+        if (committed === "superseded") return { kind: "superseded" } as const;
+        if (committed === "unsaved") return { kind: "unsaved" } as const;
+        if (pendingConflict !== null) {
+          // A 競合後に保存できなかった B を再stageした。Bは送らず比較用に保持する。
+          pending = scheduled;
+          await revealConflictAfterLatestCommit(blockedRequest ?? scheduled, pendingConflict);
+          return { kind: "conflict-ready" } as const;
+        }
+        return await durable.save(scheduled.settings, stage);
+      })
+      .then(
+        async (result) => {
+          if (result.kind === "conflict-ready") return;
+          if (result.kind === "superseded") return;
+          if (result.kind === "saved") {
+            lastSaved = {
+              settings: scheduled.settings,
+              developRevision: result.revision,
+              developSettingsUpdatedAt: result.updatedAt,
+            };
+            expectedRevision = result.revision;
+            lastError = null;
+            failure = null;
+            try { options.onSaved?.(scheduled.settings, scheduled.stage); } catch { /* ACK remains authoritative */ }
+            return;
+          }
+          if (result.kind === "conflict") {
+            await revealConflictAfterLatestCommit(scheduled, result.conflict);
+            return;
+          }
+          reportBlocked(scheduled, new Error(`補正をまだ保存できていません (${result.kind})`), result);
+        },
+        (error: unknown) => {
+          lastError = error;
+          failure = scheduled.stageStatus === "committed" ? "save" : "stage";
+          if (pending === null) pending = scheduled;
+        },
+      )
+      .finally(() => {
+        sending = false;
+        // A が superseded のときだけ、後発 B をそのまま進める。blocked/frozen は B を保持して止める。
+        pump();
+      });
+  }
+
+  const flush = (): Promise<DevelopSettingsFlushResult> => new Promise((resolve) => {
+    flushWaiters.push(resolve);
+    stopTimer();
+    // durable の失敗・競合・unknown は、同じ内容を legacy retry のように作り直さない。
+    if (failure === null && !frozen && !holdPending && !blockedInput) pump();
+    else settleWaiters();
+  });
+
+  const retry = (): Promise<DevelopSettingsFlushResult> => new Promise((resolve) => {
+    flushWaiters.push(resolve);
+    stopTimer();
+    if (frozen || blockedInput) {
+      settleWaiters();
+      return;
+    }
+    if (pending !== null && failure === "stage") {
+      try {
+        pending.stage = durable.stage(pending.settings);
+        pending.stageError = null;
+        pending.stageStatus = "new";
+        observeStage(pending);
+        failure = null;
+      } catch (error) {
+        pending.stage = null;
+        pending.stageError = error;
+        lastError = error;
+        settleWaiters();
+        notify();
+        return;
+      }
+    } else if (failure === "save") {
+      failure = null;
+    }
+    holdPending = false;
+    pump();
+  });
+
+  return {
+    schedule(input) {
+      if (disposed) return;
+      const keepFrozen = frozen;
+      let settings: DevelopSettings;
+      try {
+        settings = structuredClone(input);
+      } catch (error) {
+        blockedInput = true;
+        lastError = error;
+        stopTimer();
+        notify();
+        settleWaiters();
+        return;
+      }
+      let stage: PhotoLibraryDevelopDraftStage | null = null;
+      let stageError: unknown = null;
+      try {
+        stage = durable.stage(settings);
+      } catch (error) {
+        stageError = error;
+      }
+      pending = { settings, stage, stageError, stageStatus: stage === null ? "failed" : "new" };
+      observeStage(pending);
+      blockedInput = false;
+      failure = stage === null ? "stage" : null;
+      frozen = keepFrozen;
+      holdPending = false;
+      lastError = stageError;
+      stopTimer();
+      if (flushWaiters.length === 0 && failure === null && !frozen) {
+        timer = setTimeout(() => {
+          timer = null;
+          pump();
+        }, delayMs);
+      }
+      pump();
+    },
+    flush,
+    retry,
+    getState: currentState,
+    getLastSaved: () => lastSaved,
+    getLastError: () => lastError,
+    hasPendingWork: () => currentState() !== "idle",
+    getExpectedRevision: () => expectedRevision,
+    acknowledgeDurableInput(settings) {
+      const blocked = blockedRequest;
+      if (blocked !== null && sameJsonValue(blocked.settings, settings)) {
+        blockedRequest = null;
+        pendingConflict = null;
+        frozen = false;
+        failure = pending !== null && (pending.stageStatus === "unsaved" || pending.stageStatus === "failed") ? "stage" : null;
+        if (pending === blocked) pending = null;
+        holdPending = pending !== null && failure === null;
+        lastError = holdPending ? new Error("後の補正がまだ保存されていません") : null;
+        notify();
+        settleWaiters();
+        return true;
+      }
+      if (pending !== null && sameJsonValue(pending.settings, settings)) {
+        pending = null;
+        failure = null;
+        holdPending = false;
+        lastError = null;
+        notify();
+        settleWaiters();
+        return true;
+      }
+      return false;
+    },
+    dispose() {
+      disposed = true;
+      stopTimer();
+      notify();
+    },
+  };
+}
+
+function sameJsonValue(left: unknown, right: unknown): boolean {
+  if (Object.is(left, right)) return true;
+  if (left === null || right === null || typeof left !== "object" || typeof right !== "object") return false;
+  if (Array.isArray(left) || Array.isArray(right)) {
+    return Array.isArray(left) && Array.isArray(right) && left.length === right.length &&
+      left.every((value, index) => sameJsonValue(value, right[index]));
+  }
+  const leftRecord = left as Record<string, unknown>;
+  const rightRecord = right as Record<string, unknown>;
+  const leftKeys = Object.keys(leftRecord);
+  const rightKeys = Object.keys(rightRecord);
+  return leftKeys.length === rightKeys.length && leftKeys.every((key) =>
+    Object.prototype.hasOwnProperty.call(rightRecord, key) && sameJsonValue(leftRecord[key], rightRecord[key]),
+  );
 }
