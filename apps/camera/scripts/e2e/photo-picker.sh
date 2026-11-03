@@ -53,7 +53,6 @@ fi
 echo "photo-picker E2E: build pinned engine runtime from clean HEAD snapshot"
 mkdir -p "$W/runtime-source"
 git archive --format=tar HEAD | tar -x -C "$W/runtime-source"
-ln -s "$PWD/node_modules" "$W/runtime-source/node_modules"
 SOURCE_GIT_DIR="$(git rev-parse --absolute-git-dir)"
 GIT_DIR="$SOURCE_GIT_DIR" GIT_WORK_TREE="$W/runtime-source" \
   npm -C "$W/runtime-source" run sdk:build-engine-runtime -- --output "$W/runtime" >"$W/runtime-build.log" 2>&1 || {
