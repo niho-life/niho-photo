@@ -169,6 +169,22 @@ describe("createDevelopEngine", () => {
     expect(await restarted.engine.renderCapabilities?.()).toEqual(RENDERER_CAPABILITIES);
   });
 
+  it("runtime 交換通知は pending getter も失効させ、後続の要求応答で旧宣言を復活させない", async () => {
+    const { engine, worker } = await readyEngine({ features: { rendererCapabilities: RENDERER_CAPABILITIES } });
+    expect(await engine.renderCapabilities?.()).toEqual(RENDERER_CAPABILITIES);
+    const pending = engine.renderCapabilities!();
+    worker.respond({ type: "rendererInvalidated", id: 0 });
+    expect(await pending).toBeNull();
+    expect(await engine.renderCapabilities?.()).toBeNull();
+    expect(await engine.ready()).toBe(true);
+    const open = engine.open(new Uint8Array([1]).buffer, 640);
+    await flushPromises();
+    worker.respond({ type: "opened", id: worker.lastRequest("open").id, width: 1, height: 1 });
+    await open;
+    expect(await engine.renderCapabilities?.()).toBeNull();
+    engine.dispose();
+  });
+
   it("端末 class を既定 PC / 明示 mobile として Worker init に渡す", async () => {
     const pc = await readyEngine();
     expect(pc.worker.lastRequest("init")).toMatchObject({ deviceClass: "pc" });

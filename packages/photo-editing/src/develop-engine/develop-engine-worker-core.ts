@@ -262,6 +262,8 @@ export type DevelopDetectedSkySurface = { surfaceId: string; width: number; heig
 
 export type DevelopEngineWorkerResponse =
   | { type: "perf"; id: 0; record: DevelopEnginePerfRecord }
+  /** ready 後の runtime 交換。旧 renderer 宣言は以後使わない。 */
+  | { type: "rendererInvalidated"; id: 0 }
   | ({ type: "ready"; id: number; version: string; runtime: DevelopEngineRuntime; wasmThreads?: number } & DevelopEngineWorkerFeatures)
   | { type: "unavailable"; id: number; reason: string }
   | { type: "opened"; id: number; width: number; height: number }
@@ -2095,6 +2097,9 @@ export function createDevelopEngineWorkerHandler(
   const fallbackToWasm = async (): Promise<void> => {
     const manifestUrl = activeManifestUrl;
     if (runtime !== "native" || !manifestUrl) throw new Error("develop engine cannot fall back to wasm");
+    // wasm の読込や再生成が失敗しても native の宣言を残さない。新しい engine の ready まで cloud の能力は閉じる。
+    rendererCapabilities = null;
+    deps.post({ type: "rendererInvalidated", id: 0 });
     const input = currentOpenInput;
     const key = currentKey;
     const analysisKey = currentAnalysisKey;

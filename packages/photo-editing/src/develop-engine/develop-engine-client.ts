@@ -941,6 +941,10 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
   };
 
   const onResponse = (response: DevelopEngineWorkerResponse) => {
+    if (response.type === "rendererInvalidated") {
+      rendererCapabilities = null;
+      return;
+    }
     if (response.type === "perf") {
       if (diagnosticsEnabled()) {
         console.info("[photo-develop-perf]", { ...response.record, ...engineLabel });

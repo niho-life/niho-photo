@@ -97,7 +97,7 @@ start前に本人/epoch・requestId・原本identity/hash・payloadをdurable jo
 
 実runtimeの能力はRust coreの `renderer_capabilities()` がschema 1として宣言する。既存 `capabilities()` の `masks` とnative CLIの既存rootを保ち、同じ `renderer` を追加する。WASM・native serve・native CLIで設定version/engine/feature/maskの別一覧を作らない。SDK名や `version()` の表示文字列から能力を推定しない。
 
-browser hostは既存engineの `ready()` を確認してから `renderCapabilities?.()` を呼ぶ。getterは既存ready経路だけを読み、新しいWorkerやloaderを起動しない。未対応・不正なschema・実glueとの不一致・dispose中/終了・旧readyはnullとし、返値は変更できないsnapshotとする。schema 1の非空maskKindsはmasks featureと実効mask能力の両方を必要とする。renderer宣言が不正でも既存のローカル編集/mask能力は維持する。
+browser hostは既存engineの `ready()` を確認してから `renderCapabilities?.()` を呼ぶ。getterは既存ready経路だけを読み、新しいWorkerやloaderを起動しない。未対応・不正なschema・実glueとの不一致・dispose中/終了・旧readyはnullとし、返値は変更できないsnapshotとする。nativeからWASMへのfallback開始時も旧宣言を失効させ、次のengineのreadyまでnullを返す。読込・再生成が失敗しても旧宣言は復活しない。schema 1の非空maskKindsはmasks featureと実効mask能力の両方を必要とする。renderer宣言が不正でも既存のローカル編集/mask能力は維持する。
 
 hostは取得した `crateVersion` と正式に固定したbuild metadataのcrateを完全一致で照合し、そのmetadataの `sdkVersion` / `manifestSha256` と実runtimeの設定version/engine/feature/maskをC00 `RenderCapability`へ明示投影する。schemaVersionはruntimeの検証用でありC00へ足さない。固定metadataが無い・不一致ならcloud編集を閉じる。接続probeは本人scopeの取消を確認してdisposeし、受入した同じmanifestでWorkbenchを起動する。getterの追加だけで端末接続・正式SDK配布・実機受入を完了にしない。
 

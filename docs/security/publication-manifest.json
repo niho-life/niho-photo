@@ -299,7 +299,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine-client.test.ts",
         "sha256": "ab57eb9cc53aee5fc1ca937830d4eb7c979bf9da92b32c220bdeab772e8db065"
       },
-      "outputSha256": "1368380930df11e8cedd7e20f8dd54a0de61b5c3b65680d5ea9e3a0c9a1489d2",
+      "outputSha256": "cdbe155d5e0bf8e1d44f2b8bc0039b36afbfe4be31b2ad3e60380b153794fa9b",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -322,7 +322,8 @@
         "Issue #152 の runtime 診断を既存の描画時間テストの期待値へ追加。",
         "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
         "#171 答えの遅い要求の診断の試験",
-        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。",
+        "native失効時はWASM読込より先に旧renderer宣言を失効させる"
       ]
     },
     {
@@ -360,9 +361,10 @@
         "Issue #151 のスレッド版と #155 の論理予算を同じ client に統合",
         "#171 正規切替の停止箇所を同じ試行IDで記録する診断",
         "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み",
-        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。",
+        "native失効時はWASM読込より先に旧renderer宣言を失効させる"
       ],
-      "outputSha256": "d69284d05f7069b397ac8d035051799ef69ad3f937712a52837727ce0c970a89"
+      "outputSha256": "87a6b67fb3ec443c3eaca28102bc2937772fdadc73502d63e097cb82a199b4ea"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-manifest.ts",
@@ -500,9 +502,10 @@
         "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み",
         "#141 Mac アプリの native でも同梱の manifest から空のモデルを読む",
         "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。",
-        "mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。"
+        "mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。",
+        "native失効時はWASM読込より先に旧renderer宣言を失効させる"
       ],
-      "outputSha256": "721b1d63285cd36efbb8d31ff645bd1a83d401ec597e4fd0bb8e8c425c798dc7"
+      "outputSha256": "e6fc37f95a09d6acb2e6152d86b8589902c609e1845599a6f3f815c0397b1857"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -11433,8 +11436,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-surfaces.test.ts",
-      "sha256": "493a19330381716694e981940b4c0bb4ec7b7882a314c1eddb7a2351f79ed9a0",
-      "origin": "Issue #68のため新規作成した、Workerの面の受け渡し（能力・渡す/手放す・見本・面の作成・一時的なDeveloperの書き出し）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: #141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み\n変更理由: #141 native で空のモデルを渡す試験を足す\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。"
+      "sha256": "689833fa20995c8fd5713e79d1786bba2e378cd8b119eda71dc3fd5ef5fce621",
+      "origin": "Issue #68のため新規作成した、Workerの面の受け渡し（能力・渡す/手放す・見本・面の作成・一時的なDeveloperの書き出し）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: #141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み\n変更理由: #141 native で空のモデルを渡す試験を足す\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。\n変更理由: native失効時はWASM読込より先に旧renderer宣言を失効させる"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-mask-brush.ts",
@@ -12218,8 +12221,8 @@
     },
     {
       "path": "docs/architecture/personal-photo-cloud.md",
-      "sha256": "c2daa99aee81e1023b3b1254795a2f78fc91b1b52b62770eea7607af2e122b54",
-      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消\n変更理由: 親sessionと通常refreshを区別し端末間の独立性と失効時の旧scope破棄を明確化\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。"
+      "sha256": "690f4be445494791ec1c7d841238f2333520bb9b36a2dbaaa27e8ccaf7ea87a9",
+      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消\n変更理由: 親sessionと通常refreshを区別し端末間の独立性と失効時の旧scope破棄を明確化\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。\n変更理由: native失効時はWASM読込より先に旧renderer宣言を失効させる"
     },
     {
       "path": "scripts/ci/personal-photo-contract.test.mjs",
