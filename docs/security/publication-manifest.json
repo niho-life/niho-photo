@@ -12636,8 +12636,8 @@
     },
     {
       "path": "apps/photo-web/README.md",
-      "sha256": "09aec4ada905c55fee76d411599f7a480f52b9d3c4f301c3f41f3a7f1bc5ab9d",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。"
+      "sha256": "c940a1e3a2d5b8a13f8ea03e3a0d99a6d2f425b38d6f92ca4ee5d4be7fe1fa52",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加"
     },
     {
       "path": "apps/photo-web/eslint.config.mjs",
@@ -12646,8 +12646,8 @@
     },
     {
       "path": "apps/photo-web/package.json",
-      "sha256": "c6b00c489f4f030042bd784954da553476786d1657a35da9ac483d49ddaee20f",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。"
+      "sha256": "dc4de293c3d07bc88fbe8cd764100bdbc9afa738a47b7198c2d7e7ddb5667616",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加"
     },
     {
       "path": "apps/photo-web/provenance.json",
@@ -12781,8 +12781,8 @@
     },
     {
       "path": "apps/photo-web/tsconfig.json",
-      "sha256": "ae45b80a3689552e9ce438036c08fd434887a32360d3bcdbc11f5fa655fb90d1",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: 共通UIと既存cameraのstrict型policyへ整合。React18 experimentalのinert型を読み、未使用検査はhost専用限定configへ維持。"
+      "sha256": "f5a3d2f570a5c3c08206d41555e683d2a7354aebe1a4b7b6cab56311697b49f1",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: 共通UIと既存cameraのstrict型policyへ整合。React18 experimentalのinert型を読み、未使用検査はhost専用限定configへ維持。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加"
     },
     {
       "path": "apps/photo-web/tsconfig.pwa.json",
@@ -12803,6 +12803,46 @@
       "path": "apps/photo-web/vitest.view.config.ts",
       "sha256": "53194cc911125e660dca80695df08efa3430dee1a2da00bd21d237c31a81dde5",
       "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "apps/photo-web/src/browser/mount.tsx",
+      "sha256": "19351fd777f7527535317ca3272e56e166a2fa0ae6f37d932cf3925e6f78a6c6",
+      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。"
+    },
+    {
+      "path": "apps/photo-web/src/copy.ts",
+      "sha256": "fe3a8c2b5b6bb0d8ceda605c1cb743454336984f57b25bfe02e901626adc4424",
+      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。"
+    },
+    {
+      "path": "apps/photo-web/src/styles.css",
+      "sha256": "4b890bbe38363126304eaf145383a3f375efec4de103179f9329a8da5989cf7d",
+      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。"
+    },
+    {
+      "path": "apps/photo-web/tailwind.config.cjs",
+      "sha256": "34582711f60632e5310075600bebb4b37d045728f4d245cca917e02274f8e4ad",
+      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。"
+    },
+    {
+      "path": "apps/photo-web/vite.config.ts",
+      "sha256": "cce7010ad41a943e7b771e8f13829a2cf1d2cf7099290997343c524d5140b321",
+      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。"
+    },
+    {
+      "path": "apps/photo-web/test/browser-mount.test.tsx",
+      "sha256": "c5636d6cde149d3a339f8e5f1e14a200e625e8f99a5d3d170205eb5339a13429",
+      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。"
+    },
+    {
+      "path": "apps/photo-web/test/browser-bundle.test.mjs",
+      "sha256": "7c1fd4ed65194273125d27c6fa6e33e21aa884182ba4570746c0fa3ebba5df60",
+      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。"
+    },
+    {
+      "path": "apps/photo-web/vitest.mount.config.ts",
+      "sha256": "32fb7826691c0132e22b21815746f30574c6b865959127a4eb480b8fb9453175",
+      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。"
     }
   ],
   "excludedSources": [
