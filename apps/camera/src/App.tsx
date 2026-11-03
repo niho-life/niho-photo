@@ -43,7 +43,7 @@ export type PersonalCloudPhotoBinding = {
   actorId: string;
   /** actor/library/session/epoch/transport の衝突しないtuple。認可には使わず、query/editorを論理sessionごとに分ける。 */
   scopeKey?: string;
-  copyLocalPhoto: BrowserPhotoCopyToCloudBinding["copyLocalPhoto"];
+  copyLocalPhoto?: BrowserPhotoCopyToCloudBinding["copyLocalPhoto"];
 };
 
 export type AppProps = {
@@ -230,7 +230,7 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
   const libraryKey = queryScopeKey === undefined ? sourceKey : `${sourceKey}:scope:${queryScopeKey}`;
   const actorId = activeSource === "cloud" && cloud ? cloud.actorId : "local";
   const copyToCloud = useMemo<BrowserPhotoCopyToCloudBinding | undefined>(() =>
-    cloud && !cloudBindingTransition.switching && !cloudBindingTransition.failed ? {
+    cloud?.copyLocalPhoto && !cloudBindingTransition.switching && !cloudBindingTransition.failed ? {
       copyLocalPhoto: cloud.copyLocalPhoto,
       onOpenCloudPhoto: (photoId) => {
         void selectSource("cloud", photoId);

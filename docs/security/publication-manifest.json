@@ -4458,7 +4458,7 @@
         "path": "apps/camera/src/App.tsx",
         "sha256": "ca49b85f8269569ef243f5b0164751b3347c1cc268f906ce53dd984aa470c19e"
       },
-      "outputSha256": "5867d79e6a40d368c3621d709fd7ad7ef0f7d1ab052b459fe85b6bac80104ee7",
+      "outputSha256": "d4ce4a4b294b638f40413f2bf7e7c6424c6dee0b57d75c9200a0347cda100aea",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #3のpublic OAuth/PKCE、ローカル専用UI、安全契約と公開依存を新規接続。実issuer・署名検証器が未契約のため本番接続は無効。",
@@ -4470,7 +4470,8 @@
         "Add backwards-compatible personal photo library scope key",
         "Camera限定の安全な本人写真session読取と即時失効を実接続し、旧session遅着と保存待ちを隔離する",
         "正式Mac bootstrapの依存を通常mergeし、mainの共有編集面と固定native transportを保持",
-        "クラウド接続先が変わっても無料ローカル編集のactorとquery scopeを固定して再mountを防ぐ"
+        "クラウド接続先が変わっても無料ローカル編集のactorとquery scopeを固定して再mountを防ぐ",
+        "実転送port未接続時にはcopy操作を表示せず、検証済みread-only接続を独立して注入できる契約へする"
       ]
     },
     {
@@ -13158,8 +13159,8 @@
     },
     {
       "path": "docs/architecture/personal-photo-mac.md",
-      "sha256": "d4abe3fbb0e1f8c43fa41f87203c8a47adb34ac64a57fefcb808de4cdbb1f33c",
-      "origin": "NIHO所有の公開sourceとして新規作成。本人写真Mac接続の閉じたsession metadata・即時失効と合成fixtureの境界試験/契約。秘密、内部URL、実写真、個人情報、外部提供の資産を含まない。\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する"
+      "sha256": "d69aeb637c584b33f200cd5e3aaa25e4f021b4ae44b06e545e057a4cab067327",
+      "origin": "NIHO所有の公開sourceとして新規作成。本人写真Mac接続の閉じたsession metadata・即時失効と合成fixtureの境界試験/契約。秘密、内部URL、実写真、個人情報、外部提供の資産を含まない。\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する\n変更理由: ownerの最新Issue完了条件を反映し、細かな実機試験を追加closeゲートにしない"
     },
     {
       "path": "packages/desktop-account/src/photo_session.rs",

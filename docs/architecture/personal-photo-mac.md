@@ -14,6 +14,6 @@ nativeだけが既存Camera accessを使い、固定のPhoto mac-session APIを�
 
 固定C00 native transport、検証済み原本cache/stream、native copy journal、共有同期factoryと実rendererの起動時注入は後続で接続する。セッションmetadataの取得だけでcloud接続・コピー成功・正式出荷とは扱わない。UploadTicketやbearerはnative response memory内だけとし、IPCや永続journalへ出さない。原本・全参照mask・完全recipeの照合前にコピー完了を返さない。
 
-正式配布は実SDK/source/runtime manifestを同じ証跡で固定し、署名・公証・updater・実インストールとMac/iPhoneの実backend/storage受入を通す。未接続capabilityを成功stubで開かない。
+正式配布は実SDK/source/runtime manifestを同じ証跡で固定し、正式経路の署名・公証・updaterへ接続する。未接続capabilityを成功stubで開かない。実装がmainへ揃い既知の問題が無いIssueに、細かな画面操作や実機試験を追加close条件として課さない。本番enableや正式配布を未実施のまま成功とは記録しない。
 
 固定C00 transportは既存wire encoder/response validatorを共用する。nativeのoperation enumは任意URLやheadersを受けず、既存の認証済み本人とsessionを毎操作で照合する。JSONと原本streamは上限を分け、upload ticketを返す操作は高位native copy内だけに閉じる。原本は固定asset IDをbackendの実世代へ照合し、nativeでfull SHA・size・EOFを検証した後、scopeに束縛した一時handleから最大1MiBずつ読み取る。pathや原本全量をIPC JSON/base64へ載せない。
