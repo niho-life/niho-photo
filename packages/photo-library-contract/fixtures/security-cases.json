@@ -977,6 +977,27 @@
         ],
         "code": "upload_state_conflict"
       }
+    },
+    {
+      "id": "conflict-id-other-photo",
+      "operation": "recipe-conflicts.get",
+      "actor": "user-a",
+      "request": {
+        "photoId": "22222222-2222-4222-8222-222222222222",
+        "conflictId": "99999999-9999-4999-8999-999999999999"
+      },
+      "arrange": {
+        "conflictPhotoId": "another-synthetic-photo"
+      },
+      "expected": {
+        "status": 404,
+        "code": "not_found",
+        "invariants": [
+          "owner_and_photo_binding",
+          "no_cross_photo_snapshot",
+          "no_side_effects"
+        ]
+      }
     }
   ]
 }

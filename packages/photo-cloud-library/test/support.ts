@@ -150,6 +150,7 @@ export function defaultResponse(operation: PhotoOperation, request: unknown): un
   if (operation === "versions.get") return responses["versions.get"];
   if (operation === "versions.put") return responses["versions.put"];
   if (operation === "recipe-conflicts.list") return responses["recipe-conflicts.list"];
+  if (operation === "recipe-conflicts.get") return responses["recipe-conflicts.get"];
   if (operation === "recipe-conflicts.resolve") return responses["recipe-conflicts.resolve"];
   if (operation === "media.ensure") return responses["media.ensure"];
   return responses["photos.delete"];
