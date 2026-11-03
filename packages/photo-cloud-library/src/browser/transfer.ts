@@ -17,6 +17,7 @@ import {
 
 import { PersonalPhotoCloudError } from "../errors";
 import { abortReason, awaitBounded, cancelResponse, linkedAbortController } from "../await";
+import { recipeCandidateMatches } from "../recipe";
 import type { PersonalPhotoCloudIdentity } from "../types";
 import { GCS_CHUNK_BYTES, TRANSPORT_TIMEOUT_MS, TRUSTED_GCS_UPLOAD_ORIGIN, canonicalContentType, validateTicket } from "../wire";
 import { validateAsset } from "../validation";
@@ -507,8 +508,7 @@ function startPayload(entry: TransferJournalEntry) { return { target: { kind: "o
 function assertUploadBinding(entry: TransferJournalEntry, upload: Upload): void { if ((entry.uploadId !== null && upload.id !== entry.uploadId) || (entry.expiresAt !== null && upload.expiresAt !== entry.expiresAt) || upload.target.kind !== "original" || upload.target.fileName !== entry.fileName || upload.target.format !== entry.format || upload.sizeBytes !== entry.sizeBytes || upload.sha256 !== entry.sha256) throw new PersonalPhotoCloudError("invalid_response"); }
 function requiredUploadId(entry: TransferJournalEntry): string { if (entry.uploadId === null) throw new PersonalPhotoCloudError("invalid_response"); return entry.uploadId; }
 function parseProviderRange(value: string | null, offset: number, chunkEnd: number, total: number): number | null { if (value === null || value.includes(",")) return null; const match = /^bytes=0-(\d+)$/u.exec(value); if (!match) return null; const last = Number(match[1]); return Number.isSafeInteger(last) && last + 1 >= offset && last <= chunkEnd && last < total ? last + 1 : null; }
-function recipeMatches(candidate: RecipeCandidate, recipe: RecipeDocument): boolean { return candidate.settingsSha256 === recipe.settingsSha256 && candidate.baseVersion === recipe.baseVersion && deepEqual(candidate.settings, recipe.settings) && deepEqual(candidate.maskSurfaceIds, recipe.maskSurfaceIds); }
-function deepEqual(left: unknown, right: unknown): boolean { if (Object.is(left, right)) return true; if (Array.isArray(left) && Array.isArray(right)) return left.length === right.length && left.every((item, index) => deepEqual(item, right[index])); if (isRecord(left) && isRecord(right)) { const leftKeys = Object.keys(left).sort(); const rightKeys = Object.keys(right).sort(); return leftKeys.length === rightKeys.length && leftKeys.every((key, index) => key === rightKeys[index] && deepEqual(left[key], right[key])); } return false; }
+function recipeMatches(candidate: RecipeCandidate, recipe: RecipeDocument): boolean { return recipeCandidateMatches(candidate, recipe); }
 function status(entry: TransferJournalEntry): PersonalPhotoTransferStatus { return Object.freeze({ intentId: entry.intentId, phase: entry.phase, fileName: entry.fileName, format: entry.format, sizeBytes: entry.sizeBytes, sha256: entry.sha256, uploadedBytes: entry.uploadedBytes, photoId: entry.photoId, hasPendingRecipe: entry.phase === "pending-recipe", failure: entry.failure }); }
 function terminal(phase: TransferPhase): boolean { return ["done", "cancelled", "expired", "rejected", "purged", "failed"].includes(phase); }
 function completionDeadline(expiresAt: string): number { return Date.parse(expiresAt) + PHOTO_LIMITS.completionGraceSeconds * 1000; }

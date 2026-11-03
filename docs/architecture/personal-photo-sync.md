@@ -1,0 +1,37 @@
+# 本人写真の補正同期core
+
+C03の第一段階。認証済みの本人写真clientを使い、完全補正の下書き、固定要求の再送、保存世代の確認、競合した両版の読取りと本人選択を共有する。編集画面とautosaverへの注入、参照maskの実転送、名前付き版、Mac/Webの正式配備と実端末受入は続く。このcoreだけでPhotoLibraryの編集能力や製品の接続完了を宣言しない。
+
+## 下書きと送信
+
+`@niho/photo-cloud-sync` は既存の認証identity、`PersonalPhotoCloudClient`、journal、lockを受け取る。API URL、credential、別の写真catalogやquotaを持たない。
+
+写真を開いた本人・library・session・epoch・transportと、Photo ID・原本SHA・開始revisionをwriterへ束縛する。入力時に完全JSONを同期cloneし、ネットワークやdebounceより前にstrict IndexedDB transactionで保存する。保存できなかった入力は未保存のままであり、後段の離脱guardを解除しない。
+
+保存するのは最新の下書きと、結果を照合中の要求それぞれの完全candidate。入力のたびに全snapshotの履歴を増やさない。送信前に固定idempotency key・本文・expectedRevision・世代をcommitする。結果不明の要求が残る間は、同じkeyと本文で先に照合する。
+
+送信中にも新しい入力を保存できる。ACKでは現recordを読み直し、送った世代だけを確認する。先の送信Aの応答で、新しい下書きBを消さない。BをAのACK前に入力していても、Bの送信要求を作る時点の自分の確定ACKからrevisionを引き継ぐ。他端末の現在revisionへ暗黙にrebaseしない。
+
+journalはscopeごと16 writers/32MiB、全体64 writers/128MiBを上限とし、同じtransactionで入場を判定する。自動evictionで未保存編集を捨てない。処理中の入力と待機する最新入力を分け、置換された未commit入力はsupersededとして結果を返す。本人scopeの一覧は小さいpageで取得し、再起動後は保存済みwriter tokenを明示的にreopenする。
+
+## 本人と保存結果
+
+通常のcredential refreshでは同じsession/epochを維持する。既に開いた写真は、期限切れでも本人tupleが変わらない場合に限りlocal draftへ保存できる。ログアウト・本人変更・epoch変更・破棄後は古いwriterからの処理を止める。freshな同epochのcontrollerで復旧するまでネットワークを再開しない。新epochへ旧keyや下書きを自動移行しない。
+
+原本bytes、File、token、ticket、bearer URI、署名URLをjournalへ保存しない。未対応の設定も完全JSONのまま保持する。書けない設定をneutralや既知fieldだけに置換しない。
+
+保存結果はPhoto・原本SHA・完全設定・base・mask参照・expectedRevisionからの進行を照合する。設定のSHAはserverの正本を使い、journal自身の要求bytesのhashと混同しない。内部snapshotの構造比較はJSONのobjectキー順に依存させず、array順と未知の値を保持する。削除済み写真の404/410は終端であり、元要求から新しいPhotoやkeyを作らない。
+
+## 競合
+
+`recipes.put`、`recipe-conflicts.list`、`recipe-conflicts.get`、`recipe-conflicts.resolve`をC02の固定HTTPへ接続する。ID直接取得は本人・Photo・候補IDを束縛し、履歴のpage数やcursor更新に依存せず両snapshotを読む。409のIDだけで比較版を取得した扱いにしない。
+
+別端末に由来する競合も、localの補正やPUTを捏造せず本人が採用か現行維持を明示する。localに対応する世代がない選択は、別の未同期draftやそのCAS基準を変えない。選択が結果不明なら同じintent/key/本文を再送する。結果が既知の競合後に、本人が改めて選択した場合だけ新しいintentを作る。未知の両版を読取り専用で保持でき、現行維持によって設定を欠落させない。
+
+recipeの文書上限は1MiB/depth32、PUT本文は2MiB、選択本文は64KiB。HTTP wrapperの深さを文書の上限に数えない。競合応答はcandidate/current/resultを含むため4MiBまで検証する。signalを無視するportや遅着応答にも期限と世代検査を適用する。
+
+## 続きの接続
+
+共有autosaverからdebounce前のstageを開始し、その世代の永続commitを待ってから保存するportを後段で接続する。既存のローカル編集と32KiB draftの契約はそのまま使い、本人クラウドの完全補正をそこへ詰めない。mask/base/RAWの実保存・描画bindingが揃うまで、該当する新規採用は閉じる。
+
+合成fixtureによるrace/再起動/失効/容量/深さ/競合の試験と、正式backend/storage・実Mac/iPhone/Safari/PWAの受入は別に記録する。最終配布では変更後の共有sourceを含む新しい公式SDKを固定し、既存SDK tagや配布物を上書きしない。

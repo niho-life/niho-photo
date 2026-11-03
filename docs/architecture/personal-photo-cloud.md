@@ -66,7 +66,7 @@ canonical本人IDは検証済みNIHO userから導く。メール・拠点ID・J
 | `masks.get` | owner/photo/hashに拘束した面の保存/取得不足 | C03 |
 | `recipes.put` | revision CAS・冪等保存・両snapshotあり。完全recipe/base/mask検証と旧64KiB制限の整合不足 | C03 |
 | `versions.get` / `versions.put` | 補正台帳を再利用。名前付き版と独立revision CASのAPI不足 | C03 |
-| `recipe-conflicts.list` / `recipe-conflicts.resolve` | 両snapshot・adopt/keep-current・CAS・再送あり。未知設定/mask/base projectionを接続 | C03 |
+| `recipe-conflicts.list` / `recipe-conflicts.get` / `recipe-conflicts.resolve` | 両snapshot・adopt/keep-current・CAS・再送あり。ID直接取得は履歴のpage数に依存せず本人/Photo/候補IDへ束縛。未知設定/mask/base projectionを接続 | C03 |
 | `media.ensure` | 本人原本用renderer/job/asset/base projection不足。拠点workerと混同しない | C04 |
 | `photos.delete` | 即時非表示・全generation purge・request fence・退会/再試行基盤あり。Photo接続/受入が必要 | C02/C05/C06 |
 
