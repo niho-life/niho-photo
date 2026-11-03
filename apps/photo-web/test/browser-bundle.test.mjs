@@ -36,7 +36,8 @@ test("browser build keeps shared styles and the stateless export worker, without
             + `import ${JSON.stringify(root + "src/styles.css")};
 `
             + `import {PHOTO_WEB_VIEW_COPY} from ${JSON.stringify(root + "src/copy.ts")};\n`
-            + "globalThis.__photoWebCompileFixture = {mountPhotoWeb, copy:PHOTO_WEB_VIEW_COPY};";
+            + `import {probePhotoWebRenderer} from ${JSON.stringify(root + "src/browser/renderer.ts")};\n`
+            + "globalThis.__photoWebCompileFixture = {mountPhotoWeb, probePhotoWebRenderer, copy:PHOTO_WEB_VIEW_COPY};";
         },
       },
       collect("main"),
@@ -52,6 +53,7 @@ test("browser build keeps shared styles and the stateless export worker, without
     || id.startsWith(appRoot + "src/server/") || id.startsWith(appRoot + "src/build/")
     || id.includes("/photo-cloud-session/src/server/")), []);
   assert.ok(graphs.main.some((id) => id.endsWith("/editor/browser-photo-editing-workbench.tsx")));
+  assert.ok(graphs.main.some((id) => id.endsWith("/src/browser/renderer.ts")));
   assert.ok(graphs.worker.some((id) => id.endsWith("/develop-engine-export.worker.ts")));
   assert.equal(graphs.worker.some((id) => id.endsWith("/develop-engine.worker.ts")), false);
   const css = files.filter((item) => item.type === "asset" && item.fileName.endsWith(".css"))
