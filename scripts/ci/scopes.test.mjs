@@ -136,3 +136,12 @@ test("main pushは文書だけでもexact SHAのcamera公開成果物を生成�
   const result = selectScopes(["README.md"], all, true).filter((scope) => scope.selected);
   assert.deepEqual(result.map((scope) => scope.scope), ["camera"]);
 });
+
+// 新しいWebを検出するだけでなく、実際のworkspace三検証へ到達することを固定する。
+test("Photo Webの変更は公開scopeから型・試験・lintを実行する", async () => {
+  assert.deepEqual(selected(["apps/photo-web/src/runtime/runtime.ts"]), ["photo-editing"]);
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const commands = await scopeCommands(root, "photo-editing");
+  assert.deepEqual(commands.filter(([command, args]) => command === "npm" && args.at(-1) === "apps/photo-web")
+    .map(([, args]) => args[1]), ["typecheck", "test", "lint"]);
+});

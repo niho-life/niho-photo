@@ -11,7 +11,8 @@
     "packages/photo-cloud-session",
     "packages/photo-library-contract",
     "packages/photo-cloud-library",
-    "packages/photo-cloud-media"
+    "packages/photo-cloud-media",
+    "apps/photo-web"
   ],
   "scripts": {
     "pretypecheck": "node scripts/ci/guard-local-heavy.mjs typecheck",

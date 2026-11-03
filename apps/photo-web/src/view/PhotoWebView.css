@@ -1,0 +1,211 @@
+.photo-web-root,
+.photo-web-root * {
+  box-sizing: border-box;
+}
+
+.photo-web-root {
+  --photo-editing-surface: var(--niho-surface, #fcfbf9);
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  height: 100vh;
+  height: 100dvh;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--niho-surface, #fcfbf9);
+  color: var(--niho-text);
+  font-family: var(--font-family-sans, sans-serif);
+}
+
+.photo-web-header {
+  display: flex;
+  flex: none;
+  min-width: 0;
+  min-height: calc(3.25rem + env(safe-area-inset-top, 0px));
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: env(safe-area-inset-top, 0px) max(0.75rem, env(safe-area-inset-right, 0px)) 0 max(0.75rem, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid var(--niho-border);
+  background: var(--niho-card, #fcfbf9);
+}
+
+.photo-web-brand,
+.photo-web-header-actions,
+.photo-web-update-notice {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+}
+
+.photo-web-brand {
+  gap: 0.5rem;
+  white-space: nowrap;
+}
+
+.photo-web-brand img {
+  width: 1.5rem;
+  height: 1.5rem;
+  flex: none;
+  object-fit: contain;
+  pointer-events: none;
+}
+
+.photo-web-header-actions {
+  justify-content: flex-end;
+  gap: 0.5rem;
+}
+
+.photo-web-cloud,
+.photo-web-usage {
+  overflow: hidden;
+  color: var(--niho-text-sub);
+  font-size: 0.8125rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.photo-web-header button,
+.photo-web-empty-action button,
+.photo-web-update-notice button,
+.photo-web-primary-button {
+  min-height: 2.25rem;
+  border: 1px solid var(--niho-border);
+  border-radius: var(--radius, 0.5rem);
+  padding: 0.375rem 0.75rem;
+  background: var(--niho-surface-subtle);
+  color: var(--niho-text);
+  font: inherit;
+  font-size: 0.875rem;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.photo-web-header button:disabled,
+.photo-web-empty-action button:disabled,
+.photo-web-update-notice button:disabled {
+  cursor: default;
+  opacity: 0.55;
+}
+
+.photo-web-header button:focus-visible,
+.photo-web-empty-action button:focus-visible,
+.photo-web-update-notice button:focus-visible,
+.photo-web-primary-button:focus-visible {
+  outline: 2px solid var(--niho-accent-ink);
+  outline-offset: 2px;
+}
+
+.photo-web-primary-button {
+  border-color: transparent;
+  background: var(--niho-primary-bg);
+  color: var(--niho-primary-ink);
+}
+
+.photo-web-notices {
+  display: grid;
+  flex: none;
+  gap: 0.375rem;
+  padding: 0.5rem max(0.75rem, env(safe-area-inset-right, 0px)) 0.5rem max(0.75rem, env(safe-area-inset-left, 0px));
+  border-bottom: 1px solid var(--niho-border);
+  background: var(--niho-surface-subtle);
+  color: var(--niho-text-sub);
+  font-size: 0.875rem;
+}
+
+.photo-web-notices p {
+  margin: 0;
+}
+
+.photo-web-update-notice {
+  justify-content: space-between;
+  gap: 0.75rem;
+}
+
+.photo-web-workspace {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  overflow: hidden;
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+.photo-web-empty {
+  display: grid;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  place-items: center;
+  overflow: auto;
+  overscroll-behavior: contain;
+  padding: 2rem max(1rem, env(safe-area-inset-right, 0px)) max(2rem, env(safe-area-inset-bottom, 0px)) max(1rem, env(safe-area-inset-left, 0px));
+}
+
+.photo-web-empty-card {
+  width: min(100%, 32rem);
+  padding: clamp(1.25rem, 4vw, 2.5rem);
+  border: 1px solid var(--niho-border);
+  border-radius: calc(var(--radius, 0.5rem) * 2);
+  background: var(--niho-card, #fcfbf9);
+  box-shadow: 0 0.75rem 2rem color-mix(in srgb, var(--niho-text) 8%, transparent);
+  text-align: center;
+}
+
+.photo-web-empty-card h1 {
+  margin: 0;
+  font-size: clamp(1.5rem, 5vw, 2.25rem);
+  line-height: 1.2;
+}
+
+.photo-web-empty-card > p {
+  margin: 0.75rem 0 1.5rem;
+  color: var(--niho-text-sub);
+}
+
+.photo-web-empty-card form,
+.photo-web-empty-action {
+  margin: 0;
+}
+
+.photo-web-empty-action {
+  display: grid;
+  justify-items: center;
+  gap: 0.75rem;
+}
+
+.photo-web-empty-action p {
+  margin: 0;
+  color: var(--niho-text-sub);
+}
+
+@media (max-width: 44rem) {
+  .photo-web-header button,
+  .photo-web-empty-action button,
+  .photo-web-update-notice button,
+  .photo-web-primary-button {
+    min-height: 44px;
+  }
+
+  .photo-web-header {
+    align-items: flex-start;
+    flex-direction: column;
+    padding-bottom: 0.5rem;
+  }
+
+  .photo-web-header-actions {
+    width: 100%;
+    flex-wrap: wrap;
+    justify-content: flex-start;
+  }
+
+  .photo-web-usage {
+    flex: 1;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .photo-web-root * {
+    scroll-behavior: auto !important;
+  }
+}
