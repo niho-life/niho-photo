@@ -33,6 +33,15 @@ const SKY_MANIFEST = {
 };
 const ID = "a".repeat(64);
 const CAPABILITIES = { masks: { kinds: ["linear", "radial", "brush", "subject", "sky"], max: 8, maskPlane: true, surfaces: true } };
+const RENDERER_CAPABILITIES = {
+  schemaVersion: 1,
+  crateVersion: DEVELOP_ENGINE_CRATE_VERSION,
+  settingsVersions: [1, 2, 3, 4, 5, 6, 7, 8, 9],
+  engines: ["niho-1", "niho-14"],
+  features: ["geometry", "masks", "colorGradingLuminance"],
+  maskKinds: ["linear", "radial", "brush", "subject", "sky"],
+  maskSurfaces: true,
+};
 
 type Posted = { message: DevelopEngineWorkerResponse; transfer: Transferable[] | undefined };
 
@@ -144,6 +153,56 @@ function setup(
 }
 
 describe("Worker の面の受け渡し", () => {
+  it("capabilities JSON を一度だけ読み、legacy masks と整合する renderer 宣言を ready へ写す", async () => {
+    const glue = surfaceGlue();
+    const capabilities = vi.fn(() => JSON.stringify({ ...CAPABILITIES, renderer: RENDERER_CAPABILITIES }));
+    const runtime = setup({ ...glue.module, capabilities });
+    await runtime.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+
+    expect(capabilities).toHaveBeenCalledOnce();
+    expect(runtime.posted[0]?.message).toMatchObject({
+      type: "ready",
+      masks: CAPABILITIES.masks,
+      rendererCapabilities: RENDERER_CAPABILITIES,
+    });
+  });
+
+  it("renderer が無い旧 WASM と不正・矛盾する renderer は null に閉じ、legacy masks は保つ", async () => {
+    const old = setup(surfaceGlue().module);
+    await old.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    expect(old.posted[0]?.message).toMatchObject({ type: "ready", masks: CAPABILITIES.masks });
+    expect(old.posted[0]?.message).not.toHaveProperty("rendererCapabilities");
+
+    const declarations = [
+      { ...RENDERER_CAPABILITIES, extra: true },
+      { ...RENDERER_CAPABILITIES, features: ["masks", "colorGradingLuminance"] },
+      { ...RENDERER_CAPABILITIES, maskKinds: ["linear", "radial", "brush", "subject"] },
+      { ...RENDERER_CAPABILITIES, maskSurfaces: false },
+    ];
+    for (const renderer of declarations) {
+      const runtime = setup(surfaceGlue({ capabilities: { ...CAPABILITIES, renderer } }).module);
+      await runtime.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+      expect(runtime.posted[0]?.message).toMatchObject({ type: "ready", masks: CAPABILITIES.masks });
+      expect(runtime.posted[0]?.message).not.toHaveProperty("rendererCapabilities");
+    }
+
+    const missingSurfaceGlue = setup(
+      surfaceGlue({ encode: false, capabilities: { ...CAPABILITIES, renderer: RENDERER_CAPABILITIES } }).module,
+    );
+    await missingSurfaceGlue.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    expect(missingSurfaceGlue.posted[0]?.message).toMatchObject({
+      type: "ready",
+      masks: { kinds: ["linear", "radial"], max: 8, maskPlane: true },
+    });
+    expect(missingSurfaceGlue.posted[0]?.message).not.toHaveProperty("rendererCapabilities");
+
+    const glue = surfaceGlue({ capabilities: { ...CAPABILITIES, renderer: RENDERER_CAPABILITIES } });
+    const missingGeometryGlue = setup({ ...glue.module, beforeSettings: undefined });
+    await missingGeometryGlue.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    expect(missingGeometryGlue.posted[0]?.message).toMatchObject({ type: "ready", masks: CAPABILITIES.masks });
+    expect(missingGeometryGlue.posted[0]?.message).not.toHaveProperty("rendererCapabilities");
+  });
+
   it("口が揃っていれば masks.surfaces を付ける。揃わない glue は面の種類を描けない扱いにする", async () => {
     const ready = setup(surfaceGlue().module);
     await ready.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });

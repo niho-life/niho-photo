@@ -299,7 +299,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-engine-client.test.ts",
         "sha256": "ab57eb9cc53aee5fc1ca937830d4eb7c979bf9da92b32c220bdeab772e8db065"
       },
-      "outputSha256": "619494114333c94acbbbae3899a8fb584fe6e5096b77518b2b70275c8abd0776",
+      "outputSha256": "1368380930df11e8cedd7e20f8dd54a0de61b5c3b65680d5ea9e3a0c9a1489d2",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -321,7 +321,8 @@
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
         "Issue #152 の runtime 診断を既存の描画時間テストの期待値へ追加。",
         "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
-        "#171 答えの遅い要求の診断の試験"
+        "#171 答えの遅い要求の診断の試験",
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
       ]
     },
     {
@@ -358,9 +359,10 @@
         "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
         "Issue #151 のスレッド版と #155 の論理予算を同じ client に統合",
         "#171 正規切替の停止箇所を同じ試行IDで記録する診断",
-        "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み"
+        "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み",
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
       ],
-      "outputSha256": "0f4e73b8f8fce7b2c0f3a8237a906fc77c776bb504bbc337a6e636ce8999d7cf"
+      "outputSha256": "d69284d05f7069b397ac8d035051799ef69ad3f937712a52837727ce0c970a89"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-manifest.ts",
@@ -496,9 +498,10 @@
         "Issue #155: 切り抜いた JPEG / PNG の書き出しを、切り抜きが届くデコードの大きさで見積もる",
         "WKWebView を WebKit と判定し、SharedArrayBuffer の無い分離をスレッド版の対象にしない（#175）",
         "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み",
-        "#141 Mac アプリの native でも同梱の manifest から空のモデルを読む"
+        "#141 Mac アプリの native でも同梱の manifest から空のモデルを読む",
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
       ],
-      "outputSha256": "7eb2f71aa94ef5c8bbb41554f7bbbac2eca6fa14343c42ab44ea04c731c7e6fe"
+      "outputSha256": "29736636cf1a883e0e815ef93bf6545ddeed982cb10d050e9ff68db5ed980c28"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -5984,7 +5987,7 @@
         "path": "packages/develop-engine/crates/niho-develop-render/src/lib.rs",
         "sha256": "a9ac3a784a2eb9250747dc2eaabc10c958c1a10d71c7ca16ffdd0d96b40456bc"
       },
-      "outputSha256": "d05879d4d79615ab91cf0bea878053501ce0a3898ffb260d0e01e619836d0849",
+      "outputSha256": "7ccb2dd92093a4b49f48d7a4d3231ceb5b9430bc6063399eca6aa2df7dc61268",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
@@ -6005,7 +6008,8 @@
         "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
         "niho-photo#132: 原寸の書き出しの native の読み込みの上限を 1 億画素に広げる（ブラウザの wasm は 4000 万画素のまま）。",
-        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。"
+        "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
       ]
     },
     {
@@ -6027,7 +6031,7 @@
         "path": "packages/develop-engine/crates/niho-develop-render/tests/cli.rs",
         "sha256": "8ddf42804ccd8202fb8834bc499d2d03a331eb0ff96e020421a776f2286ef9bd"
       },
-      "outputSha256": "371a62d1b869fcfc7f3106b74ff11022f2f33804ce4c8c3021a6efa2aad3d951",
+      "outputSha256": "ba2dddc4f7929308e2e31cc70f0c08db881185ef803434f94b3a5ebdb572b43f",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "新engine受入と未知版拒否の境界を更新し、既存wasm CIで候補のFinal/Interactive固定画素を検証する。",
@@ -6053,7 +6057,8 @@
         "Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ",
         "niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。",
         "niho-photo#132: 原寸の書き出しの native の読み込みの上限を 1 億画素に広げる（ブラウザの wasm は 4000 万画素のまま）。",
-        "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。"
+        "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。",
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
       ]
     },
     {
@@ -6077,7 +6082,7 @@
         "path": "packages/develop-engine/crates/niho-develop-wasm/src/lib.rs",
         "sha256": "bb2c416ce23b4e3ca3208f32736f22254ed82276b24fd7f49f1a022e4eb85fbd"
       },
-      "outputSha256": "030ac6c9b5f7e9e98d382936534e17d8a95aa02f4a896e4f0172fded9b19fc68",
+      "outputSha256": "1c3317cd1ea63148cb85e91b451c4592dccb03d87dea1b08ccea3e555764be76",
       "modifications": [
         "Issue #30 Oklch色ミキサーとengine 10/11対応を反映",
         "部分補正（マスク）#65: validateSettingsのマスク読み取り回帰テストを追加",
@@ -6099,7 +6104,8 @@
         "niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。",
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
         "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
-        "#141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験"
+        "#141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験",
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
       ]
     },
     {
@@ -11426,8 +11432,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-surfaces.test.ts",
-      "sha256": "7e9611d696463155f414e68ce1cf6f1f0568fcb575b8d668db1a28bbc477cd9a",
-      "origin": "Issue #68のため新規作成した、Workerの面の受け渡し（能力・渡す/手放す・見本・面の作成・一時的なDeveloperの書き出し）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: #141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み\n変更理由: #141 native で空のモデルを渡す試験を足す"
+      "sha256": "d37e26c308dedfdcc33a8c041a1e2627aa339a634b74a4e3f728d2cf9a0ca2df",
+      "origin": "Issue #68のため新規作成した、Workerの面の受け渡し（能力・渡す/手放す・見本・面の作成・一時的なDeveloperの書き出し）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: #141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み\n変更理由: #141 native で空のモデルを渡す試験を足す\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-mask-brush.ts",
@@ -11861,8 +11867,8 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/api.rs",
-      "sha256": "b3b83572ece7143b5b09eabda876742bb9063a79dc29b8cca64877932ef20bca",
-      "origin": "公開Issue #152 のため新規作成。wasm と native が共有する現像 API。既存の公開実装を移動。\n変更理由: #141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験"
+      "sha256": "bdf189cc0088fc5196d70ad857f43eb9711969e5adf91fd3b4eed1d0e381b07e",
+      "origin": "公開Issue #152 のため新規作成。wasm と native が共有する現像 API。既存の公開実装を移動。\n変更理由: #141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/api_cross_target.rs",
@@ -12211,8 +12217,8 @@
     },
     {
       "path": "docs/architecture/personal-photo-cloud.md",
-      "sha256": "1a84a11104e3ae93ef96de3f5c692d87d1e78eeff10701ba54a888ad9575985b",
-      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消\n変更理由: 親sessionと通常refreshを区別し端末間の独立性と失効時の旧scope破棄を明確化"
+      "sha256": "5de8fcf824ba06cefa91e7d636bbd8f77ea9f564193c62a34653ffd305b157e3",
+      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消\n変更理由: 親sessionと通常refreshを区別し端末間の独立性と失効時の旧scope破棄を明確化\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
     },
     {
       "path": "scripts/ci/personal-photo-contract.test.mjs",
@@ -12803,6 +12809,16 @@
       "path": "apps/photo-web/vitest.view.config.ts",
       "sha256": "53194cc911125e660dca80695df08efa3430dee1a2da00bd21d237c31a81dde5",
       "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/develop-engine/develop-renderer-capabilities.ts",
+      "sha256": "50149022fcb32d46bb462b842de37efa1a2abe6be0e9628c1491fa7dfb6334c2",
+      "origin": "NIHOが公開runtimeのschema 1宣言を検証するため新規実装。公開Rust/WASMの能力だけを扱い、非公開source・資格情報・利用者データを含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/develop-engine/develop-renderer-capabilities.test.ts",
+      "sha256": "5a1d1525845cebdf6e0af2ef42926bd6dae3d29f645cfd49aaa636d2bf40d76e",
+      "origin": "NIHOがschema 1の不正入力・readonly snapshotを検証するため新規作成した合成unit test。実写真・利用者データ・第三者資産を含まない。"
     }
   ],
   "excludedSources": [

@@ -113,6 +113,19 @@ pub fn thread_count() -> usize {
     }
 }
 
+/// The renderer contract declared by this exact crate build.
+pub fn renderer_capabilities() -> serde_json::Value {
+    serde_json::json!({
+        "schemaVersion": 1,
+        "crateVersion": crate::CRATE_VERSION,
+        "settingsVersions": crate::settings::READABLE_SETTINGS_VERSIONS,
+        "engines": crate::settings::KNOWN_ENGINES,
+        "features": ["geometry", "masks", "colorGradingLuminance"],
+        "maskKinds": crate::local_mask::MaskKind::ALL.map(crate::local_mask::MaskKind::as_str),
+        "maskSurfaces": true,
+    })
+}
+
 /// What this build draws beyond what [`validate_settings`] reads, as JSON:
 /// `{"masks":{"kinds":["linear","radial","brush","subject","sky"],
 /// "max":8,"maskPlane":true,"surfaces":true,"skyDetection":true}}` — local
@@ -128,7 +141,8 @@ pub fn capabilities() -> String {
             "maskPlane": true,
             "surfaces": true,
             "skyDetection": true,
-        }
+        },
+        "renderer": renderer_capabilities(),
     })
     .to_string()
 }
@@ -747,7 +761,46 @@ impl Developer {
 
 #[cfg(test)]
 mod tests {
-    use super::{parse_white, white_json, Developer};
+    use super::{capabilities, parse_white, renderer_capabilities, white_json, Developer};
+
+    #[test]
+    fn renderer_capabilities_follow_the_crates_constants() {
+        let renderer = renderer_capabilities();
+        assert_eq!(renderer["schemaVersion"], 1);
+        assert_eq!(renderer["crateVersion"], crate::CRATE_VERSION);
+        assert_eq!(
+            renderer["settingsVersions"],
+            serde_json::json!(crate::settings::READABLE_SETTINGS_VERSIONS)
+        );
+        assert_eq!(
+            renderer["engines"],
+            serde_json::json!(crate::settings::KNOWN_ENGINES)
+        );
+        assert_eq!(
+            renderer["features"],
+            serde_json::json!(["geometry", "masks", "colorGradingLuminance"])
+        );
+        assert_eq!(
+            renderer["maskKinds"],
+            serde_json::json!(
+                crate::local_mask::MaskKind::ALL.map(crate::local_mask::MaskKind::as_str)
+            )
+        );
+        assert_eq!(renderer["maskSurfaces"], true);
+
+        let root: serde_json::Value = serde_json::from_str(&capabilities()).unwrap();
+        assert_eq!(root["renderer"], renderer);
+        assert_eq!(
+            root["masks"],
+            serde_json::json!({
+                "kinds": ["linear", "radial", "brush", "subject", "sky"],
+                "max": crate::settings::MAX_LOCAL_MASKS,
+                "maskPlane": true,
+                "surfaces": true,
+                "skyDetection": true,
+            })
+        );
+    }
 
     #[test]
     fn whites_read_and_write_lightrooms_scale() {

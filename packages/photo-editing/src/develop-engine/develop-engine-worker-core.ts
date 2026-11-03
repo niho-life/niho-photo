@@ -2,6 +2,10 @@ import type { DevelopAnalysisHelper, DevelopAnalysisHelperResponse } from "./dev
 import { parseDevelopEngineManifest } from "./develop-engine-manifest";
 import type { DevelopAnalysisStore } from "./develop-engine-analysis-store";
 import {
+  parseDevelopRendererCapabilities,
+  type DevelopRendererCapabilities,
+} from "./develop-renderer-capabilities";
+import {
   analysisAheadMemoryBytes,
   analysisHelperMemoryBytes,
   DEVELOP_MEMORY_BUDGET,
@@ -234,6 +238,8 @@ export type DevelopEngineWorkerFeatures = {
   presetFromMeta?: true;
   /** 部分補正（マスク）を描ける種類と枚数（glue の `capabilities()`。無い・描けない glue では付けない） */
   masks?: DevelopMaskCapabilities;
+  /** 実際に起動した renderer 自身が宣言し、実 glue と照合できた schema 1。 */
+  rendererCapabilities?: DevelopRendererCapabilities;
 };
 
 /** wasm が描ける部分補正（`capabilities().masks`）。 */
@@ -666,21 +672,15 @@ const SURFACE_MASK_KINDS = ["brush", "subject", "sky"];
 
 /** crate の `MAX_LOCAL_MASKS`（契約の上限。glue がこれより大きい値を返しても上限で止める）。 */
 const MAX_MASKS_CONTRACT = 8;
+const MAX_CAPABILITIES_JSON_LENGTH = 32_768;
 
 /**
- * glue の `capabilities()` から描ける部分補正を読む（1 回だけ。口が無い・throw・JSON でない・種類が無い・形が違うなら null＝描けない）。
+ * parse 済み `capabilities().masks` から描ける部分補正を読む（種類が無い・形が違うなら null＝描けない）。
  * 知らない種類は落とし、`max` は 1〜8 の整数だけを受ける。
  */
-function readMaskCapabilities(glue: DevelopGlue): DevelopMaskCapabilities | null {
-  if (!glue.capabilities) return null;
-  let parsed: unknown;
-  try {
-    parsed = JSON.parse(String(glue.capabilities()));
-  } catch {
-    return null;
-  }
-  if (!isRecord(parsed) || !isRecord(parsed.masks)) return null;
-  const { kinds, max, maskPlane, surfaces } = parsed.masks;
+function readMaskCapabilities(value: unknown, glue: DevelopGlue): DevelopMaskCapabilities | null {
+  if (!isRecord(value)) return null;
+  const { kinds, max, maskPlane, surfaces } = value;
   if (!Array.isArray(kinds) || !isPositiveInteger(max)) return null;
   const known = ["linear", "radial", "brush", "subject", "sky"];
   // 面の受け渡しは、応答と glue の口（作る・id・Developer の受け渡しと書き出し）が揃っているときだけ
@@ -701,6 +701,45 @@ function readMaskCapabilities(glue: DevelopGlue): DevelopMaskCapabilities | null
     maskPlane: maskPlane === true && glue.maskPlane,
     ...(surfacesReady ? { surfaces: true } : {}),
   };
+}
+
+function sameStrings(left: readonly string[], right: readonly string[]): boolean {
+  return left.length === right.length && left.every((value, index) => value === right[index]);
+}
+
+/** renderer 宣言を schema と実 glue / 実効 masks の両方で閉じる。 */
+function readRendererCapabilities(
+  value: unknown,
+  glue: DevelopGlue,
+  masks: DevelopMaskCapabilities | null,
+): DevelopRendererCapabilities | null {
+  const renderer = parseDevelopRendererCapabilities(value);
+  if (!renderer) return null;
+  const declaresGeometry = renderer.features.includes("geometry");
+  const declaresMasks = renderer.features.includes("masks");
+  if (declaresGeometry !== (glue.geometry !== null) || declaresMasks !== (masks !== null)) return null;
+  if (!masks) return renderer;
+  if (!sameStrings(renderer.maskKinds, masks.kinds) || renderer.maskSurfaces !== (masks.surfaces === true)) return null;
+  return renderer;
+}
+
+/** `capabilities()` は起動時に一度だけ呼び、legacy masks と renderer を独立に投影する。 */
+function readRuntimeCapabilities(glue: DevelopGlue): {
+  masks: DevelopMaskCapabilities | null;
+  renderer: DevelopRendererCapabilities | null;
+} {
+  if (!glue.capabilities) return { masks: null, renderer: null };
+  let parsed: unknown;
+  try {
+    const raw = String(glue.capabilities());
+    if (raw.length > MAX_CAPABILITIES_JSON_LENGTH) return { masks: null, renderer: null };
+    parsed = JSON.parse(raw);
+  } catch {
+    return { masks: null, renderer: null };
+  }
+  if (!isRecord(parsed)) return { masks: null, renderer: null };
+  const masks = readMaskCapabilities(parsed.masks, glue);
+  return { masks, renderer: readRendererCapabilities(parsed.renderer, glue, masks) };
 }
 
 /** wasm が効果のある設定を読めるかを確かめる、効果が 1 つだけ効いている小さな設定（crate の `EFFECTS_SETTINGS_VERSION` = 3）。 */
@@ -1089,6 +1128,7 @@ export function createDevelopEngineWorkerHandler(
   let detail = false;
   // 起こした wasm が描ける部分補正（起こしたときに `capabilities()` を 1 回だけ読む。描けなければ null）
   let masks: DevelopMaskCapabilities | null = null;
+  let rendererCapabilities: DevelopRendererCapabilities | null = null;
   let perspective = false;
   let upright = false;
   // 起こした wasm が空を探せるか（`Developer.detectSky` があり、面を受け渡せて `sky` を描ける）
@@ -1817,6 +1857,7 @@ export function createDevelopEngineWorkerHandler(
   };
 
   const postReady = (id: number) => {
+    const rendererSnapshot = rendererCapabilities && parseDevelopRendererCapabilities(rendererCapabilities);
     deps.post({
       type: "ready",
       id,
@@ -1828,6 +1869,7 @@ export function createDevelopEngineWorkerHandler(
       ...(colorPoints ? { colorPoints: true as const } : {}),
       ...(detail ? { detail: true as const } : {}),
       ...(masks ? { masks: { ...masks, kinds: [...masks.kinds] } } : {}),
+      ...(rendererSnapshot ? { rendererCapabilities: rendererSnapshot } : {}),
       ...(perspective ? { perspective: true as const } : {}),
       ...(upright ? { upright: true as const } : {}),
       ...(skyDetection ? { skyDetection: true as const } : {}),
@@ -1849,7 +1891,9 @@ export function createDevelopEngineWorkerHandler(
     effects = acceptsEffectSettings(loaded.validateSettings);
     colorPoints = loaded.colorSampling && acceptsColorPointSettings(loaded.validateSettings);
     detail = acceptsDetailSettings(loaded.validateSettings);
-    masks = readMaskCapabilities(loaded);
+    const runtimeCapabilities = readRuntimeCapabilities(loaded);
+    masks = runtimeCapabilities.masks;
+    rendererCapabilities = runtimeCapabilities.renderer;
     perspective = loaded.geometry !== null && acceptsPerspectiveSettings(loaded.validateSettings);
     upright = perspective && loaded.upright;
     skyDetection =

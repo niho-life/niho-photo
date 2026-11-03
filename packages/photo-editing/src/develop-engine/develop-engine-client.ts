@@ -1,5 +1,9 @@
 import { DevelopEngineError, DevelopMaskSurfaceError, developEngineErrorOf } from "./develop-engine-errors";
 import { developEngineManifestPath } from "./develop-engine-manifest";
+import {
+  parseDevelopRendererCapabilities,
+  type DevelopRendererCapabilities,
+} from "./develop-renderer-capabilities";
 import type {
   DevelopEngineDeviceClass,
   DevelopEngineWorkerRequest,
@@ -37,6 +41,7 @@ import { readDevelopUprightEstimate, type DevelopUprightEstimate, type DevelopUp
 
 export type { DevelopEngineDeviceClass, DevelopMaskCapabilities } from "./develop-engine-worker-core";
 export type { DevelopMaskSurfaceSource } from "./develop-mask-surfaces";
+export type { DevelopRendererCapabilities } from "./develop-renderer-capabilities";
 export { DevelopEngineError, DevelopMaskSurfaceError, type DevelopMaskSurfaceErrorCode } from "./develop-engine-errors";
 
 export {
@@ -171,6 +176,11 @@ export type DevelopExportOptions = { maxDimension: number; quality: number; mask
 export type DevelopEngine = {
   /** 使えるか（初回に Worker を作って wasm を起こす。throw しない） */
   ready: () => Promise<boolean>;
+  /**
+   * 既に起動済みの実 runtime が宣言した renderer schema。`ready()` を開始せず、未起動・終了中・不正な宣言は null。
+   * テスト用・native の既存実装との型互換のため optional。
+   */
+  renderCapabilities?: () => Promise<DevelopRendererCapabilities | null>;
   /** 写真を 1 回デコードして持つ（前の写真は手放す。待っている描画は null で終える） */
   open: (bytes: ArrayBuffer, workingMaxDimension: number) => Promise<{ width: number; height: number }>;
   /** 持っている写真を描く。同じ枠の新しい要求に追い越されたら null */
@@ -618,6 +628,8 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
   let presetFromMetaSupported = false;
   // 描ける部分補正（`ready` の応答の `masks`。無ければ null）
   let maskCapabilities: DevelopMaskCapabilities | null = null;
+  // 起動した実 runtime の renderer 宣言（Worker と client の両方で検証した immutable snapshot）
+  let rendererCapabilities: DevelopRendererCapabilities | null = null;
   // 出しているマスクの面と、その間に来た「次」（描画の枠とは別）
   let inFlightMaskPlane: InFlightMaskPlane | null = null;
   let queuedMaskPlane: MaskPlaneRequest | null = null;
@@ -786,6 +798,8 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
   /** Worker を止め、待っているものをすべて終える（描画は null、ほかは reject）。 */
   const terminate = (nextStatus: "unavailable" | "disposed") => {
     status = nextStatus;
+    rendererCapabilities = null;
+    initId = null;
     const current = worker;
     worker = null;
     try {
@@ -953,6 +967,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
         autoSupported = response.auto === true;
         presetFromMetaSupported = response.presetFromMeta === true;
         maskCapabilities = readMaskCapabilitiesResponse(response.masks);
+        rendererCapabilities = parseDevelopRendererCapabilities(response.rendererCapabilities);
         status = "ready";
         settleReady?.(true);
         settleReady = null;
@@ -1131,6 +1146,21 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
     return readyPromise;
   };
 
+  const renderCapabilities = async (): Promise<DevelopRendererCapabilities | null> => {
+    const observedReady = readyPromise;
+    if (!observedReady || terminateWhenIdle || status === "disposed" || status === "unavailable") return null;
+    if (!(await observedReady)) return null;
+    if (
+      readyPromise !== observedReady ||
+      status !== "ready" ||
+      terminateWhenIdle ||
+      rendererCapabilities === null
+    ) {
+      return null;
+    }
+    return parseDevelopRendererCapabilities(rendererCapabilities);
+  };
+
   /**
    * 描画を待ち行列に入れる。Worker が空いていればすぐ出し、出している間は優先度の枠の「次」として持つ（同じ枠の古い「次」は
    * null で終える）。
@@ -1156,6 +1186,7 @@ export function createDevelopEngine(options: CreateDevelopEngineOptions = {}): D
 
   return {
     ready,
+    renderCapabilities,
 
     async supportsGeometry() {
       return (await ready()) && geometrySupported;

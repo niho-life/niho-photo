@@ -95,6 +95,12 @@ start前に本人/epoch・requestId・原本identity/hash・payloadをdurable jo
 
 能力の交差計算はC02 adapterだけが所有する。C04はserver能力、C05/C06は実hostのrenderer能力を渡し、`PhotoCapabilityContext` の双方を確認するまで編集不可とする。hostごとに交差判定を複製しない。
 
+実runtimeの能力はRust coreの `renderer_capabilities()` がschema 1として宣言する。既存 `capabilities()` の `masks` とnative CLIの既存rootを保ち、同じ `renderer` を追加する。WASM・native serve・native CLIで設定version/engine/feature/maskの別一覧を作らない。SDK名や `version()` の表示文字列から能力を推定しない。
+
+browser hostは既存engineの `ready()` を確認してから `renderCapabilities?.()` を呼ぶ。getterは既存ready経路だけを読み、新しいWorkerやloaderを起動しない。未対応・不正なschema・実glueとの不一致・dispose中/終了・旧readyはnullとし、返値は変更できないsnapshotとする。renderer宣言が不正でも既存のローカル編集/mask能力は維持する。
+
+hostは取得した `crateVersion` と正式に固定したbuild metadataのcrateを完全一致で照合し、そのmetadataの `sdkVersion` / `manifestSha256` と実runtimeの設定version/engine/feature/maskをC00 `RenderCapability`へ明示投影する。schemaVersionはruntimeの検証用でありC00へ足さない。固定metadataが無い・不一致ならcloud編集を閉じる。接続probeは本人scopeの取消を確認してdisposeし、受入した同じmanifestでWorkbenchを起動する。getterの追加だけで端末接続・正式SDK配布・実機受入を完了にしない。
+
 完全recipe JSON・version・engine・baseVersion・参照mask hash・revisionを保持する。保存はexpectedRevision必須、冪等keyは本人/操作/写真に拘束。競合時は両snapshotを永続保持し、本人の明示adopt/keep-currentだけをCASで反映。名前付き版は独立versions revisionで管理する。
 
 未知version/engine/field/maskを落として保存しない。serverと実host rendererの能力の積集合だけを書込可能にし、未知recipeは保持したままread-only/書込拒否。canonicalな作業コピーとbaseが合わないローカル補正を暗黙変換せず、全cloud端末は同じbaseを使う。

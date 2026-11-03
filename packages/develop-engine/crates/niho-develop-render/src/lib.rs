@@ -244,6 +244,7 @@ pub fn capabilities() -> Value {
         "maskKinds": MaskKind::ALL.map(MaskKind::as_str),
         "maxMasks": MAX_LOCAL_MASKS,
         "maxPixels": LIMITS.max_pixels,
+        "renderer": niho_develop::api::renderer_capabilities(),
     })
 }
 
