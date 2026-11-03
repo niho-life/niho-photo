@@ -12245,8 +12245,8 @@
     },
     {
       "path": "docs/legal/asset-inventory.csv",
-      "sha256": "32ea957a2e590acdef014dd4df35d7781cab288a9402cc61398512b3a4f22d80",
-      "origin": "Photo #193 / C00 の契約確定に伴い監査。既存backendの即時purgeとPhoto製品未接続の区別、抽出した合成fixtureの権利・出典または対象型検査を記録。内部URL・実写真・資格情報を含まない。\n変更理由: レビュー反映後の合成型負例のexact hashとサイズを更新"
+      "sha256": "be9cb5b812dca7d3830421ebb298ae0bfd2615c281f88fb971e23b1d431203d8",
+      "origin": "Photo #193 / C00 の契約確定に伴い監査。既存backendの即時purgeとPhoto製品未接続の区別、抽出した合成fixtureの権利・出典または対象型検査を記録。内部URL・実写真・資格情報を含まない。\n変更理由: レビュー反映後の合成型負例のexact hashとサイズを更新\n変更理由: 競合ID取得の合成fixtureの現行公開sourceとexact hashを追加監査し元の抽出記録を保持"
     },
     {
       "path": "apps/photo-web/src/server/auth.ts",
