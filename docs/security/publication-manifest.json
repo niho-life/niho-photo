@@ -3757,7 +3757,7 @@
         "path": "apps/camera/README.md",
         "sha256": "d0e1f198e83893a73cd3d84122debf76ad9755e00a5fc5e1b69c242daec8d4eb"
       },
-      "outputSha256": "6dde2625f6d5b35cac8d94bd9a0a47621c39107ea01e7c7f1c357cb4ebb2628a",
+      "outputSha256": "b8a0224f419943fa5840af4af85a74a412d27543d32a30b1266bcec222fe84a5",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "フォルダと個別写真の利用方法、公開契約、および許可するネイティブコマンドを明記",
@@ -3770,7 +3770,8 @@
         "niho-photo#152: Mac アプリの現像を native sidecar に接続",
         "Issue #152 の native 現像の画素一致と UI 実操作 E2E の手順を追記。",
         "Mac WKWebView の独自 scheme で共有メモリが使えない原因（#173）と probe への案内を追記し、native の glue の読み分けの記述を実装に合わせた",
-        "個人クラウドの未接続状態と正式native転送を後で注入する境界を明記。"
+        "個人クラウドの未接続状態と正式native転送を後で注入する境界を明記。",
+        "Issue #210のMac写真選択E2E runner、合成fixture、検証範囲と手動DMG受け入れの免除を記載。"
       ]
     },
     {
@@ -3808,13 +3809,14 @@
         "path": "apps/camera/package.json",
         "sha256": "c8a02fb7558712e146296e67114a29f704677064714dd4d5e87697c906756b07"
       },
-      "outputSha256": "f3d6d9693aef8fc7d9e9e9ac7823a84f17b21bd00aedece3c4416c24b2127f97",
+      "outputSha256": "86541d03c069dbe6afbb51a57c7c6e184c6c798fa70dd0336c11dac3a2d405fc",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #3のpublic OAuth/PKCE、ローカル専用UI、安全契約と公開依存を新規接続。実issuer・署名検証器が未契約のため本番接続は無効。",
         "Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。",
         "Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。",
-        "repository URLをniho-lifeへ移管"
+        "repository URLをniho-lifeへ移管",
+        "公開repoに写真選択のMac自動E2E runnerを追加するnpm scriptを公開。"
       ]
     },
     {
@@ -4161,10 +4163,12 @@
         "path": "apps/camera/src-tauri/src/dialog.rs",
         "sha256": "a2d298fded021c366eb3098026fb452bc06b7d724ce2d6e2ba10e422aede4fd6"
       },
-      "outputSha256": "cb29e43675c47e63a1f5c666921ae11bfc4486acb97ae7280245fc72c4fe82d5",
+      "outputSha256": "4b18860727fbfe98523e13c77be3b222530b73b765605e6a45b9630c54455a74",
       "modifications": [
         "共有形式フィルターを使う複数写真pickerと参照削除コマンドを同梱UIの権限内に追加",
-        "E2E専用写真選択のcfg分岐を末尾式にしてfeature付きclippyの警告を解消する"
+        "E2E専用写真選択のcfg分岐を末尾式にしてfeature付きclippyの警告を解消する",
+        "E2E専用のダイアログ環境変数読取をfeature=e2eへコンパイル時限定。通常buildは環境変数分岐を含めない。",
+        "feature=e2e buildで使わないOSダイアログ引数を明示的に消費し、警告を解消。"
       ]
     },
     {
@@ -11899,6 +11903,26 @@
       "path": "apps/camera/scripts/e2e/native-develop-ui.sh",
       "sha256": "073d18a160c00daf09906ad677b47a19317506edef76de15443bb8df1c64bdbf",
       "origin": "公開Issue #152 のため新規作成。合成 PNG で camera の画面から露光・プリセット・native runtime を確認する E2E。外部の画像・実写真を含まない。"
+    },
+    {
+      "path": "apps/camera/scripts/e2e/photo-picker-fixtures.swift",
+      "sha256": "7021427cfb1ca61ff9fdcf1924389fb9cf1c9db8c6879e20382811648f2dd3d5",
+      "origin": "niho-photo #210 のため独立作成。Apple ImageIOでJPEG・PNG・HEIC・TIFFの合成写真を一時生成する。RW2は既存の公開サニタイズ済みdecoder fixtureを一時コピーして使う。写真・パス・画像hashは報告へ出さない。"
+    },
+    {
+      "path": "apps/camera/scripts/e2e/photo-picker.js",
+      "sha256": "2d04df04b57e25ba903d13f0982450262fe1214cf1c6a46fdc2c9d8685f72e32",
+      "origin": "niho-photo #210 の独立したE2E画面probe。操作結果の固定状態だけを報告し、ファイル名・絶対path・画像hash・例外本文を出力しない。"
+    },
+    {
+      "path": "apps/camera/scripts/e2e/photo-picker.sh",
+      "sha256": "82ca289f0d42d121faeff907018576f30f213597e2b3d6e31e45ae59812727f6",
+      "origin": "niho-photo #210 の独立したMac自動E2E runner。一時HOME・試験専用identifier・合成fixtureを使い、folder/multi-select・restart・duplicate/cancel・missing/reappear・forget/readd・edit/export・path redactionを検査する。"
+    },
+    {
+      "path": "apps/camera/scripts/run-e2e.sh",
+      "sha256": "125ea683b559242f763744534e650974ceb0e43a2283fa1f493fbbcec7e06ea2",
+      "origin": "公開Issue #210のE2E runner entrypoint。アプリのe2e featureだけで利用する写真pickerの一時試験を呼び出す。"
     },
     {
       "path": "packages/develop-engine/tools/sky-mask-train/README.md",
