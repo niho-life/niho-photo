@@ -1,7 +1,8 @@
 use crate::connect::{equal, secret_43, Pending};
+use crate::photo_session::{parse_response, HttpPhotoSession, PhotoSessionTransport};
 use crate::{
-  AccountError, Browser, Cancel, Config, CredentialStore, ExternalBrowser, HttpTransport, Request, Response, Secret,
-  SecretKind, Transport, SAFETY_CONTRACT_VERSION,
+  AccountError, Browser, Cancel, ClientId, Config, CredentialStore, ExternalBrowser, HttpTransport, PhotoIdentity,
+  Request, Response, Secret, SecretKind, Transport, SAFETY_CONTRACT_VERSION,
 };
 use serde::{Deserialize, Serialize};
 use std::sync::{Arc, Mutex};
@@ -42,6 +43,7 @@ struct Adapters {
   store: Arc<dyn CredentialStore>,
   browser: Arc<dyn Browser>,
   transport: Arc<dyn Transport>,
+  photo_session: Arc<dyn PhotoSessionTransport>,
 }
 pub(crate) trait Clock: Send + Sync {
   fn now_ms(&self) -> Result<u64, AccountError>;
@@ -179,6 +181,7 @@ impl Account {
         store,
         browser,
         transport,
+        photo_session: Arc::new(HttpPhotoSession),
       }),
       Arc::new(SystemClock),
     )
@@ -186,6 +189,11 @@ impl Account {
   #[cfg(test)]
   pub(crate) fn with_clock(mut self, clock: Arc<dyn Clock>) -> Self {
     self.clock = clock;
+    self
+  }
+  #[cfg(test)]
+  pub(crate) fn with_photo_session(mut self, photo_session: Arc<dyn PhotoSessionTransport>) -> Self {
+    self.adapters.as_mut().expect("configured test account").photo_session = photo_session;
     self
   }
   fn preflight_error(&self, error: AccountError) -> AccountError {
@@ -623,6 +631,96 @@ impl Account {
     } else {
       Ok(())
     }
+  }
+  /// Camera専用の固定server endpointから、安全な本人session metadataだけを読む。
+  pub fn photo_identity(&self) -> Result<PhotoIdentity, AccountError> {
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    if adapters.config.client != ClientId::Camera {
+      return Err(AccountError::NotConfigured);
+    }
+    let (generation, access, connection) = {
+      let inner = self.inner.lock().map_err(|_| AccountError::Internal)?;
+      let now = self.clock.now_ms()?;
+      if inner.phase != AccountPhase::Connected || inner.cancel.is_some() || now >= inner.expires_at_ms {
+        return Err(AccountError::Expired);
+      }
+      let access = inner.access.as_ref().cloned().ok_or(AccountError::Expired)?;
+      let raw = adapters
+        .store
+        .load(SecretKind::RefreshToken)?
+        .ok_or(AccountError::Expired)?;
+      let connection: StoredConnection = serde_json::from_str(raw.expose()).map_err(|_| AccountError::Storage)?;
+      if connection.version != SAFETY_CONTRACT_VERSION
+        || connection.client != ClientId::Camera
+        || !opaque_id(&connection.connection_id)
+        || !opaque_id(&connection.user_id)
+      {
+        return Err(AccountError::Storage);
+      }
+      (inner.generation, access, connection)
+    };
+
+    let response = adapters.photo_session.send(&adapters.config, &access)?;
+    let identity = match parse_response(
+      response,
+      self.clock.now_ms()?,
+      &connection.user_id,
+      &connection.connection_id,
+    ) {
+      Ok(identity) => identity,
+      Err(error @ (AccountError::Expired | AccountError::AccountUnavailable)) => {
+        self.invalidate_photo_identity(adapters, generation, error)?;
+        return Err(error);
+      }
+      Err(error) => return Err(error),
+    };
+
+    let fresh_now = self.clock.now_ms()?;
+    let inner = self.inner.lock().map_err(|_| AccountError::Internal)?;
+    if inner.generation != generation
+      || inner.phase != AccountPhase::Connected
+      || inner.cancel.is_some()
+      || fresh_now >= inner.expires_at_ms
+      || inner
+        .access
+        .as_ref()
+        .is_none_or(|fresh| !equal(fresh.expose(), access.expose()))
+    {
+      return Err(AccountError::Cancelled);
+    }
+    let raw = adapters
+      .store
+      .load(SecretKind::RefreshToken)?
+      .ok_or(AccountError::Cancelled)?;
+    let fresh: StoredConnection = serde_json::from_str(raw.expose()).map_err(|_| AccountError::Storage)?;
+    if fresh.version != connection.version
+      || fresh.client != connection.client
+      || fresh.user_id != connection.user_id
+      || fresh.connection_id != connection.connection_id
+    {
+      return Err(AccountError::Cancelled);
+    }
+    Ok(identity)
+  }
+
+  fn invalidate_photo_identity(
+    &self,
+    adapters: &Adapters,
+    generation: u64,
+    error: AccountError,
+  ) -> Result<(), AccountError> {
+    let mut inner = self.inner.lock().map_err(|_| AccountError::Internal)?;
+    if inner.generation != generation {
+      return Err(AccountError::Cancelled);
+    }
+    inner.generation = inner.generation.checked_add(1).ok_or(AccountError::Internal)?;
+    inner.access = None;
+    inner.cancel = None;
+    inner.next_attempt_ms = u64::MAX;
+    inner.phase = AccountPhase::Failed;
+    inner.error = Some(error);
+    adapters.store.clear(SecretKind::RefreshToken)?;
+    Ok(())
   }
   pub fn cancel(&self) -> Result<(), AccountError> {
     self.cancel_inner().map_err(|error| self.preflight_error(error))

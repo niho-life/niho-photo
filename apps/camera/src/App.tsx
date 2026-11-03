@@ -41,7 +41,7 @@ export type PersonalCloudPhotoBinding = {
   library: PhotoLibrary;
   host: PhotoEditingHost;
   actorId: string;
-  /** `personal:<libraryId>:<actorId>`。認可には使わず、共通編集面のquery cacheを個人ライブラリで分ける。 */
+  /** actor/library/session/epoch/transport の衝突しないtuple。認可には使わず、query/editorを論理sessionごとに分ける。 */
   scopeKey?: string;
   copyLocalPhoto: BrowserPhotoCopyToCloudBinding["copyLocalPhoto"];
 };
@@ -167,12 +167,21 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
   const localHost = useMemo(() => createLocalPhotoEditingHost(native), [native]);
   const cutout = useMemo(() => createLocalPhotoCutoutHost(native, localLibrary.withStablePhoto), [localLibrary, native]);
   const incomingCloud = usableCloudBinding(cloudBinding) ? cloudBinding : null;
+  const incomingCloudSecurityKey = incomingCloud === null
+    ? null
+    : JSON.stringify([incomingCloud.actorId, incomingCloud.scopeKey ?? null]);
+  const cloudSecurityKeyRef = useRef(incomingCloudSecurityKey);
+  cloudSecurityKeyRef.current = incomingCloudSecurityKey;
   const [source, setSource] = useState<PhotoSource>("local");
   const [sourceSwitching, setSourceSwitching] = useState(false);
   const [openCloudPhotoId, setOpenCloudPhotoId] = useState<string | null>(null);
   const leaveGuardRef = useRef<PhotoEditingLeaveGuard | null>(null);
   const sourceSwitchRef = useRef(false);
+  const sourceSwitchGenerationRef = useRef(0);
   const resetForCloudOwnerChange = useCallback(() => {
+    sourceSwitchGenerationRef.current += 1;
+    sourceSwitchRef.current = false;
+    setSourceSwitching(false);
     setSource("local");
     setOpenCloudPhotoId(null);
   }, []);
@@ -196,16 +205,20 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
   }, []);
   const selectSource = useCallback(async (next: PhotoSource, cloudPhotoId: string | null = null) => {
     if (!cloud || next === source || sourceSwitchRef.current) return;
+    const securityKey = cloudSecurityKeyRef.current;
+    const generation = ++sourceSwitchGenerationRef.current;
     sourceSwitchRef.current = true;
     setSourceSwitching(true);
     try {
       const canLeave = await (leaveGuardRef.current?.() ?? Promise.resolve(true));
-      if (!canLeave) return;
+      if (!canLeave || cloudSecurityKeyRef.current !== securityKey || sourceSwitchGenerationRef.current !== generation) return;
       setOpenCloudPhotoId(next === "cloud" ? cloudPhotoId : null);
       setSource(next);
     } finally {
-      sourceSwitchRef.current = false;
-      setSourceSwitching(false);
+      if (sourceSwitchGenerationRef.current === generation) {
+        sourceSwitchRef.current = false;
+        setSourceSwitching(false);
+      }
     }
   }, [cloud, source]);
 
