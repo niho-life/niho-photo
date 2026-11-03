@@ -16,10 +16,14 @@ import {
   isUploadTicketShape,
   validateInfo,
   validateJsonDepth,
+  validateJsonValue,
   validateLibrary,
   validateLookup,
   validatePage,
   validatePhoto,
+  validateRecipeConflict,
+  validateRecipeConflictPage,
+  validateRecipeConflictResolution,
   validateStartUploadResponse,
   validateUpload,
 } from "./validation";
@@ -36,6 +40,7 @@ export const PHOTO_CONTENT_HEADERS = {
   totalBytes: "X-NIHO-Photo-Total-Bytes",
 } as const;
 export const JSON_LIMITS = { list: PHOTO_LIMITS.maxPageBytes, success: PHOTO_LIMITS.maxRecipeBodyBytes, error: 64 * 1024 } as const;
+const HTTP_JSON_MAX_DEPTH = PHOTO_LIMITS.maxJsonDepth + 6;
 export const TRANSPORT_TIMEOUT_MS = 15_000;
 export const MAX_UPLOAD_URL_BYTES = 8 * 1024;
 export const GCS_CHUNK_BYTES = 8 * 1024 ** 2;
@@ -50,11 +55,12 @@ const CONTENT_TYPE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+(
 export type WireOperation =
   | "library.get" | "photos.list" | "photos.get" | "photos.info" | "photos.lookup"
   | "uploads.start" | "uploads.get" | "uploads.renew" | "uploads.complete" | "uploads.cancel"
+  | "recipes.put" | "recipe-conflicts.list" | "recipe-conflicts.get" | "recipe-conflicts.resolve"
   | "photos.delete" | "content.get";
 
 export type EncodedOperation = {
   readonly operation: WireOperation;
-  readonly method: "GET" | "POST" | "DELETE";
+  readonly method: "GET" | "POST" | "PUT" | "DELETE";
   readonly suffix: string;
   readonly query: string;
   readonly body: Uint8Array<ArrayBuffer> | null;
@@ -124,6 +130,36 @@ export function encodeOperation(
     const suffix = `/photos/${id}${operation === "photos.info" ? "/info" : ""}`;
     return { operation, method: operation === "photos.delete" ? "DELETE" : "GET", suffix, query: "", body: null, range: null, idempotencyKey: operation === "photos.delete" ? requiredKey() : noKey() };
   }
+  if (operation === "recipes.put") {
+    const value = exactRecord(request, ["photoId", "expectedRevision", "settings", "baseVersion"]);
+    const photoId = encodeOpaqueSegment(value.photoId);
+    if (!safeNonNegative(value.expectedRevision) || !isRecipeSettings(value.settings) || value.baseVersion !== null && !boundedOpaque(value.baseVersion, 1, OPAQUE_ID_MAX_BYTES)) invalidRequest();
+    validateJsonValue(value.settings, PHOTO_LIMITS.maxRecipeBytes);
+    const encodedBody = body({ expectedRevision: value.expectedRevision, settings: value.settings, baseVersion: value.baseVersion });
+    if (encodedBody.byteLength > PHOTO_LIMITS.maxRecipeBodyBytes) invalidRequest();
+    return { operation, method: "PUT", suffix: `/photos/${photoId}/recipe`, query: "", body: encodedBody, range: null, idempotencyKey: requiredKey() };
+  }
+  if (operation === "recipe-conflicts.list") {
+    const value = exactRecord(request, ["photoId", "cursor", "limit"], true);
+    const query = new URLSearchParams();
+    if (value.cursor !== undefined) query.set("cursor", opaque(value.cursor));
+    if (value.limit !== undefined) {
+      if (!integerBetween(value.limit, 1, PHOTO_LIMITS.listMaxCount)) invalidRequest();
+      query.set("limit", String(value.limit));
+    }
+    return { operation, method: "GET", suffix: `/photos/${encodeOpaqueSegment(value.photoId)}/recipe-conflicts`, query: query.toString(), body: null, range: null, idempotencyKey: noKey() };
+  }
+  if (operation === "recipe-conflicts.get") {
+    const value = exactRecord(request, ["photoId", "conflictId"]);
+    return { operation, method: "GET", suffix: `/photos/${encodeOpaqueSegment(value.photoId)}/recipe-conflicts/${encodeOpaqueSegment(value.conflictId)}`, query: "", body: null, range: null, idempotencyKey: noKey() };
+  }
+  if (operation === "recipe-conflicts.resolve") {
+    const value = exactRecord(request, ["photoId", "conflictId", "expectedRevision", "decision"]);
+    if (!safeNonNegative(value.expectedRevision) || value.decision !== "adopt" && value.decision !== "keep-current") invalidRequest();
+    const encodedBody = body({ expectedRevision: value.expectedRevision, decision: value.decision });
+    if (encodedBody.byteLength > PHOTO_LIMITS.maxOtherBodyBytes) invalidRequest();
+    return { operation, method: "POST", suffix: `/photos/${encodeOpaqueSegment(value.photoId)}/recipe-conflicts/${encodeOpaqueSegment(value.conflictId)}/resolve`, query: "", body: encodedBody, range: null, idempotencyKey: requiredKey() };
+  }
   if (operation === "uploads.get" || operation === "uploads.renew" || operation === "uploads.complete" || operation === "uploads.cancel") {
     const value = exactRecord(request, ["uploadId"]);
     const action = operation.split(".")[1];
@@ -167,6 +203,10 @@ export function parseIncomingOperation(request: Request): EncodedOperation | nul
     const upload = /^\/uploads\/([^/]+)$/u.exec(relative);
     const uploadAction = /^\/uploads\/([^/]+)\/(renew|complete|cancel)$/u.exec(relative);
     const content = /^\/photos\/([^/]+)\/assets\/([^/]+)\/content$/u.exec(relative);
+    const recipe = /^\/photos\/([^/]+)\/recipe$/u.exec(relative);
+    const conflicts = /^\/photos\/([^/]+)\/recipe-conflicts$/u.exec(relative);
+    const conflict = /^\/photos\/([^/]+)\/recipe-conflicts\/([^/]+)$/u.exec(relative);
+    const resolveConflict = /^\/photos\/([^/]+)\/recipe-conflicts\/([^/]+)\/resolve$/u.exec(relative);
     if (photo && (method === "GET" || method === "DELETE")) { operation = method === "GET" ? "photos.get" : "photos.delete"; rawRequest = { photoId: decodeRequired(photo[1]) }; }
     else if (info && method === "GET") { operation = "photos.info"; rawRequest = { photoId: decodeRequired(info[1]) }; }
     else if (upload && method === "GET") { operation = "uploads.get"; rawRequest = { uploadId: decodeRequired(upload[1]) }; }
@@ -174,29 +214,52 @@ export function parseIncomingOperation(request: Request): EncodedOperation | nul
     else if (content && method === "GET") {
       operation = "content.get";
       rawRequest = { photoId: decodeRequired(content[1]), assetId: decodeRequired(content[2]), ...(range === null ? {} : { range: parseRequestRange(range) }) };
-    } else invalidRequest();
+    } else if (recipe && method === "PUT") { operation = "recipes.put"; rawRequest = undefined; }
+    else if (conflicts && method === "GET") { operation = "recipe-conflicts.list"; rawRequest = { photoId: decodeRequired(conflicts[1]), ...parseConflictListQuery(url.searchParams) }; }
+    else if (conflict && method === "GET") { operation = "recipe-conflicts.get"; rawRequest = { photoId: decodeRequired(conflict[1]), conflictId: decodeRequired(conflict[2]) }; }
+    else if (resolveConflict && method === "POST") { operation = "recipe-conflicts.resolve"; rawRequest = undefined; }
+    else invalidRequest();
   }
-  if (operation !== "photos.list" && url.search !== "") invalidRequest();
+  if (operation !== "photos.list" && operation !== "recipe-conflicts.list" && url.search !== "") invalidRequest();
   const encoded = rawRequest === undefined ? null : encodeOperation(operation, rawRequest, key);
   if (encoded !== null) {
     if (encoded.range !== range) invalidRequest();
     return encoded;
   }
-  return { operation: operation as WireOperation, method: method as "POST", suffix: relative, query: "", body: null, range: null, idempotencyKey: key ?? null };
+  return { operation: operation as WireOperation, method: method as "POST" | "PUT", suffix: relative, query: "", body: null, range: null, idempotencyKey: key ?? null };
 }
 
 export async function readAndEncodeIncomingBody(request: Request, encoded: EncodedOperation): Promise<EncodedOperation> {
-  const expectsBody = encoded.operation === "photos.lookup" || encoded.operation === "uploads.start"
+  const expectsBody = encoded.operation === "photos.lookup" || encoded.operation === "uploads.start" || encoded.operation === "recipes.put"
+    || encoded.operation === "recipe-conflicts.resolve"
     || encoded.operation === "uploads.renew" || encoded.operation === "uploads.complete" || encoded.operation === "uploads.cancel";
   if (!expectsBody) {
     if (request.body !== null) invalidRequest();
     return encoded;
   }
   if (request.headers.get("Content-Type")?.toLowerCase() !== "application/json") invalidRequest();
-  const bytes = await readBoundedBody(request.body, PHOTO_LIMITS.maxRecipeBodyBytes, request.signal);
+  const requestLimit = encoded.operation === "recipe-conflicts.resolve" ? PHOTO_LIMITS.maxOtherBodyBytes : PHOTO_LIMITS.maxRecipeBodyBytes;
+  const bytes = await readBoundedBody(request.body, requestLimit, request.signal);
   const raw = parseJsonBytes(bytes);
   if (encoded.operation === "photos.lookup" || encoded.operation === "uploads.start") {
     const checked = encodeOperation(encoded.operation, raw, encoded.idempotencyKey ?? undefined);
+    if (checked.suffix !== encoded.suffix) invalidRequest();
+    return checked;
+  }
+  if (encoded.operation === "recipes.put") {
+    const route = /^\/photos\/([^/]+)\/recipe$/u.exec(encoded.suffix);
+    if (!route) invalidRequest();
+    const checked = encodeOperation(encoded.operation, { photoId: decodeRequired(route[1]), ...exactRecord(raw, ["expectedRevision", "settings", "baseVersion"]) }, encoded.idempotencyKey ?? undefined);
+    if (checked.suffix !== encoded.suffix) invalidRequest();
+    return checked;
+  }
+  if (encoded.operation === "recipe-conflicts.resolve") {
+    const route = /^\/photos\/([^/]+)\/recipe-conflicts\/([^/]+)\/resolve$/u.exec(encoded.suffix);
+    if (!route) invalidRequest();
+    const checked = encodeOperation(encoded.operation, {
+      photoId: decodeRequired(route[1]), conflictId: decodeRequired(route[2]),
+      ...exactRecord(raw, ["expectedRevision", "decision"]),
+    }, encoded.idempotencyKey ?? undefined);
     if (checked.suffix !== encoded.suffix) invalidRequest();
     return checked;
   }
@@ -232,6 +295,16 @@ export function validateOperationResponse<K extends WireOperation>(
   } else if (operation === "uploads.complete" || operation === "uploads.cancel") {
     const receipt = validateReceipt(value);
     checked = { ...receipt, value: validateUpload(receipt.value as PhotoOperationMap["uploads.get"]["response"], libraryId) };
+  } else if (operation === "recipes.put") {
+    const receipt = validateReceipt(value);
+    checked = { ...receipt, value: validatePhoto(receipt.value as PhotoOperationMap["recipes.put"]["response"]["value"], libraryId) };
+  } else if (operation === "recipe-conflicts.list") {
+    checked = validateRecipeConflictPage(value as PhotoOperationMap["recipe-conflicts.list"]["response"]);
+  } else if (operation === "recipe-conflicts.get") {
+    checked = validateRecipeConflict(value as PhotoOperationMap["recipe-conflicts.get"]["response"]);
+  } else if (operation === "recipe-conflicts.resolve") {
+    const receipt = validateReceipt(value);
+    checked = { ...receipt, value: validateRecipeConflictResolution(receipt.value as PhotoOperationMap["recipe-conflicts.resolve"]["response"]["value"]) };
   } else if (operation === "photos.delete") {
     const record = exactRecord(value, ["state"]);
     if (record.state !== "purged") invalidResponse();
@@ -339,7 +412,9 @@ export function parsePhotoError(value: unknown, status: number): PhotoErrorEnvel
   return root as unknown as PhotoErrorEnvelope;
 }
 
-export function responseJsonLimit(operation: WireOperation): number { return operation === "photos.list" ? JSON_LIMITS.list : JSON_LIMITS.success; }
+export function responseJsonLimit(operation: WireOperation): number {
+  return operation === "photos.list" || operation.startsWith("recipe-conflicts.") ? JSON_LIMITS.list : JSON_LIMITS.success;
+}
 
 function validateStartRequest(value: unknown): StartUploadRequest {
   const record = exactRecord(value, ["target", "sizeBytes", "sha256", "contentType"]);
@@ -369,7 +444,7 @@ function parseJsonBytes(bytes: Uint8Array): unknown {
   try {
     const value: unknown = JSON.parse(text);
     // A replayed start receipt nests settings at value.upload.result.photo.recipe.settings.
-    validateJsonDepth(value, PHOTO_LIMITS.maxJsonDepth + 6);
+    validateJsonDepth(value, HTTP_JSON_MAX_DEPTH);
     return value;
   } catch { invalidResponse(); }
 }
@@ -383,6 +458,22 @@ function parseListQuery(query: URLSearchParams): Record<string, unknown> {
   const sort = scalar("sort"); if (sort !== undefined) result.sort = sort;
   const formats = query.getAll("formats"); if (formats.length > 0) result.formats = formats;
   for (const name of ["edited", "editable"]) { const value = scalar(name); if (value !== undefined) { if (value !== "true" && value !== "false") invalidRequest(); result[name] = value === "true"; } }
+  return result;
+}
+function parseConflictListQuery(query: URLSearchParams): Record<string, unknown> {
+  const allowed = new Set(["cursor", "limit"]);
+  for (const key of query.keys()) if (!allowed.has(key)) invalidRequest();
+  const result: Record<string, unknown> = {};
+  for (const name of allowed) {
+    const values = query.getAll(name);
+    if (values.length > 1) invalidRequest();
+    const value = values[0];
+    if (value === undefined) continue;
+    if (name === "limit") {
+      if (!/^\d+$/u.test(value)) invalidRequest();
+      result.limit = Number(value);
+    } else result.cursor = value;
+  }
   return result;
 }
 function parseRequestRange(value: string): { start: number; endInclusive?: number } {
@@ -408,6 +499,9 @@ function safeNonNegative(value: unknown): value is number { return typeof value 
 function safePositive(value: unknown): value is number { return safeNonNegative(value) && value > 0; }
 function integerBetween(value: unknown, min: number, max: number): value is number { return safeNonNegative(value) && value >= min && value <= max; }
 function isSha256(value: unknown): value is string { return typeof value === "string" && SHA256.test(value); }
+function isRecipeSettings(value: unknown): value is Record<string, unknown> & { readonly v: number; readonly engine: string } {
+  return isRecord(value) && safeNonNegative(value.v) && boundedOpaque(value.engine, 1, 128);
+}
 function isFormat(value: unknown): value is "jpeg" | "png" | "heic" | "heif" | "tiff" | "raw" { return typeof value === "string" && ["jpeg", "png", "heic", "heif", "tiff", "raw"].includes(value); }
 export function canonicalContentType(format: "jpeg" | "png" | "heic" | "heif" | "tiff" | "raw"): string {
   if (format === "jpeg") return "image/jpeg";

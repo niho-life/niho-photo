@@ -116,6 +116,12 @@
       "backend": "implemented",
       "photoWiring": "not-connected",
       "evidence": "即時非表示・generation指定purge・request fence・退会/再試行基盤を再利用。Photo製品への配線と実環境受入は未完。"
+    },
+    "recipe-conflicts.get": {
+      "backend": "partial",
+      "photoWiring": "not-connected",
+      "issue": 196,
+      "evidence": "C03 adds an owner/photo/id-bound direct snapshot read so explicit conflict choice does not depend on history page count; formal product acceptance remains pending."
     }
   }
 }
