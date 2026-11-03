@@ -84,6 +84,8 @@ export function BrowserPhotoEditingStatusLine(props: {
     message?: string | null;
     onRestore: () => void;
     onDiscard: () => void;
+    /** durable cloud復旧は同じ状態欄に、固定された比較選択などの明示操作を渡す。 */
+    actions?: readonly { label: string; onClick: () => void; disabled?: boolean }[];
   } | null;
 }) {
   const status = props.status;
@@ -101,6 +103,7 @@ export function BrowserPhotoEditingStatusLine(props: {
   }
   if (props.recovery) {
     const extra = props.recovery.count > 1 ? `（ほか${props.recovery.count - 1}件）` : "";
+    const actions = props.recovery.actions;
     return (
       <>
         <p role="status" className={cn(STATUS_LINE_CLASS_NAME, "text-niho-text-sub")}>
@@ -108,12 +111,26 @@ export function BrowserPhotoEditingStatusLine(props: {
             (props.recovery.conflict ? "別の端末の編集後に、未保存の補正があります" : "未保存の補正があります")}
           {extra}
         </p>
-        <button type="button" disabled={props.recovery.busy} onClick={props.recovery.onRestore} className={RETRY_BUTTON_CLASS_NAME}>
-          復元
-        </button>
-        <button type="button" disabled={props.recovery.busy} onClick={props.recovery.onDiscard} className={RETRY_BUTTON_CLASS_NAME}>
-          破棄
-        </button>
+        {actions ? actions.map((action) => (
+          <button
+            key={action.label}
+            type="button"
+            disabled={props.recovery.busy || action.disabled}
+            onClick={action.onClick}
+            className={RETRY_BUTTON_CLASS_NAME}
+          >
+            {action.label}
+          </button>
+        )) : (
+          <>
+            <button type="button" disabled={props.recovery.busy} onClick={props.recovery.onRestore} className={RETRY_BUTTON_CLASS_NAME}>
+              復元
+            </button>
+            <button type="button" disabled={props.recovery.busy} onClick={props.recovery.onDiscard} className={RETRY_BUTTON_CLASS_NAME}>
+              破棄
+            </button>
+          </>
+        )}
       </>
     );
   }

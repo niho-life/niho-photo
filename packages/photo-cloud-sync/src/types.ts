@@ -60,9 +60,23 @@ export interface RecipeConflictIntent {
   readonly expectedRevision: number;
 }
 
+/** 同scopeの復旧表示用snapshot。要求key/credential/URLを含めない。 */
+export interface RecipeDraftSnapshot {
+  readonly photoId: string;
+  readonly sourceSha256: string;
+  readonly initialRevision: number;
+  readonly latest: (JournalStage & { readonly ref: RecipeStageRef }) | null;
+  readonly attempted: JournalStage | null;
+  readonly conflictIds: readonly string[];
+  readonly hasUnknownAttempt: boolean;
+  readonly pendingResolution: RecipeConflictIntent | null;
+  readonly terminalReason: "not-found" | "photo-deleted" | null;
+}
+
 export interface PersonalPhotoRecipeWriter {
   readonly token: string;
   stage(candidate: LocalRecipeCandidate): RecipeStageRef;
+  readDraft(signal?: AbortSignal): Promise<RecipeDraftSnapshot>;
   save(ref: RecipeStageRef, signal?: AbortSignal): Promise<SaveRecipeResult>;
   retry(signal?: AbortSignal): Promise<SaveRecipeResult>;
   retryResolution(signal?: AbortSignal): Promise<ResolveRecipeConflictResult>;

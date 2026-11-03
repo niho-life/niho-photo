@@ -37,6 +37,7 @@ import type {
   PendingWriterPage,
   PersonalPhotoRecipeSync,
   PersonalPhotoRecipeWriter,
+  RecipeDraftSnapshot,
   RecipeConflictIntent,
   RecipeJournalScope,
   RecipeStageRef,
@@ -352,6 +353,41 @@ class Writer implements PersonalPhotoRecipeWriter {
 
   hydrate(stage: JournalStage): RecipeStageRef {
     return this.sync.createRef(this, stage, true);
+  }
+
+  async readDraft(signal?: AbortSignal): Promise<RecipeDraftSnapshot> {
+    this.assertOpen();
+    this.sync.assertLocal();
+    const link = signal === undefined
+      ? linkedAbortController(this.signal)
+      : linkedAbortController(this.signal, signal);
+    try {
+      const reopened = await this.sync.journal(link.controller.signal, (journalSignal) =>
+        this.sync.options.journal.reopen(this.sync.scope, this.token, journalSignal));
+      this.sync.assertLocal();
+      this.assertOpen();
+      if (reopened === null) throw new PersonalPhotoCloudError("not_found");
+      return Object.freeze({
+        photoId: reopened.binding.photoId,
+        sourceSha256: reopened.binding.sourceSha256,
+        initialRevision: reopened.binding.initialRevision,
+        latest: reopened.latest === null
+          ? null
+          : Object.freeze({ ...clone(reopened.latest), ref: this.hydrate(reopened.latest) }),
+        attempted: reopened.attempt === null
+          ? null
+          : Object.freeze({
+              generation: reopened.attempt.generation,
+              candidate: clone(reopened.attempt.candidate),
+            }),
+        conflictIds: Object.freeze([...reopened.conflictIds]),
+        hasUnknownAttempt: reopened.attempt !== null || reopened.resolution !== null,
+        pendingResolution: reopened.resolution === null ? null : publicIntent(reopened.resolution),
+        terminalReason: reopened.terminalReason,
+      });
+    } finally {
+      link.dispose();
+    }
   }
 
   async save(ref: RecipeStageRef, signal?: AbortSignal): Promise<SaveRecipeResult> {

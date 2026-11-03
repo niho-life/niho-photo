@@ -110,6 +110,7 @@ import type { BrowserPhotoFlagControl } from "./browser-photo-editing-flags";
 import { BrowserPhotoEditingFolderTree } from "./browser-photo-editing-folder-tree";
 import { BrowserPhotoEditingFooter, BrowserPhotoEditingStatusLine } from "./browser-photo-editing-footer";
 import { BrowserPhotoExportSheet } from "./browser-photo-editing-export-sheet";
+import { BrowserPhotoDurableComparisonDialog } from "./browser-photo-durable-comparison";
 import {
   BrowserPhotoEditingGrid,
   BrowserPhotoListSortControl,
@@ -493,14 +494,15 @@ export function BrowserPhotoEditingWorkbench(props: {
     replaceCloudPhoto: cloud.replacePhoto,
     markEditedPreviewPending: cloud.markEditedPreviewPending,
   });
+  const readyDevelopEngine = develop.readyDevelopEngine;
   // フォルダを読めた後の idle に段2 engineを1個だけ起こす。RAWのdecode・全件先読みはしない。
   useEffect(() => {
     if (!editingAllowed || items.length === 0 || !items.some((item) => isDevelopWorkTarget(item.photo))) return;
     const timer = window.setTimeout(() => {
-      void develop.readyDevelopEngine().catch(() => undefined);
+      void readyDevelopEngine().catch(() => undefined);
     }, 0);
     return () => window.clearTimeout(timer);
-  }, [develop.readyDevelopEngine, editingAllowed, items]);
+  }, [editingAllowed, items, readyDevelopEngine]);
   if (props.articlePrepareForInsert) {
     props.articlePrepareForInsert.current = async (photoIds) => {
       const checkDrafts = () => {
@@ -842,7 +844,7 @@ export function BrowserPhotoEditingWorkbench(props: {
   // 1 枚で補正の入力を開けている（wasm か S1 の canvas）。閲覧のみの operator も wasm なら保存済みの補正で描く
   const loupeEditing = loupeOpened !== null && (loupeOpened.mode === "wasm" || Boolean(loupeOpened.decoded));
   const editable = props.canEdit && loupeEditing;
-  const draftRecoveryPending = develop.draftRecovery.selectedDraft !== null;
+  const draftRecoveryPending = develop.draftRecovery.selectedDraft !== null || develop.durableRecovery.blocksCurrentPhoto;
   const controlsDisabled =
     !editable || operation !== null || develop.leaving || staleReloading || cropSettling || draftRecoveryPending;
   // 切り抜きの道具（F3b 移行元設計）を開いている（1 枚で見ている wasm の写真）
@@ -865,7 +867,8 @@ export function BrowserPhotoEditingWorkbench(props: {
   // beforeunload は未保存操作（送り終えていない背景除去の保存を含む）だけを止める。route guard は保存済みの wasm セッションでも
   // 離脱処理を通し、背景除去の保存も送り終えてから離れる。
   const unloadGuarded =
-    operation !== null || adding !== null || add.macBusy || open.dirty || develop.saveState !== "idle" || cutout.saving;
+    operation !== null || adding !== null || add.macBusy || open.dirty || develop.saveState !== "idle" ||
+    develop.durableRecovery.pending || cutout.saving;
   const guarded = unloadGuarded || opened?.mode === "wasm";
   const confirmRouteLeave = useBrowserPhotoLeaveGuards({
     unloadGuarded,
@@ -2042,16 +2045,26 @@ export function BrowserPhotoEditingWorkbench(props: {
             : operation?.kind === "delete" && operation.deleting
               ? PHOTO_CLOUD_DELETING_NOTICE
               : null;
-  const recoveryControl = develop.draftRecovery.selectedDraft
+  const recoveryControl = develop.durableRecovery.pending
     ? {
+        count: Math.max(1, develop.durableRecovery.count),
+        conflict: false,
+        busy: develop.durableRecovery.busy,
+        message: develop.durableRecovery.message,
+        onRestore: () => undefined,
+        onDiscard: () => undefined,
+        actions: develop.durableRecovery.actions,
+      }
+    : develop.draftRecovery.selectedDraft
+      ? {
         count: develop.draftRecovery.count,
         conflict: develop.draftRecovery.selectedDraft.conflicted,
         busy: develop.draftRecovery.busy,
         message: develop.draftRecovery.message,
         onRestore: () => void open.restoreDraft(),
         onDiscard: develop.draftRecovery.discardSelectedDraft,
-      }
-    : null;
+        }
+      : null;
 
   // この Mac のフォルダの面で、フォルダを選んでいない（木を読み込み中・読めなかった・フォルダが無い・木を読んで選び直している途中）
   const folderUnselected = folderMode && !folders.selected && folders.selectedFolderId === null;
@@ -3011,6 +3024,7 @@ export function BrowserPhotoEditingWorkbench(props: {
         onRename={albumLibrary.renameAlbum}
         onDelete={deleteAlbum}
       />
+      <BrowserPhotoDurableComparisonDialog model={develop.durableRecovery.comparison} />
       <BrowserPhotoAlbumAddDialog
         open={albumAddOpen}
         albums={albumLibrary.albums}

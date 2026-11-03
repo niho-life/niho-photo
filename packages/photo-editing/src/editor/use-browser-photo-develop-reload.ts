@@ -97,7 +97,9 @@ export function useBrowserPhotoDevelopReload(params: {
       ...session,
       photo,
       settingsSource: resolved.settingsSource,
-      saver: latestAccessRef.current.canEdit ? createSaver(session.spotId, session.photoId, photo.developRevision) : null,
+      saver: latestAccessRef.current.canEdit
+        ? createSaver(session.spotId, session.photoId, photo.developRevision, photo.contentSha256)
+        : null,
     };
     // 止まった（か、送るものの無い）前の保存係は手放す
     previousSaver?.dispose();
