@@ -1,0 +1,43 @@
+/*
+ * NIHO photo の共有Web土台（Tailwind v4）。theme/class/token は camera と同じ共有sourceを使い、
+ * このentryではWeb固有のtitlebarや重複tokenを定義しない。
+ */
+@config "../tailwind.config.cjs";
+@import "tailwindcss";
+@import "niho-ui/styles/tokens.css";
+
+:root {
+  --niho-surface: #FCFBF9;
+  --niho-card: #FCFBF9;
+  --photo-editing-surface: var(--niho-surface);
+}
+
+@layer base {
+  * {
+    @apply border-border;
+  }
+
+  html {
+    font-size: 106.25%;
+  }
+
+  html,
+  body,
+  #root {
+    height: 100%;
+    margin: 0;
+  }
+
+  body {
+    @apply bg-niho-surface text-foreground font-sans antialiased;
+    overflow: hidden;
+    overscroll-behavior: none;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation: none !important;
+    transition: none !important;
+  }
+}

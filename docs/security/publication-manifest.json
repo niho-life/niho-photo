@@ -12636,8 +12636,8 @@
     },
     {
       "path": "apps/photo-web/README.md",
-      "sha256": "09aec4ada905c55fee76d411599f7a480f52b9d3c4f301c3f41f3a7f1bc5ab9d",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。"
+      "sha256": "c940a1e3a2d5b8a13f8ea03e3a0d99a6d2f425b38d6f92ca4ee5d4be7fe1fa52",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加"
     },
     {
       "path": "apps/photo-web/eslint.config.mjs",
@@ -12646,8 +12646,8 @@
     },
     {
       "path": "apps/photo-web/package.json",
-      "sha256": "c6b00c489f4f030042bd784954da553476786d1657a35da9ac483d49ddaee20f",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。"
+      "sha256": "dc4de293c3d07bc88fbe8cd764100bdbc9afa738a47b7198c2d7e7ddb5667616",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加"
     },
     {
       "path": "apps/photo-web/provenance.json",
@@ -12781,8 +12781,8 @@
     },
     {
       "path": "apps/photo-web/tsconfig.json",
-      "sha256": "ae45b80a3689552e9ce438036c08fd434887a32360d3bcdbc11f5fa655fb90d1",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: 共通UIと既存cameraのstrict型policyへ整合。React18 experimentalのinert型を読み、未使用検査はhost専用限定configへ維持。"
+      "sha256": "f5a3d2f570a5c3c08206d41555e683d2a7354aebe1a4b7b6cab56311697b49f1",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: 共通UIと既存cameraのstrict型policyへ整合。React18 experimentalのinert型を読み、未使用検査はhost専用限定configへ維持。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加"
     },
     {
       "path": "apps/photo-web/tsconfig.pwa.json",

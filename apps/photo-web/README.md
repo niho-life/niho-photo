@@ -13,6 +13,8 @@
 - `src/server/static-store.ts`: 起動前に全ファイルの長さ・SHA256を確認し、immutable Blobで保持する。要求URLからfilesystem pathを作らない。root/SW/manifest/build metadataはno-store、列挙済みの静的assetだけをpublic immutableで返す。
 - `src/pwa`: 匿名offline HTMLだけを初回cacheし、静的assetを正確なhash/長さ/MIMEで検証する。認証/API/写真/root/アプリmanifestはcacheしない。更新は開いている全画面のguardが許可した場合だけ適用し、他画面を強制reloadしない。
 - `src/runtime`: C01 controllerを1個所有し、C02 connectionとC03 guard/失効消去portを接続する。Query、表示用URL、dialog、遅着connectを本人と世代に拘束し、通常refreshで編集を作り直さない。C03のjournalを実装しない。
+- `src/browser/mount.tsx`: runtimeとReact rootを各1個だけ所有し、scope通知を同期描画する。開始失敗・終了時の後始末を隔離し、同rootの二重mountを拒否する。
+- `src/copy.ts` / `src/styles.css`: 共通copyとTailwind/theme/tokenを各host境界へ接続する。Viteは共通編集面と既存のstateless export workerを配布する。
 - `src/view`: `PhotoLibraryProvider`、`BrowserPhotoEditingWorkbench`、`AppDialogHost`を使う。API、永続journal、別の編集面を持たない。文言は共通copyから受け取る。
 
 静的配布は1ファイル8MiB、合計32MiB、128ファイル以内。Nodeの既定64MiB要求/応答・16処理枠はadapterの防御上限で、対応形式やクラウド転送能力の宣言ではない。C02/C08が実際の転送契約に合わせて明示設定する。V8 heap制限をWASM全体のメモリ上限とみなさない。
@@ -33,6 +35,8 @@ workspace登録後の対象検証:
 npm run test --workspace @niho/photo-web
 npm run lint --workspace @niho/photo-web
 ```
+
+Node対象には実際のVite bundle検査、View対象には単一rootと終了・失敗・遅着のmount試験を含む。Vite graphでnative/server依存の混入と共通CSS生成を確認する。正式root/mainとC02/C03実接続は引き続き配備前の受入条件。
 
 完全な共通UI型検査と重いnative/WASM buildは公開CIで行う。ローカルでは `tsconfig.pwa.json`、`tsconfig.build.json`、`tsconfig.server.json`、`tsconfig.runtime.json` の対象限定検査を使う。合成画像・fake portの試験と、正式origin/本人/実保存先/実iPhoneの受入を混同しない。
 
