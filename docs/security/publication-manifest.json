@@ -13022,8 +13022,8 @@
     },
     {
       "path": "packages/photo-cloud-sync/src/sync.ts",
-      "sha256": "6f73695e596ac1ea5029cb1e56c96207a70f15be764e1250621732b78f37d84c",
-      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。"
+      "sha256": "87158d02433f6d0adc9d47c1d830a0e5627ccc98ed95f766c462f72b0dc9df42",
+      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: 非同期journal callbackで競合IDの検証済み非null snapshotを使い厳格型を保持"
     },
     {
       "path": "packages/photo-cloud-sync/src/types.ts",
@@ -13032,8 +13032,8 @@
     },
     {
       "path": "packages/photo-cloud-sync/test/sync.test.ts",
-      "sha256": "a639f16637352477d88b77b869aca4a5125a6155cc67920e2551f3d48b8f3adf",
-      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。"
+      "sha256": "20046fb90d0c322f1ce7e89d3ce4902d1daadca302b16c2328742e88ed3ba7f5",
+      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: 遅延保存応答の合成Promiseを実receipt型で宣言し厳格型へ整合"
     },
     {
       "path": "packages/photo-cloud-sync/tsconfig.json",

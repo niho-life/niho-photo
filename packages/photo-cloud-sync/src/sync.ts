@@ -654,18 +654,19 @@ class Writer implements PersonalPhotoRecipeWriter {
     } catch (error) {
       const backend = readPhotoError(error);
       if (backend?.code === "revision_conflict" && backend.conflictId !== null) {
+        const conflictId = backend.conflictId;
         assertCurrent();
         const recorded = await this.sync.journal(signal, (journalSignal) => this.sync.options.journal.conflictAttempt(
           this.binding,
           attempt.attemptId,
           attempt.generation,
-          backend.conflictId,
+          conflictId,
           null,
           journalSignal,
         ));
         assertCurrent();
         if (!recorded) return { status: "unknown", generation: attempt.generation };
-        return await this.finishConflict({ ...attempt, conflictId: backend.conflictId }, backend.conflictId, signal, assertCurrent);
+        return await this.finishConflict({ ...attempt, conflictId }, conflictId, signal, assertCurrent);
       }
       if (backend?.code === "not_found" || backend?.code === "photo_deleted") {
         assertCurrent();

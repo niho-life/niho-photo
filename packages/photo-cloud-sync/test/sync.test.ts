@@ -377,7 +377,7 @@ describe("durable recipe sync", () => {
     const setup = harness({ handler: async (operation, request) => {
       if (operation === "recipes.put") {
         puts += 1;
-        if (puts === 1) return await new Promise((resolve) => { resolveA = resolve as typeof resolveA; }) as never;
+        if (puts === 1) return await new Promise<PhotoOperationMap["recipes.put"]["response"]>((resolve) => { resolveA = resolve; }) as never;
         expect((request as PhotoOperationMap["recipes.put"]["request"]).expectedRevision).toBe(1);
         return recipeReceipt(2, (request as PhotoOperationMap["recipes.put"]["request"]).settings) as never;
       }
@@ -789,7 +789,7 @@ describe("durable recipe sync", () => {
         keys.push("idempotencyKey" in options ? options.idempotencyKey : undefined);
         if (first) {
           first = false;
-          return await new Promise((resolve) => { resolveLate = resolve as typeof resolveLate; }) as never;
+          return await new Promise<PhotoOperationMap["recipes.put"]["response"]>((resolve) => { resolveLate = resolve; }) as never;
         }
         return recipeReceipt(1) as never;
       }
