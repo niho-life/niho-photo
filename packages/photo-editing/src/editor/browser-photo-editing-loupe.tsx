@@ -29,6 +29,7 @@ import { PhotoEditingClipOverlay } from "./photo-editing-clip-overlay";
 import { PhotoEditingCompareSplit } from "./photo-editing-compare-split";
 import { PhotoEditingCropOverlay } from "./photo-editing-crop-overlay";
 import { PhotoEditingCutoutBrushOverlay } from "./photo-editing-cutout-brush-overlay";
+import { usePhotoEditingImageCors } from "./photo-editing-image-cors";
 import { PhotoEditingHealOverlay } from "./photo-editing-heal-overlay";
 import { canvasNormalizedPoint } from "./photo-editing-color-mixer";
 
@@ -172,6 +173,7 @@ export function BrowserPhotoEditingLoupe(props: {
   unclipped?: boolean;
 }) {
   const { opened, opening, openedVisible } = props;
+  const useCorsForPhotos = usePhotoEditingImageCors();
   const [showCanonicalPending, setShowCanonicalPending] = useState(false);
   useEffect(() => {
     setShowCanonicalPending(false);
@@ -371,6 +373,7 @@ export function BrowserPhotoEditingLoupe(props: {
         // 閲覧だけに使う画像（プレビュー・記事用の画像）。補正の入力にはしない。作業コピーを待っている間のプレビュー
         // （長辺 1024px）は、差し替える画（長辺 1280px）と同じ大きさに見せる（差し替えで大きさが跳ねない）
         <img
+          crossOrigin={useCorsForPhotos ? "anonymous" : undefined}
           src={opened.viewUrl}
           onLoad={(event) => props.onPreviewLoaded?.(opened.key, props.previewGeneration ?? null, event.currentTarget)}
           onError={(event) => props.onPreviewFailed?.(opened.key, event.currentTarget)}
