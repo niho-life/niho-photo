@@ -65,7 +65,7 @@ export type BrowserPhotoOpenFlowContext = {
     developRevision: number,
     contentSha256?: string,
     provisionalGeneration?: number,
-  ) => DevelopSettingsSaver;
+  ) => DevelopSettingsSaver | null;
   /** wasm で開いた 1 枚目の丁寧な画を覚え、「補正前」の画を捨てる */
   rememberOpenedFrame: (key: string, settings: DevelopSettings, frame: DevelopFrame | null) => void;
 };

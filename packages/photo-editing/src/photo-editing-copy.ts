@@ -1197,6 +1197,36 @@ export const PHOTO_EDITING_PERSONAL_CLOUD_COPY = {
   quotaExceeded: "クラウドの空き容量が足りません。不要な写真を削除してから、もう一度お試しください。",
 } as const;
 
+/** 本人クラウドの未同期補正・競合・復旧。内部IDやrevisionは表示しない。 */
+export const PHOTO_EDITING_DURABLE_DRAFT_COPY = {
+  pending: "未同期の補正があります",
+  conflict: "別の端末の補正と競合しています",
+  unknown: "保存結果を確認してください",
+  unsupported: "この端末では補正を適用できません。補正データは保存できます。",
+  terminal: "元の写真が見つかりません。補正データを保存できます。",
+  checking: "未同期の補正を確認しています…",
+  check: "確認",
+  compare: "比較する",
+  comparisonTitle: "補正を比較",
+  comparisonDescription: "同じ写真の、この端末に残した補正と現在の補正を比べて選びます。",
+  devicePreview: "この端末に残した補正",
+  currentPreview: "現在の補正",
+  historicalNotice: "競合した時点の記録とは区別し、いま採用されている補正を表示しています。",
+  openPhotoToCompare: "この写真を開いてから比較してください。",
+  canonicalPending: "写真の編集用データを準備中のため、まだ比較できません。",
+  previewUnavailable: "この補正をこの端末では表示できません。",
+  unsupportedPreview: "この端末ではこの補正を安全に表示・採用できません。",
+  confirmSave: "保存結果を確認",
+  save: "保存する",
+  useDevice: "この端末の補正を使う",
+  useCurrent: "現在の補正を使う",
+  back: "戻る",
+  discard: "破棄",
+  saveData: "補正データを保存",
+  saveDataFileName: "補正データ.json",
+  failed: "未同期の補正を確認できませんでした。もう一度お試しください。",
+} as const;
+
 /** 独立Photo Webの共通copy。静的HTML・PWA・Reactで同じ文言を使う。 */
 export const PHOTO_WEB_COPY = {
   brand: "NIHO photo",

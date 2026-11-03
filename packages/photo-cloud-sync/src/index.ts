@@ -1,4 +1,5 @@
 export { createPersonalPhotoRecipeSync } from "./sync";
+export { createPersonalPhotoCloudLibrary } from "./binding";
 export type {
   CreatePersonalPhotoRecipeSyncOptions,
   LocalRecipeCandidate,
@@ -15,3 +16,4 @@ export type {
   SaveRecipeResult,
   StageCommitResult,
 } from "./types";
+export type { CreatePersonalPhotoCloudLibraryWithSyncOptions } from "./binding";

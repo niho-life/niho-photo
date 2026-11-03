@@ -112,6 +112,39 @@ describe("BrowserPhotoEditingStatusLine recovery", () => {
     expect(onRestore).toHaveBeenCalledOnce();
     expect(onDiscard).toHaveBeenCalledOnce();
   });
+
+  it("durable競合の比較入口をPC/mobile共通の状態欄に出す", async () => {
+    const { BrowserPhotoEditingStatusLine } = await import("./browser-photo-editing-footer");
+    const compare = vi.fn();
+    act(() => root.render(
+      <BrowserPhotoEditingStatusLine
+        progressText={null}
+        saveState="failed"
+        onRetrySave={() => undefined}
+        status={null}
+        canAdd
+        onRetryAdd={() => undefined}
+        canStopAdd={false}
+        onStopAdd={() => undefined}
+        gridSourceError={null}
+        pendingWorkText={null}
+        showWideOnlyNote={false}
+        recovery={{
+          count: 1,
+          conflict: true,
+          busy: false,
+          message: "別の端末の補正と競合しています",
+          onRestore: () => undefined,
+          onDiscard: () => undefined,
+          actions: [{ label: "比較する", onClick: compare }],
+        }}
+      />,
+    ));
+    const buttons = Array.from(container.querySelectorAll("button"));
+    expect(buttons.map((button) => button.textContent)).toEqual(["比較する"]);
+    act(() => buttons[0]?.click());
+    expect(compare).toHaveBeenCalledOnce();
+  });
 });
 
 describe("BrowserPhotoEditingFooter flags (niho-photo#47)", () => {

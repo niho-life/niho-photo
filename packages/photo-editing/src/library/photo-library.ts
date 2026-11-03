@@ -1,3 +1,4 @@
+import type { PhotoLibraryDurableDevelopDrafts } from "./photo-library-durable-drafts";
 import type { DevelopSettings } from "../develop-engine/develop-settings";
 import type { PhotoEditingSettings } from "../photo-editing-types";
 
@@ -137,6 +138,8 @@ export type PhotoLibrary = {
   ): Promise<File>;
 
   // ---- 補正
+  /** 完全補正を通信前に永続化する本人scope別の接続口。無いlibraryは従来の保存を使う。 */
+  readonly durableDevelopDrafts?: PhotoLibraryDurableDevelopDrafts;
   /**
    * 補正（`developSettings`）を保存する。`expectedRevision`（直し始めた版）を渡すと、今の版と同じときだけ保存し、別の端末が先に
    * 保存していれば `stale`（今の写真）。版の照合は niho-develop-engine 決まりごと 4 のまま。`editedPreviewBy` は補正後のプレビューの
