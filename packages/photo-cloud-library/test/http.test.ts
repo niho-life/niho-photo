@@ -96,7 +96,7 @@ describe("same-origin HTTP client and BFF", () => {
     const photo = { ...responses["photos.get"], recipe: { ...responses["photos.get"].recipe,
       settings: { ...responses["photos.get"].recipe.settings, future: nested } } };
     const upload = {
-      id: "depth-start-upload", target: { kind: "original", fileName: photo.fileName, format: photo.format },
+      id: "depth-start-upload", target: { kind: "original" as const, fileName: photo.fileName, format: photo.format },
       sha256: photo.original.sha256, sizeBytes: photo.original.sizeBytes, expiresAt: "2026-11-03T00:30:00.000Z",
       state: "stored", result: { kind: "original", photo },
     };
