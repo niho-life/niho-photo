@@ -644,11 +644,12 @@
         "path": "packages/photo-editing/src/develop-engine/develop-settings-autosave.ts",
         "sha256": "d1ac98de8c7379a1e06c5e7ed67aeb9dad82d94e314b75100a7d29c28f4cef72"
       },
-      "outputSha256": "72d10397471588941c7f353d2d89728c499556f30f7c1d62ec7c9ab0347b8caa",
+      "outputSha256": "22d8690bb0d98aecf9f84ebf6bcfdf14f8c3fd320495ef42a18cf723c8823f5e",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
-        "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する"
+        "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
+        "以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続"
       ]
     },
     {
@@ -1066,7 +1067,7 @@
         "path": "packages/photo-editing/src/editor/browser-photo-editing-footer.tsx",
         "sha256": "448c53cf1da0a5f3b41e1d507d2ac5d618a39c0b300571ad95a670bdba86bca0"
       },
-      "outputSha256": "9897aded0567fd7744d9bc2c8767de096c06dcc4ba406c3884c020b6065cc1bb",
+      "outputSha256": "45b1a815a302812a40c6eea3a6ab76c3563cf3494afcbb4afc44f040597f2817",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -1079,7 +1080,8 @@
         "PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。",
         "PR #98で選別フラグの保存経路とUIを更新する。",
         "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
-        "自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する"
+        "自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する",
+        "以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続"
       ]
     },
     {
@@ -1457,9 +1459,10 @@
         "Add backwards-compatible personal photo library scope key",
         "niho-photo #219: COEP分離文書の写真画像CORS読み込みを追加",
         "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
-        "自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する"
+        "自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する",
+        "以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続"
       ],
-      "outputSha256": "6de387401b822ffd3bd547fe86b15a7b540f9803afe385ccc0ad4f48ba9edaa6"
+      "outputSha256": "2309373483eb98cec63b1027d681f8a06d75b347274549ee7b6b7021f8ebd368"
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-adjustment-controls-effects.test.tsx",
@@ -1977,7 +1980,7 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-develop.ts",
         "sha256": "491153dcf3675cfd0b822a008f101a77125411c9e18966ea7b7fb96e18ce8228"
       },
-      "outputSha256": "19d42f3b7b17c4ccd8881dcc0ced810b06837165e9e95427d313cc75a23e89d1",
+      "outputSha256": "488ca18c2af46fa113113d7cf5a92a3ffc33ef90529da267ef9612877b7b5789",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -1992,7 +1995,8 @@
         "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
         "自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する",
         "永続下書きの復旧保存後に現行補正で編集セッションを再開し、通常の自動保存中は編集操作を継続可能にする。",
-        "復旧保存後の編集再開に専用reload経路を使い、別端末通知を誤表示しない。"
+        "復旧保存後の編集再開に専用reload経路を使い、別端末通知を誤表示しない。",
+        "以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続"
       ]
     },
     {
@@ -2602,9 +2606,10 @@
         "C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録",
         "独立Photo WebとPWAの日本語copy・容量表記を共通の正本へ集約する。",
         "mainの本人cloud共通copyとA作成のPhoto Web共通copy・容量表示を両方保持して通常mergeを解消。",
-        "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する"
+        "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
+        "以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続"
       ],
-      "outputSha256": "d4e505e63eafd27b7056131c440980520f1f4db842c6be40f292cabc9205f35b"
+      "outputSha256": "5f3eb9c604b6de5dea32942ef316cadb65b9974276cee4d2952b2ca87f609b18"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-crop.test.ts",
@@ -13072,8 +13077,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-settings-autosave.test.ts",
-      "sha256": "c8ca165271b45aa1ace868fc81589fbb8d721eb3309917c4e21c4cb5e4d09604",
-      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "a4dc31fb7f1e98cc858f5c1ca5453cfdb0b9fad13f2d3a4c8f8d7092b7da9664",
+      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続"
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-durable-comparison.test.tsx",
@@ -13109,6 +13114,21 @@
       "path": "apps/photo-web/test/photo-web-transfer-panel.test.tsx",
       "sha256": "a1c64671666f242608ccf9ae7a7dc9898bcc91b3a23729bb27a83008e66d9f50",
       "origin": "NIHOがC06転送表示の合成controllerとReactイベント回帰試験として新規作成。実写真・個人情報を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/editor/browser-photo-previous-drafts.test.tsx",
+      "sha256": "484837659955301ec971eb9e4efded09c2449ccd48d5ec2685de5e39779a1da0",
+      "origin": "NIHO original explicit previous-draft recovery UI and synthetic regression tests for C03."
+    },
+    {
+      "path": "packages/photo-editing/src/editor/browser-photo-previous-drafts.tsx",
+      "sha256": "bd60230fabd98b0a77f116693ae1c413a7f43ec4ecb430418c7326090c6da6f1",
+      "origin": "NIHO original explicit previous-draft recovery UI and synthetic regression tests for C03."
+    },
+    {
+      "path": "packages/photo-editing/src/editor/use-browser-photo-previous-drafts.test.tsx",
+      "sha256": "bf1161f072ad27905bca8893e1e6b71da43aa876207cac8b0679b021f0bd6cce",
+      "origin": "NIHO original explicit previous-draft recovery UI and synthetic regression tests for C03."
     }
   ],
   "excludedSources": [

@@ -1199,6 +1199,18 @@ export const PHOTO_EDITING_PERSONAL_CLOUD_COPY = {
 
 /** 本人クラウドの未同期補正・競合・復旧。内部IDやrevisionは表示しない。 */
 export const PHOTO_EDITING_DURABLE_DRAFT_COPY = {
+  previousEntry: "以前の補正を確認",
+  previousTitle: "以前の未同期の補正",
+  previousChecking: "以前の補正を確認しています…",
+  previousEmpty: "以前の未同期の補正はありません。",
+  previousDescription: "再接続前の補正です。確認して保存すると、未完了の保存を照合し、未送信なら保存します。",
+  previousSave: "確認して保存",
+  previousNext: "次へ",
+  previousFirst: "最初へ",
+  previousBack: "一覧に戻る",
+  previousClose: "編集に戻る",
+  previousOpen: "この補正を確認",
+  photoFallback: "写真",
   pending: "未同期の補正があります",
   conflict: "別の端末の補正と競合しています",
   unknown: "保存結果を確認してください",

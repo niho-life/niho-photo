@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState, type MutableRefObject } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from "react";
 import type { QueryClient } from "@tanstack/react-query";
 
 import {
@@ -70,6 +70,29 @@ type DurableRecoveryState = {
   message: string | null;
 };
 
+type PreviousDraftEntry = {
+  summary: PhotoLibraryDevelopDraftSummary;
+  photoName: string;
+};
+
+type PreviousDraftsState = {
+  ownerActorId: string | null;
+  ownerPort: object | null;
+  ownerScopeKey: string | undefined;
+  ownerScopeSignal: AbortSignal | undefined;
+  open: boolean;
+  cursor: string | null;
+  items: readonly PreviousDraftEntry[];
+  nextCursor: string | null;
+  writer: PhotoLibraryDevelopDraftWriter | null;
+  snapshot: PhotoLibraryDevelopDraftSnapshot | null;
+  comparison: PhotoLibraryDevelopConflictComparison | null;
+  comparisonPreview: DurableComparisonPreview | null;
+  photoName: string;
+  busy: boolean;
+  message: string | null;
+};
+
 export type DurableComparisonPreview = {
   comparison: PhotoLibraryDevelopConflictComparison;
   photoId: string;
@@ -88,6 +111,24 @@ const EMPTY_DURABLE_RECOVERY: DurableRecoveryState = {
   snapshot: null,
   comparison: null,
   comparisonPreview: null,
+  busy: false,
+  message: null,
+};
+
+const EMPTY_PREVIOUS_DRAFTS: PreviousDraftsState = {
+  ownerActorId: null,
+  ownerPort: null,
+  ownerScopeKey: undefined,
+  ownerScopeSignal: undefined,
+  open: false,
+  cursor: null,
+  items: [],
+  nextCursor: null,
+  writer: null,
+  snapshot: null,
+  comparison: null,
+  comparisonPreview: null,
+  photoName: PHOTO_EDITING_DURABLE_DRAFT_COPY.photoFallback,
   busy: false,
   message: null,
 };
@@ -139,11 +180,24 @@ export function useBrowserPhotoDevelop(params: {
   const latestSetStatusRef = useRef(setStatus);
   latestSetStatusRef.current = setStatus;
   const durablePort = library.durableDevelopDrafts;
+  const previousPort = durablePort?.previous;
   const [durableRecovery, setDurableRecovery] = useState<DurableRecoveryState>(EMPTY_DURABLE_RECOVERY);
   const durableRecoveryRef = useRef(durableRecovery);
   durableRecoveryRef.current = durableRecovery;
   const durableRefreshGenerationRef = useRef(0);
   const durableComparisonGenerationRef = useRef(0);
+  const [previousDrafts, setPreviousDrafts] = useState<PreviousDraftsState>(EMPTY_PREVIOUS_DRAFTS);
+  const previousDraftsRef = useRef(previousDrafts);
+  previousDraftsRef.current = previousDrafts;
+  const previousGenerationRef = useRef(0);
+  const previousOwnerActorIdRef = useRef<string | null>(null);
+  const previousOwnerPortRef = useRef<object | null>(null);
+  const previousOwnerScopeSignalRef = useRef<AbortSignal | undefined>(undefined);
+  const previousComparisonGenerationRef = useRef(0);
+  const previousPausedSaverRef = useRef<{
+    saver: DevelopSettingsSaver;
+    resume: () => void;
+  } | null>(null);
   const durableSaversRef = useRef(new WeakMap<DevelopSettingsSaver, {
     writer: PhotoLibraryDevelopDraftWriter;
     photoId: string;
@@ -524,6 +578,35 @@ export function useBrowserPhotoDevelop(params: {
     try { return host.isScopeCurrent?.() !== false; } catch { return false; }
   }, [host, isDurableScopeCurrent]);
 
+  const invalidatePreviousDrafts = useCallback((updateState: boolean, resumePaused = true): void => {
+    previousGenerationRef.current += 1;
+    previousComparisonGenerationRef.current += 1;
+    const previous = previousDraftsRef.current;
+    previousDraftsRef.current = EMPTY_PREVIOUS_DRAFTS;
+    previousOwnerActorIdRef.current = null;
+    previousOwnerPortRef.current = null;
+    previousOwnerScopeSignalRef.current = undefined;
+    previous.writer?.dispose();
+    const paused = previousPausedSaverRef.current;
+    if (resumePaused) {
+      previousPausedSaverRef.current = null;
+      paused?.resume();
+    }
+    if (updateState && mountedRef.current) setPreviousDrafts(EMPTY_PREVIOUS_DRAFTS);
+  }, [mountedRef]);
+
+  useEffect(() => {
+    invalidatePreviousDrafts(true);
+    const abort = () => invalidatePreviousDrafts(true);
+    host.scopeSignal?.addEventListener("abort", abort, { once: true });
+    return () => {
+      host.scopeSignal?.removeEventListener("abort", abort);
+      // unmountでは上のsession cleanupがflush→disposeする。ここでresumeしてnetworkを復活させない。
+      // dependency切替なら次のeffect本体がowner-boundな旧saverだけをresumeする。
+      invalidatePreviousDrafts(false, false);
+    };
+  }, [durablePort, host.scopeSignal, invalidatePreviousDrafts, params.actorId, scopeKey]);
+
   const refreshDurableRecovery = useCallback(async (): Promise<void> => {
     if (!durablePort || !isDurableScopeCurrent()) {
       if (mountedRef.current) setDurableRecovery(EMPTY_DURABLE_RECOVERY);
@@ -595,7 +678,9 @@ export function useBrowserPhotoDevelop(params: {
     const session = developSessionRef.current;
     const samePhoto = session?.photoId === writer.photoId &&
       session.photo.contentSha256 === writer.sourceSha256;
-    let photoName = samePhoto ? session?.photo.fileName ?? writer.photoId : writer.photoId;
+    let photoName = samePhoto
+      ? session?.photo.fileName ?? PHOTO_EDITING_DURABLE_DRAFT_COPY.photoFallback
+      : PHOTO_EDITING_DURABLE_DRAFT_COPY.photoFallback;
     if (!samePhoto) {
       try {
         const photo = await library.get(
@@ -897,6 +982,429 @@ export function useBrowserPhotoDevelop(params: {
     }
   }, [host, isDurableFileScopeCurrent, mountedRef]);
 
+  const previousRequestOptions = useMemo(
+    () => host.scopeSignal === undefined ? undefined : { signal: host.scopeSignal },
+    [host.scopeSignal],
+  );
+  const isPreviousGenerationCurrent = useCallback((generation: number): boolean =>
+    generation === previousGenerationRef.current && mountedRef.current && previousPort !== undefined &&
+    previousOwnerActorIdRef.current !== null && previousOwnerActorIdRef.current === actorIdRef.current &&
+    previousOwnerPortRef.current === previousPort && previousOwnerScopeSignalRef.current === host.scopeSignal &&
+    isDurableScopeCurrent(), [host.scopeSignal, isDurableScopeCurrent, mountedRef, previousPort]);
+
+  const releasePreviousSelection = useCallback((keepDialogOpen: boolean): void => {
+    previousGenerationRef.current += 1;
+    previousComparisonGenerationRef.current += 1;
+    const previous = previousDraftsRef.current;
+    previous.writer?.dispose();
+    const paused = previousPausedSaverRef.current;
+    previousPausedSaverRef.current = null;
+    paused?.resume();
+    setPreviousDrafts((current) => ({
+      ...current,
+      open: keepDialogOpen,
+      writer: null,
+      snapshot: null,
+      comparison: null,
+      comparisonPreview: null,
+      photoName: PHOTO_EDITING_DURABLE_DRAFT_COPY.photoFallback,
+      busy: false,
+      message: null,
+    }));
+  }, []);
+
+  const loadPreviousDraftPage = useCallback(async (cursor: string | null): Promise<void> => {
+    const ownerActorId = actorIdRef.current;
+    if (!previousPort || !ownerActorId || !isDurableScopeCurrent()) return;
+    const generation = ++previousGenerationRef.current;
+    previousOwnerActorIdRef.current = ownerActorId;
+    previousOwnerPortRef.current = previousPort;
+    previousOwnerScopeSignalRef.current = host.scopeSignal;
+    previousComparisonGenerationRef.current += 1;
+    const previous = previousDraftsRef.current;
+    previous.writer?.dispose();
+    const paused = previousPausedSaverRef.current;
+    previousPausedSaverRef.current = null;
+    paused?.resume();
+    setPreviousDrafts((current) => ({
+      ...current,
+      ownerActorId,
+      ownerPort: previousPort,
+      ownerScopeKey: scopeKey,
+      ownerScopeSignal: host.scopeSignal,
+      open: true,
+      cursor,
+      items: [],
+      nextCursor: null,
+      writer: null,
+      snapshot: null,
+      comparison: null,
+      comparisonPreview: null,
+      photoName: PHOTO_EDITING_DURABLE_DRAFT_COPY.photoFallback,
+      busy: true,
+      message: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousChecking,
+    }));
+    try {
+      const page = await previousPort.list(
+        cursor === null ? { limit: 16 } : { cursor, limit: 16 },
+        previousRequestOptions,
+      );
+      if (!isPreviousGenerationCurrent(generation)) return;
+      const items: PreviousDraftEntry[] = [];
+      for (const summary of page.items) {
+        let photoName: string = PHOTO_EDITING_DURABLE_DRAFT_COPY.photoFallback;
+        try {
+          const photo = await library.get(summary.photoId, previousRequestOptions);
+          if (!isPreviousGenerationCurrent(generation)) return;
+          if (photo?.fileName?.trim()) photoName = photo.fileName;
+        } catch {
+          if (!isPreviousGenerationCurrent(generation)) return;
+        }
+        items.push({ summary, photoName });
+      }
+      if (!isPreviousGenerationCurrent(generation)) return;
+      setPreviousDrafts((current) => ({
+        ...current,
+        ownerActorId,
+        ownerPort: previousPort,
+        ownerScopeKey: scopeKey,
+        ownerScopeSignal: host.scopeSignal,
+        open: true,
+        cursor,
+        items,
+        nextCursor: page.nextCursor,
+        busy: false,
+        message: null,
+      }));
+    } catch {
+      if (!isPreviousGenerationCurrent(generation)) return;
+      setPreviousDrafts((current) => ({
+        ...current,
+        ownerActorId,
+        ownerPort: previousPort,
+        ownerScopeKey: scopeKey,
+        ownerScopeSignal: host.scopeSignal,
+        open: true,
+        cursor,
+        items: [],
+        nextCursor: null,
+        busy: false,
+        message: PHOTO_EDITING_DURABLE_DRAFT_COPY.failed,
+      }));
+    }
+  }, [host.scopeSignal, isDurableScopeCurrent, isPreviousGenerationCurrent, library, previousPort,
+    previousRequestOptions, scopeKey]);
+
+  const openPreviousDraft = useCallback(async (entry: PreviousDraftEntry): Promise<void> => {
+    if (!previousPort || !isDurableScopeCurrent() || previousDraftsRef.current.busy) return;
+    const generation = ++previousGenerationRef.current;
+    previousComparisonGenerationRef.current += 1;
+    const session = developSessionRef.current;
+    if (session?.photoId === entry.summary.photoId && session.saver?.pauseDurable) {
+      previousPausedSaverRef.current = { saver: session.saver, resume: session.saver.pauseDurable() };
+    }
+    setPreviousDrafts((current) => ({
+      ...current,
+      busy: true,
+      message: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousChecking,
+      photoName: entry.photoName,
+    }));
+    let writer: PhotoLibraryDevelopDraftWriter | null = null;
+    try {
+      writer = await previousPort.reopen(entry.summary.token, previousRequestOptions);
+      if (!isPreviousGenerationCurrent(generation)) {
+        writer.dispose();
+        return;
+      }
+      const snapshot = await writer.read(previousRequestOptions);
+      if (!isPreviousGenerationCurrent(generation)) {
+        writer.dispose();
+        return;
+      }
+      setPreviousDrafts((current) => ({
+        ...current,
+        writer,
+        snapshot,
+        comparison: null,
+        comparisonPreview: null,
+        busy: false,
+        message: null,
+      }));
+    } catch {
+      writer?.dispose();
+      if (!isPreviousGenerationCurrent(generation)) return;
+      const paused = previousPausedSaverRef.current;
+      previousPausedSaverRef.current = null;
+      paused?.resume();
+      setPreviousDrafts((current) => ({
+        ...current,
+        writer: null,
+        snapshot: null,
+        busy: false,
+        message: PHOTO_EDITING_DURABLE_DRAFT_COPY.failed,
+      }));
+    }
+  }, [isDurableScopeCurrent, isPreviousGenerationCurrent, previousPort, previousRequestOptions]);
+
+  const savePreviousDraftData = useCallback(async (): Promise<void> => {
+    const { writer, snapshot, comparison } = previousDraftsRef.current;
+    if (!writer || !snapshot || snapshot.latest === null && snapshot.attempted === null || !isDurableFileScopeCurrent()) return;
+    const envelope = {
+      format: "niho-photo-develop-recovery",
+      version: 1,
+      photo: { id: writer.photoId, sourceSha256: writer.sourceSha256 },
+      latest: snapshot.latest,
+      attempted: snapshot.attempted,
+      comparison: comparison === null ? null : {
+        candidate: comparison.candidate,
+        current: comparison.current,
+        historicalCurrent: comparison.historicalCurrent,
+        expectedRevision: comparison.expectedRevision,
+      },
+    } as const;
+    const blob = new Blob([JSON.stringify(envelope, null, 2)], { type: "application/json" });
+    try {
+      await host.saveFile({ blob, fileName: PHOTO_EDITING_DURABLE_DRAFT_COPY.saveDataFileName });
+      if (!isDurableFileScopeCurrent()) return;
+    } catch {
+      if (mountedRef.current && isDurableFileScopeCurrent()) {
+        setPreviousDrafts((current) => ({ ...current, message: PHOTO_EDITING_DURABLE_DRAFT_COPY.failed }));
+      }
+    }
+  }, [host, isDurableFileScopeCurrent, mountedRef]);
+
+  const preparePreviousComparisonPreview = useCallback(async (
+    writer: PhotoLibraryDevelopDraftWriter,
+    comparison: PhotoLibraryDevelopConflictComparison,
+  ): Promise<void> => {
+    const generation = ++previousComparisonGenerationRef.current;
+    const previousGeneration = previousGenerationRef.current;
+    const session = developSessionRef.current;
+    const samePhoto = session?.photoId === writer.photoId && session.photo.contentSha256 === writer.sourceSha256;
+    const photoName = previousDraftsRef.current.photoName || PHOTO_EDITING_DURABLE_DRAFT_COPY.photoFallback;
+    const publish = (preview: DurableComparisonPreview) => {
+      if (generation !== previousComparisonGenerationRef.current ||
+          !isPreviousGenerationCurrent(previousGeneration)) return;
+      setPreviousDrafts((current) => current.comparison?.choice === comparison.choice
+        ? { ...current, comparisonPreview: preview }
+        : current);
+    };
+    if (!samePhoto) {
+      publish({
+        comparison, photoId: writer.photoId, photoName, loading: false,
+        candidateFrame: null, currentFrame: null,
+        candidateReason: PHOTO_EDITING_DURABLE_DRAFT_COPY.openPhotoToCompare,
+        currentReason: PHOTO_EDITING_DURABLE_DRAFT_COPY.openPhotoToCompare,
+      });
+      return;
+    }
+    const engine = engineRef.current;
+    const unavailableReason = session?.input?.kind === "provisional"
+      ? PHOTO_EDITING_DURABLE_DRAFT_COPY.canonicalPending
+      : engine === null ? PHOTO_EDITING_DURABLE_DRAFT_COPY.previewUnavailable : null;
+    if (!session || unavailableReason !== null || engine === null) {
+      publish({
+        comparison, photoId: writer.photoId, photoName, loading: false,
+        candidateFrame: null, currentFrame: null,
+        candidateReason: unavailableReason ?? PHOTO_EDITING_DURABLE_DRAFT_COPY.previewUnavailable,
+        currentReason: unavailableReason ?? PHOTO_EDITING_DURABLE_DRAFT_COPY.previewUnavailable,
+      });
+      return;
+    }
+    const isCurrent = () => generation === previousComparisonGenerationRef.current &&
+      isPreviousGenerationCurrent(previousGeneration) && developSessionRef.current === session &&
+      engineRef.current === engine && session.photoId === writer.photoId &&
+      session.photo.contentSha256 === writer.sourceSha256;
+    publish({
+      comparison, photoId: writer.photoId, photoName, loading: true,
+      candidateFrame: null, currentFrame: null,
+      candidateReason: comparison.canAdopt ? null : PHOTO_EDITING_DURABLE_DRAFT_COPY.unsupportedPreview,
+      currentReason: null,
+    });
+    let candidateFrame: DevelopFrame | null = null;
+    if (comparison.canAdopt) {
+      try {
+        candidateFrame = await engine.render(comparison.candidate.settings, {
+          maxDimension: 512, interactive: false, priority: "background",
+        });
+      } catch { candidateFrame = null; }
+      if (!isCurrent()) return;
+    }
+    let currentFrame: DevelopFrame | null = null;
+    try {
+      currentFrame = await engine.render(comparison.current.settings, {
+        maxDimension: 512, interactive: false, priority: "background",
+      });
+    } catch { currentFrame = null; }
+    if (!isCurrent()) return;
+    publish({
+      comparison, photoId: writer.photoId, photoName, loading: false,
+      candidateFrame, currentFrame,
+      candidateReason: comparison.canAdopt && candidateFrame === null
+        ? PHOTO_EDITING_DURABLE_DRAFT_COPY.previewUnavailable
+        : comparison.canAdopt ? null : PHOTO_EDITING_DURABLE_DRAFT_COPY.unsupportedPreview,
+      currentReason: currentFrame === null ? PHOTO_EDITING_DURABLE_DRAFT_COPY.previewUnavailable : null,
+    });
+  }, [isPreviousGenerationCurrent]);
+
+  const comparePreviousDraft = useCallback(async (): Promise<void> => {
+    const { writer, snapshot } = previousDraftsRef.current;
+    const conflict = snapshot?.conflicts[0];
+    if (!writer || !conflict || !isDurableScopeCurrent()) return;
+    const generation = previousGenerationRef.current;
+    setPreviousDrafts((current) => ({
+      ...current, busy: true, message: PHOTO_EDITING_DURABLE_DRAFT_COPY.checking,
+    }));
+    try {
+      const comparison = await writer.compare(conflict, previousRequestOptions);
+      if (!isPreviousGenerationCurrent(generation)) return;
+      const nextSnapshot = await writer.read(previousRequestOptions);
+      if (!isPreviousGenerationCurrent(generation)) return;
+      setPreviousDrafts((current) => ({
+        ...current, snapshot: nextSnapshot, comparison, comparisonPreview: null, busy: false, message: null,
+      }));
+      await preparePreviousComparisonPreview(writer, comparison);
+    } catch {
+      if (!isPreviousGenerationCurrent(generation)) return;
+      setPreviousDrafts((current) => ({
+        ...current, busy: false, message: PHOTO_EDITING_DURABLE_DRAFT_COPY.failed,
+      }));
+    }
+  }, [isDurableScopeCurrent, isPreviousGenerationCurrent, preparePreviousComparisonPreview, previousRequestOptions]);
+
+  const finishPreviousKnownSettlement = useCallback(async (
+    writer: PhotoLibraryDevelopDraftWriter,
+    revision: number,
+    kind: "saved" | "resolved",
+  ): Promise<void> => {
+    const session = developSessionRef.current;
+    const paused = previousPausedSaverRef.current;
+    const sameSession = session?.saver !== null && session?.saver !== undefined && paused?.saver === session.saver &&
+      session.photoId === writer.photoId && session.photo.contentSha256 === writer.sourceSha256;
+    const shouldReload = sameSession && paused?.saver.hasPendingWork() !== true;
+    releasePreviousSelection(true);
+    if (!shouldReload || !isDurableScopeCurrent()) return;
+    try {
+      const photo = await library.get(writer.photoId, previousRequestOptions);
+      if (!mountedRef.current || !isDurableScopeCurrent() || developSessionRef.current !== session) return;
+      if (photo === null || photo.id !== writer.photoId || photo.contentSha256 !== writer.sourceSha256 ||
+          photo.developRevision < revision) {
+        releaseDevelopSession();
+        latestSetStatusRef.current({ kind: "error", text: PHOTO_EDITING_DURABLE_DRAFT_COPY.failed });
+        return;
+      }
+      if (kind === "saved") saveDurableRecoveryHandlerRef.current?.(photo);
+      else saveStaleHandlerRef.current?.(photo);
+    } catch {
+      if (!mountedRef.current || !isDurableScopeCurrent() || developSessionRef.current !== session) return;
+      releaseDevelopSession();
+      latestSetStatusRef.current({ kind: "error", text: PHOTO_EDITING_DURABLE_DRAFT_COPY.failed });
+    }
+  }, [isDurableScopeCurrent, library, mountedRef, previousRequestOptions, releaseDevelopSession,
+    releasePreviousSelection]);
+
+  const handlePreviousSaveResult = useCallback(async (
+    writer: PhotoLibraryDevelopDraftWriter,
+    result: PhotoLibraryDevelopDraftSaveResult | PhotoLibraryDevelopConflictResolution,
+  ): Promise<void> => {
+    const generation = previousGenerationRef.current;
+    if (!isPreviousGenerationCurrent(generation)) return;
+    if (result.kind === "conflict") {
+      const snapshot = await writer.read(previousRequestOptions);
+      if (!isPreviousGenerationCurrent(generation)) return;
+      setPreviousDrafts((current) => ({ ...current, snapshot, busy: false, message: null }));
+      return;
+    }
+    const snapshot = await writer.read(previousRequestOptions);
+    if (!isPreviousGenerationCurrent(generation)) return;
+    const empty = snapshot.latest === null && snapshot.attempted === null && snapshot.conflicts.length === 0 &&
+      !snapshot.hasUnknownAttempt && !snapshot.hasPendingResolution && snapshot.terminalReason === null;
+    setPreviousDrafts((current) => ({
+      ...current,
+      snapshot,
+      comparison: snapshot.hasPendingResolution ? current.comparison : null,
+      comparisonPreview: snapshot.hasPendingResolution ? current.comparisonPreview : null,
+      busy: false,
+      message: null,
+    }));
+    if (empty && (result.kind === "saved" || result.kind === "resolved")) {
+      await finishPreviousKnownSettlement(writer, result.revision, result.kind);
+    }
+  }, [finishPreviousKnownSettlement, isPreviousGenerationCurrent, previousRequestOptions]);
+
+  const savePreviousDraft = useCallback(async (): Promise<void> => {
+    const { writer, snapshot } = previousDraftsRef.current;
+    if (!writer || !snapshot || previousDraftsRef.current.busy || !isDurableScopeCurrent()) return;
+    const generation = previousGenerationRef.current;
+    setPreviousDrafts((current) => ({
+      ...current, busy: true, message: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousChecking,
+    }));
+    try {
+      const result = snapshot.hasPendingResolution
+        ? await writer.retryResolution(previousRequestOptions)
+        : snapshot.hasUnknownAttempt
+          ? await writer.retry(previousRequestOptions)
+          : snapshot.latestStage
+            ? await writer.save(snapshot.latestStage, previousRequestOptions)
+            : await writer.retry(previousRequestOptions);
+      if (!isPreviousGenerationCurrent(generation)) return;
+      await handlePreviousSaveResult(writer, result);
+    } catch {
+      if (!isPreviousGenerationCurrent(generation)) return;
+      setPreviousDrafts((current) => ({
+        ...current, busy: false, message: PHOTO_EDITING_DURABLE_DRAFT_COPY.failed,
+      }));
+    }
+  }, [handlePreviousSaveResult, isDurableScopeCurrent, isPreviousGenerationCurrent, previousRequestOptions]);
+
+  const resolvePreviousConflict = useCallback(async (decision: "adopt" | "keep-current"): Promise<void> => {
+    const { writer, comparison, comparisonPreview } = previousDraftsRef.current;
+    if (!writer || !comparison || !comparisonPreview || comparisonPreview.comparison.choice !== comparison.choice ||
+        previousDraftsRef.current.busy || !isDurableScopeCurrent()) return;
+    if (decision === "adopt" && (!comparison.canAdopt || comparisonPreview.candidateFrame === null ||
+        comparisonPreview.currentFrame === null)) return;
+    const generation = previousGenerationRef.current;
+    setPreviousDrafts((current) => ({
+      ...current, busy: true, message: PHOTO_EDITING_DURABLE_DRAFT_COPY.checking,
+    }));
+    try {
+      const result = await writer.resolve(comparison.choice, decision, previousRequestOptions);
+      if (!isPreviousGenerationCurrent(generation)) return;
+      await handlePreviousSaveResult(writer, result);
+    } catch {
+      if (!isPreviousGenerationCurrent(generation)) return;
+      setPreviousDrafts((current) => ({
+        ...current, busy: false, message: PHOTO_EDITING_DURABLE_DRAFT_COPY.failed,
+      }));
+    }
+  }, [handlePreviousSaveResult, isDurableScopeCurrent, isPreviousGenerationCurrent, previousRequestOptions]);
+
+  const closePreviousComparison = useCallback(() => {
+    if (previousDraftsRef.current.busy) return;
+    previousComparisonGenerationRef.current += 1;
+    setPreviousDrafts((current) => ({
+      ...current, comparison: null, comparisonPreview: null, message: null,
+    }));
+  }, []);
+
+  const discardPreviousDraft = useCallback(async (): Promise<void> => {
+    const { writer, snapshot } = previousDraftsRef.current;
+    if (!writer || !snapshot || snapshot.hasUnknownAttempt || snapshot.hasPendingResolution ||
+        previousDraftsRef.current.busy || !isDurableScopeCurrent()) return;
+    const generation = previousGenerationRef.current;
+    setPreviousDrafts((current) => ({ ...current, busy: true }));
+    try {
+      await writer.discard(previousRequestOptions);
+      if (!isPreviousGenerationCurrent(generation)) return;
+      releasePreviousSelection(true);
+    } catch {
+      if (!isPreviousGenerationCurrent(generation)) return;
+      setPreviousDrafts((current) => ({
+        ...current, busy: false, message: PHOTO_EDITING_DURABLE_DRAFT_COPY.failed,
+      }));
+    }
+  }, [isDurableScopeCurrent, isPreviousGenerationCurrent, previousRequestOptions, releasePreviousSelection]);
+
   /**
    * wasm で直す写真の保存係（閲覧のみの operator は作らない）。成功は何も出さず、状態欄は失敗だけ。`developRevision` は直し始めた
    * 版（開いた写真の今の行の版）で、保存のたびに `expectedRevision` として送る（別の端末が先に保存していれば 409 で止まり、
@@ -1175,6 +1683,44 @@ export function useBrowserPhotoDevelop(params: {
           }] : []),
         ];
 
+  const previousSnapshot = previousDrafts.snapshot;
+  const previousComparison = previousDrafts.comparison;
+  const previousComparisonPreview = previousDrafts.comparisonPreview;
+  const previousOwnerVisible = params.actorId !== null && previousDrafts.ownerActorId === params.actorId &&
+    previousDrafts.ownerPort === previousPort && previousDrafts.ownerScopeKey === scopeKey &&
+    previousDrafts.ownerScopeSignal === host.scopeSignal;
+  const previousSelectedMessage = previousDrafts.message ?? (
+    previousComparison
+      ? previousComparison.canAdopt
+        ? PHOTO_EDITING_DURABLE_DRAFT_COPY.conflict
+        : PHOTO_EDITING_DURABLE_DRAFT_COPY.unsupported
+      : previousSnapshot?.hasUnknownAttempt || previousSnapshot?.hasPendingResolution
+        ? PHOTO_EDITING_DURABLE_DRAFT_COPY.unknown
+        : previousSnapshot?.terminalReason
+          ? PHOTO_EDITING_DURABLE_DRAFT_COPY.terminal
+          : PHOTO_EDITING_DURABLE_DRAFT_COPY.previousDescription
+  );
+  const previousSelectedActions = previousDrafts.writer === null ? [] : [
+    ...(previousSnapshot?.conflicts[0] ? [{
+      label: PHOTO_EDITING_DURABLE_DRAFT_COPY.compare,
+      onClick: () => void comparePreviousDraft(),
+    }] : []),
+    ...(!previousSnapshot?.terminalReason ? [{
+      label: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousSave,
+      onClick: () => void savePreviousDraft(),
+    }] : []),
+    ...((previousSnapshot?.latest ?? previousSnapshot?.attempted) ? [{
+      label: PHOTO_EDITING_DURABLE_DRAFT_COPY.saveData,
+      onClick: () => void savePreviousDraftData(),
+    }] : []),
+    ...(!previousSnapshot?.hasUnknownAttempt && !previousSnapshot?.hasPendingResolution ? [{
+      label: PHOTO_EDITING_DURABLE_DRAFT_COPY.discard,
+      onClick: () => void discardPreviousDraft(),
+    }] : []),
+  ];
+  const previousBlocksCurrentPhoto = previousOwnerVisible && previousDrafts.open && previousDrafts.writer !== null &&
+    previousDrafts.writer.photoId === durableCurrentPhotoId;
+
   return {
     engineRef,
     developSessionRef,
@@ -1225,6 +1771,54 @@ export function useBrowserPhotoDevelop(params: {
         onClose: closeDurableComparison,
       } : null,
       refresh: refreshDurableRecovery,
+    },
+    previousDrafts: {
+      entryAction: previousPort && params.actorId ? {
+        label: PHOTO_EDITING_DURABLE_DRAFT_COPY.previousEntry,
+        disabled: previousDrafts.open || durableRecovery.busy || durableRecovery.comparison !== null,
+        onClick: () => void loadPreviousDraftPage(null),
+      } : null,
+      blocksCurrentPhoto: previousBlocksCurrentPhoto,
+      dialog: previousOwnerVisible && previousDrafts.open && previousDrafts.comparison === null ? {
+        busy: previousDrafts.busy,
+        message: previousDrafts.writer ? previousSelectedMessage : previousDrafts.message,
+        items: previousDrafts.items.map((entry) => ({
+          photoName: entry.photoName,
+          onOpen: () => void openPreviousDraft(entry),
+        })),
+        selected: previousDrafts.writer ? {
+          photoName: previousDrafts.photoName,
+          actions: previousSelectedActions,
+        } : null,
+        hasNext: previousDrafts.nextCursor !== null,
+        isFirst: previousDrafts.cursor === null,
+        onNext: () => {
+          const cursor = previousDraftsRef.current.nextCursor;
+          if (cursor !== null) void loadPreviousDraftPage(cursor);
+        },
+        onFirst: () => void loadPreviousDraftPage(null),
+        onBack: () => releasePreviousSelection(true),
+        onClose: () => releasePreviousSelection(false),
+      } : null,
+      comparison: previousOwnerVisible && previousComparisonPreview ? {
+        photoName: previousComparisonPreview.photoName,
+        loading: previousComparisonPreview.loading,
+        candidateFrame: previousComparisonPreview.candidateFrame,
+        currentFrame: previousComparisonPreview.currentFrame,
+        candidateReason: previousComparisonPreview.candidateReason,
+        currentReason: previousComparisonPreview.currentReason,
+        canAdopt: previousComparison !== null &&
+          previousComparisonPreview.comparison.choice === previousComparison.choice &&
+          previousComparisonPreview.candidateFrame !== null && previousComparisonPreview.currentFrame !== null &&
+          previousComparison.canAdopt,
+        busy: previousDrafts.busy,
+        onAdopt: () => void resolvePreviousConflict("adopt"),
+        onKeepCurrent: () => void resolvePreviousConflict("keep-current"),
+        onSaveData: previousSnapshot?.latest || previousSnapshot?.attempted
+          ? () => void savePreviousDraftData()
+          : null,
+        onClose: closePreviousComparison,
+      } : null,
     },
     draftRecovery: {
       selectedDraft,
