@@ -178,6 +178,7 @@ import { PhotoEditingMaskMobileTools } from "./photo-editing-mask-mobile-tools";
 import { BrowserPhotoEditingMaskLayer } from "./photo-editing-mask-overlay";
 import { PhotoEditingMaskTools } from "./photo-editing-mask-tools";
 import { PhotoEditingDropOverlay } from "./photo-editing-drop-overlay";
+import { PhotoEditingImageCorsProvider } from "./photo-editing-image-cors";
 import { PhotoEditingHealTools } from "./photo-editing-heal-tools";
 import { PhotoEditingAddFolderEmptyState, PhotoEditingAddPhotosEmptyState } from "./photo-editing-empty-states";
 import { PhotoEditingGrid, countPhotoEditingGridColumns, type PhotoEditingGridItem } from "./photo-editing-grid";
@@ -347,6 +348,11 @@ export function BrowserPhotoEditingWorkbench(props: {
   treeFooter?: ReactNode;
   /** 個人クラウドへのコピー口。省略時はコピー操作を一切表示しない。 */
   copyToCloud?: BrowserPhotoCopyToCloudBinding;
+  /**
+   * COEP `require-corp` を使うブラウザ文書で写真とアルバム表紙を CORS 読み込みする。
+   * 有効にする場合、写真 URL の配信元はこのアプリ origin に ACAO を返す必要がある。
+   */
+  useCorsForPhotos?: boolean;
 }) {
   const queryClient = useQueryClient();
   // 写真の出どころ（接続口 PhotoLibrary。web は拠点のクラウドの写真置き場、NIHO camera はこの Mac のフォルダ。移行元設計）
@@ -2143,7 +2149,7 @@ export function BrowserPhotoEditingWorkbench(props: {
     </p>
   );
 
-  return (
+  const content = (
     <section
       ref={rootRef}
       aria-label="ブラウザ写真編集"
@@ -3025,4 +3031,5 @@ export function BrowserPhotoEditingWorkbench(props: {
       ) : null}
     </section>
   );
+  return <PhotoEditingImageCorsProvider enabled={props.useCorsForPhotos === true}>{content}</PhotoEditingImageCorsProvider>;
 }

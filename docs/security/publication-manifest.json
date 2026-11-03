@@ -929,8 +929,10 @@
         "path": "packages/photo-editing/src/editor/browser-photo-editing-albums.tsx",
         "sha256": "fe2b60aa899c51b5a3c4b82602b19784e6fceab3d9cd9e7996fb693118dc2955"
       },
-      "outputSha256": "fe2b60aa899c51b5a3c4b82602b19784e6fceab3d9cd9e7996fb693118dc2955",
-      "modifications": []
+      "outputSha256": "446547ce26e774e47f37b0eef006b68300605ec38ebe41d8dbdad24e1ab6c759",
+      "modifications": [
+        "niho-photo #219: COEP分離文書の写真画像CORS読み込みを追加"
+      ]
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-editing-bulk-menu.tsx",
@@ -1131,9 +1133,10 @@
         "niho-photo#41 の比較UIを #72 のヒストグラム・Jキー契約と併存するようmainへ積み直した。",
         "niho-photo#41 の左右比較で両canvasに同じPC余白とfitを適用する。",
         "部分補正（マスク）#67: 写真の canvas の上にマスクの操作を重ねる口（maskOverlay）を足す",
-        "PR #97を最新#96へ積み直し、遠近対応の写真表示に統合。"
+        "PR #97を最新#96へ積み直し、遠近対応の写真表示に統合。",
+        "niho-photo #219: COEP分離文書の写真画像CORS読み込みを追加"
       ],
-      "outputSha256": "32f8c3fb5c8ebea6afe9c817e2fa129986cc9b19466839f7ece4ef2edc10ad34"
+      "outputSha256": "1fcd960b12222da07be2ef21fb18e59a9a6c5fc6c4e8fa9b74d56787a586587d"
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-editing-mobile-editor.tsx",
@@ -1316,13 +1319,14 @@
         "path": "packages/photo-editing/src/editor/browser-photo-editing-tree.tsx",
         "sha256": "2291c76ce46a907e917c9a33160c36f1b069c9a4a9f71ad64b2c21c6c9849a28"
       },
-      "outputSha256": "c1c7da8d959f55791187b81cf61946652e8c85c1e8ba9a623a824b7f3928a31f",
+      "outputSha256": "e6978e8794ec4e91c06dae4e3af27fc5a14176d938dae2f164a3c9ae6c41ea34",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "任意の個別写真ソース契約と選んだ写真のUI、復元、取消、再試行、失敗時参照保持を追加",
         "Issue #50のMac画面配置・表示色・パネル・版位置の変更。",
-        "Issue #49の統合確認: 左の木をPCの幅で2段に貫いて窓の底まで伸ばす。"
+        "Issue #49の統合確認: 左の木をPCの幅で2段に貫いて窓の底まで伸ばす。",
+        "niho-photo #219: COEP分離文書の写真画像CORS読み込みを追加"
       ]
     },
     {
@@ -1445,9 +1449,10 @@
         "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
         "画面幅変更後も編集面の端末メモリ区分を固定する（#155 レビュー）",
         "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み",
-        "Add backwards-compatible personal photo library scope key"
+        "Add backwards-compatible personal photo library scope key",
+        "niho-photo #219: COEP分離文書の写真画像CORS読み込みを追加"
       ],
-      "outputSha256": "bdeb6d712bf3c889121a094bb64d540b8517ecc44e7562fe78805378a6ed1465"
+      "outputSha256": "a29641b50db24a18f0d672fa72897d93deee3bfe1045dfbc0e925c702d22cd62"
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-adjustment-controls-effects.test.tsx",
@@ -1726,10 +1731,11 @@
         "path": "packages/photo-editing/src/editor/photo-editing-grid.test.tsx",
         "sha256": "7d3c1c32e7bea6ab62c3eca9f3a7455ae4a6a9c51b3349111c9923049f6a386a"
       },
-      "outputSha256": "0e477611ab8f2bf5b1587a52e0a5bb65793a5556e11a7eaf8d55da5b54167735",
+      "outputSha256": "23324c10cdb321f80764190d214f832fecc139fa8eccfa526f5bb33d36a7b9a5",
       "modifications": [
         "Issue #50の背景色トークン変更に合わせ既存testを更新。",
-        "幾何が後から付いた読み込み済みのタイルで実寸を読み、空白のまま残らないようにした。"
+        "幾何が後から付いた読み込み済みのタイルで実寸を読み、空白のまま残らないようにした。",
+        "niho-photo #219: COEP分離文書の写真画像CORS読み込みを追加"
       ]
     },
     {
@@ -1740,12 +1746,13 @@
         "path": "packages/photo-editing/src/editor/photo-editing-grid.tsx",
         "sha256": "1b6e669fa72c10a2fd80f68fdc8ccb7141b06d6073741e87118a07cd1ad4a6a2"
       },
-      "outputSha256": "f7d586994e36575ae33b808653e6ab262cbe448f9a6248d8ef54ceb695a316e2",
+      "outputSha256": "74f55a771cc1a8ebd9b5fdf6cff0aeb912fad9721299f7659afb42164393afa1",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #50のMac画面配置・表示色・パネル・版位置の変更。",
-        "幾何が後から付いた読み込み済みのタイルで実寸を読み、空白のまま残らないようにした。"
+        "幾何が後から付いた読み込み済みのタイルで実寸を読み、空白のまま残らないようにした。",
+        "niho-photo #219: COEP分離文書の写真画像CORS読み込みを追加"
       ]
     },
     {
@@ -10540,8 +10547,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-editing-loupe.test.tsx",
-      "sha256": "2a93284afbaf72ca76aba4aa4d1e7b363e56f2f564762552f3403c8a75bb884f",
-      "origin": "niho-photo#49 のため新規作成。1 枚の面の写真のまわりの余白の合成テスト（架空の写真名と blob の仮 URL だけを使う）。"
+      "sha256": "0f13513bfa1a19965cd303e3ff425db4b5701eebdc87fbcc4ae7ef8fa73beaa5",
+      "origin": "niho-photo#49 のため新規作成。1 枚の面の写真のまわりの余白の合成テスト（架空の写真名と blob の仮 URL だけを使う）。\n変更理由: niho-photo #219: COEP分離文書の写真画像CORS読み込みを追加"
     },
     {
       "path": "apps/camera/src/window-surface.test.ts",
@@ -12939,6 +12946,7 @@
       "origin": "NIHO所有のC02転送で、deadline/abort/late responseの解放を同じ境界へ閉じる小さい補助実装。既存公開契約を再利用し、資格情報・内部URL・実写真は含まない。"
     },
     {
+<<<<<<< HEAD
       "path": "docs/architecture/personal-photo-sync.md",
       "sha256": "8f3bec3b59b2398cb306e85b91fde51e782ddccfa00224924c47bd2b90879d9e",
       "origin": "NIHO所有の本人補正同期coreの新規設計。完全draft、actor scope、同一key再送、CAS/競合と後続の実受入境界を公開可能な範囲で記述。\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証"
@@ -13002,6 +13010,11 @@
       "path": "packages/photo-cloud-sync/tsconfig.json",
       "sha256": "4b6495e7817607609b6b069250904b735ffd65b1a1523eb452ba655b6b36ff1b",
       "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。"
+=======
+      "path": "packages/photo-editing/src/editor/photo-editing-image-cors.tsx",
+      "sha256": "78da7f47dd3cec72d40a7b11b2d85ee088b767eaa3e48956f8c6058a84bbf862",
+      "origin": "niho-photo #219 の分離ブラウザ文書向け画像CORS opt-in を実装するため、この公開リポジトリで新規作成。第三者コード・fixture・実データを含まない。"
+>>>>>>> origin/feature/personal-photo-transfers
     }
   ],
   "excludedSources": [

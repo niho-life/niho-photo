@@ -14,6 +14,7 @@ import { PHOTO_EDITING_FOLDER_FALLBACK_LABEL, PHOTO_EDITING_SELECTED_PHOTOS_LABE
 import { cn } from "niho-ui/cn";
 
 import { findPhotoLibraryFolder } from "./use-browser-photo-folders";
+import { usePhotoEditingImageCors } from "./photo-editing-image-cors";
 
 /**
  * ブラウザ版の左の木（「クラウド」の下に「写真」「お気に入り」「記事の画像」）と、狭い幅でその代わりに出す上段の切り替え。件数は
@@ -84,9 +85,10 @@ type PlaceProps = {
 };
 
 function AlbumCover({ album }: { album: BrowserPhotoAlbumSummary }) {
+  const useCorsForPhotos = usePhotoEditingImageCors();
   return album.cover?.imageUrl ? (
     // アルバム名を隣で読み上げるので表紙は装飾。
-    <img src={album.cover.imageUrl} alt="" className="h-7 w-7 shrink-0 rounded-lg object-cover" />
+    <img crossOrigin={useCorsForPhotos ? "anonymous" : undefined} src={album.cover.imageUrl} alt="" className="h-7 w-7 shrink-0 rounded-lg object-cover" />
   ) : (
     <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-niho-pale/60">
       <Folder className="h-4 w-4" aria-hidden />

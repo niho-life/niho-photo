@@ -19,6 +19,7 @@ import type { PhotoEditingThumbnail } from "../photo-editing-thumbnail";
 import { cn } from "niho-ui/cn";
 
 import { CloudPhotoMark } from "./photo-editing-cloud-photo-mark";
+import { usePhotoEditingImageCors } from "./photo-editing-image-cors";
 
 /** グリッドのタイル 1 枚分。`key` は場所ごとの写真の ID（クラウドの写真の ID・フォルダの entryId・開いた写真の photoId） */
 export type PhotoEditingGridItem = {
@@ -61,6 +62,7 @@ export function PhotoEditingTileImage({
   geometry: Record<string, unknown> | null;
   cellAspect?: number;
 }) {
+  const useCorsForPhotos = usePhotoEditingImageCors();
   // 読んだ画像の実寸（どの URL の画像か一緒に持つ。URL が替わったら前の画像の実寸は使わない）
   const [measured, setMeasured] = useState<{ url: string; width: number; height: number } | null>(null);
   const size = measured && measured.url === url ? measured : null;
@@ -78,6 +80,7 @@ export function PhotoEditingTileImage({
   const image = (style?: CSSProperties, className?: string) => (
     <img
       ref={imageRef}
+      crossOrigin={useCorsForPhotos ? "anonymous" : undefined}
       src={url}
       alt=""
       loading="lazy"
