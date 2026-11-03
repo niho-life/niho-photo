@@ -53,8 +53,11 @@ fi
 echo "photo-picker E2E: build pinned engine runtime from clean HEAD snapshot"
 mkdir -p "$W/runtime-source"
 git archive --format=tar HEAD | tar -x -C "$W/runtime-source"
+ln -s "$PWD/node_modules" "$W/runtime-source/node_modules"
+printf 'node_modules\n' >"$W/runtime-source-gitignore"
 SOURCE_GIT_DIR="$(git rev-parse --absolute-git-dir)"
 GIT_DIR="$SOURCE_GIT_DIR" GIT_WORK_TREE="$W/runtime-source" \
+  GIT_CONFIG_COUNT=1 GIT_CONFIG_KEY_0=core.excludesFile GIT_CONFIG_VALUE_0="$W/runtime-source-gitignore" \
   npm -C "$W/runtime-source" run sdk:build-engine-runtime -- --output "$W/runtime" >"$W/runtime-build.log" 2>&1 || {
   echo "photo-picker E2E engine runtime build failed (check pinned Rust, wasm target, rust-src, and wasm-bindgen prerequisites)" >&2
   show_build_failure "$W/runtime-build.log"

@@ -11917,8 +11917,8 @@
     },
     {
       "path": "apps/camera/scripts/e2e/photo-picker.sh",
-      "sha256": "1fa98e6c69730e965215194a10924bcde47440805fa42a05871742a4c30415df",
-      "origin": "niho-photo #210 の独立したMac自動E2E runner。合成fixtureを使い、Mac miniの重処理guardを通してMac Studioで実行する。git archiveでHEADを一時出力し、そのworktreeを既存Git metadataへ接続してruntimeをbuildするためclone/worktreeを作らない。folder/multi-select・restart・duplicate/cancel・missing/reappear・forget/readd・edit/export・path redactionを検査する。"
+      "sha256": "a674c82f3fe7b46f758561aed28e7f968b8a3f9f1b35113771119865ff605c6b",
+      "origin": "niho-photo #210 の独立したMac自動E2E runner。合成fixtureを使い、Mac miniの重処理guardを通してMac Studioで実行する。git archiveでHEADを一時出力し、runtime builderに既存Git metadataを渡す。依存用node_modules symlinkは一時Git configで除外し、clone/worktreeを作らない。folder/multi-select・restart・duplicate/cancel・missing/reappear・forget/readd・edit/export・path redactionを検査する。"
     },
     {
       "path": "apps/camera/scripts/run-e2e.sh",
