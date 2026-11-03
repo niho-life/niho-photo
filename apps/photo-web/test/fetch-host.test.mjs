@@ -469,8 +469,15 @@ describe("createPhotoWebFetchHost", () => {
         assert.equal(calls, 0);
       });
     }
-    for (const origin of ["http://photo.example/", "https://user@photo.example/", "https://photo.example/path", "https://photo.example/?x=1"] ) {
-      await context.test(origin, async () => {
+    const credentialOrigin = new URL(ORIGIN);
+    credentialOrigin.username = "fixture-user";
+    for (const [name, origin] of [
+      ["insecure scheme", "http://photo.example/"],
+      ["userinfo", credentialOrigin.href],
+      ["path", "https://photo.example/path"],
+      ["query", "https://photo.example/?x=1"],
+    ]) {
+      await context.test(name, async () => {
         assert.equal((await createPhotoWebFetchHost(options({ origin }))(new Request(`${ORIGIN}/`))).status, 503);
       });
     }

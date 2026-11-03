@@ -170,9 +170,9 @@ describe("createPhotoWebNodeServer HTTP boundary", () => {
         headers: {
           Cookie: "session=opaque",
           Origin: ORIGIN,
-          Forwarded: "host=private.invalid",
-          "X-Forwarded-For": "10.0.0.1",
-          "X-Forwarded-Host": "private.invalid",
+          Forwarded: "host=upstream.invalid",
+          "X-Forwarded-For": "192.0.2.1",
+          "X-Forwarded-Host": "upstream.invalid",
           "X-Forwarded-Proto": "http",
           "X-Forwarded-Client-Cert": "synthetic",
         },
@@ -203,7 +203,7 @@ describe("createPhotoWebNodeServer HTTP boundary", () => {
       ["duplicate host", `GET / HTTP/1.1\r\nHost: ${HOST}\r\nHost: ${HOST}\r\nConnection: close\r\n\r\n`],
       ["wrong host", "GET / HTTP/1.1\r\nHost: photo.example\r\nConnection: close\r\n\r\n"],
       ["absolute form", `GET ${ORIGIN}/private HTTP/1.1\r\nHost: ${HOST}\r\nConnection: close\r\n\r\n`],
-      ["authority-like", `GET //private.invalid/x HTTP/1.1\r\nHost: ${HOST}\r\nConnection: close\r\n\r\n`],
+      ["authority-like", `GET //upstream.invalid/x HTTP/1.1\r\nHost: ${HOST}\r\nConnection: close\r\n\r\n`],
       ["double slash", `GET /a//private HTTP/1.1\r\nHost: ${HOST}\r\nConnection: close\r\n\r\n`],
       ["literal dot segment", `GET /a/../private HTTP/1.1\r\nHost: ${HOST}\r\nConnection: close\r\n\r\n`],
       ["encoded dot segment", `GET /a/%2e%2E/private HTTP/1.1\r\nHost: ${HOST}\r\nConnection: close\r\n\r\n`],
@@ -219,7 +219,7 @@ describe("createPhotoWebNodeServer HTTP boundary", () => {
           const raw = await bounded(rawRequest(fixture.port, message), name);
           assert.equal(statusOf(raw), 400);
           assert.match(raw, /Cache-Control: no-store/iu);
-          assert.doesNotMatch(raw, /private\.invalid|unexpected/iu);
+          assert.doesNotMatch(raw, /upstream\.invalid|unexpected/iu);
         });
       }
       assert.equal(calls, 0);
@@ -239,7 +239,7 @@ describe("createPhotoWebNodeServer HTTP boundary", () => {
       assert.equal(trace.status, 405);
       assert.match(trace.headers.allow, /GET/u);
       const connect = await rawRequest(fixture.port,
-        `CONNECT private.invalid:443 HTTP/1.1\r\nHost: ${HOST}\r\nConnection: close\r\n\r\n`);
+        `CONNECT upstream.invalid:443 HTTP/1.1\r\nHost: ${HOST}\r\nConnection: close\r\n\r\n`);
       assert.equal(statusOf(connect), 405);
       assert.equal(calls, 0);
     } finally {

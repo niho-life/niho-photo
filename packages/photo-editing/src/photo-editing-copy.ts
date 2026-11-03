@@ -1182,3 +1182,44 @@ export const PHOTO_EDITING_FORGET_SELECTED_PHOTOS_DESCRIPTION =
 export const PHOTO_EDITING_FORGET_SELECTED_PHOTOS_FAILED_TEXT = "選んだ写真を一覧から外せませんでした。";
 /** この Mac の写真の一覧を読めなかった（クラウドの「クラウドの写真を読み込めませんでした。」の代わり）。 */
 export const PHOTO_EDITING_LOCAL_PHOTOS_LOAD_FAILED_TEXT = "写真を読み込めませんでした。";
+
+/** 独立Photo Webの共通copy。静的HTML・PWA・Reactで同じ文言を使う。 */
+export const PHOTO_WEB_COPY = {
+  brand: "NIHO photo",
+  title: "クラウドの写真を開く",
+  subtitle: "NIHOにログインすると、MacやiPhoneで同じ写真を開けます。",
+  login: "NIHOでログイン",
+  verifying: "接続を確認しています",
+  unavailable: "接続を確認できませんでした。しばらくしてから、もう一度お試しください。",
+  retry: "再試行",
+  logout: "ログアウト",
+  cloud: "クラウド",
+  toggleTree: "左のパネル",
+  offline: "オフラインです。まだ開いていない写真を開くには、接続が必要です。",
+  failed: "操作を完了できませんでした。もう一度お試しください。",
+  version: "Web版",
+  pwaAvailable: "新しい版を利用できます。",
+  pwaPreparing: "更新を準備しています…",
+  pwaBlocked: "開いている画面の編集や転送を終えてから、もう一度更新してください。",
+  pwaFailed: "更新できませんでした。もう一度お試しください。",
+  pwaApply: "更新する",
+  homeLabel: "Photoに戻る",
+} as const;
+
+const PHOTO_WEB_USAGE_UNAVAILABLE_TEXT = "容量を確認できません";
+
+/** 削除処理中のbytesはusedの内数。表示で二重加算しない。5GiBは製品表記5GB。 */
+export function photoWebUsageLabel(usage: { usedBytes: number; quotaBytes: number; reservedBytes: number; pendingPurgeBytes: number }): string {
+  if (![usage.usedBytes, usage.quotaBytes, usage.reservedBytes, usage.pendingPurgeBytes].every((value) => Number.isSafeInteger(value) && value >= 0)
+    || usage.quotaBytes === 0 || usage.pendingPurgeBytes > usage.usedBytes) return PHOTO_WEB_USAGE_UNAVAILABLE_TEXT;
+  const format = (bytes: number): string => {
+    const units = ["B", "KB", "MB", "GB"] as const;
+    let unit = 0;
+    while (unit < 3 && bytes >= 1024 ** (unit + 1)) unit++;
+    return `${new Intl.NumberFormat("ja-JP", { maximumFractionDigits: 1 }).format(bytes / 1024 ** unit)}${units[unit]}`;
+  };
+  const parts = [`使用中 ${format(usage.usedBytes)} / ${format(usage.quotaBytes)}`];
+  if (usage.reservedBytes > 0) parts.push(`転送予約中 ${format(usage.reservedBytes)}`);
+  if (usage.pendingPurgeBytes > 0) parts.push(`削除処理中 ${format(usage.pendingPurgeBytes)}（使用中に含む）`);
+  return parts.join("、");
+}
