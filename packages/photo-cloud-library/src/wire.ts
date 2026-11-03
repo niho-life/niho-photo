@@ -283,7 +283,8 @@ export function validateTicket(
   const contentType = entries.find(([name]) => name.toLowerCase() === "content-type")?.[1];
   if (contentType !== undefined && (!CONTENT_TYPE.test(contentType) || (options.expectedContentType !== undefined && contentType !== options.expectedContentType))) invalidResponse();
   if (options.expectedContentType !== undefined && contentType !== options.expectedContentType) invalidResponse();
-  return Object.freeze({ ...ticket, headers: Object.freeze(contentType === undefined ? {} : { "Content-Type": contentType }) });
+  const headers: Record<string, string> = contentType === undefined ? {} : { "Content-Type": contentType };
+  return Object.freeze({ ...ticket, headers: Object.freeze(headers) });
 }
 
 export async function readBoundedJson(response: Response, maximumBytes: number, signal: AbortSignal): Promise<{ readonly bytes: Uint8Array<ArrayBuffer>; readonly value: unknown }> {
