@@ -11,6 +11,7 @@ import {
   type PhotoEditingGridItem,
   type PhotoEditingGridMore,
 } from "./photo-editing-grid";
+import { PhotoEditingImageCorsProvider } from "./photo-editing-image-cors";
 
 const ITEMS: PhotoEditingGridItem[] = [
   { key: "c1", fileName: "P1524180.RW2", thumbnail: { url: "https://example.test/c1.jpg", failed: false }, raw: true, cloud: false },
@@ -411,6 +412,25 @@ describe("PhotoEditingTileImage（幾何が後から付いたタイル）", () =
       tileRoot.render(<PhotoEditingTileImage url={url} geometry={{ rotate: 90, flipH: false, flipV: false, angle: 0 }} />),
     );
     expect(tileContainer.querySelector("img")?.style.opacity).toBe("0");
+  });
+
+  it("分離文書用 provider は CORS 属性を src より前に付ける", async () => {
+    await act(async () =>
+      tileRoot.render(
+        <PhotoEditingImageCorsProvider enabled>
+          <PhotoEditingTileImage url="https://example.test/signed.jpg?token=fixture" geometry={null} />
+        </PhotoEditingImageCorsProvider>,
+      ),
+    );
+    const image = tileContainer.querySelector("img");
+    const attributes = image?.getAttributeNames() ?? [];
+    expect(image?.getAttribute("crossorigin")).toBe("anonymous");
+    expect(attributes.indexOf("crossorigin")).toBeLessThan(attributes.indexOf("src"));
+  });
+
+  it("provider が無いときは非分離文書の画像属性を変えない", async () => {
+    await act(async () => tileRoot.render(<PhotoEditingTileImage url="https://example.test/a.jpg" geometry={null} />));
+    expect(tileContainer.querySelector("img")?.hasAttribute("crossorigin")).toBe(false);
   });
 
   it("URL が替わったら、前の画像の実寸は使わず読み直す", async () => {
