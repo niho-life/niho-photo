@@ -182,6 +182,18 @@ describe("PhotoWebTransferPanel", () => {
     expect(controller.checkCapability).not.toHaveBeenCalled();
   });
 
+  it("hidden file inputs are excluded from the Tab and accessibility order", async () => {
+    const controller = fakeController({ list: vi.fn(async () => page([status({ phase: "needs-file" })])) });
+    await render(binding(controller), host());
+    await flush();
+    const inputs = [...container.querySelectorAll<HTMLInputElement>('input[type="file"]')];
+    expect(inputs).toHaveLength(2);
+    for (const input of inputs) {
+      expect(input.tabIndex).toBe(-1);
+      expect(input.getAttribute("aria-hidden")).toBe("true");
+    }
+  });
+
   it("選択ごとに入力を即時clearし、一つのintentとactive gateだけでstartする", async () => {
     const pending = deferred<PersonalPhotoTransferStatus>();
     const controller = fakeController({ start: vi.fn(() => pending.promise) });

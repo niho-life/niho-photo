@@ -345,6 +345,8 @@ export function PhotoWebTransferPanel(props: PhotoWebTransferPanelProps) {
             ref={addInputRef}
             className="photo-web-transfer-file-input"
             type="file"
+            tabIndex={-1}
+            aria-hidden="true"
             accept={extensionDetails.accept || undefined}
             aria-label={transfer.copy.add}
             disabled={!canAdd}
@@ -407,6 +409,8 @@ export function PhotoWebTransferPanel(props: PhotoWebTransferPanelProps) {
                           }}
                           className="photo-web-transfer-file-input"
                           type="file"
+                          tabIndex={-1}
+                          aria-hidden="true"
                           accept={resumeAccept}
                           aria-label={transfer.copy.chooseSameFile}
                           disabled={!canMutate}
