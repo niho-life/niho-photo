@@ -295,12 +295,23 @@ describe("installPhotoStaticWorker static boundary", () => {
     await assert.rejects(hostile.fire("fetch", { request: staticRequest("/assets/app.js") }), /timed out/);
     assert.equal(cancelled, true);
 
+    const cacheOnlyDeadlineTimer = {
+      setTimeout(callback, milliseconds) {
+        return setTimeout(callback, milliseconds === 1_000 ? 0 : milliseconds);
+      },
+      clearTimeout,
+    };
     const hangingCache = fakeScope(
       async () => basic(bodies["/assets/app.js"], { headers: safeHeaders("application/javascript") }),
       new Map(),
-      fastDeadlineTimer,
+      cacheOnlyDeadlineTimer,
     );
     hangingCache.scope.caches.open = async () => new Promise(() => undefined);
+    // A healthy native digest may outlive the accelerated cache deadline.
+    hangingCache.scope.crypto = { subtle: { async digest(...args) {
+      await new Promise((resolve) => setTimeout(resolve, 10));
+      return await crypto.subtle.digest(...args);
+    } } };
     installPhotoStaticWorker(hangingCache.scope, manifest);
     const response = await hangingCache.fire("fetch", { request: staticRequest("/assets/app.js") });
     assert.equal(await response.text(), bodies["/assets/app.js"]);
