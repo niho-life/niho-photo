@@ -5,6 +5,8 @@ import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig } from "vitest/config";
 
+import { parsePhotoCloudBuildProof } from "./src/cloud-build-proof";
+
 // NIHO photo の画面（Tauri の frontendDist）。tauri dev は devUrl（http://localhost:1430）を、tauri build は dist/ を読む。
 //
 // 共有の package（packages/photo-editing = niho-photo-editing・packages/ui = niho-ui）はソースのまま読む（exports が src/*.ts）。
@@ -27,6 +29,11 @@ export function sharedPackagePeerDependencies(): string[] {
 }
 
 export default defineConfig({
+  define: {
+    __NIHO_PHOTO_CLOUD_BUILD_PROOF__: JSON.stringify(parsePhotoCloudBuildProof(
+      process.env.NIHO_PHOTO_CLOUD_BUILD_PROOF ? JSON.parse(process.env.NIHO_PHOTO_CLOUD_BUILD_PROOF) : null,
+    )),
+  },
   plugins: [react(), tailwindcss()],
   clearScreen: false,
   server: {

@@ -81,13 +81,16 @@ test("official build環境は公開値だけを追加し秘密・Cargo設定を�
   const workspace = temp("niho-photo-env-workspace-");
   const isolatedRoot = temp("niho-photo-env-isolated-");
   const publicKey = `AIza${"A".repeat(35)}`;
-  const env = officialBuildEnvironment({ PATH: "/usr/bin", HOME: "/unsafe", CARGO_HOME: "/unsafe/cargo", RUSTFLAGS: "unsafe", TAURI_SIGNING_PRIVATE_KEY: "secret" }, { workspace, isolatedRoot, publicFirebaseKey: publicKey });
+  const proof = { sdkVersion: "0.1.9", crateVersion: "0.27.0", manifestSha256: "a".repeat(64), sdkSourceCommit: "b".repeat(40) };
+  const env = officialBuildEnvironment({ PATH: "/usr/bin", HOME: "/unsafe", CARGO_HOME: "/unsafe/cargo", RUSTFLAGS: "unsafe", TAURI_SIGNING_PRIVATE_KEY: "secret", NIHO_PHOTO_CLOUD_BUILD_PROOF: '{"sdkVersion":"forged"}' }, { workspace, isolatedRoot, publicFirebaseKey: publicKey, cloudBuildProof: proof });
   assert.equal(env.NIHO_PHOTO_PUBLIC_FIREBASE_WEB_API_KEY, publicKey);
+  assert.deepEqual(JSON.parse(env.NIHO_PHOTO_CLOUD_BUILD_PROOF), proof);
   assert.equal(env.HOME, path.join(isolatedRoot, "home"));
   assert.equal(env.CARGO_HOME, path.join(isolatedRoot, "cargo-home"));
   assert.equal(env.RUSTUP_TOOLCHAIN, "1.98.1");
   assert.equal(env.RUSTFLAGS, undefined);
   assert.equal(env.TAURI_SIGNING_PRIVATE_KEY, undefined);
+  assert.throws(() => officialBuildEnvironment({ HOME: "/unsafe" }, { workspace, isolatedRoot, publicFirebaseKey: publicKey, cloudBuildProof: { ...proof, source: "unverified" } }), /SDK proof/u);
   assert.throws(() => officialBuildEnvironment({}, { workspace, isolatedRoot: temp("niho-photo-env-missing-"), publicFirebaseKey: "" }), /公開Firebase/);
 });
 

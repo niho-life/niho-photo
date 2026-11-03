@@ -167,7 +167,9 @@ export function buildCandidate(values) {
     const overlays = applyVersionOverlay(workspace, values["--version"]);
     assertExpectedWorkspaceChanges(sourceBefore, sourceSnapshot(workspace));
     const isolated = path.join(scratch, "isolated");
-    const env = officialBuildEnvironment(process.env, { workspace, isolatedRoot: isolated, publicFirebaseKey });
+    const env = officialBuildEnvironment(process.env, { workspace, isolatedRoot: isolated, publicFirebaseKey,
+      cloudBuildProof: { sdkVersion: sdk.manifest.version, crateVersion: sdk.manifest.engine.crateVersion,
+        manifestSha256: sdk.manifest.engine.manifest.sha256, sdkSourceCommit: sdk.manifest.source.commit } });
     const runtimeBundle = stageRuntimeAssetBundle(workspace, sdk.manifest, path.join(isolated, "runtime.assetbundle"));
     const native = buildNative({ sdkDirectory, sdkManifest: sdk.manifest, workspace, scratch, env });
     const notices = stageCandidateNotices(workspace, path.join(scratch, "third-party-notices"));

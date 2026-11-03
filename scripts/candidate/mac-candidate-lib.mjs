@@ -20,6 +20,7 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 import { assertSystemNativeSearchPaths } from "../../packages/develop-engine/build-macos-native.mjs";
+import { parsePhotoCloudBuildProof } from "../../apps/camera/src/cloud-build-proof.ts";
 import { assertPublicBytes, createSbom, lockfiles } from "../ci/release-evidence-lib.mjs";
 import { readPublicSdkDependenciesSync } from "../ci/publication-lib.mjs";
 import { normalizeArtifactDigest, sdkReleaseProfile, validateReleaseManifest, verifyManifestPackageFiles } from "../sdk/verify-release-artifact.mjs";
@@ -268,9 +269,11 @@ export function applyVersionOverlay(workspace, version) {
   });
 }
 
-export function officialBuildEnvironment(input, { workspace, isolatedRoot, publicFirebaseKey }) {
+export function officialBuildEnvironment(input, { workspace, isolatedRoot, publicFirebaseKey, cloudBuildProof = null }) {
   if (!path.isAbsolute(workspace) || !path.isAbsolute(isolatedRoot)) throw new CandidateError("official build隔離pathが不正です");
   if (typeof publicFirebaseKey !== "string" || !/^AIza[A-Za-z0-9_-]{30,}$/u.test(publicFirebaseKey)) throw new CandidateError("公式candidateには公開Firebase Web API keyが必要です");
+  const proof = parsePhotoCloudBuildProof(cloudBuildProof);
+  if (cloudBuildProof !== null && !proof) throw new CandidateError("公式candidateのPhoto SDK proofが不正です");
   const inherited = Object.fromEntries(["PATH", "LANG", "DEVELOPER_DIR", "SDKROOT"].filter((key) => input[key]).map((key) => [key, input[key]]));
   const rustupHome = input.RUSTUP_HOME || (input.HOME ? path.join(input.HOME, ".rustup") : undefined);
   if (!path.isAbsolute(rustupHome ?? "")) throw new CandidateError("Rust toolchainの保存先は絶対pathが必要です");
@@ -299,6 +302,8 @@ export function officialBuildEnvironment(input, { workspace, isolatedRoot, publi
     CARGO_PROFILE_RELEASE_STRIP: "debuginfo",
     CARGO_ENCODED_RUSTFLAGS: remap.join("\x1f"),
     NIHO_PHOTO_PUBLIC_FIREBASE_WEB_API_KEY: publicFirebaseKey,
+    // Do not inherit caller declarations: this value comes from the verified SDK manifest.
+    NIHO_PHOTO_CLOUD_BUILD_PROOF: JSON.stringify(proof),
     CSC_IDENTITY_AUTO_DISCOVERY: "false",
     CI: "true",
   };

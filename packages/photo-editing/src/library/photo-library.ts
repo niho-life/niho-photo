@@ -206,6 +206,11 @@ export type PhotoLibrary = {
     photo: Pick<PhotoLibraryItem, "id" | "fileName" | "sizeBytes" | "hasOriginal">,
     options?: PhotoLibraryRequestOptions,
   ): Promise<{ blob: Blob; fileName: string }>;
+  /** Save verified original bytes through a native dialog without materializing a JS Blob. */
+  saveOriginalNative?(
+    photo: Pick<PhotoLibraryItem, "id" | "fileName" | "sizeBytes" | "hasOriginal">,
+    options?: PhotoLibraryRequestOptions,
+  ): Promise<PhotoLibraryNativeExportResult>;
   /**
    * native の段 2 で原寸の JPEG にして保存する（`capabilities.nativeExport`）。`folderId` が無ければ保存ダイアログ、あれば
    * そのフォルダへ。ダイアログを閉じたら `saved: false`。失敗は画面に出せる 1 行の `Error`（フォルダが無くなったときだけ
