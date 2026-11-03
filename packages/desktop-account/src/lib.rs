@@ -1,6 +1,7 @@
 //! Photo / DocsのNIHO app-connect public client。認証・認可の最終判断はサーバーが行う。
 mod account;
 mod connect;
+mod photo_cloud;
 mod photo_session;
 mod secret;
 
@@ -8,6 +9,10 @@ pub use account::{Account, AccountPhase, AccountSnapshot};
 pub use connect::{
   parse_callback, Browser, Callback, Cancel, ClientId, Config, ExternalBrowser, HttpTransport, Request, Response,
   Transport,
+};
+pub use photo_cloud::{
+  photo_ephemeral_id, PhotoContentMetadata, PhotoDownloadCancel, PhotoJsonResponse, PhotoOperation, PhotoRequest,
+  PhotoScopeCapture,
 };
 pub use photo_session::{PhotoIdentity, PhotoIdentityTransport};
 pub use secret::{CredentialStore, FileSecretStore, KeychainStore, Secret, SecretKind};

@@ -9,7 +9,7 @@ const PHOTO_SESSION_PATH: &str = "/api/auth/photo-connect/mac-session";
 const MAX_RESPONSE: u64 = 64 * 1024;
 const MAX_LIFETIME_MS: u64 = 31 * 24 * 60 * 60 * 1000;
 
-#[derive(Clone, Debug, Serialize, PartialEq, Eq)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
 #[serde(rename_all = "kebab-case")]
 pub enum PhotoIdentityTransport {
   MacBearer,
@@ -212,7 +212,7 @@ fn is_format_character(character: char) -> bool {
   )
 }
 
-fn parse_strict_iso(value: &str) -> Option<u64> {
+pub(crate) fn parse_strict_iso(value: &str) -> Option<u64> {
   let bytes = value.as_bytes();
   if bytes.len() != 24
     || bytes[4] != b'-'

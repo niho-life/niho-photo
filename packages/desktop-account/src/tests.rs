@@ -1,11 +1,13 @@
 use super::*;
 use crate::account::Clock;
 use crate::connect::{Pending, PENDING_TTL_MS};
+use crate::photo_cloud::{NativePhotoRequest, PhotoHttpResponse, PhotoHttpTransport};
 use crate::photo_session::{PhotoSessionResponse, PhotoSessionTransport};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::BTreeMap;
+use std::io::Cursor;
 use std::sync::{
   atomic::{AtomicBool, AtomicU64, Ordering},
   Arc, Mutex,
@@ -192,6 +194,31 @@ impl Fixture {
     let account = Arc::new(
       Account::with_adapters(config.clone(), store.clone(), browser.clone(), server.clone())
         .with_photo_session(photo_session)
+        .with_clock(clock.clone()),
+    );
+    Self {
+      account,
+      store,
+      browser,
+      server,
+      clock,
+      config,
+    }
+  }
+  fn with_photo_http(photo_http: Arc<dyn PhotoHttpTransport>) -> Self {
+    let config = Config::mock("http://127.0.0.1:12345");
+    let store = Arc::new(MemoryStore::default());
+    let browser = Arc::new(CaptureBrowser::default());
+    let clock = Arc::new(TestClock(AtomicU64::new(1_000_000)));
+    let server = Arc::new(MockServer {
+      state: Mutex::new(ServerState::default()),
+      store: store.clone(),
+      browser: browser.clone(),
+    });
+    let account = Arc::new(
+      Account::with_adapters(config.clone(), store.clone(), browser.clone(), server.clone())
+        .with_photo_session(Arc::new(StaticPhotoSession::valid()))
+        .with_photo_http(photo_http)
         .with_clock(clock.clone()),
     );
     Self {
@@ -758,6 +785,171 @@ fn expiry_refresh_keeps_the_same_logical_photo_identity_scope() {
   assert_eq!(first.session_epoch, second.session_epoch);
   assert_eq!(first.transport, second.transport);
   assert_ne!(first.expires_at, second.expires_at);
+}
+
+fn photo_scope(identity: &PhotoIdentity) -> PhotoScopeCapture {
+  PhotoScopeCapture {
+    user_id: identity.user_id.clone(),
+    session_id: identity.session_id.clone(),
+    session_epoch: identity.session_epoch.clone(),
+    transport: identity.transport.clone(),
+  }
+}
+
+fn native_photo_value() -> Value {
+  json!({
+    "id":"photo","libraryId":"library","storageState":"stored","lifecycle":"active",
+    "fileName":"synthetic.jpg","format":"jpeg","hasEdits":false,"addedAt":"1970-01-01T00:16:40.000Z",
+    "capturedAt":null,"width":1,"height":1,
+    "original":{"id":"upa_opaque","kind":"original","sha256":format!("{:x}", Sha256::digest(b"x")),
+      "sizeBytes":1,"contentType":"image/jpeg","width":1,"height":1},
+    "recipe":{"revision":0,"settings":{"v":1,"engine":"niho-14"},"settingsSha256":"b".repeat(64),
+      "baseVersion":null,"maskSurfaceIds":[],"updatedAt":"1970-01-01T00:16:40.000Z"},
+    "media":{"state":"pending"}
+  })
+}
+
+struct ContentStatusPhotoHttp {
+  status: u16,
+  received: Arc<AtomicBool>,
+  release: Arc<AtomicBool>,
+}
+
+impl ContentStatusPhotoHttp {
+  fn immediate(status: u16) -> Self {
+    Self {
+      status,
+      received: Arc::new(AtomicBool::new(false)),
+      release: Arc::new(AtomicBool::new(true)),
+    }
+  }
+}
+
+impl PhotoHttpTransport for ContentStatusPhotoHttp {
+  fn send(
+    &self,
+    _: &Config,
+    bearer: &Secret,
+    request: &NativePhotoRequest,
+    content: bool,
+  ) -> Result<PhotoHttpResponse, AccountError> {
+    assert_eq!(bearer.expose(), "synthetic-id-token");
+    if content {
+      self.received.store(true, Ordering::SeqCst);
+      let deadline = Instant::now() + Duration::from_secs(3);
+      while !self.release.load(Ordering::SeqCst) {
+        assert!(Instant::now() < deadline);
+        std::thread::sleep(Duration::from_millis(2));
+      }
+      if self.status == 0 {
+        return Err(AccountError::Network);
+      }
+      return Ok(PhotoHttpResponse {
+        status: self.status,
+        content_length: Some(0),
+        content_type: Some("application/json".into()),
+        sha256: None,
+        total_bytes: None,
+        body: Box::new(Cursor::new(Vec::<u8>::new())),
+      });
+    }
+    assert!(request.url.path().ends_with("/photos/photo"));
+    let bytes = serde_json::to_vec(&native_photo_value()).unwrap();
+    Ok(PhotoHttpResponse {
+      status: 200,
+      content_length: Some(bytes.len() as u64),
+      content_type: Some("application/json".into()),
+      sha256: None,
+      total_bytes: None,
+      body: Box::new(Cursor::new(bytes)),
+    })
+  }
+}
+
+#[test]
+fn guarded_cache_read_rejects_bytes_if_logout_or_refresh_occurs_during_io() {
+  for refresh in [false, true] {
+    let f = Fixture::new();
+    f.login();
+    let scope = photo_scope(&f.account.photo_identity().unwrap());
+    let result = f.account.photo_content_read_guarded(&scope, || {
+      if refresh {
+        f.account.refresh().unwrap();
+      } else {
+        f.account.logout().unwrap();
+      }
+      Ok(vec![7_u8])
+    });
+    assert_eq!(result, Err(AccountError::Cancelled));
+  }
+}
+
+#[test]
+fn content_401_invalidates_only_its_captured_generation() {
+  let http = Arc::new(ContentStatusPhotoHttp::immediate(401));
+  let f = Fixture::with_photo_http(http);
+  f.login();
+  let scope = photo_scope(&f.account.photo_identity().unwrap());
+  let metadata = f.account.photo_content_metadata(&scope, "photo", "upa_opaque").unwrap();
+  assert_eq!(
+    f.account
+      .photo_content_download(&scope, &metadata, &mut Vec::new(), &PhotoDownloadCancel::default(),),
+    Err(AccountError::Expired)
+  );
+  assert_eq!(f.account.snapshot().phase, AccountPhase::Failed);
+  assert!(f.store.load(SecretKind::RefreshToken).unwrap().is_none());
+  assert_eq!(
+    f.account.photo_content_read_guarded(&scope, || Ok(vec![1_u8])),
+    Err(AccountError::Expired)
+  );
+
+  let received = Arc::new(AtomicBool::new(false));
+  let release = Arc::new(AtomicBool::new(false));
+  let http = Arc::new(ContentStatusPhotoHttp {
+    status: 401,
+    received: Arc::clone(&received),
+    release: Arc::clone(&release),
+  });
+  let f = Fixture::with_photo_http(http);
+  f.login();
+  let scope = photo_scope(&f.account.photo_identity().unwrap());
+  let metadata = f.account.photo_content_metadata(&scope, "photo", "upa_opaque").unwrap();
+  let account = Arc::clone(&f.account);
+  let pending = std::thread::spawn(move || {
+    account.photo_content_download(&scope, &metadata, &mut Vec::new(), &PhotoDownloadCancel::default())
+  });
+  let deadline = Instant::now() + Duration::from_secs(3);
+  while !received.load(Ordering::SeqCst) {
+    assert!(Instant::now() < deadline);
+    std::thread::sleep(Duration::from_millis(2));
+  }
+  f.account.refresh().unwrap();
+  release.store(true, Ordering::SeqCst);
+  assert_eq!(pending.join().unwrap(), Err(AccountError::Cancelled));
+  assert_eq!(f.account.snapshot().phase, AccountPhase::Connected);
+  assert!(f.store.load(SecretKind::RefreshToken).unwrap().is_some());
+}
+
+#[test]
+fn content_transient_status_does_not_permanently_logout() {
+  for status in [0, 429, 503] {
+    let f = Fixture::with_photo_http(Arc::new(ContentStatusPhotoHttp::immediate(status)));
+    f.login();
+    let scope = photo_scope(&f.account.photo_identity().unwrap());
+    let metadata = f.account.photo_content_metadata(&scope, "photo", "upa_opaque").unwrap();
+    let expected = if status == 0 {
+      AccountError::Network
+    } else {
+      AccountError::InvalidResponse
+    };
+    assert_eq!(
+      f.account
+        .photo_content_download(&scope, &metadata, &mut Vec::new(), &PhotoDownloadCancel::default(),),
+      Err(expected)
+    );
+    assert_eq!(f.account.snapshot().phase, AccountPhase::Connected);
+    assert!(f.store.load(SecretKind::RefreshToken).unwrap().is_some());
+  }
 }
 
 struct PausedTransport {
