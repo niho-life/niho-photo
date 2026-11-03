@@ -1,7 +1,13 @@
 import type { PersonalCloudPhotoBinding } from "./App";
 
 /** Issued by the trusted native session, never inferred from a login snapshot or a default actor. */
-export type MacPhotoCloudScope = Readonly<{ actorId: string; libraryId: string; sessionEpoch: string }>;
+export type MacPhotoCloudScope = Readonly<{
+  actorId: string;
+  libraryId: string;
+  sessionId: string;
+  sessionEpoch: string;
+  transport: "mac-bearer";
+}>;
 export type MacPhotoCopyStatus = Readonly<{
   requestId: string;
   photoId: string;
@@ -33,7 +39,11 @@ export class MacPhotoCopyError extends Error {
 }
 
 function sameScope(left: MacPhotoCloudScope | null, right: MacPhotoCloudScope) {
-  return left?.actorId === right.actorId && left.libraryId === right.libraryId && left.sessionEpoch === right.sessionEpoch;
+  return left?.actorId === right.actorId
+    && left.libraryId === right.libraryId
+    && left.sessionId === right.sessionId
+    && left.sessionEpoch === right.sessionEpoch
+    && left.transport === right.transport;
 }
 
 type Connection = {
@@ -59,7 +69,8 @@ export function createMacPersonalCloudPhotoBinding(connection: Connection | null
   if (!connection) return { state: "not_connected", binding: undefined, dispose: () => {} };
   const { native, library, host } = connection;
   const scope = Object.freeze({ ...connection.scope });
-  if (!scope.actorId.trim() || !scope.libraryId.trim() || !scope.sessionEpoch.trim() || library.place !== "cloud" || !sameScope(connection.currentScope(), scope)) {
+  if (!scope.actorId.trim() || !scope.libraryId.trim() || !scope.sessionId.trim() || !scope.sessionEpoch.trim()
+    || scope.transport !== "mac-bearer" || library.place !== "cloud" || !sameScope(connection.currentScope(), scope)) {
     return { state: "not_connected", binding: undefined, dispose: () => {} };
   }
   let disposed = false;
@@ -76,7 +87,7 @@ export function createMacPersonalCloudPhotoBinding(connection: Connection | null
 
   const binding: PersonalCloudPhotoBinding = {
     library, host, actorId: scope.actorId,
-    scopeKey: `personal:${scope.libraryId}:${scope.actorId}`,
+    scopeKey: JSON.stringify([scope.actorId, scope.libraryId, scope.sessionId, scope.sessionEpoch, scope.transport]),
     async copyLocalPhoto(photoId, options) {
       assertCurrent();
       if (options.signal.aborted) throw new MacPhotoCopyError("cancelled");
