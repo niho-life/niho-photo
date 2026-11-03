@@ -208,7 +208,7 @@ class TransferController implements BrowserPersonalPhotoTransferController {
     return await this.withLock(scope, intentId, signal, async (operationSignal) => {
       let entry = await this.requiredEntry(scope, intentId, operationSignal);
       if (entry.phase === "cancelled" || entry.phase === "purged" || entry.phase === "rejected" || entry.phase === "expired") return status(entry);
-      if (entry.phase === "done" || entry.phase === "pending-recipe") return status(await this.update(entry, { phase: "failed", failure: "stored" }));
+      if (entry.phase === "done" || entry.phase === "pending-recipe") return status(await this.markStoredCancellation(entry));
       entry = await this.update(entry, { phase: "cancel-pending" });
       return status(await this.cancelEntry(entry, operationSignal));
     });
@@ -238,7 +238,7 @@ class TransferController implements BrowserPersonalPhotoTransferController {
     if (entry.uploadId === null) {
       const reconciled = await this.reconcileStart(entry, signal);
       entry = reconciled.entry;
-      if (reconciled.existing) return await this.update(entry, { phase: "failed", failure: "stored" });
+      if (reconciled.existing || entry.phase === "pending-recipe" || entry.phase === "done") return await this.markStoredCancellation(entry);
       if (entry.uploadId === null || terminal(entry.phase)) return entry;
       if (entry.phase !== "cancel-pending") entry = await this.update(entry, { phase: "cancel-pending" });
     }
@@ -247,10 +247,26 @@ class TransferController implements BrowserPersonalPhotoTransferController {
       const upload = receipt.value;
       assertUploadBinding(entry, upload);
       if (upload.state === "cancelled") entry = await this.update(entry, { phase: "cancelled" });
-      else if (upload.state === "stored" || upload.state === "verifying") entry = await this.update(entry, { phase: upload.state === "stored" ? "failed" : "verifying", failure: upload.state === "stored" ? "stored" : null });
+      else if (upload.state === "stored") entry = await this.markStoredCancellation(await this.acceptUploadState(entry, upload, signal, false));
+      else if (upload.state === "verifying") entry = await this.acceptUploadState(entry, upload, signal, false);
       else if (upload.state === "expired") entry = await this.update(entry, { phase: "expired" });
-    } catch (error) { entry = await this.handleKnownFailure(entry, error); }
+    } catch (error) {
+      if (photoErrorCode(error) === "upload_state_conflict" && entry.candidate !== null) {
+        // A stored original may still have a different local recipe. Read its actual
+        // result before closing cancellation, so the complete candidate stays reachable.
+        try {
+          const upload = await this.options.client.request("uploads.get", { uploadId: requiredUploadId(entry) }, { signal });
+          assertUploadBinding(entry, upload);
+          if (upload.state === "stored") entry = await this.markStoredCancellation(await this.acceptUploadState(entry, upload, signal, false));
+          else if (upload.state === "verifying") entry = await this.acceptUploadState(entry, upload, signal, false);
+        } catch (readError) { entry = await this.handleKnownFailure(entry, readError); }
+      } else entry = await this.handleKnownFailure(entry, error);
+    }
     return entry;
+  }
+
+  private async markStoredCancellation(entry: TransferJournalEntry): Promise<TransferJournalEntry> {
+    return await this.update(entry, { phase: entry.phase === "pending-recipe" ? "pending-recipe" : "failed", failure: "stored" });
   }
 
   private async run(initial: TransferJournalEntry, file: File, signal: AbortSignal): Promise<PersonalPhotoTransferStatus> {
