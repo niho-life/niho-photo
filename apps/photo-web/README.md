@@ -1,0 +1,45 @@
+# Photo専用Webのhost境界
+
+正式な提供先は `https://photo.niho.life`、Safariとホーム画面PWAの起動先は `/`。共通の写真編集面を使い、Editorの `/photo` や新しい画像処理エンジンを追加しない。
+
+このpackageはC01本人session consumer、既存C02/C03への接続口、共通編集面、静的配信とPWAを扱う。認証producer・クラウドHTTP操作の配置・永続下書き/outbox・実保存先はそれぞれの正本を使う。factoryの対象試験が成功しても、正式配備や実端末の受入が完了した意味にはならない。
+
+## 境界
+
+- `src/server/auth.ts`: 既存C01の固定認証ルート。未設定時は503へ閉じる。
+- `src/server/fetch-host.ts`: exact origin、固定C01ルート、注入されたC02 handler、検証済み静的ファイルだけを扱う。認証/APIはno-store。認証失敗のナビゲーションは、共有copyから作る匿名の日本語HTMLを返す。
+- `src/server/node-server.ts`: listenしないNode HTTP adapter。呼出側がloopbackへのbindとTLS reverse proxyを用意する。raw Host/target/headerを検査し、要求・応答をbounded streamで渡す。切断と通常のPOST完了を区別し、取消し・期限・backpressure・処理枠を保持する。
+- `src/build/static-bundle.ts`: 信頼されたVite成果物と公式SDKの検証済みbytesから、匿名document、content-addressed静的asset、manifest、classic SW、公開build metadataを生成する。既存outputは上書きしない。
+- `src/server/static-store.ts`: 起動前に全ファイルの長さ・SHA256を確認し、immutable Blobで保持する。要求URLからfilesystem pathを作らない。root/SW/manifest/build metadataはno-store、列挙済みの静的assetだけをpublic immutableで返す。
+- `src/pwa`: 匿名offline HTMLだけを初回cacheし、静的assetを正確なhash/長さ/MIMEで検証する。認証/API/写真/root/アプリmanifestはcacheしない。更新は開いている全画面のguardが許可した場合だけ適用し、他画面を強制reloadしない。
+- `src/runtime`: C01 controllerを1個所有し、C02 connectionとC03 guard/失効消去portを接続する。Query、表示用URL、dialog、遅着connectを本人と世代に拘束し、通常refreshで編集を作り直さない。C03のjournalを実装しない。
+- `src/view`: `PhotoLibraryProvider`、`BrowserPhotoEditingWorkbench`、`AppDialogHost`を使う。API、永続journal、別の編集面を持たない。文言は共通copyから受け取る。
+
+静的配布は1ファイル8MiB、合計32MiB、128ファイル以内。Nodeの既定64MiB要求/応答・16処理枠はadapterの防御上限で、対応形式やクラウド転送能力の宣言ではない。C02/C08が実際の転送契約に合わせて明示設定する。V8 heap制限をWASM全体のメモリ上限とみなさない。
+
+## 接続と配布
+
+C08の信頼された設定に、C01実producer登録、C02実transport、C03下書き・guard・失効消去、共有dialog取消し、正式なCSP/immutable asset保持を合わせる。安全なUI identity metadataをserverの本人証明として送らない。通常のcredential refreshでは編集を維持し、失効・本人切替では処理と派生資源を同期的に止める。通常の画面終了を下書きの失効消去にしない。
+
+WebのVite bundleは共通の `develop-engine.worker.ts` を、既存の `develop-engine-export.worker.ts` へexact absolute aliasで解決する。これで同じ画素処理を使いながらnative glueや永続analysis DBを含めない。実際の配布graphとworker起動を確認し、SDK名の一致だけで能力や読み込まれたbytesを保証しない。
+
+公式SDK baseline、notice、既存512pxアイコンの由来は `src/build/build-baseline.json` と `provenance.json`。C08が別の正式SDKセットを選ぶ場合は、実発行物のsource/hash/receiptを受入してから更新する。古いassetはPWA更新が終わるまで保持する。CDNで圧縮・変形してContent-Lengthを変えると固定bytes検証に失敗するため、静的配信はno-transformとし、実際の公開応答のbytes/長さ/MIMEをreadbackする。
+
+## 検証
+
+workspace登録後の対象検証:
+
+```sh
+npm run test --workspace @niho/photo-web
+npm run lint --workspace @niho/photo-web
+```
+
+完全な共通UI型検査と重いnative/WASM buildは公開CIで行う。ローカルでは `tsconfig.pwa.json`、`tsconfig.build.json`、`tsconfig.server.json`、`tsconfig.runtime.json` の対象限定検査を使う。合成画像・fake portの試験と、正式origin/本人/実保存先/実iPhoneの受入を混同しない。
+
+#194/#197/#199/#200の完了には、実認証、JPEG/PNG/受入済み形式の追加・編集・再読込・書出し・即時purge、Mac Chrome/Safari、実iPhone Safari/PWA、署名済みMacとの両方向の往復、越権/容量/競合/失効/遅着の独立証跡が必要。
+
+Web hostのscopeSignal/isScopeCurrentは、共通の共有シート呼出し直前にも接続する必要がある。host.saveFileだけでは共通UIのnavigator.share経路を包めない。C03側の正式な共有portが未接続の状態を実機合格としない。
+
+UI型検査は既存cameraと同じstrict設定を使う。PWA・build・serverの限定検査にはnoUncheckedIndexedAccess/exactOptionalPropertyTypesも適用する。runtimeのdownloadBudgetはC02/C08が実受入済みのhost memory budgetから明示設定し、未設定や不正値では接続を開始しない。
+
+静的storeが保持するのは現在のbuildだけ。過去のファイルをdiskに残すだけでは、このexact mapから過去pathは配信されない。C08の静的配信層で旧content-addressed assetも配信し、passive画面が閉じるまで保持する。SWの2版cache上限をserver側の保持版数と同一視せず、root/SW/manifestは現在版だけを返す。
