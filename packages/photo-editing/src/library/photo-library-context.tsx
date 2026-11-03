@@ -10,6 +10,10 @@ import type { PhotoLibrary, PhotoLibraryCapabilities } from "./photo-library";
  * 画面遷移とログインはホストの責務。下書きの持ち主はactorIdで受け取る。
  */
 export type PhotoEditingHost = {
+  /** 本人/接続の世代が失効したら同期的にabortする。ローカル専用hostでは省略できる。 */
+  readonly scopeSignal?: AbortSignal;
+  /** OSへ新たなファイルを渡せる本人/接続の状態か。検証中・期限切れもfalseにする。 */
+  isScopeCurrent?(): boolean;
   /**
    * 写真の中身が変わった（足した・作業コピーができた・補正後のプレビューが付いた）ことを、編集面の外の画面へ知らせる
    * （web は記事制作の画像ライブラリを読み直す。外の画面が無いアプリは何もしない）。待たない・失敗しない

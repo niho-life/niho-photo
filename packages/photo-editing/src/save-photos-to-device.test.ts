@@ -5,6 +5,7 @@ const saveFileMock = vi.fn<(file: { blob: Blob; fileName: string }) => Promise<"
 
 import {
   PHOTO_SAVE_MAX_FILES,
+  photoSaveEnv,
   photoSaveActionLabel,
   resolvePhotoSaveRoute,
   savePhotosToDevice,
@@ -118,5 +119,80 @@ describe("savePhotosToDevice（device-file / download）", () => {
       saved: 1,
     });
     expect(saveFileMock).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("savePhotosToDeviceの本人scope", () => {
+  it("photoSaveEnvが同じsignalとhostに束縛した同期検証を渡す", () => {
+    const host = {
+      scopeSignal: new AbortController().signal,
+      current: true,
+      isScopeCurrent() { return this.current; },
+      nativeFileSaveAvailable: () => false,
+      saveFile: saveFileMock,
+    };
+    const env = photoSaveEnv(host);
+    expect(env.scopeSignal).toBe(host.scopeSignal);
+    expect(env.isScopeCurrent?.()).toBe(true);
+    host.current = false;
+    expect(env.isScopeCurrent?.()).toBe(false);
+  });
+
+  it.each(["aborted", "verifying", "throws"])("%sのscopeでOSへ渡さない", async (state) => {
+    const controller = new AbortController();
+    if (state === "aborted") controller.abort();
+    const nav = shareNavigator({ active: true });
+    const env = {
+      navigator: nav, saveFile: saveFileMock, scopeSignal: controller.signal,
+      isScopeCurrent: () => { if (state === "throws") throw new Error("unavailable"); return state !== "verifying"; },
+    };
+    for (const route of ["share", "device-file", "download"] as const) {
+      await expect(savePhotosToDevice([jpeg("a.jpg")], route, env)).resolves.toEqual({ kind: "cancelled" });
+    }
+    expect(nav.share).not.toHaveBeenCalled();
+    expect(saveFileMock).not.toHaveBeenCalled();
+  });
+
+  it("OS共有直前にscopeを再確認する", async () => {
+    let current = true;
+    const nav = shareNavigator();
+    Object.defineProperty(nav, "userActivation", { get: () => { current = false; return { isActive: true }; } });
+    await expect(savePhotosToDevice([jpeg("a.jpg")], "share", {
+      navigator: nav, saveFile: saveFileMock, isScopeCurrent: () => current,
+    })).resolves.toEqual({ kind: "cancelled" });
+    expect(nav.share).not.toHaveBeenCalled();
+  });
+
+  it.each([false, true])("開始済み共有の遅着%sを新scopeの成功/再タップにしない", async (reject) => {
+    const controller = new AbortController();
+    const nav = shareNavigator({ share: async () => {
+      controller.abort();
+      if (reject) throw domError("NotAllowedError");
+    } });
+    await expect(savePhotosToDevice([jpeg("a.jpg")], "share", {
+      navigator: nav, saveFile: saveFileMock, scopeSignal: controller.signal,
+    })).resolves.toEqual({ kind: "cancelled" });
+    expect(nav.share).toHaveBeenCalledOnce();
+  });
+
+  it.each(["device-file", "download"] as const)("%sで1枚目のawait後に失効したら次へ渡さない", async (route) => {
+    let current = true;
+    saveFileMock.mockImplementation(async () => { current = false; return "saved"; });
+    await expect(savePhotosToDevice([jpeg("a.jpg"), jpeg("b.jpg")], route, {
+      navigator: null, saveFile: saveFileMock, isScopeCurrent: () => current,
+    })).resolves.toEqual({ kind: "cancelled" });
+    expect(saveFileMock).toHaveBeenCalledOnce();
+  });
+
+  it("保存の失敗が失効後に届いたら取消しにし、現在のscopeの失敗は維持する", async () => {
+    const controller = new AbortController();
+    saveFileMock.mockImplementationOnce(async () => { controller.abort(); throw new Error("old failure"); });
+    await expect(savePhotosToDevice([jpeg("a.jpg")], "device-file", {
+      navigator: null, saveFile: saveFileMock, scopeSignal: controller.signal,
+    })).resolves.toEqual({ kind: "cancelled" });
+    saveFileMock.mockRejectedValueOnce(new Error("current failure"));
+    await expect(savePhotosToDevice([jpeg("a.jpg")], "download", {
+      navigator: null, saveFile: saveFileMock, isScopeCurrent: () => true,
+    })).rejects.toThrow("current failure");
   });
 });

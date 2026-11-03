@@ -2334,10 +2334,11 @@
         "path": "packages/photo-editing/src/library/photo-library-context.tsx",
         "sha256": "8d02900518760166fa02df02d858bc8536821f33662b570b428139f3ed44a56c"
       },
-      "outputSha256": "e69d6e63d6d29082443e7d55ca2a90f8d4b249fa9e0b0290390b90cd86f3a653",
+      "outputSha256": "5f69262752cba4bb34491094ae30c69440148cce5c6d6d2a5c0ac11c5239ba55",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "C06本人scopeの失効後保存を停止し共有dialogの保持内容を同期取消する公開接続"
       ]
     },
     {
@@ -3175,10 +3176,11 @@
         "path": "packages/photo-editing/src/save-photos-to-device.test.ts",
         "sha256": "91facb425116e0fd0d144d842ff7cbbc34ef6e8d478ef615f8361dcdcc20076e"
       },
-      "outputSha256": "0f65e90da22fda7da8bee12ac5b33371083b7b6015c9cb3544e67d3ffef64222",
+      "outputSha256": "2227961a4168c1f4f4da1e1f14cbbcc70f8de3406335a70a36b578208f24bc63",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "C06本人scopeの失効後保存を停止し共有dialogの保持内容を同期取消する公開接続"
       ]
     },
     {
@@ -3189,10 +3191,11 @@
         "path": "packages/photo-editing/src/save-photos-to-device.ts",
         "sha256": "212823eab38e47e7ce674018684e0b3a626fd44953d5e8ae14eb321da2c772ab"
       },
-      "outputSha256": "cf116ab1579d6e885f0702e5e549380b90be559e9ee38610e68cd1aea66c7458",
+      "outputSha256": "0e524dd3530e638eae25bb829c0ffb3267948b99e92da2e4831d35d808319803",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "C06本人scopeの失効後保存を停止し共有dialogの保持内容を同期取消する公開接続"
       ]
     },
     {
@@ -3441,10 +3444,11 @@
         "path": "packages/ui/src/app-dialog.ts",
         "sha256": "eedb1eb14d1645051468d175a584c89684c7e43d364c7fb858135baead85cdef"
       },
-      "outputSha256": "83736b7ce62d34795561194eff437f056557562d098308e2597b9e34f3b699ea",
+      "outputSha256": "cc00d55e3f70b103424d25c554a3bf18abddc1554010e54532ae7a839f6ef4c8",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "C06本人scopeの失効後保存を停止し共有dialogの保持内容を同期取消する公開接続"
       ]
     },
     {
@@ -12873,6 +12877,11 @@
       "path": "packages/photo-editing/src/develop-engine/develop-renderer-capabilities.test.ts",
       "sha256": "16c993c9727c4b8ed35a10b4b80c0f8dfc8e1325f596d64f2415519646881e84",
       "origin": "NIHOがschema 1の不正入力・readonly snapshotを検証するため新規作成した合成unit test。実写真・利用者データ・第三者資産を含まない。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。"
+    },
+    {
+      "path": "packages/ui/src/app-dialog.test.ts",
+      "sha256": "332f50d249708baf003fb08dd9251f39427b2a7892b60b601f01a7cb029b7541",
+      "origin": "Photo C03/C06の本人scope失効時に共通dialogの全取消・保持内容消去・遅着拒否を検証する新規合成試験。Bがowner承認の限定移管範囲で独自作成。実データ・外部資産を含まない。"
     }
   ],
   "excludedSources": [
