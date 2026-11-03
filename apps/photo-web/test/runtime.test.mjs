@@ -1037,6 +1037,48 @@ function authenticationHarness(options = {}) {
 }
 
 describe("connection authentication rejection", () => {
+  for (const fence of ["peer", "bfcache"]) {
+    it(`preserves the same-user rejection latch across a ${fence} fence until explicit retry`, async () => {
+      const test = authenticationHarness();
+      try {
+        await test.runtime.start();
+        await eventually(() => assert.ok(test.runtime.getSnapshot().binding));
+        test.contexts[0].onAuthenticationRejected();
+        await eventually(() => assert.equal(test.runtime.getSnapshot().session.phase, "ready"));
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.equal(test.contexts.length, 1);
+        if (fence === "peer") test.channel.receive({ type: "session-changed" });
+        else {
+          test.window.dispatchEvent(pageEvent("pagehide", true));
+          test.window.dispatchEvent(pageEvent("pageshow", true));
+        }
+        await eventually(() => assert.equal(test.bridge.refreshes, 2));
+        await eventually(() => assert.equal(test.runtime.getSnapshot().session.phase, "ready"));
+        await new Promise((resolve) => setImmediate(resolve));
+        assert.equal(test.contexts.length, 1);
+        assert.equal(test.runtime.getSnapshot().binding, null);
+        await test.runtime.retry();
+        await eventually(() => assert.ok(test.runtime.getSnapshot().binding));
+        assert.equal(test.contexts.length, 2);
+      } finally { test.runtime.dispose(); }
+    });
+  }
+
+  it("clears the rejection latch after a logical identity change", async () => {
+    const test = authenticationHarness();
+    try {
+      await test.runtime.start();
+      await eventually(() => assert.ok(test.runtime.getSnapshot().binding));
+      test.bridge.refreshQueue.push(identity("owner-b"));
+      test.contexts[0].onAuthenticationRejected();
+      await eventually(() => assert.equal(test.runtime.getSnapshot().binding?.actorId, "owner-b"));
+      test.bridge.refreshQueue.push(identity());
+      test.channel.receive({ type: "session-changed" });
+      await eventually(() => assert.equal(test.runtime.getSnapshot().binding?.actorId, "owner-a"));
+      assert.equal(test.contexts.length, 3);
+    } finally { test.runtime.dispose(); }
+  });
+
   it("fences synchronously, broadcasts anonymously and waits for explicit retry after same-user verification", async () => {
     const verification = deferred();
     let dialogCancels = 0;

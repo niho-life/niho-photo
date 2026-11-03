@@ -274,6 +274,7 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
   let binding: PhotoWebViewBinding | null = null;
   let pendingConnect: Promise<void> | null = null;
   let rejectedGeneration: number | null = null;
+  let authenticationRejectedScope: string | null = null;
   let suppressConnection = false;
   let verificationInFlight: Promise<void> | null = null;
   let verificationQueuedFresh = false;
@@ -539,6 +540,7 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
       || connectPort === null) return;
     const current = session.getSnapshot();
     if (current.phase !== "ready" || !current.cloudOperationsAvailable || current.identity === null) return;
+    if (authenticationRejectedScope === logicalScope(current.identity)) return;
     const generation = resourceGeneration;
     const identity = current.identity;
     const run = async (): Promise<void> => {
@@ -565,9 +567,9 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
                 || (current.phase !== "ready" && current.phase !== "verifying")
                 || current.identity === null || isPhotoIdentityExpired(current.identity, now())
                 || !samePhotoIdentityScope(identity, current.identity)) return;
+              // Generic peer/BFCache fences must preserve an explicit-retry requirement.
+              authenticationRejectedScope = logicalScope(identity);
               const verification = requestVerification(true);
-              // A same-user refresh must not immediately retry a persistently rejected BFF.
-              rejectedGeneration = resourceGeneration;
               notifyPeers();
               void verification.catch(() => undefined);
             },
@@ -746,6 +748,8 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
 
   removers.push(session.onEvent(onSessionEvent));
   removers.push(session.subscribe(() => {
+    if (authenticationRejectedScope !== null
+      && authenticationRejectedScope !== logicalScope(session.getSnapshot().identity)) authenticationRejectedScope = null;
     publish();
     scheduleProactiveRefresh();
     scheduleConnection();
@@ -937,6 +941,7 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
     async retry(): Promise<void> {
       if (disposed || !cloudEnabled) return;
       rejectedGeneration = null;
+      authenticationRejectedScope = null;
       await requestVerification(false);
       scheduleConnection();
     },

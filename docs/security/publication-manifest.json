@@ -12682,8 +12682,8 @@
     },
     {
       "path": "apps/photo-web/README.md",
-      "sha256": "d336387850702b721f476cfdcb048b9a521b96a05754aeef0a1a10852193258e",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: Photo WebのC01 captureとC02 clientの接続・受信stream寿命、正式bootstrapの残る責務を記録する。\n変更理由: 固定Photo BFFの401だけをruntimeの世代別本人再確認へ接続し、透過fetchとbrowser graphの対象検証・責務を追加する"
+      "sha256": "810309b15e4cd98db4b5665b0b72ea3909d3f4fff9c22a1dd7256e26b6cbbb07",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: Photo WebのC01 captureとC02 clientの接続・受信stream寿命、正式bootstrapの残る責務を記録する。\n変更理由: 固定Photo BFFの401だけをruntimeの世代別本人再確認へ接続し、透過fetchとbrowser graphの対象検証・責務を追加する\n変更理由: 同じ本人のBFF認証拒否をpeer通知・BFCacheの世代変更をまたいで保持し、明示retry又は本人変更だけで解除する"
     },
     {
       "path": "apps/photo-web/eslint.config.mjs",
@@ -12737,8 +12737,8 @@
     },
     {
       "path": "apps/photo-web/src/runtime/runtime.ts",
-      "sha256": "c287a6f5f328e4d480c6c8e65366a7519bf276fde9fb696490dd52ea49e6d568",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: 固定Photo BFFの認証拒否を本人・世代に拘束して即時fenceし、実本人再確認と明示retryへ接続する"
+      "sha256": "5cdf082ea6181e20a46a0ec3104250c1a1a1d59df0fb42770203dca93b0b6d1a",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: 固定Photo BFFの認証拒否を本人・世代に拘束して即時fenceし、実本人再確認と明示retryへ接続する\n変更理由: 同じ本人のBFF認証拒否をpeer通知・BFCacheの世代変更をまたいで保持し、明示retry又は本人変更だけで解除する"
     },
     {
       "path": "apps/photo-web/src/runtime/types.ts",
@@ -12797,8 +12797,8 @@
     },
     {
       "path": "apps/photo-web/test/runtime.test.mjs",
-      "sha256": "44a3ab58f73d324f22e7e1b744057081678c29c61e631ce602b030ecdb846322",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: 固定Photo BFFの認証拒否を本人・世代に拘束して即時fenceし、実本人再確認と明示retryへ接続する"
+      "sha256": "93838757c5b59671d5971ac6915e56ecf3d7698f29116095c06e5b184c77d9c5",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: 固定Photo BFFの認証拒否を本人・世代に拘束して即時fenceし、実本人再確認と明示retryへ接続する\n変更理由: 同じ本人のBFF認証拒否をpeer通知・BFCacheの世代変更をまたいで保持し、明示retry又は本人変更だけで解除する"
     },
     {
       "path": "apps/photo-web/test/static-bundle.test.mjs",

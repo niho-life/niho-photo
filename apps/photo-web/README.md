@@ -64,4 +64,4 @@ renderer probeは、このbundleに固定した受入済みSDK/manifest proofと
 
 正式compositionでは、固定Photo BFFへのfetchで得た401をruntimeのfence・peer通知・本人再確認へつなぐ。providerへの送信失敗はC02の再開・renewで扱う。helperの単体成功だけではこのHTTP接続、失効時の両journal消去、preview解放、実producer・SDK・memory budgetの受入は完了しない。
 
-`connect` が受け取る `onAuthenticationRejected` を `createPhotoWebCloudFetch` へ渡し、そのfetchをC02 browser clientだけに注入する。固定same-origin `/cloud/v2/` の401でruntimeが同期的に旧接続を止め、匿名のpeer通知と実本人再確認を行う。同じ本人へ戻っても自動接続を繰り返さず、明示retryで再開する。旧世代・失効済み接続からの通知は無視する。403/409/503やproviderの401はこの本人通知へ変換しない。
+`connect` が受け取る `onAuthenticationRejected` を `createPhotoWebCloudFetch` へ渡し、そのfetchをC02 browser clientだけに注入する。固定same-origin `/cloud/v2/` の401でruntimeが同期的に旧接続を止め、匿名のpeer通知と実本人再確認を行う。同じ本人へ戻っても自動接続を繰り返さず、明示retryで再開する。この拒否状態はpeer通知やBFCache復帰をまたいで保持し、本人tupleが変わった場合にも解除する。旧世代・失効済み接続からの通知は無視する。403/409/503やproviderの401はこの本人通知へ変換しない。
