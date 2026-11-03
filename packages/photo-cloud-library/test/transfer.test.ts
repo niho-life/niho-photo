@@ -509,6 +509,57 @@ describe("browser original copy controller", () => {
     harness.controller.dispose();
   });
 
+
+  it.each(["existing-start", "stored-start", "stored-cancel", "stored-conflict", "stored-conflict-lost", "pending"] as const)("preserves the complete candidate across cancellation via %s and reopen", async (mode) => {
+    const factory = new IDBFactory();
+    const name = `cancel-candidate-${mode}`;
+    const harness = makeController({ factory, name });
+    const local = candidate({ settings: { ...responses["photos.get"].recipe.settings, preservedUnknown: { local: true } } });
+    let startRequest: StartUploadRequest | null = null;
+    let starts = 0;
+    let reads = 0;
+    harness.client.dispatch = async (operation, request) => {
+      if (operation === "uploads.start") {
+        startRequest = request as StartUploadRequest;
+        starts += 1;
+        if ((mode === "existing-start" || mode === "stored-start") && starts === 1) throw new Error("start response lost");
+        const photo = photoFor(startRequest);
+        if (mode === "existing-start" || mode === "pending") return { value: { kind: "existing", photo }, replayed: starts > 1 };
+        const upload = mode === "stored-start"
+          ? { ...reserved(startRequest, 3), state: "stored", result: { kind: "original", photo } }
+          : { ...reserved(startRequest, 3), state: "verifying", jobId: "job" };
+        return { value: { kind: "upload", upload, ticket: null }, replayed: starts > 1 };
+      }
+      if (operation === "uploads.cancel" && (mode === "stored-conflict" || mode === "stored-conflict-lost")) throw { error: { code: "upload_state_conflict", requestId: "synthetic", retryable: false } };
+      if ((operation === "uploads.cancel" || operation === "uploads.get") && startRequest) {
+        if (operation === "uploads.get" && mode === "stored-conflict-lost" && ++reads === 1) throw new Error("read unavailable");
+        const upload = { ...reserved(startRequest, 3), state: "stored", result: { kind: "original", photo: photoFor(startRequest) } };
+        return operation === "uploads.cancel" ? { value: upload, replayed: false } : upload;
+      }
+      throw new Error(`unexpected ${operation}`);
+    };
+    try {
+      await harness.controller.start({ intentId: "intent", file: file(), format: "jpeg", fullRecipeCandidate: local });
+      const cancelled = await harness.controller.cancel("intent");
+      if (mode === "stored-conflict-lost") {
+        expect(cancelled).toMatchObject({ phase: "cancel-pending", hasPendingRecipe: false });
+        harness.controller.dispose();
+        const recovery = makeController({ factory, name, client: harness.client });
+        try { expect(await recovery.controller.resume({ intentId: "intent" })).toMatchObject({ phase: "pending-recipe", hasPendingRecipe: true, failure: "stored" }); }
+        finally { recovery.controller.dispose(); }
+      } else expect(cancelled).toMatchObject({ phase: "pending-recipe", hasPendingRecipe: true, failure: "stored" });
+      const expected = { candidate: local, cloudRecipe: responses["photos.get"].recipe };
+      if (mode !== "stored-conflict-lost") expect(await harness.controller.readPendingRecipe("intent")).toMatchObject(expected);
+      expect(harness.client.calls.filter((call) => call.operation === "photos.delete")).toHaveLength(0);
+      harness.controller.dispose();
+      const reopened = makeController({ factory, name, client: harness.client });
+      try {
+        expect((await reopened.controller.list()).items).toMatchObject([{ phase: "pending-recipe", hasPendingRecipe: true }]);
+        expect(await reopened.controller.readPendingRecipe("intent")).toMatchObject(expected);
+      } finally { reopened.controller.dispose(); }
+    } finally { harness.controller.dispose(); }
+  });
+
   it("does not delete an original when cancel reports stored conflict", async () => {
     const harness = makeController();
     harness.client.dispatch = async (operation, request) => {
