@@ -812,7 +812,14 @@ export function useBrowserPhotoDevelop(params: {
     if (!durablePort || !target || !isDurableScopeCurrent()) return;
     setDurableRecovery((current) => ({ ...current, busy: true, message: PHOTO_EDITING_DURABLE_DRAFT_COPY.checking }));
     try {
-      const writer = await durablePort.reopen(
+      const session = developSessionRef.current;
+      const active = session?.saver ? durableSaversRef.current.get(session.saver) : undefined;
+      const reusableWriter = active && session && active.writer.token === target.token &&
+        active.photoId === target.photoId && session.photoId === target.photoId &&
+        active.sourceSha256 === session.photo.contentSha256
+        ? active.writer
+        : null;
+      const writer = reusableWriter ?? await durablePort.reopen(
         target.token,
         host.scopeSignal === undefined ? undefined : { signal: host.scopeSignal },
       );
@@ -1281,12 +1288,15 @@ export function useBrowserPhotoDevelop(params: {
     const paused = previousPausedSaverRef.current;
     const sameSession = session?.saver !== null && session?.saver !== undefined && paused?.saver === session.saver &&
       session.photoId === writer.photoId && session.photo.contentSha256 === writer.sourceSha256;
-    const shouldReload = sameSession && paused?.saver.hasPendingWork() !== true;
+    const mayReload = (): boolean => sameSession && session !== null && paused !== null &&
+      paused.saver === session.saver && paused.saver.hasPendingWork() !== true &&
+      developSessionRef.current === session && isDurableScopeCurrent();
+    const shouldReload = mayReload();
     releasePreviousSelection(true);
     if (!shouldReload || !isDurableScopeCurrent()) return;
     try {
       const photo = await library.get(writer.photoId, previousRequestOptions);
-      if (!mountedRef.current || !isDurableScopeCurrent() || developSessionRef.current !== session) return;
+      if (!mountedRef.current || !mayReload()) return;
       if (photo === null || photo.id !== writer.photoId || photo.contentSha256 !== writer.sourceSha256 ||
           photo.developRevision < revision) {
         releaseDevelopSession();
@@ -1296,7 +1306,7 @@ export function useBrowserPhotoDevelop(params: {
       if (kind === "saved") saveDurableRecoveryHandlerRef.current?.(photo);
       else saveStaleHandlerRef.current?.(photo);
     } catch {
-      if (!mountedRef.current || !isDurableScopeCurrent() || developSessionRef.current !== session) return;
+      if (!mountedRef.current || !mayReload()) return;
       releaseDevelopSession();
       latestSetStatusRef.current({ kind: "error", text: PHOTO_EDITING_DURABLE_DRAFT_COPY.failed });
     }

@@ -644,7 +644,7 @@
         "path": "packages/photo-editing/src/develop-engine/develop-settings-autosave.ts",
         "sha256": "d1ac98de8c7379a1e06c5e7ed67aeb9dad82d94e314b75100a7d29c28f4cef72"
       },
-      "outputSha256": "9cc6f4173c2deb19542fd615d00e6fa70e338d993e153aceb1fba196584375f1",
+      "outputSha256": "3181431c7f115234e779f915ca2fea93cfbe0a47953c8196fa34998774bcbb2b",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -1981,7 +1981,7 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-develop.ts",
         "sha256": "491153dcf3675cfd0b822a008f101a77125411c9e18966ea7b7fb96e18ce8228"
       },
-      "outputSha256": "488ca18c2af46fa113113d7cf5a92a3ffc33ef90529da267ef9612877b7b5789",
+      "outputSha256": "bd00e3bf20e5e30a86dc8c33db0015296d1a823178f6298e19960383487d0c90",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -13104,7 +13104,7 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-durable-recovery.test.tsx",
-      "sha256": "7c3877cef92a12895ed626e888c74386f58da9935c25d172b9506bdb1f8cf5c1",
+      "sha256": "7cb29ed8627ea8fb26e6783bf2392cc4b8f325fff0bfcf47126f956fed347ff6",
       "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する\n変更理由: 復旧後の編集再開と通常自動保存中の操作継続を固定する回帰試験を追加。\n変更理由: 復旧保存時の専用reload経路を通ることを回帰検証する。"
     },
     {
@@ -13159,7 +13159,7 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-previous-drafts.test.tsx",
-      "sha256": "7dbabbbef52abedfbdc39e3d11a74ae26ea7ce28b041db4489c1d987d2d6564a",
+      "sha256": "f9a98e14009b9c11f7e9e1910c597e3f6c2c3af4f9899438af97e7c87145a444",
       "origin": "NIHO original explicit previous-draft recovery UI and synthetic regression tests for C03."
     }
   ],
