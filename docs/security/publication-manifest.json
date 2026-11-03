@@ -12771,8 +12771,8 @@
     },
     {
       "path": "apps/photo-web/test/worker-runtime.test.mjs",
-      "sha256": "b99eb985b7c2758027dda2aff7a3d5ab16930bc64963329a8a015241eada4294",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。"
+      "sha256": "aafd563aeb7a182ff5766288efab1b8b04151249b46f7cd8fa9329bf57aa1983",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 同時body読取の試験を固定turn待ちではなく実read開始で同期。SHA遅延の決定的回帰を追加"
     },
     {
       "path": "apps/photo-web/tsconfig.build.json",
