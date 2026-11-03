@@ -366,7 +366,12 @@ function validateTicketShape(value: unknown): UploadTicket { if (!isUploadTicket
 function parseJsonBytes(bytes: Uint8Array): unknown {
   let text: string;
   try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { invalidResponse(); }
-  try { const value: unknown = JSON.parse(text); validateJsonDepth(value); return value; } catch { invalidResponse(); }
+  try {
+    const value: unknown = JSON.parse(text);
+    // A stored-upload receipt nests recipe.settings five levels below its JSON root.
+    validateJsonDepth(value, PHOTO_LIMITS.maxJsonDepth + 5);
+    return value;
+  } catch { invalidResponse(); }
 }
 function parseListQuery(query: URLSearchParams): Record<string, unknown> {
   const allowed = new Set(["cursor", "limit", "sort", "formats", "edited", "editable"]);

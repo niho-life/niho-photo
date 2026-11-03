@@ -225,8 +225,8 @@ export function validateJsonValue(value: unknown, maximumBytes: number): void {
   validateJson(value, 0);
 }
 
-export function validateJsonDepth(value: unknown): void {
-  validateJson(value, 0);
+export function validateJsonDepth(value: unknown, maximumDepth: number = PHOTO_LIMITS.maxJsonDepth): void {
+  validateJson(value, 0, maximumDepth);
 }
 
 export function validateRenderer(value: RenderCapability): RenderCapability {
@@ -321,19 +321,19 @@ function validateWorkingCopy(value: WorkingCopy): void {
   validateJson(value.meta, 0);
 }
 
-function validateJson(value: unknown, depth: number): void {
-  if (depth > PHOTO_LIMITS.maxJsonDepth) invalid();
+function validateJson(value: unknown, depth: number, maximumDepth: number = PHOTO_LIMITS.maxJsonDepth): void {
+  if (depth > maximumDepth) invalid();
   if (value === null || typeof value === "string" || typeof value === "boolean") return;
   if (typeof value === "number") {
     if (!Number.isFinite(value)) invalid();
     return;
   }
   if (Array.isArray(value)) {
-    for (const item of value) validateJson(item, depth + 1);
+    for (const item of value) validateJson(item, depth + 1, maximumDepth);
     return;
   }
   if (!isRecord(value)) invalid();
-  for (const item of Object.values(value)) validateJson(item, depth + 1);
+  for (const item of Object.values(value)) validateJson(item, depth + 1, maximumDepth);
 }
 
 function jsonBytes(value: unknown): number {

@@ -58,6 +58,38 @@ async function clientFor(harness: ReturnType<typeof setup>, identity = new FakeI
 }
 
 describe("same-origin HTTP client and BFF", () => {
+  it.each([32, 33])("bounds the recipe itself at depth %i independently of HTTP envelopes", async (depth) => {
+    let nested: unknown = null;
+    for (let index = 1; index < depth; index += 1) nested = { next: nested };
+    const photo = { ...responses["photos.get"], recipe: { ...responses["photos.get"].recipe,
+      settings: { ...responses["photos.get"].recipe.settings, future: nested } } };
+    const harness = setup((request) => request.url.endsWith("/library") ? json(responses["library.get"]) : json(photo));
+    const client = await clientFor(harness);
+    try {
+      const result = client.request("photos.get", { photoId: photo.id }, { signal: new AbortController().signal });
+      if (depth === 32) await expect(result).resolves.toEqual(photo);
+      else await expect(result).rejects.toBeTruthy();
+    } finally { client.dispose(); }
+  });
+
+  it("preserves a depth-32 recipe inside the deepest stored-upload receipt", async () => {
+    let nested: unknown = null;
+    for (let index = 1; index < 32; index += 1) nested = { next: nested };
+    const photo = { ...responses["photos.get"], recipe: { ...responses["photos.get"].recipe,
+      settings: { ...responses["photos.get"].recipe.settings, future: nested } } };
+    const receipt = { replayed: true, value: {
+      id: "depth-upload", target: { kind: "original", fileName: photo.fileName, format: photo.format },
+      sha256: photo.original.sha256, sizeBytes: photo.original.sizeBytes, expiresAt: "2026-11-03T00:30:00.000Z",
+      state: "stored", result: { kind: "original", photo },
+    } };
+    const harness = setup((request) => request.url.endsWith("/library") ? json(responses["library.get"]) : json(receipt));
+    const client = await clientFor(harness);
+    try {
+      await expect(client.request("uploads.complete", { uploadId: "depth-upload" }, {
+        signal: new AbortController().signal, idempotencyKey: "depth-completion",
+      })).resolves.toEqual(receipt);
+    } finally { client.dispose(); }
+  });
   it("accepts an existing photo start response without an upload ticket", async () => {
     const photo = responses["photos.get"];
     const existing = { value: { kind: "existing", photo }, replayed: true };

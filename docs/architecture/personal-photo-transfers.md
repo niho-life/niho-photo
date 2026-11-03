@@ -29,7 +29,7 @@ operationごとにpath/method/query/bodyを固定し、繰返しformatsを維持
 
 captureは `X-NIHO-Photo-Actor-Id` / `X-NIHO-Photo-Session-Id` / `X-NIHO-Photo-Session-Epoch` の3header、transportはbrowser-session固定。keyは `Idempotency-Key`。BFFはfresh actorへ3項目を照合し、upstreamへ本人/epochと新鮮なcredentialを渡す。callerのAuthorizationやcookie全体はforwardしない。C01のscope_changed/401はC00のunauthenticated、設定/上流不明はtemporarily_unavailableへ写し、任意error本文を返さない。
 
-JSONはparse前にstreamの総byte数を制限する。`photos.list` はContent-Lengthなし・分割streamも含め4MiBまで。個別Photoやuploadの成功応答は1MiBの完全recipeを含み得るため2MiBまで、errorは64KiBまでとする。UTF-8/JSON/depth/DTOを検査し、ページ全体を再serializeするだけの検査を重ねない。全応答をno-storeとし、上流error本文・URL・provider応答を表示/ログへ出さない。
+JSONはparse前にstreamの総byte数を制限する。`photos.list` はContent-Lengthなし・分割streamも含め4MiBまで。個別Photoやuploadの成功応答は1MiBの完全recipeを含み得るため2MiBまで、errorは64KiBまでとする。UTF-8/JSON/depth/DTOを検査し、完全recipeとworking-copy metadataは各文書のrootからdepth32を数える。HTTP envelopeの既知の最大5段を文書の深さへ算入せず、transport全体にも有限のdepth上限を置く。ページ全体を再serializeするだけの検査を重ねない。全応答をno-storeとし、上流error本文・URL・provider応答を表示/ログへ出さない。
 
 `content.get` は原本200MiBまでのgeneration固定stream。whole-asset SHA、全体size、200/206、Content-Range/Length、実際のbyte数、timeout/abort/cancelを検証し、全量bufferしない。BFFはdispatch前と応答公開前にactorを再検証し、backendのcommit fenceを代用しない。開始済みstreamや取得済み端末コピーの遠隔消去は保証しない。
 
