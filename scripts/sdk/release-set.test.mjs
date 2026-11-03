@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import { execFileSync, spawnSync } from "node:child_process";
 import { after, test } from "node:test";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 
 import {
   assertRelativePath,
@@ -277,11 +277,33 @@ test("展開先のdirectoryがsymlinkでもnative CLIを実行する", () => {
 test("release-set 定義は package/path/version の改変を拒否する", () => {
   const config = JSON.parse(readFileSync(path.join(realRoot, "sdk/release-set.json"), "utf8"));
   assert.equal(validateConfig(config), config);
+  const legacy = structuredClone(config);
+  legacy.schemaVersion = 1;
+  legacy.version = "0.1.7";
+  legacy.packages = legacy.packages.filter(({ id }) => id !== "personal-cloud-contract");
+  legacy.ownedSourcePaths = legacy.ownedSourcePaths.slice(0, -1);
+  assert.equal(validateConfig(legacy), legacy);
+  for (const invalid of ["1", "2", "__proto__", "constructor", null, true, Object.create({ toString: () => "2" })]) {
+    const basis = invalid === "1" ? legacy : config;
+    assert.throws(() => validateConfig({ ...basis, schemaVersion: invalid }), /schema profile/u);
+  }
   assert.throws(() => validateConfig({ ...config, repository: "niho-coliving/niho-photo" }), /基本契約/);
   assert.throws(() => validateConfig({ ...config, version: "latest" }), /semver/);
+  assert.throws(() => validateConfig({ ...config, schemaVersion: 3 }), /schema profile/);
   const escaped = structuredClone(config);
   escaped.packages[0].sourceRoot = "../niho-app";
-  assert.throws(() => validateConfig(escaped), /相対path/);
+  assert.throws(() => validateConfig(escaped), /package profile/);
+  for (const mutate of [
+    (value) => { value.packages.find(({ id }) => id === "personal-cloud-contract").entry = "src/other.ts"; },
+    (value) => { value.packages.find(({ id }) => id === "personal-cloud-contract").include = ["src/**"]; },
+    (value) => { value.packages.find(({ id }) => id === "personal-cloud-contract").sourceRoot = "packages/photo-editing"; },
+    (value) => { value.packages.find(({ id }) => id === "personal-cloud-contract").unexpected = true; },
+    (value) => { value.ownedSourcePaths = value.ownedSourcePaths.slice(0, -1); },
+  ]) {
+    const changed = structuredClone(config);
+    mutate(changed);
+    assert.throws(() => validateConfig(changed));
+  }
 });
 
 test("TypeScript dependency closure の欠落を拒否する", () => {
@@ -352,6 +374,9 @@ test("clean Git object から決定的 tarball を作り repo 外 consumer で T
   const one = await packReleaseSet({ repoRoot: fixture.root, outputDirectory: first, assetDirectory: fixture.assets });
   const two = await packReleaseSet({ repoRoot: fixture.root, outputDirectory: second, assetDirectory: fixture.assets });
   assert.deepEqual(one.manifest.packages, two.manifest.packages);
+  assert.equal(one.manifest.schemaVersion, 2);
+  assert.equal(one.manifest.packages.length, 7);
+  assert.equal(one.manifest.sourceOwnership.paths.length, 19);
   assert.equal(one.manifest.releaseReady, true);
   assert.deepEqual(one.manifest.recipeCompatibility.supportedVersions, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
   assert.ok(one.manifest.recipeCompatibility.engineIdentifiers.includes("niho-13"));
@@ -409,6 +434,56 @@ test("clean Git object から決定的 tarball を作り repo 外 consumer で T
       for (const name of Object.values(threadsRuntimeFileNames(fixture.config.engine.crateVersion))) assert.ok(entries.includes(`package/develop-engine/${fixture.config.engine.version}/${name}`), name);
     }
   }
+  const cloudContractRecord = one.manifest.packages.find(({ id }) => id === "personal-cloud-contract");
+  assert.equal(cloudContractRecord.name, "niho-photo-personal-cloud-contract");
+  const cloudContractExtracted = temp("niho-photo-personal-cloud-contract-");
+  execFileSync("tar", ["-xzf", path.join(first, cloudContractRecord.file), "-C", cloudContractExtracted]);
+  const cloudContractRoot = path.join(cloudContractExtracted, "package");
+  const cloudContractFiles = execFileSync("tar", ["-tzf", path.join(first, cloudContractRecord.file)], { encoding: "utf8" });
+  assert.doesNotMatch(cloudContractFiles, /(?:fixture|test|auth|http)/iu);
+  const cloudContractPackage = JSON.parse(readFileSync(path.join(cloudContractRoot, "package.json"), "utf8"));
+  assert.equal(cloudContractPackage.dependencies, undefined);
+  const runtimeContract = await import(`${pathToFileURL(path.join(cloudContractRoot, "dist/index.js")).href}?fixture=${Date.now()}`);
+  assert.equal(runtimeContract.PHOTO_LIBRARY_CONTRACT_VERSION, 2);
+  assert.equal(runtimeContract.PHOTO_LIMITS.quotaBytes, 5 * 1024 ** 3);
+  assert.equal(runtimeContract.PHOTO_ERROR_STATUS.revision_conflict, 409);
+  assert.equal(runtimeContract.PHOTO_ERROR_STATUS.temporarily_unavailable, 503);
+  const emittedContract = ["dist/index.js", "dist/index.d.ts", "dist/src/v2.js", "dist/src/v2.d.ts"].map((name) => readFileSync(path.join(cloudContractRoot, name), "utf8")).join("\n");
+  assert.doesNotMatch(emittedContract, /(?:from|export\s+\*)\s+["'][^"']+\.ts["']/u);
+  assert.doesNotMatch(emittedContract, /(?:private\/var\/|\/Users\/)/u);
+
+  for (const [consumerName, libs, types] of [
+    ["node", ["lib.es2022.d.ts"], ["node"]],
+    ["browser", ["lib.es2022.d.ts", "lib.dom.d.ts"], []],
+  ]) {
+    const consumer = temp(`niho-photo-c00-${consumerName}-consumer-`);
+    put(consumer, "package.json", '{"type":"module"}\n');
+    mkdirSync(path.join(consumer, "node_modules"), { recursive: true });
+    symlinkSync(cloudContractRoot, path.join(consumer, "node_modules/niho-photo-personal-cloud-contract"), "dir");
+    put(consumer, "index.ts", [
+      'import { PHOTO_ERROR_STATUS, PHOTO_LIBRARY_CONTRACT_VERSION, PHOTO_LIMITS, type PersonalPhotoCloudClient, type PhotoErrorCode } from "niho-photo-personal-cloud-contract";',
+      "export const statusFor = (code: PhotoErrorCode): number => PHOTO_ERROR_STATUS[code];",
+      'export const readLibrary = (client: PersonalPhotoCloudClient, signal: AbortSignal) => client.request("library.get", {}, { signal });',
+      "export const contract = [PHOTO_LIBRARY_CONTRACT_VERSION, PHOTO_LIMITS.maxFileBytes] as const;",
+      "",
+    ].join("\n"));
+    const program = ts.createProgram({
+      rootNames: [path.join(consumer, "index.ts")],
+      options: {
+        lib: libs,
+        module: ts.ModuleKind.NodeNext,
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+        noEmit: true,
+        skipLibCheck: false,
+        strict: true,
+        target: ts.ScriptTarget.ES2022,
+        typeRoots: [path.join(realRoot, "node_modules/@types")],
+        types,
+      },
+    });
+    const diagnostics = ts.getPreEmitDiagnostics(program).filter(({ category }) => category === ts.DiagnosticCategory.Error);
+    assert.deepEqual(diagnostics.map(({ messageText }) => ts.flattenDiagnosticMessageText(messageText, " ")), []);
+  }
   const manifestPath = path.join(first, one.manifestName);
   assert.deepEqual(verifyReleaseManifestFiles(manifestPath).packages, one.manifest.packages);
   // Mac の candidate が同梱する runtimeFiles は 1 本だけ。スレッドの版は threads に分ける。
@@ -421,6 +496,30 @@ test("clean Git object から決定的 tarball を作り repo 外 consumer で T
   const historicalManifest = structuredClone(one.manifest);
   historicalManifest.repository = "niho-coliving/niho-photo";
   assert.equal(validateReleaseManifest(historicalManifest, fixture.source.commit).repository, "niho-coliving/niho-photo");
+  const legacyManifest = structuredClone(one.manifest);
+  legacyManifest.schemaVersion = 1;
+  legacyManifest.version = "0.1.7";
+  legacyManifest.packages = legacyManifest.packages.filter(({ id }) => id !== "personal-cloud-contract");
+  legacyManifest.sourceOwnership.paths = legacyManifest.sourceOwnership.paths.slice(0, -1);
+  legacyManifest.sourceOwnership.digest = createHash("sha256").update(legacyManifest.sourceOwnership.paths.map(({ path: name, sha256: digest, files }) => `${name}\0${digest}\0${files}\n`).join("")).digest("hex");
+  assert.equal(validateReleaseManifest(legacyManifest, fixture.source.commit).schemaVersion, 1);
+  for (const invalid of ["1", "2", "__proto__", "constructor", null, true, Object.create({ toString: () => "2" })]) {
+    const basis = invalid === "1" ? legacyManifest : one.manifest;
+    assert.throws(() => validateReleaseManifest({ ...basis, schemaVersion: invalid }, fixture.source.commit), /schema profile/u);
+  }
+  for (const mutate of [
+    (value) => { value.schemaVersion = 3; },
+    (value) => { value.packages.push(one.manifest.packages.find(({ id }) => id === "personal-cloud-contract")); },
+    (value) => { value.sourceOwnership.paths.push(one.manifest.sourceOwnership.paths.at(-1)); },
+    (value) => { value.extra = true; },
+    (value) => { value.packages[0].extra = true; },
+    (value) => { value.sourceOwnership.paths[0].extra = true; },
+    (value) => { value.packages = []; },
+  ]) {
+    const mixed = structuredClone(legacyManifest);
+    mutate(mixed);
+    assert.throws(() => validateReleaseManifest(mixed, fixture.source.commit));
+  }
   const manifestSha256 = sha256(readFileSync(manifestPath));
   assert.equal(verifyReleaseArtifact({ directory: first, expectedSource: fixture.source.commit, expectedManifestSha256: manifestSha256 }).manifestSha256, manifestSha256);
   assert.throws(() => verifyReleaseArtifact({ directory: first, expectedSource: fixture.source.commit, expectedManifestSha256: "f".repeat(64) }), /輸送hash/);
@@ -463,6 +562,9 @@ test("clean Git object から決定的 tarball を作り repo 外 consumer で T
     ["threads-duplicate-single", (value) => { value.engine.threads.runtimeFiles[0] = { ...value.engine.runtimeFiles[0] }; }],
     ["threads-bad-integrity", (value) => { value.engine.threads.runtimeFiles[0].integrity = "sha256-invalid"; }],
     ["threads-extra-key", (value) => { value.engine.threads.files = {}; }],
+    ["unknown-top-key", (value) => { value.extra = true; }],
+    ["unknown-package-key", (value) => { value.packages[0].extra = true; }],
+    ["unknown-ownership-key", (value) => { value.sourceOwnership.paths[0].extra = true; }],
   ]) {
     const changed = structuredClone(one.manifest);
     mutate(changed);

@@ -1,0 +1,22 @@
+{
+  "name": "@niho/photo-cloud-library",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "本人クラウドportを既存PhotoLibraryへ接続する共通adapter",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "test": "vitest run",
+    "lint": "eslint ."
+  },
+  "dependencies": {
+    "@niho/photo-personal-cloud-contract": "*",
+    "niho-photo-editing": "*"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

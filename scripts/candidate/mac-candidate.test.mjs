@@ -32,10 +32,13 @@ import {
   validateTarEntries,
   verifyAppNoticeResources,
   verifyCandidateDirectory,
+  verifySdkDirectory,
   verifySdkProofDirectory,
+  writeCandidateTransportProof,
 } from "./mac-candidate-lib.mjs";
 import { sourceSnapshot, assertExpectedWorkspaceChanges, candidateSbomBytes } from "./build-mac-candidate.mjs";
 import { preparePublishedSdkProof } from "./prepare-published-sdk.mjs";
+import { sdkReleaseProfile } from "../sdk/verify-release-artifact.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const temporary = [];
@@ -170,7 +173,7 @@ test("app tar contractはroot外path・special file・symlinkを拒否する", (
   ]) assert.throws(() => validateTarEntries([...valid, entry], "NIHO photo.app"), /path traversal/);
 });
 
-function candidateFixture() {
+function candidateFixture(sdkManifestSchemaVersion = 1) {
   const directory = temp("niho-photo-candidate-fixture-");
   const source = "a".repeat(40), tree = "b".repeat(40), version = "1.2.3", runId = "44", runAttempt = "2";
   const base = candidateBaseName({ version, sourceSha: source, runId, runAttempt });
@@ -192,10 +195,10 @@ function candidateFixture() {
   const sbom = { bomFormat: "CycloneDX", specVersion: "1.6", version: 1, metadata: { component: { type: "application", name: "niho-photo", version: source } }, components: [] };
   writeFileSync(path.join(directory, sbomName), `${JSON.stringify(sbom)}\n`);
   const asset = (name) => { const bytes = readFileSync(path.join(directory, name)); return { name, sha256: sha256(bytes), bytes: bytes.length }; };
-  const ownershipPaths = JSON.parse(readFileSync(path.join(root, "sdk/release-set.json"), "utf8")).ownedSourcePaths.map((name, index) => ({ path: name, sha256: String(index).padStart(64, "0"), files: 1 }));
+  const sdkProfile = sdkReleaseProfile(sdkManifestSchemaVersion);
+  const ownershipPaths = sdkProfile.ownedSourcePaths.map((name, index) => ({ path: name, sha256: String(index).padStart(64, "0"), files: 1 }));
   const ownershipDigest = createHash("sha256").update(ownershipPaths.map(({ path: name, sha256: digest, files }) => `${name}\0${digest}\0${files}\n`).join("")).digest("hex");
-  const packageNames = { ui: "niho-photo-ui", "photo-editing": "niho-photo-editing", "cloud-contract": "niho-photo-cloud-contract", "photo-contract": "niho-photo-contract", "develop-engine-source": "niho-photo-develop-engine-source", "develop-engine-runtime": "niho-photo-develop-engine-runtime" };
-  const sdkPackages = Object.entries(packageNames).map(([id, name]) => ({ id, name, file: `${id}.tgz`, sha256: "c".repeat(64), bytes: 1 }));
+  const sdkPackages = sdkProfile.packages.map(([id, name]) => ({ id, name, file: `${id}.tgz`, sha256: "c".repeat(64), bytes: 1 }));
   const files = inventoryTree(path.join(appRoot, "NIHO photo.app"));
   const native = ["apple-raw-linear", "niho-develop-render", "niho-camera-cutout"].map((name) => {
     const file = files.find((item) => item.path === `Contents/MacOS/${name}`);
@@ -209,7 +212,15 @@ function candidateFixture() {
     version,
     source: { commit: source, tree },
     run: { id: runId, attempt: runAttempt },
-    sdk: { mode: "published", version: "0.1.1", manifestFile: `niho-photo-sdk-0.1.1-${"1".repeat(40)}.json`, manifestSha256: "c".repeat(64), source: { commit: "1".repeat(40), tree: "2".repeat(40) }, packages: sdkPackages },
+    sdk: {
+      mode: "published",
+      version: sdkManifestSchemaVersion === 2 ? "0.1.8" : "0.1.1",
+      manifestFile: `niho-photo-sdk-${sdkManifestSchemaVersion === 2 ? "0.1.8" : "0.1.1"}-${"1".repeat(40)}.json`,
+      manifestSha256: "c".repeat(64),
+      source: { commit: "1".repeat(40), tree: "2".repeat(40) },
+      packages: sdkPackages,
+      ...(sdkManifestSchemaVersion === 2 ? { sdkManifestSchemaVersion: 2 } : {}),
+    },
     sourceOwnership: { algorithm: "sha256-git-file-set-v1", digest: ownershipDigest, paths: ownershipPaths },
     publicAccountConfig: { name: "NIHO_PHOTO_PUBLIC_FIREBASE_WEB_API_KEY", sha256: "e".repeat(64), included: true },
     build: { signing: "ad-hoc", officialUpdates: true, updaterArtifacts: false, toolchain: { node: "v24.1.0", rust: "rustc 1.98.1 (fixture)", swift: "Swift 6 fixture", tauri: "tauri 2 fixture", target: "aarch64-apple-darwin" } },
@@ -250,7 +261,7 @@ const pinnedRecords = (paths, marker) => paths.map((name, index) => {
 function sdkManifestFixture(candidate, repository = "niho-life/niho-photo") {
   const runtimeDigest = "8".repeat(64), manifestDigest = "9".repeat(64);
   return {
-    schemaVersion: 1,
+    schemaVersion: candidate.manifest.sdk.sdkManifestSchemaVersion ?? 1,
     releaseReady: true,
     repository,
     version: candidate.manifest.sdk.version,
@@ -303,6 +314,9 @@ function sdkProofFixture(candidate, sdkRepository = "niho-life/niho-photo") {
 
 test("candidate data verifierはasset集合/hash/identity/updater/versionを固定する", () => {
   const valid = candidateFixture();
+  assert.equal(Object.hasOwn(valid.manifest.sdk, "sdkManifestSchemaVersion"), false);
+  assert.equal(valid.manifest.sdk.packages.length, 6);
+  assert.equal(valid.manifest.sourceOwnership.paths.length, 18);
   assert.equal(verifyCandidateDirectory(valid.directory).assets.length, 3);
   const manifestSha256 = sha256(readFileSync(path.join(valid.directory, valid.manifestFile)));
   const verifier = path.join(root, "scripts/candidate/verify-mac-candidate.mjs");
@@ -362,6 +376,62 @@ test("移管前candidateと旧repositoryの公開SDK proofを引き続き検証�
   }).manifest.repository, "niho-coliving/niho-photo");
 });
 
+test("SDK schema 2 candidateは7 package・19 ownership path・明示proofだけを受け付ける", () => {
+  const candidate = candidateFixture(2);
+  assert.equal(candidate.manifest.sdk.sdkManifestSchemaVersion, 2);
+  assert.equal(candidate.manifest.sdk.packages.length, 7);
+  assert.equal(candidate.manifest.sourceOwnership.paths.length, 19);
+  assert.equal(verifyCandidateDirectory(candidate.directory).manifest.sdk.sdkManifestSchemaVersion, 2);
+
+  const sdkDirectory = temp("niho-photo-sdk2-directory-");
+  for (const record of candidate.manifest.sdk.packages) {
+    const stage = temp("niho-photo-sdk2-package-");
+    put(stage, "package/index.txt", `${record.id}\n`);
+    execFileSync("tar", ["-czf", path.join(sdkDirectory, record.file), "-C", stage, "package"]);
+    const bytes = readFileSync(path.join(sdkDirectory, record.file));
+    record.sha256 = sha256(bytes);
+    record.bytes = bytes.length;
+  }
+  const sdkManifest = sdkManifestFixture(candidate);
+  const manifestBytes = Buffer.from(`${JSON.stringify(sdkManifest, null, 2)}\n`);
+  candidate.manifest.sdk.manifestSha256 = sha256(manifestBytes);
+  writeFileSync(path.join(sdkDirectory, candidate.manifest.sdk.manifestFile), manifestBytes);
+  const verifiedDirectory = verifySdkDirectory({
+    directory: sdkDirectory,
+    mode: "published",
+    appSource: candidate.manifest.source.commit,
+    expectedManifestSha256: candidate.manifest.sdk.manifestSha256,
+  });
+  assert.equal(verifiedDirectory.manifest.schemaVersion, 2);
+  assert.equal(verifiedDirectory.manifest.packages.length, 7);
+
+  const proof = sdkProofFixture(candidate);
+  const verifiedProof = verifySdkProofDirectory({ directory: proof.directory, candidateManifest: candidate.manifest, expectedSdkVersion: candidate.manifest.sdk.version, expectedSdkManifestSha256: candidate.manifest.sdk.manifestSha256 });
+  assert.equal(verifiedProof.manifest.schemaVersion, 2);
+  assert.equal(verifiedProof.manifest.sourceOwnership.paths.length, 19);
+  const transportDirectory = temp("niho-photo-sdk2-transport-");
+  const transport = writeCandidateTransportProof({
+    candidate: { manifest: candidate.manifest },
+    sdkProof: verifiedProof,
+    artifactId: "99",
+    artifactDigest: "a".repeat(64),
+    artifactName: `niho-photo-candidate-${candidate.manifest.source.commit}-run-${candidate.manifest.run.id}-attempt-${candidate.manifest.run.attempt}`,
+    toolingSourceSha: "e".repeat(40),
+    receiptFile: path.join(transportDirectory, "receipt.json"),
+    provenanceFile: path.join(transportDirectory, "provenance.json"),
+  });
+  assert.equal(transport.receipt.sdk.sdkManifestSchemaVersion, 2);
+  assert.equal(transport.provenance.sdk.sdkManifestSchemaVersion, 2);
+
+  for (const value of [undefined, 1, 3]) {
+    const forged = candidateFixture(2);
+    if (value === undefined) delete forged.manifest.sdk.sdkManifestSchemaVersion;
+    else forged.manifest.sdk.sdkManifestSchemaVersion = value;
+    writeFileSync(path.join(forged.directory, forged.manifestFile), `${JSON.stringify(forged.manifest, null, 2)}\n`);
+    assert.throws(() => verifyCandidateDirectory(forged.directory));
+  }
+});
+
 test("published SDK proofはmanifest schema/source ownership/release receiptをcandidateへ固定する", () => {
   const candidate = candidateFixture();
   const proof = sdkProofFixture(candidate);
@@ -385,14 +455,18 @@ test("candidate publisher verifierはrun/SDK proof/artifact digestを照合し�
   const artifactName = `niho-photo-candidate-${candidate.manifest.source.commit}-run-${candidate.manifest.run.id}-attempt-${candidate.manifest.run.attempt}`;
   const args = [verifier, "--directory", candidate.directory, "--sdk-proof-directory", proof.directory, "--expected-manifest-sha256", candidateManifestSha256, "--expected-source", candidate.manifest.source.commit, "--expected-version", candidate.manifest.version, "--expected-sdk-mode", "published", "--expected-sdk-version", candidate.manifest.sdk.version, "--expected-sdk-manifest-sha256", candidate.manifest.sdk.manifestSha256, "--run-id", candidate.manifest.run.id, "--run-attempt", candidate.manifest.run.attempt, "--artifact-id", "99", "--artifact-digest", "a".repeat(64), "--artifact-name", artifactName, "--tooling-source", "e".repeat(40), "--receipt", receipt, "--provenance", provenance];
   assert.doesNotThrow(() => execFileSync(process.execPath, args));
-  assert.equal(JSON.parse(readFileSync(receipt)).artifact.digest, `sha256:${"a".repeat(64)}`);
-  assert.equal(JSON.parse(readFileSync(provenance)).sdk.sourceSha, candidate.manifest.sdk.source.commit);
+  const receiptProof = JSON.parse(readFileSync(receipt));
+  const provenanceProof = JSON.parse(readFileSync(provenance));
+  assert.equal(receiptProof.artifact.digest, `sha256:${"a".repeat(64)}`);
+  assert.equal(Object.hasOwn(receiptProof.sdk, "sdkManifestSchemaVersion"), false);
+  assert.equal(provenanceProof.sdk.sourceSha, candidate.manifest.sdk.source.commit);
+  assert.equal(Object.hasOwn(provenanceProof.sdk, "sdkManifestSchemaVersion"), false);
   const badRun = [...args]; badRun[badRun.lastIndexOf(candidate.manifest.run.attempt)] = "3";
   assert.throws(() => execFileSync(process.execPath, badRun, { stdio: "pipe" }));
 });
 
-test("published SDK preparerは7-file directoryとGitHub releaseの8 assetsを別proofへ固定する", () => {
-  const candidate = candidateFixture();
+for (const sdkSchemaVersion of [1, 2]) test(`published SDK preparerはschema ${sdkSchemaVersion}のdirectoryとGitHub releaseを別proofへ固定する`, () => {
+  const candidate = candidateFixture(sdkSchemaVersion);
   const sdkDirectory = temp("niho-photo-published-sdk-");
   for (const record of candidate.manifest.sdk.packages) {
     const stage = temp("niho-photo-sdk-package-");
@@ -405,6 +479,13 @@ test("published SDK preparerは7-file directoryとGitHub releaseの8 assetsを�
   const sdkManifest = sdkManifestFixture(candidate);
   const manifestBytes = Buffer.from(`${JSON.stringify(sdkManifest, null, 2)}\n`);
   candidate.manifest.sdk.manifestSha256 = sha256(manifestBytes);
+  writeFileSync(path.join(sdkDirectory, candidate.manifest.sdk.manifestFile), manifestBytes);
+  for (const invalid of [String(sdkSchemaVersion), "__proto__", "constructor", null, true]) {
+    const malformedBytes = Buffer.from(`${JSON.stringify({ ...sdkManifest, schemaVersion: invalid })}\n`);
+    writeFileSync(path.join(sdkDirectory, candidate.manifest.sdk.manifestFile), malformedBytes);
+    assert.throws(() => verifySdkDirectory({ directory: sdkDirectory, mode: "published",
+      appSource: candidate.manifest.source.commit, expectedManifestSha256: sha256(malformedBytes) }), /schema profile/u);
+  }
   writeFileSync(path.join(sdkDirectory, candidate.manifest.sdk.manifestFile), manifestBytes);
   const receipt = {
     schemaVersion: 1, repository: candidate.manifest.repository, sourceSha: candidate.manifest.sdk.source.commit,
@@ -426,6 +507,10 @@ test("published SDK preparerは7-file directoryとGitHub releaseの8 assetsを�
   assert.doesNotThrow(() => preparePublishedSdkProof({ "--sdk-directory": sdkDirectory, "--sdk-receipt": receiptFile, "--release-json": releaseFile, "--tag-sha": candidate.manifest.sdk.source.commit, "--expected-version": candidate.manifest.sdk.version, "--expected-manifest-sha256": candidate.manifest.sdk.manifestSha256, "--output": output, "--github-output": githubOutput }));
   assert.deepEqual(JSON.parse(readFileSync(path.join(output, "photo-sdk-release.json"))).assets.map(({ name }) => name).sort(), assets.map(({ name }) => name).sort());
   assert.match(readFileSync(githubOutput, "utf8"), /sdk-manifest-sha256=/u);
+  const prepared = verifySdkProofDirectory({ directory: output, candidateManifest: candidate.manifest,
+    expectedSdkVersion: candidate.manifest.sdk.version,
+    expectedSdkManifestSha256: candidate.manifest.sdk.manifestSha256 });
+  assert.equal(prepared.manifest.schemaVersion, sdkSchemaVersion);
 });
 
 

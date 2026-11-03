@@ -66,7 +66,7 @@ export function preparePublishedSdkProof(values) {
   writeFileSync(path.join(output, RELEASE_FILE), `${JSON.stringify(release, null, 2)}\n`, { flag: "wx", mode: 0o644 });
   const candidateManifest = {
     repository: "niho-life/niho-photo",
-    sdk: { version: sdk.manifest.version, source: sdk.manifest.source, manifestFile: sdk.manifestFile, manifestSha256: sdk.manifestSha256, packages: sdk.manifest.packages.map(({ id, name, file, sha256, size: bytes }) => ({ id, name, file, sha256, bytes })) },
+    sdk: { ...(sdk.manifest.schemaVersion === 2 ? { sdkManifestSchemaVersion: 2 } : {}), version: sdk.manifest.version, source: sdk.manifest.source, manifestFile: sdk.manifestFile, manifestSha256: sdk.manifestSha256, packages: sdk.manifest.packages.map(({ id, name, file, sha256, size: bytes }) => ({ id, name, file, sha256, bytes })) },
     sourceOwnership: sdk.manifest.sourceOwnership,
   };
   verifySdkProofDirectory({ directory: output, candidateManifest, expectedSdkVersion: expectedVersion, expectedSdkManifestSha256: expectedManifestSha256 });

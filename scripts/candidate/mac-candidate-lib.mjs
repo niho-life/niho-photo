@@ -22,7 +22,7 @@ import path from "node:path";
 import { assertSystemNativeSearchPaths } from "../../packages/develop-engine/build-macos-native.mjs";
 import { assertPublicBytes, createSbom, lockfiles } from "../ci/release-evidence-lib.mjs";
 import { readPublicSdkDependenciesSync } from "../ci/publication-lib.mjs";
-import { normalizeArtifactDigest, validateReleaseManifest, verifyManifestPackageFiles } from "../sdk/verify-release-artifact.mjs";
+import { normalizeArtifactDigest, sdkReleaseProfile, validateReleaseManifest, verifyManifestPackageFiles } from "../sdk/verify-release-artifact.mjs";
 
 const COMMIT = /^[a-f0-9]{40}$/u;
 const SHA256 = /^[a-f0-9]{64}$/u;
@@ -51,7 +51,6 @@ const OVERLAY_PATHS = [
   "apps/camera/src-tauri/Cargo.toml",
   "apps/camera/src-tauri/Cargo.lock",
 ];
-const OWNED_PATHS = ["packages/photo-editing", "packages/ui", "packages/niho-cloud-contract", "packages/develop-engine", "packages/desktop-photo", "sdk", "scripts/sdk", "scripts/ci/cloud-contract-sync.mjs", "scripts/ci/image-metadata.mjs", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/ci/photo-sdk-workflow-lib.mjs", "scripts/ci/publication-lib.mjs", "scripts/ci/release-evidence-lib.mjs", "scripts/ci/workflow-lib.mjs", "LICENSE.md", "ASSET_LICENSE.md", "TRADEMARKS.md", "THIRD_PARTY_NOTICES.md"];
 
 export class CandidateError extends Error {}
 export const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
@@ -160,14 +159,22 @@ function ownershipDigest(records) {
   return sha256(Buffer.from(records.map(({ path: ownedPath, sha256: digest, files }) => `${ownedPath}\0${digest}\0${files}\n`).join("")));
 }
 
+function candidateSdkManifestSchemaVersion(sdk) {
+  if (sdk?.sdkManifestSchemaVersion === undefined) return 1;
+  if (sdk.sdkManifestSchemaVersion !== 2) throw new CandidateError("candidate SDK manifest schema profileが不正です");
+  return 2;
+}
+
 function jsonFile(file, label) {
   boundedOrdinaryFile(file, label);
   try { return JSON.parse(readFileSync(file, "utf8")); } catch { throw new CandidateError(`${label}がJSONではありません`); }
 }
 
-export function sourceOwnership(repoRoot, commit) {
+export function sourceOwnership(repoRoot, commit, sdkManifestSchemaVersion = 1) {
   assertFullSha(commit, "ownership source");
-  const records = OWNED_PATHS.map((ownedPath) => {
+  let profile;
+  try { profile = sdkReleaseProfile(sdkManifestSchemaVersion); } catch { throw new CandidateError("SDK manifest schema profileが不正です"); }
+  const records = profile.ownedSourcePaths.map((ownedPath) => {
     const entries = gitEntries(repoRoot, commit, ownedPath);
     const digest = createHash("sha256");
     for (const entry of entries) {
@@ -202,7 +209,7 @@ export function verifySdkDirectory({ directory, mode, appSource, expectedManifes
   ordinaryDirectory(directory, "SDK directory");
   const names = readdirSync(directory).sort();
   const manifests = names.filter((name) => /^niho-photo-sdk-.+-[a-f0-9]{40}\.json$/u.test(name));
-  if (manifests.length !== 1 || names.length !== 7 || names.some((name) => !SAFE_ASSET.test(name))) throw new CandidateError("SDK asset集合または名前が不正です");
+  if (manifests.length !== 1 || names.some((name) => !SAFE_ASSET.test(name))) throw new CandidateError("SDK asset集合または名前が不正です");
   const manifestFile = manifests[0];
   const manifestPath = path.join(directory, manifestFile);
   const manifestBytes = readFileSync(manifestPath);
@@ -210,6 +217,8 @@ export function verifySdkDirectory({ directory, mode, appSource, expectedManifes
   let manifest;
   try { manifest = JSON.parse(manifestBytes); } catch { throw new CandidateError("SDK manifestがJSONではありません"); }
   validateReleaseManifest(manifest);
+  const profile = sdkReleaseProfile(manifest.schemaVersion);
+  if (names.length !== profile.directoryFiles) throw new CandidateError("SDK asset集合または名前が不正です");
   verifyManifestPackageFiles({ manifest, directory, manifestFile, exactDirectory: true });
   if (manifestFile !== `niho-photo-sdk-${manifest.version}-${manifest.source.commit}.json`) throw new CandidateError("SDK manifest名が不正です");
   assertSdkSelection({ mode, appSource, sdkSource: manifest.source.commit, manifestSha256, expectedManifestSha256 });
@@ -547,9 +556,12 @@ export function packDmg(appPath, output, expectedFiles, options = {}) {
 }
 
 function validateCandidateManifest(manifest, fileName) {
-  if (manifest?.schemaVersion !== 1 || !RELEASE_REPOSITORIES.has(manifest.repository) || manifest.product !== PRODUCT || manifest.bundleId !== BUNDLE_ID || !COMMIT.test(manifest.source?.commit ?? "") || !COMMIT.test(manifest.source?.tree ?? "") || !["published", "local-validation"].includes(manifest.sdk?.mode) || !SAFE_ASSET.test(manifest.sdk?.manifestFile ?? "") || !SHA256.test(manifest.sdk?.manifestSha256 ?? "") || !COMMIT.test(manifest.sdk?.source?.commit ?? "") || !COMMIT.test(manifest.sdk?.source?.tree ?? "") || (manifest.sdk.mode === "local-validation" && manifest.sdk.source.commit !== manifest.source.commit) || manifest.sourceOwnership?.algorithm !== "sha256-git-file-set-v1" || !SHA256.test(manifest.sourceOwnership?.digest ?? "") || manifest.sourceOwnership.digest !== ownershipDigest(manifest.sourceOwnership.paths ?? []) || JSON.stringify((manifest.sourceOwnership.paths ?? []).map(({ path: name }) => name)) !== JSON.stringify(OWNED_PATHS) || manifest.sourceOwnership.paths.some((item) => !SHA256.test(item.sha256 ?? "") || !Number.isSafeInteger(item.files) || item.files <= 0) || manifest.publicAccountConfig?.name !== "NIHO_PHOTO_PUBLIC_FIREBASE_WEB_API_KEY" || !SHA256.test(manifest.publicAccountConfig?.sha256 ?? "") || manifest.publicAccountConfig?.included !== true || manifest.build?.officialUpdates !== true || manifest.build?.updaterArtifacts !== false || manifest.build?.signing !== "ad-hoc" || manifest.build?.toolchain?.target !== "aarch64-apple-darwin" || !String(manifest.build?.toolchain?.rust ?? "").startsWith("rustc 1.98.1 ") || !["node", "swift", "tauri"].every((key) => typeof manifest.build?.toolchain?.[key] === "string" && manifest.build.toolchain[key].length > 2) || manifest.app?.identity?.product !== PRODUCT || manifest.app?.identity?.bundleId !== BUNDLE_ID || manifest.app?.identity?.version !== manifest.version || manifest.app?.identity?.deepLink !== DEEP_LINK || manifest.app?.updater?.feed !== UPDATER_FEED || manifest.app?.updater?.publicKeySha256 !== candidateContract.updaterPublicKeySha256 || manifest.app?.updater?.officialUpdates !== true || !Array.isArray(manifest.app?.files) || !manifest.app.files.length || !Array.isArray(manifest.overlays) || manifest.overlays.map(({ path: name }) => name).join("\0") !== OVERLAY_PATHS.join("\0") || manifest.overlays.some(({ beforeSha256, afterSha256 }) => !SHA256.test(beforeSha256 ?? "") || !SHA256.test(afterSha256 ?? "") || beforeSha256 === afterSha256)) throw new CandidateError("candidate manifest基本契約が不正です");
+  const sdkManifestSchemaVersion = candidateSdkManifestSchemaVersion(manifest?.sdk);
+  const sdkProfile = sdkReleaseProfile(sdkManifestSchemaVersion);
+  const sdkKeys = ["mode", "version", "source", "manifestFile", "manifestSha256", "packages", ...(sdkManifestSchemaVersion === 2 ? ["sdkManifestSchemaVersion"] : [])].sort();
+  if (JSON.stringify(Object.keys(manifest?.sdk ?? {}).sort()) !== JSON.stringify(sdkKeys) || manifest?.schemaVersion !== 1 || !RELEASE_REPOSITORIES.has(manifest.repository) || manifest.product !== PRODUCT || manifest.bundleId !== BUNDLE_ID || !COMMIT.test(manifest.source?.commit ?? "") || !COMMIT.test(manifest.source?.tree ?? "") || !["published", "local-validation"].includes(manifest.sdk?.mode) || !SAFE_ASSET.test(manifest.sdk?.manifestFile ?? "") || !SHA256.test(manifest.sdk?.manifestSha256 ?? "") || !COMMIT.test(manifest.sdk?.source?.commit ?? "") || !COMMIT.test(manifest.sdk?.source?.tree ?? "") || (manifest.sdk.mode === "local-validation" && manifest.sdk.source.commit !== manifest.source.commit) || manifest.sourceOwnership?.algorithm !== "sha256-git-file-set-v1" || !SHA256.test(manifest.sourceOwnership?.digest ?? "") || manifest.sourceOwnership.digest !== ownershipDigest(manifest.sourceOwnership.paths ?? []) || JSON.stringify((manifest.sourceOwnership.paths ?? []).map(({ path: name }) => name)) !== JSON.stringify(sdkProfile.ownedSourcePaths) || manifest.sourceOwnership.paths.some((item) => !SHA256.test(item.sha256 ?? "") || !Number.isSafeInteger(item.files) || item.files <= 0) || manifest.publicAccountConfig?.name !== "NIHO_PHOTO_PUBLIC_FIREBASE_WEB_API_KEY" || !SHA256.test(manifest.publicAccountConfig?.sha256 ?? "") || manifest.publicAccountConfig?.included !== true || manifest.build?.officialUpdates !== true || manifest.build?.updaterArtifacts !== false || manifest.build?.signing !== "ad-hoc" || manifest.build?.toolchain?.target !== "aarch64-apple-darwin" || !String(manifest.build?.toolchain?.rust ?? "").startsWith("rustc 1.98.1 ") || !["node", "swift", "tauri"].every((key) => typeof manifest.build?.toolchain?.[key] === "string" && manifest.build.toolchain[key].length > 2) || manifest.app?.identity?.product !== PRODUCT || manifest.app?.identity?.bundleId !== BUNDLE_ID || manifest.app?.identity?.version !== manifest.version || manifest.app?.identity?.deepLink !== DEEP_LINK || manifest.app?.updater?.feed !== UPDATER_FEED || manifest.app?.updater?.publicKeySha256 !== candidateContract.updaterPublicKeySha256 || manifest.app?.updater?.officialUpdates !== true || !Array.isArray(manifest.app?.files) || !manifest.app.files.length || !Array.isArray(manifest.overlays) || manifest.overlays.map(({ path: name }) => name).join("\0") !== OVERLAY_PATHS.join("\0") || manifest.overlays.some(({ beforeSha256, afterSha256 }) => !SHA256.test(beforeSha256 ?? "") || !SHA256.test(afterSha256 ?? "") || beforeSha256 === afterSha256)) throw new CandidateError("candidate manifest基本契約が不正です");
   assertStrictVersion(manifest.sdk.version);
-  const packageIds = ["ui", "photo-editing", "cloud-contract", "photo-contract", "develop-engine-source", "develop-engine-runtime"];
+  const packageIds = sdkProfile.packages.map(([id]) => id);
   if (!Array.isArray(manifest.sdk.packages) || JSON.stringify(manifest.sdk.packages.map(({ id }) => id).sort()) !== JSON.stringify(packageIds.sort()) || manifest.sdk.packages.some((item) => !SAFE_ASSET.test(item.file ?? "") || !SHA256.test(item.sha256 ?? "") || !Number.isSafeInteger(item.bytes) || item.bytes <= 0 || item.bytes > MAX_ASSET_BYTES)) throw new CandidateError("candidate SDK package pinが不正です");
   const appPaths = new Set();
   for (const record of manifest.app.files) {
@@ -627,6 +639,8 @@ export function verifySdkProofDirectory({ directory, candidateManifest, expected
   let sdkManifest;
   try { sdkManifest = JSON.parse(manifestBytes.toString("utf8")); } catch { throw new CandidateError("SDK proof manifestがJSONではありません"); }
   validateReleaseManifest(sdkManifest, candidateManifest.sdk.source.commit);
+  const candidateSchemaVersion = candidateSdkManifestSchemaVersion(candidateManifest.sdk);
+  if (sdkManifest.schemaVersion !== candidateSchemaVersion) throw new CandidateError("SDK proof manifest schemaがcandidateと一致しません");
   if (sdkManifest.version !== expectedSdkVersion || manifestFile !== `niho-photo-sdk-${expectedSdkVersion}-${candidateManifest.sdk.source.commit}.json` || JSON.stringify(sdkManifest.source) !== JSON.stringify(candidateManifest.sdk.source)) throw new CandidateError("SDK proof manifest identityが一致しません");
   assertOwnershipMatches(candidateManifest.sourceOwnership, sdkManifest.sourceOwnership);
   const packages = sdkManifest.packages.map(({ id, name, file, sha256: digest, size }) => ({ id, name, file, sha256: digest, bytes: size }));
@@ -641,6 +655,7 @@ export function verifySdkProofDirectory({ directory, candidateManifest, expected
 
 export function writeCandidateTransportProof({ candidate, sdkProof, artifactId, artifactDigest, artifactName, toolingSourceSha, receiptFile, provenanceFile }) {
   assertFullSha(toolingSourceSha, "publisher tooling source");
+  const sdkManifestSchemaVersion = candidateSdkManifestSchemaVersion(candidate.manifest.sdk);
   let canonicalArtifactDigest;
   try { canonicalArtifactDigest = normalizeArtifactDigest(artifactDigest); } catch { throw new CandidateError("candidate artifact receipt入力が不正です"); }
   if (!POSITIVE_INTEGER.test(artifactId ?? "") || artifactName !== `niho-photo-candidate-${candidate.manifest.source.commit}-run-${candidate.manifest.run.id}-attempt-${candidate.manifest.run.attempt}`) throw new CandidateError("candidate artifact receipt入力が不正です");
@@ -655,7 +670,12 @@ export function writeCandidateTransportProof({ candidate, sdkProof, artifactId, 
     runAttempt: candidate.manifest.run.attempt,
     artifact: { id: artifactId, name: artifactName, digest: canonicalArtifactDigest },
     candidateManifest: { file: candidate.manifestFile, sha256: candidate.manifestSha256 },
-    sdk: { version: candidate.manifest.sdk.version, sourceSha: candidate.manifest.sdk.source.commit, manifest: { file: sdkProof.manifestFile, sha256: sdkProof.manifestSha256 } },
+    sdk: {
+      version: candidate.manifest.sdk.version,
+      sourceSha: candidate.manifest.sdk.source.commit,
+      manifest: { file: sdkProof.manifestFile, sha256: sdkProof.manifestSha256 },
+      ...(sdkManifestSchemaVersion === 2 ? { sdkManifestSchemaVersion: 2 } : {}),
+    },
   };
   const receiptBytes = Buffer.from(`${JSON.stringify(receipt, null, 2)}\n`);
   writeFileSync(receiptFile, receiptBytes, { flag: "wx", mode: 0o644 });
@@ -669,6 +689,7 @@ export function writeCandidateTransportProof({ candidate, sdkProof, artifactId, 
       version: candidate.manifest.sdk.version,
       sourceSha: candidate.manifest.sdk.source.commit,
       manifest: receipt.sdk.manifest,
+      ...(sdkManifestSchemaVersion === 2 ? { sdkManifestSchemaVersion: 2 } : {}),
       release: { tag: sdkProof.release.tagName, id: String(sdkProof.release.releaseId), metadataSha256: sha256(readFileSync(path.join(sdkProof.directory, sdkProof.releaseFile))) },
       receipt: { file: sdkProof.receiptFile, sha256: sha256(readFileSync(path.join(sdkProof.directory, sdkProof.receiptFile))) },
     },
