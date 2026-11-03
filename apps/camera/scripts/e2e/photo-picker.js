@@ -10,6 +10,7 @@
   const currentPlace = () => document.querySelector('nav[aria-label="表示中の場所"] [aria-current="page"]')?.textContent.trim() ?? null;
   const selectedRow = () => [...(document.querySelector('aside[aria-label="写真の場所"]')?.querySelectorAll("button") ?? [])]
     .find((button) => button.textContent.includes("選んだ写真")) ?? null;
+  const folderRow = () => document.querySelector(`aside[aria-label="写真の場所"] button[title="${config.folderName}"]`);
   const selectedCount = () => {
     const compact = (selectedRow()?.textContent ?? "").replace(/\s/gu, "");
     const match = compact.match(/選んだ写真(\d+)/u);
@@ -58,6 +59,12 @@
     row.click();
     await waitFor(() => currentPlace() === "選んだ写真", "selected-photos-place-missing");
     await waitFor(() => document.querySelector('section[aria-label="写真の一覧"]')?.getAttribute("aria-busy") !== "true", "photo-list-loading");
+  };
+  const selectFolder = async () => {
+    const row = await waitFor(() => folderRow(), "remembered-folder-missing", 90000);
+    row.click();
+    await waitFor(() => currentPlace() === config.folderName, "folder-place-missing", 90000);
+    await waitFor(() => document.querySelector('section[aria-label="写真の一覧"]')?.getAttribute("aria-busy") !== "true", "folder-list-loading", 90000);
   };
   const editAndExport = async (name) => {
     const selected = await waitFor(() => tile(name), "fixture-tile-missing");
@@ -171,10 +178,14 @@
       if (config.phase === "missing") {
         stage = "missing-media";
         await delay(1500);
-        if (config.fixtureNames.some((name) => tile(name)) || tile(config.folderPhotoName)) {
-          throw Object.assign(new Error(), { code: "moved-media-still-listed" });
+        await selectSelectedPhotos();
+        if (tiles().length !== 0) {
+          throw Object.assign(new Error(), { code: "moved-photos-still-listed" });
         }
-        report({ ok: true, phase: "missing", missingMediaOmitted: true });
+        if (folderRow()) {
+          throw Object.assign(new Error(), { code: "moved-folder-source-still-listed" });
+        }
+        report({ ok: true, phase: "missing", missingPhotosOmitted: true, missingFolderSourceHidden: true });
         return;
       }
 
@@ -183,7 +194,9 @@
         await waitFor(() => selectedRow(), "selected-source-not-restored", 90000);
         await selectSelectedPhotos();
         await waitFor(() => exactTiles(config.fixtureNames), "restored-media-not-listed", 90000);
-        report({ ok: true, phase: "reappear", mediaRestored: true, selectedCount: selectedCount() });
+        await selectFolder();
+        await waitFor(() => tiles().length === 1 && tile(config.folderPhotoName), "restored-folder-media-not-listed", 90000);
+        report({ ok: true, phase: "reappear", selectedPhotosRestored: true, folderMediaRestored: true, selectedCount: selectedCount() });
         return;
       }
 

@@ -11,6 +11,7 @@ const scopes = new Set([
   "photo-editing/test",
   "sdk:build-engine-runtime",
   "candidate:build",
+  "camera:e2e:photo-picker",
 ]);
 
 // Tailscale の端末名を優先し、停止中だけ既知の macOS hostname に戻す。

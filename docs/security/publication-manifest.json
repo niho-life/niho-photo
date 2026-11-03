@@ -3757,7 +3757,7 @@
         "path": "apps/camera/README.md",
         "sha256": "d0e1f198e83893a73cd3d84122debf76ad9755e00a5fc5e1b69c242daec8d4eb"
       },
-      "outputSha256": "b8a0224f419943fa5840af4af85a74a412d27543d32a30b1266bcec222fe84a5",
+      "outputSha256": "ed63ceaf958b493ff4b46289c8fed465e0ae84bc9ab3a6af7df0b95d5248c2ba",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "フォルダと個別写真の利用方法、公開契約、および許可するネイティブコマンドを明記",
@@ -3771,7 +3771,8 @@
         "Issue #152 の native 現像の画素一致と UI 実操作 E2E の手順を追記。",
         "Mac WKWebView の独自 scheme で共有メモリが使えない原因（#173）と probe への案内を追記し、native の glue の読み分けの記述を実装に合わせた",
         "個人クラウドの未接続状態と正式native転送を後で注入する境界を明記。",
-        "Issue #210のMac写真選択E2E runner、合成fixture、検証範囲と手動DMG受け入れの免除を記載。"
+        "Issue #210のMac写真選択E2E runner、合成fixture、検証範囲と手動DMG受け入れの免除を記載。",
+        "Issue #210の自動E2EにMac mini重処理guardとMac Studio実行手順を追記。"
       ]
     },
     {
@@ -11676,7 +11677,7 @@
     },
     {
       "path": "scripts/ci/guard-local-heavy.mjs",
-      "sha256": "eafc281299e58797ff4b4db4e6bfba0721116d38d5bd9a85b04640e4ff2a98af",
+      "sha256": "6ade2acaa6001f20299d863224e9824cafb3e120180fea2346dae107d78e17ee",
       "origin": "Mac miniでの重いローカル検証を実行前に停止するため独立作成。公開CIの構成と端末実行先の契約に基づく。"
     },
     {
@@ -11911,13 +11912,13 @@
     },
     {
       "path": "apps/camera/scripts/e2e/photo-picker.js",
-      "sha256": "2d04df04b57e25ba903d13f0982450262fe1214cf1c6a46fdc2c9d8685f72e32",
+      "sha256": "15f858e802b2eff863bae6968fb3778cbcd90b1d168086b3615f59514bde285d",
       "origin": "niho-photo #210 の独立したE2E画面probe。操作結果の固定状態だけを報告し、ファイル名・絶対path・画像hash・例外本文を出力しない。"
     },
     {
       "path": "apps/camera/scripts/e2e/photo-picker.sh",
-      "sha256": "82ca289f0d42d121faeff907018576f30f213597e2b3d6e31e45ae59812727f6",
-      "origin": "niho-photo #210 の独立したMac自動E2E runner。一時HOME・試験専用identifier・合成fixtureを使い、folder/multi-select・restart・duplicate/cancel・missing/reappear・forget/readd・edit/export・path redactionを検査する。"
+      "sha256": "aea14a53b4caf7a28635e9ec0ee17772c1667294aaa8e113dec30d852e8ebd9e",
+      "origin": "niho-photo #210 の独立したMac自動E2E runner。合成fixtureを使い、Mac miniの重処理guardを通してMac Studioで実行する。git archiveでHEADを一時出力してruntimeをbuildし、clone/worktreeを作らない。folder/multi-select・restart・duplicate/cancel・missing/reappear・forget/readd・edit/export・path redactionを検査する。"
     },
     {
       "path": "apps/camera/scripts/run-e2e.sh",

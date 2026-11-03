@@ -2,6 +2,8 @@
 set -euo pipefail
 cd "$(dirname "$0")/../../../.."
 
+node scripts/ci/guard-local-heavy.mjs camera:e2e:photo-picker
+
 if [ "$(uname -s)" != "Darwin" ]; then
   echo "photo-picker E2E requires macOS" >&2
   exit 2
@@ -49,11 +51,10 @@ if [ ! -d node_modules ] || [ ! -x node_modules/.bin/vite ] || [ ! -f node_modul
 fi
 
 echo "photo-picker E2E: build pinned engine runtime from clean HEAD snapshot"
-git clone --quiet --shared --no-checkout "$PWD" "$W/runtime-source"
-git -C "$W/runtime-source" checkout --quiet --detach HEAD
+mkdir -p "$W/runtime-source"
+git archive --format=tar HEAD | tar -x -C "$W/runtime-source"
 ln -s "$PWD/node_modules" "$W/runtime-source/node_modules"
-printf '\nnode_modules\n' >>"$W/runtime-source/.git/info/exclude"
-node "$W/runtime-source/scripts/sdk/build-develop-engine-runtime.mjs" --output "$W/runtime" >"$W/runtime-build.log" 2>&1 || {
+npm -C "$W/runtime-source" run sdk:build-engine-runtime -- --output "$W/runtime" >"$W/runtime-build.log" 2>&1 || {
   echo "photo-picker E2E engine runtime build failed (check pinned Rust, wasm target, rust-src, and wasm-bindgen prerequisites)" >&2
   show_build_failure "$W/runtime-build.log"
   exit 1
@@ -151,9 +152,6 @@ if [ ! -x "$APP" ]; then
   exit 1
 fi
 
-FIXTURE_NAMES='["fixture-heic.heic","fixture-jpeg.jpg","fixture-png.png","fixture-raw.rw2","fixture-tiff.tiff"]'
-EDIT_NAMES='["fixture-jpeg.jpg","fixture-png.png","fixture-heic.heic","fixture-tiff.tiff"]'
-EXTENSIONS='["HEIC","JPEG","PNG","RW2","TIFF"]'
 write_probe() {
   local phase="$1"
   local expected="${2:-null}"

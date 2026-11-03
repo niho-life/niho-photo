@@ -45,7 +45,7 @@ Mac アプリの WKWebView は独自の scheme（`tauri://localhost`）の画面
 
 ## 写真pickerの自動E2E（#210）
 
-Node.js 24 と macOS が必要です。`npm -C apps/camera run e2e:photo-picker` は一時HOME・合成写真・試験専用identifierを使い、フォルダと複数写真の選択、再起動、重複・取消、移動後の再表示、参照を外して再追加したときの補正復元、編集・JPEG書き出し、パスを含まない報告を確認します。署名済みDMGの手動画面受け入れは含みません。
+Node.js 24 と macOS が必要です。Mac mini では重いビルドがguardで停止するため、push済みclean HEADからMac Studioへ送って実行します: `~/.codex/skills/ssh-personal-macs/scripts/studio-exec.sh run --class heavy --name camera-photo-picker-e2e -- npm -C apps/camera run e2e:photo-picker`。一時HOME・合成写真・試験専用identifierを使い、フォルダと複数写真の選択、再起動、重複・取消、写真とフォルダの参照元移動/復元、参照を外して再追加したときの補正復元、編集・JPEG書き出し、パスを含まない報告を確認します。署名済みDMGの手動画面受け入れは含みません。
 
 ## 公式candidateのSDK runtime
 
