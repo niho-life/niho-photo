@@ -30,11 +30,15 @@ class Locks implements RecipeSyncLocks {
   }
 }
 
-function setup(handler?: <K extends PhotoOperation>(operation: K) => Promise<PhotoOperationMap[K]["response"]>) {
-  const identity = new Identity();
+function setup(
+  handler?: <K extends PhotoOperation>(operation: K) => Promise<PhotoOperationMap[K]["response"]>,
+  databaseName = `binding-${crypto.randomUUID()}`,
+  identity = new Identity(),
+  epoch = "epoch-1",
+) {
   const calls: PhotoOperation[] = [];
   const client: PersonalPhotoCloudClient = {
-    scope: { actorId: IDS.userA, libraryId: IDS.library, sessionEpoch: "epoch-1" },
+    scope: { actorId: IDS.userA, libraryId: IDS.library, sessionEpoch: epoch },
     async request<K extends PhotoOperation>(operation: K, _request: PhotoOperationMap[K]["request"], _options: PhotoRequestOptions<K>) {
       calls.push(operation);
       return handler ? await handler(operation) : defaultResponse(operation);
@@ -50,7 +54,7 @@ function setup(handler?: <K extends PhotoOperation>(operation: K) => Promise<Pho
     presets,
     memoryBudgets: { originalBytes: 1024 ** 2, workingCopyBytes: 1024 ** 2, previewBytes: 1024 ** 2 },
     clock: { now: () => Date.parse("2026-11-03T00:00:00.000Z") },
-    journal: new IndexedDbRecipeSyncJournal(indexedDB, `binding-${crypto.randomUUID()}`),
+    journal: new IndexedDbRecipeSyncJournal(indexedDB, databaseName),
     locks: new Locks(),
     randomId: () => `binding-${++id}`,
   });
@@ -129,6 +133,33 @@ describe("photo library durable binding", () => {
     } finally { fixture.handle.dispose(); }
   });
 
+  it("projects previous recovery through a token map separate from normal drafts", async () => {
+    const databaseName = `binding-previous-${crypto.randomUUID()}`;
+    const old = setup(undefined, databaseName);
+    const oldWriter = old.port.open({ photoId: IDS.photo, sourceSha256: responses["photos.get"].original.sha256, expectedRevision: 0 });
+    await oldWriter.stage(structuredClone(responses["photos.get"].recipe.settings) as DevelopSettings).committed;
+    old.handle.dispose();
+
+    const identity = new Identity(defaultActor({ sessionId: "parent-2", sessionEpoch: "epoch-2" }));
+    const current = setup(undefined, databaseName, identity, "epoch-2");
+    try {
+      expect(current.port.previous).toBeDefined();
+      await expect(current.port.list()).resolves.toEqual({ items: [], nextCursor: null });
+      const previous = await current.port.previous!.list();
+      expect(previous.items).toHaveLength(1);
+      await expect(current.port.reopen(previous.items[0]!.token)).rejects.toBeDefined();
+
+      const normalWriter = current.port.open({ photoId: IDS.photo, sourceSha256: responses["photos.get"].original.sha256, expectedRevision: 0 });
+      await normalWriter.stage(structuredClone(responses["photos.get"].recipe.settings) as DevelopSettings).committed;
+      const normal = await current.port.list();
+      await expect(current.port.previous!.reopen(normal.items[0]!.token)).rejects.toBeDefined();
+
+      const recovered = await current.port.previous!.reopen(previous.items[0]!.token);
+      expect(() => recovered.stage(structuredClone(responses["photos.get"].recipe.settings) as DevelopSettings)).toThrow();
+      await expect(recovered.read()).resolves.toMatchObject({ latest: { settings: responses["photos.get"].recipe.settings } });
+    } finally { current.handle.dispose(); }
+  });
+
   it("binds conflicts and choices to one writer and fixes the fresh revision at comparison time", async () => {
     const conflict = responses["recipe-conflicts.get"];
     let currentRecipe = conflict.currentRecipe;
@@ -163,8 +194,8 @@ describe("photo library durable binding", () => {
   });
 });
 
-function defaultActor(): VerifiedPhotoActor {
-  return { userId: IDS.userA, sessionId: "parent-1", sessionEpoch: "epoch-1", transport: "browser-session", expiresAt: "2030-01-01T00:00:00.000Z" };
+function defaultActor(overrides: Partial<VerifiedPhotoActor> = {}): VerifiedPhotoActor {
+  return { userId: IDS.userA, sessionId: "parent-1", sessionEpoch: "epoch-1", transport: "browser-session", expiresAt: "2030-01-01T00:00:00.000Z", ...overrides };
 }
 
 function defaultResponse<K extends PhotoOperation>(operation: K): PhotoOperationMap[K]["response"] {
