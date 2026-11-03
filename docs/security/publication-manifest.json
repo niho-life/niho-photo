@@ -4709,9 +4709,10 @@
         "path": "apps/camera/tsconfig.json",
         "sha256": "969e52141755a259ddc9ad32a6f2411ea986aca2fd6c36564bd5a7236753e255"
       },
-      "outputSha256": "fa16a097c321ef3134896fc7be143f95148ab22e7d65f2b129096a7bd6248b8e",
+      "outputSha256": "b8dec5d259c9386530158e186982f37321bc76d7b4d0233c1cac8b3cd81058b3",
       "modifications": [
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "共有 photo-cloud-session の TypeScript source import をCameraで型検査"
       ]
     },
     {
@@ -10159,8 +10160,8 @@
     },
     {
       "path": "apps/camera/src-tauri/src/account.rs",
-      "sha256": "7cac36058f2aebaedeef368e29478683b8e199800586094c1014c7bee48d4171",
-      "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: Camera限定の安全な本人写真session読取と即時失効を実接続し、旧session遅着と保存待ちを隔離する"
+      "sha256": "8b7b1b4275d8ed6547837cc11ab851815af2ad74afb2512f62d029cc0e329b52",
+      "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: Camera限定の安全な本人写真session読取と即時失効を実接続し、旧session遅着と保存待ちを隔離する\n変更理由: ログアウト後の本人写真session読取と並行refreshによる失効解除を防止\n変更理由: ログアウト失効フェンスとTauri account command境界を修正\n変更理由: ログアウト中のsession失効とstale observer競合を防止\n変更理由: ログアウト失効フェンスの回帰testを整備\n変更理由: 公開commandの型可視性をcrate境界に限定"
     },
     {
       "path": "apps/camera/src/camera-account.test.tsx",

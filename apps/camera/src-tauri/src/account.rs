@@ -4,10 +4,7 @@ use niho_desktop_account::{
   Account, AccountPhase, AccountSnapshot, ClientId, Config, FileSecretStore, PhotoIdentity, Secret,
 };
 use serde::Serialize;
-use std::sync::{
-  atomic::{AtomicBool, Ordering},
-  Arc,
-};
+use std::sync::{Arc, Mutex};
 use tauri::{AppHandle, Emitter, Manager, State};
 use tauri_plugin_deep_link::DeepLinkExt;
 
@@ -18,21 +15,155 @@ struct PhotoIdentityInvalidated {
   invalidated: bool,
 }
 
-struct SharedAccount {
+pub(crate) struct SharedAccount {
   account: Account,
-  invalidated: AtomicBool,
+  photo_identity: PhotoIdentityFence,
+}
+
+/// Fences logout, refresh, and fresh-login transitions around reads that
+/// return the native photo identity. The account's own lock protects native
+/// credentials; this generation also protects the response while the HTTP
+/// read is in flight.
+#[derive(Default)]
+struct PhotoIdentityFence {
+  state: Mutex<PhotoIdentityFenceState>,
+}
+
+#[derive(Default)]
+struct PhotoIdentityFenceState {
+  generation: u64,
+  invalidated: bool,
+  terminal: bool,
+  login_generation: Option<u64>,
+}
+
+impl PhotoIdentityFence {
+  fn generation(&self) -> Result<u64, niho_desktop_account::AccountError> {
+    self
+      .state
+      .lock()
+      .map(|state| state.generation)
+      .map_err(|_| niho_desktop_account::AccountError::Internal)
+  }
+
+  fn begin_read(&self) -> Result<u64, niho_desktop_account::AccountError> {
+    let state = self
+      .state
+      .lock()
+      .map_err(|_| niho_desktop_account::AccountError::Internal)?;
+    if state.invalidated {
+      return Err(niho_desktop_account::AccountError::Expired);
+    }
+    Ok(state.generation)
+  }
+
+  fn read_is_current(&self, generation: u64) -> bool {
+    self
+      .state
+      .lock()
+      .is_ok_and(|state| !state.invalidated && state.generation == generation)
+  }
+
+  fn begin_refresh(&self) -> Result<u64, niho_desktop_account::AccountError> {
+    let state = self
+      .state
+      .lock()
+      .map_err(|_| niho_desktop_account::AccountError::Internal)?;
+    if state.terminal {
+      return Err(niho_desktop_account::AccountError::Expired);
+    }
+    Ok(state.generation)
+  }
+
+  fn finish_refresh(&self, generation: u64) -> bool {
+    let Ok(mut state) = self.state.lock() else { return false };
+    if state.generation != generation || state.terminal {
+      return false;
+    }
+    state.generation = state.generation.saturating_add(1);
+    state.invalidated = false;
+    true
+  }
+
+  fn arm_login(&self) -> Result<u64, niho_desktop_account::AccountError> {
+    let mut state = self
+      .state
+      .lock()
+      .map_err(|_| niho_desktop_account::AccountError::Internal)?;
+    state.generation = state.generation.saturating_add(1);
+    let generation = state.generation;
+    state.login_generation = Some(generation);
+    Ok(generation)
+  }
+
+  fn login_generation(&self) -> Option<u64> {
+    self.state.lock().ok()?.login_generation
+  }
+
+  fn finish_login(&self, generation: u64) -> bool {
+    let Ok(mut state) = self.state.lock() else { return false };
+    if state.generation != generation || state.login_generation != Some(generation) {
+      return false;
+    }
+    state.generation = state.generation.saturating_add(1);
+    state.invalidated = false;
+    state.terminal = false;
+    state.login_generation = None;
+    true
+  }
+
+  fn clear_login_permit(&self, generation: u64) {
+    if let Ok(mut state) = self.state.lock() {
+      if state.generation == generation && state.login_generation == Some(generation) {
+        state.login_generation = None;
+      }
+    }
+  }
+
+  fn invalidate_terminal(&self) {
+    if let Ok(mut state) = self.state.lock() {
+      state.generation = state.generation.saturating_add(1);
+      state.invalidated = true;
+      state.terminal = true;
+      state.login_generation = None;
+    }
+  }
+
+  fn invalidate_terminal_if_current(&self, generation: u64) -> bool {
+    let Ok(mut state) = self.state.lock() else { return true };
+    if state.generation != generation || state.terminal || state.login_generation.is_some() {
+      return false;
+    }
+    state.generation = state.generation.saturating_add(1);
+    state.invalidated = true;
+    state.terminal = true;
+    state.login_generation = None;
+    true
+  }
+
+  fn invalidate_recoverable(&self) {
+    if let Ok(mut state) = self.state.lock() {
+      state.generation = state.generation.saturating_add(1);
+      state.invalidated = true;
+      state.login_generation = None;
+    }
+  }
 }
 
 impl SharedAccount {
   fn new(account: Account) -> Self {
     Self {
       account,
-      invalidated: AtomicBool::new(false),
+      photo_identity: PhotoIdentityFence::default(),
     }
   }
 
   fn emit_invalidation(&self, app: &AppHandle) {
-    self.invalidated.store(true, Ordering::SeqCst);
+    self.photo_identity.invalidate_terminal();
+    self.emit_invalidated(app);
+  }
+
+  fn emit_invalidated(&self, app: &AppHandle) {
     let _ = app.emit(
       PHOTO_IDENTITY_INVALIDATED_EVENT,
       PhotoIdentityInvalidated { invalidated: true },
@@ -40,22 +171,105 @@ impl SharedAccount {
   }
 
   fn observe(&self, app: &AppHandle) -> AccountSnapshot {
+    let generation = self.photo_identity.generation().ok();
     let snapshot = self.account.snapshot();
-    if snapshot.phase == AccountPhase::Connected {
-      self.invalidated.store(false, Ordering::SeqCst);
-    } else if (snapshot.phase == AccountPhase::Failed
+    if (snapshot.phase == AccountPhase::Failed
       || matches!(
         snapshot.error,
         Some(niho_desktop_account::AccountError::Expired | niho_desktop_account::AccountError::AccountUnavailable)
       ))
-      && !self.invalidated.swap(true, Ordering::SeqCst)
+      && generation.is_some_and(|generation| self.photo_identity.invalidate_terminal_if_current(generation))
     {
-      let _ = app.emit(
-        PHOTO_IDENTITY_INVALIDATED_EVENT,
-        PhotoIdentityInvalidated { invalidated: true },
-      );
+      self.emit_invalidated(app);
     }
     snapshot
+  }
+}
+
+#[cfg(test)]
+mod photo_identity_fence_tests {
+  use super::PhotoIdentityFence;
+  use niho_desktop_account::AccountError;
+
+  #[test]
+  fn logout_blocks_new_reads_and_fences_an_in_flight_read() {
+    let fence = PhotoIdentityFence::default();
+    let read_generation = fence.begin_read().unwrap();
+
+    fence.invalidate_terminal();
+
+    assert_eq!(fence.begin_read(), Err(AccountError::Expired));
+    assert!(!fence.read_is_current(read_generation));
+  }
+
+  #[test]
+  fn refresh_started_before_logout_cannot_reopen_the_identity_fence() {
+    let fence = PhotoIdentityFence::default();
+    let refresh_generation = fence.begin_refresh().unwrap();
+
+    fence.invalidate_terminal();
+
+    assert!(!fence.finish_refresh(refresh_generation));
+    assert_eq!(fence.begin_refresh(), Err(AccountError::Expired));
+  }
+
+  #[test]
+  fn cancelling_a_refresh_cannot_downgrade_an_active_logout() {
+    let fence = PhotoIdentityFence::default();
+    fence.invalidate_terminal();
+
+    fence.invalidate_recoverable();
+
+    assert_eq!(fence.begin_refresh(), Err(AccountError::Expired));
+    assert_eq!(fence.begin_read(), Err(AccountError::Expired));
+  }
+
+  #[test]
+  fn only_a_fresh_login_callback_can_clear_terminal_invalidation() {
+    let fence = PhotoIdentityFence::default();
+    fence.invalidate_terminal();
+    assert!(fence.arm_login().is_ok());
+
+    let callback_generation = fence.login_generation().unwrap();
+    assert_eq!(fence.login_generation(), Some(callback_generation));
+    assert!(fence.finish_login(callback_generation));
+    assert!(fence.begin_read().is_ok());
+  }
+
+  #[test]
+  fn callback_started_before_logout_cannot_clear_its_invalidation() {
+    let fence = PhotoIdentityFence::default();
+    assert!(fence.arm_login().is_ok());
+    let callback_generation = fence.login_generation().unwrap();
+
+    fence.invalidate_terminal();
+
+    assert!(!fence.finish_login(callback_generation));
+    assert_eq!(fence.begin_read(), Err(AccountError::Expired));
+  }
+
+  #[test]
+  fn a_stale_failure_observation_cannot_overwrite_a_fresh_login() {
+    let fence = PhotoIdentityFence::default();
+    let observed_generation = fence.generation().unwrap();
+    let login_generation = fence.arm_login().unwrap();
+
+    assert!(!fence.invalidate_terminal_if_current(observed_generation));
+    assert_eq!(fence.login_generation(), Some(login_generation));
+    assert!(fence.finish_login(login_generation));
+    assert!(fence.begin_read().is_ok());
+  }
+
+  #[test]
+  fn a_new_successful_refresh_can_clear_recoverable_cancellation() {
+    let fence = PhotoIdentityFence::default();
+    let cancelled_generation = fence.begin_refresh().unwrap();
+    fence.invalidate_recoverable();
+    assert!(!fence.finish_refresh(cancelled_generation));
+
+    let retry_generation = fence.begin_refresh().unwrap();
+    assert!(fence.finish_refresh(retry_generation));
+    assert!(fence.begin_read().is_ok());
   }
 }
 
@@ -80,7 +294,13 @@ pub fn install(app: &tauri::AppHandle) {
       let app = callback_app.clone();
       let raw = Secret::new(url.as_str());
       tauri::async_runtime::spawn_blocking(move || {
-        let _ = account.account.handle_callback(&raw);
+        let login_generation = account.photo_identity.login_generation();
+        let result = account.account.handle_callback(&raw);
+        if result.is_ok() {
+          if let Some(generation) = login_generation {
+            account.photo_identity.finish_login(generation);
+          }
+        }
         account.observe(&app);
       });
     }
@@ -97,7 +317,16 @@ pub fn install(app: &tauri::AppHandle) {
         account.observe(&background_app);
       }
       loop {
-        let _ = account.account.maintain();
+        if let Ok(generation) = account.photo_identity.begin_refresh() {
+          let before = account.account.snapshot().phase;
+          let result = account.account.maintain();
+          if result.is_ok()
+            && before != AccountPhase::Connected
+            && account.account.snapshot().phase == AccountPhase::Connected
+          {
+            account.photo_identity.finish_refresh(generation);
+          }
+        }
         account.observe(&background_app);
         std::thread::sleep(std::time::Duration::from_secs(1));
       }
@@ -114,10 +343,18 @@ pub async fn camera_account_login(
   account: State<'_, Arc<SharedAccount>>,
 ) -> Result<(), niho_desktop_account::AccountError> {
   let account = Arc::clone(account.inner());
+  let login_generation = account.photo_identity.arm_login()?;
   let worker = Arc::clone(&account);
-  let result = tauri::async_runtime::spawn_blocking(move || worker.account.login())
-    .await
-    .map_err(|_| niho_desktop_account::AccountError::Internal)?;
+  let result = match tauri::async_runtime::spawn_blocking(move || worker.account.login()).await {
+    Ok(result) => result,
+    Err(_) => {
+      account.photo_identity.clear_login_permit(login_generation);
+      return Err(niho_desktop_account::AccountError::Internal);
+    }
+  };
+  if result.is_err() {
+    account.photo_identity.clear_login_permit(login_generation);
+  }
   account.observe(&app);
   result
 }
@@ -129,7 +366,8 @@ pub fn camera_account_cancel(
   let refreshing = account.account.snapshot().phase == AccountPhase::Refreshing;
   let result = account.account.cancel();
   if refreshing {
-    account.emit_invalidation(&app);
+    account.photo_identity.invalidate_recoverable();
+    account.emit_invalidated(&app);
   } else {
     account.observe(&app);
   }
@@ -153,10 +391,14 @@ pub async fn camera_account_refresh(
   account: State<'_, Arc<SharedAccount>>,
 ) -> Result<(), niho_desktop_account::AccountError> {
   let account = Arc::clone(account.inner());
+  let refresh_generation = account.photo_identity.begin_refresh()?;
   let worker = Arc::clone(&account);
   let result = tauri::async_runtime::spawn_blocking(move || worker.account.refresh())
     .await
     .map_err(|_| niho_desktop_account::AccountError::Internal)?;
+  if result.is_ok() && !account.photo_identity.finish_refresh(refresh_generation) {
+    return Err(niho_desktop_account::AccountError::Cancelled);
+  }
   account.observe(&app);
   result
 }
@@ -167,10 +409,15 @@ pub async fn camera_photo_identity(
   account: State<'_, Arc<SharedAccount>>,
 ) -> Result<PhotoIdentity, niho_desktop_account::AccountError> {
   let account = Arc::clone(account.inner());
+  let read_generation = account.photo_identity.begin_read()?;
   let worker = Arc::clone(&account);
   let result = tauri::async_runtime::spawn_blocking(move || worker.account.photo_identity())
     .await
     .map_err(|_| niho_desktop_account::AccountError::Internal)?;
   account.observe(&app);
-  result
+  match result {
+    Ok(identity) if account.photo_identity.read_is_current(read_generation) => Ok(identity),
+    Ok(_) => Err(niho_desktop_account::AccountError::Cancelled),
+    Err(error) => Err(error),
+  }
 }
