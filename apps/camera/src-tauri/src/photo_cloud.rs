@@ -224,6 +224,19 @@ impl PhotoCloudState {
     unlink_entries(entries);
   }
 
+  fn close_owned_handle(&self, scope: &PhotoScopeCapture, handle: &str) -> Result<(), AccountError> {
+    let entry = {
+      let mut inner = self.inner.lock().map_err(|_| AccountError::Internal)?;
+      let entry = inner.handles.get(handle).ok_or(AccountError::Expired)?;
+      if entry.scope != *scope {
+        return Err(AccountError::Rejected);
+      }
+      remove_entry(&mut inner, handle).ok_or(AccountError::Expired)?
+    };
+    drop(entry.file);
+    fs::remove_file(entry.path).map_err(|_| AccountError::Storage)
+  }
+
   pub(crate) fn purge_expired(&self) {
     let entries = {
       let Ok(mut inner) = self.inner.lock() else { return };
@@ -482,6 +495,7 @@ pub async fn camera_photo_request(
   cache: State<'_, Arc<PhotoCloudState>>,
   input: CameraPhotoRequest,
 ) -> Result<PhotoJsonResponse, AccountError> {
+  let generation = account.begin_photo_operation()?;
   let account = Arc::clone(account.inner());
   let cache = Arc::clone(cache.inner());
   let operation = input.operation;
@@ -496,13 +510,21 @@ pub async fn camera_photo_request(
   let worker = Arc::clone(&account);
   let response = tauri::async_runtime::spawn_blocking(move || worker.account.photo_request(&scope, &request))
     .await
-    .map_err(|_| AccountError::Internal)??;
+    .map_err(|_| AccountError::Internal)?;
+  let current_before_observe = account.ensure_photo_operation_current(generation);
+  account.observe(&app);
+  current_before_observe?;
+  let response = response?;
+  // A current request's closed 401 envelope must still reach the C00 client so
+  // it can invalidate its scope after native observation emits revocation.
+  if response.status != 401 {
+    account.ensure_photo_operation_current(generation)?;
+  }
   if response.status == 200 {
     if let Some(photo_id) = delete_photo_id {
       cache.invalidate_photo(&delete_scope, &photo_id);
     }
   }
-  account.observe(&app);
   Ok(response)
 }
 
@@ -513,6 +535,7 @@ pub async fn camera_photo_content_open(
   cache: State<'_, Arc<PhotoCloudState>>,
   input: ContentOpenRequest,
 ) -> Result<ContentOpenResponse, AccountError> {
+  let generation = account.begin_photo_operation()?;
   validate_id(&input.request_id)?;
   validate_id(&input.photo_id)?;
   validate_id(&input.asset_id)?;
@@ -523,10 +546,20 @@ pub async fn camera_photo_content_open(
   account.account.photo_scope_current(&input.scope)?;
   let operation = cache.register_download(input.scope.clone(), input.request_id.clone(), input.photo_id.clone())?;
   operation.check()?;
-  let response = tauri::async_runtime::spawn_blocking(move || open_content(&account, &cache, input, operation))
-    .await
-    .map_err(|_| AccountError::Internal)?;
+  let scope = input.scope.clone();
+  let worker = Arc::clone(&account);
+  let worker_cache = Arc::clone(&cache);
+  let response =
+    tauri::async_runtime::spawn_blocking(move || open_content(&worker, &worker_cache, input, operation, generation))
+      .await
+      .map_err(|_| AccountError::Internal)?;
   account.observe(&app);
+  if let Err(error) = account.ensure_photo_operation_current(generation) {
+    if let Ok(opened) = &response {
+      let _ = cache.close_owned_handle(&scope, &opened.handle);
+    }
+    return Err(error);
+  }
   response
 }
 
@@ -535,9 +568,12 @@ fn open_content(
   cache: &PhotoCloudState,
   input: ContentOpenRequest,
   operation: DownloadOperation,
+  generation: u64,
 ) -> Result<ContentOpenResponse, AccountError> {
+  account.ensure_photo_operation_current(generation)?;
   operation.acquire()?;
   operation.check()?;
+  account.ensure_photo_operation_current(generation)?;
   let metadata = account
     .account
     .photo_content_metadata(&input.scope, &input.photo_id, &input.asset_id)?;
@@ -578,7 +614,7 @@ fn open_content(
     range: range.clone(),
     size_bytes,
   };
-  if operation.check().is_err() {
+  if operation.check().is_err() || account.ensure_photo_operation_current(generation).is_err() {
     drop(file);
     let _ = fs::remove_file(&path);
     return Err(AccountError::Cancelled);
@@ -616,13 +652,15 @@ pub fn camera_photo_content_read(
   let size = entry.range.end_inclusive.unwrap_or(entry.metadata.size_bytes - 1) - entry.range.start + 1;
   let remaining = size.saturating_sub(entry.offset);
   let count = remaining.min(u64::from(input.max_bytes)) as usize;
-  let read = account.account.photo_content_read_guarded(&input.scope, || {
-    let mut bytes = vec![0_u8; count];
-    if count > 0 {
-      entry.file.read_exact(&mut bytes).map_err(|_| AccountError::Storage)?;
-      entry.offset += count as u64;
-    }
-    Ok(bytes)
+  let read = account.read_photo_chunk_guarded(|| {
+    account.account.photo_content_read_guarded(&input.scope, || {
+      let mut bytes = vec![0_u8; count];
+      if count > 0 {
+        entry.file.read_exact(&mut bytes).map_err(|_| AccountError::Storage)?;
+        entry.offset += count as u64;
+      }
+      Ok(bytes)
+    })
   });
   match read {
     Ok(bytes) => Ok(tauri::ipc::Response::new(bytes)),
@@ -642,16 +680,7 @@ pub fn camera_photo_content_close(
   cache: State<'_, Arc<PhotoCloudState>>,
   input: ContentCloseRequest,
 ) -> Result<(), AccountError> {
-  let entry = {
-    let mut inner = cache.inner.lock().map_err(|_| AccountError::Internal)?;
-    let entry = inner.handles.get(&input.handle).ok_or(AccountError::Expired)?;
-    if entry.scope != input.scope {
-      return Err(AccountError::Rejected);
-    }
-    remove_entry(&mut inner, &input.handle).ok_or(AccountError::Expired)?
-  };
-  drop(entry.file);
-  fs::remove_file(entry.path).map_err(|_| AccountError::Storage)
+  cache.close_owned_handle(&input.scope, &input.handle)
 }
 
 #[tauri::command]

@@ -677,10 +677,7 @@ impl Account {
       (inner.generation, access, connection)
     };
 
-    let response = match adapters.photo_session.send(&adapters.config, &access) {
-      Ok(response) => response,
-      Err(error) => return Err(error),
-    };
+    let response = adapters.photo_session.send(&adapters.config, &access)?;
     let identity = match parse_response(
       response,
       self.clock.now_ms()?,
