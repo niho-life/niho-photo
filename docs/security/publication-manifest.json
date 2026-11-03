@@ -499,9 +499,10 @@
         "WKWebView を WebKit と判定し、SharedArrayBuffer の無い分離をスレッド版の対象にしない（#175）",
         "#141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み",
         "#141 Mac アプリの native でも同梱の manifest から空のモデルを読む",
-        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
+        "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。",
+        "mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。"
       ],
-      "outputSha256": "29736636cf1a883e0e815ef93bf6545ddeed982cb10d050e9ff68db5ed980c28"
+      "outputSha256": "721b1d63285cd36efbb8d31ff645bd1a83d401ec597e4fd0bb8e8c425c798dc7"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine.worker.ts",
@@ -11432,8 +11433,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-engine-worker-core-surfaces.test.ts",
-      "sha256": "d37e26c308dedfdcc33a8c041a1e2627aa339a634b74a4e3f728d2cf9a0ca2df",
-      "origin": "Issue #68のため新規作成した、Workerの面の受け渡し（能力・渡す/手放す・見本・面の作成・一時的なDeveloperの書き出し）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: #141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み\n変更理由: #141 native で空のモデルを渡す試験を足す\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
+      "sha256": "493a19330381716694e981940b4c0bb4ec7b7882a314c1eddb7a2351f79ed9a0",
+      "origin": "Issue #68のため新規作成した、Workerの面の受け渡し（能力・渡す/手放す・見本・面の作成・一時的なDeveloperの書き出し）の回帰。外部画像・非公開コード・個体metadataを含まない。\n変更理由: #141 空のマスク: 開いている作業画像から wasm で空の面を作って保存する経路と、manifest のモデルの初回読み込み\n変更理由: #141 native で空のモデルを渡す試験を足す\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-mask-brush.ts",
@@ -12217,8 +12218,8 @@
     },
     {
       "path": "docs/architecture/personal-photo-cloud.md",
-      "sha256": "5de8fcf824ba06cefa91e7d636bbd8f77ea9f564193c62a34653ffd305b157e3",
-      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消\n変更理由: 親sessionと通常refreshを区別し端末間の独立性と失効時の旧scope破棄を明確化\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。"
+      "sha256": "c2daa99aee81e1023b3b1254795a2f78fc91b1b52b62770eea7607af2e122b54",
+      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消\n変更理由: 親sessionと通常refreshを区別し端末間の独立性と失効時の旧scope破棄を明確化\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。"
     },
     {
       "path": "scripts/ci/personal-photo-contract.test.mjs",
@@ -12812,13 +12813,13 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-renderer-capabilities.ts",
-      "sha256": "50149022fcb32d46bb462b842de37efa1a2abe6be0e9628c1491fa7dfb6334c2",
-      "origin": "NIHOが公開runtimeのschema 1宣言を検証するため新規実装。公開Rust/WASMの能力だけを扱い、非公開source・資格情報・利用者データを含まない。"
+      "sha256": "c25f8f3464498c6dcb78f093e390a1059f4e1ac59c010e91cc1d31029b6173a0",
+      "origin": "NIHOが公開runtimeのschema 1宣言を検証するため新規実装。公開Rust/WASMの能力だけを扱い、非公開source・資格情報・利用者データを含まない。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-renderer-capabilities.test.ts",
-      "sha256": "5a1d1525845cebdf6e0af2ef42926bd6dae3d29f645cfd49aaa636d2bf40d76e",
-      "origin": "NIHOがschema 1の不正入力・readonly snapshotを検証するため新規作成した合成unit test。実写真・利用者データ・第三者資産を含まない。"
+      "sha256": "16c993c9727c4b8ed35a10b4b80c0f8dfc8e1325f596d64f2415519646881e84",
+      "origin": "NIHOがschema 1の不正入力・readonly snapshotを検証するため新規作成した合成unit test。実写真・利用者データ・第三者資産を含まない。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。"
     }
   ],
   "excludedSources": [

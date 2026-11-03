@@ -203,6 +203,19 @@ describe("Worker の面の受け渡し", () => {
     expect(missingGeometryGlue.posted[0]?.message).not.toHaveProperty("rendererCapabilities");
   });
 
+  it("mask glue と masks 情報が無い場合、maskKinds だけ宣言する renderer を ready へ写さない", async () => {
+    const renderer = { ...RENDERER_CAPABILITIES, features: ["geometry", "colorGradingLuminance"] };
+    const glue = surfaceGlue({ developerSurfaces: false, encode: false, capabilities: { renderer } });
+    Reflect.deleteProperty(glue.module.Developer.prototype, "maskPlane");
+    const runtime = setup(glue.module);
+
+    await runtime.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+
+    expect(runtime.posted[0]?.message).toMatchObject({ type: "ready", geometry: true });
+    expect(runtime.posted[0]?.message).not.toHaveProperty("masks");
+    expect(runtime.posted[0]?.message).not.toHaveProperty("rendererCapabilities");
+  });
+
   it("口が揃っていれば masks.surfaces を付ける。揃わない glue は面の種類を描けない扱いにする", async () => {
     const ready = setup(surfaceGlue().module);
     await ready.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });

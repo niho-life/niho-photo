@@ -715,10 +715,10 @@ function readRendererCapabilities(
 ): DevelopRendererCapabilities | null {
   const renderer = parseDevelopRendererCapabilities(value);
   if (!renderer) return null;
+  if (!masks) return null;
   const declaresGeometry = renderer.features.includes("geometry");
   const declaresMasks = renderer.features.includes("masks");
   if (declaresGeometry !== (glue.geometry !== null) || declaresMasks !== (masks !== null)) return null;
-  if (!masks) return renderer;
   if (!sameStrings(renderer.maskKinds, masks.kinds) || renderer.maskSurfaces !== (masks.surfaces === true)) return null;
   return renderer;
 }

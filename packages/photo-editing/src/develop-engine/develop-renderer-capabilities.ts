@@ -92,7 +92,7 @@ export function parseDevelopRendererCapabilities(value: unknown): DevelopRendere
         ? (item as DevelopRendererMaskKind)
         : null,
     );
-    if (!settingsVersions || !engines || !features || !maskKinds) return null;
+    if (!settingsVersions || !engines || !features?.includes("masks") || !maskKinds) return null;
     return Object.freeze({
       schemaVersion: 1,
       crateVersion: value.crateVersion,

@@ -42,6 +42,7 @@ describe("parseDevelopRendererCapabilities", () => {
     ["invalid semver", { ...VALID, crateVersion: "niho-develop 0.23.0" }],
     ["unknown feature", { ...VALID, features: ["geometry", "future"] }],
     ["duplicate feature", { ...VALID, features: ["geometry", "geometry"] }],
+    ["mask kinds without masks feature", { ...VALID, features: ["geometry", "colorGradingLuminance"] }],
     ["unknown mask", { ...VALID, maskKinds: ["linear", "depth"] }],
     ["duplicate mask", { ...VALID, maskKinds: ["linear", "linear"] }],
     ["duplicate engine", { ...VALID, engines: ["niho-1", "niho-1"] }],
