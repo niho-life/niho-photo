@@ -11912,7 +11912,7 @@
     },
     {
       "path": "apps/camera/scripts/e2e/photo-picker.js",
-      "sha256": "15f858e802b2eff863bae6968fb3778cbcd90b1d168086b3615f59514bde285d",
+      "sha256": "ac8c72c96b69186f0aa382b9cee523fd7fe8509ea109e9d1dc47dde06f2a36c4",
       "origin": "niho-photo #210 の独立したE2E画面probe。操作結果の固定状態だけを報告し、ファイル名・絶対path・画像hash・例外本文を出力しない。"
     },
     {

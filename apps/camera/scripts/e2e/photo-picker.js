@@ -178,7 +178,9 @@
       if (config.phase === "missing") {
         stage = "missing-media";
         await delay(1500);
-        await selectSelectedPhotos();
+        if (selectedRow()) {
+          await selectSelectedPhotos();
+        }
         if (tiles().length !== 0) {
           throw Object.assign(new Error(), { code: "moved-photos-still-listed" });
         }
