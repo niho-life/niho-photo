@@ -5,7 +5,9 @@
   "type": "module",
   "description": "本人クラウドportを既存PhotoLibraryへ接続する共通adapter",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./browser": "./src/browser/index.ts",
+    "./server": "./src/server/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
@@ -14,9 +16,14 @@
   },
   "dependencies": {
     "@niho/photo-personal-cloud-contract": "*",
-    "niho-photo-editing": "*"
+    "@noble/hashes": "2.4.0",
+    "niho-photo-editing": "*",
+    "@niho/photo-cloud-session": "*"
   },
   "engines": {
     "node": "24.x"
+  },
+  "devDependencies": {
+    "fake-indexeddb": "6.2.7"
   }
 }
