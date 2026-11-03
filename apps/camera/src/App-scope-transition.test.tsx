@@ -55,7 +55,7 @@ it.each(["never", "late"])("unlocks the new owner's tabs and fences the %s previ
     expect(cloudTab().disabled).toBe(true);
     controls.guard = async () => true;
     await render(makeBinding("synthetic-owner-b"));
-    expect(container.querySelector('[data-testid="editor-owner"]')?.textContent).toBe("synthetic-owner-b");
+    expect(container.querySelector('[data-testid="editor-owner"]')?.textContent).toBe("local");
     expect(cloudTab().disabled).toBe(false);
     let finishNew: (value: boolean) => void = () => undefined;
     controls.guard = () => new Promise<boolean>(resolve => { finishNew = resolve; });
@@ -65,6 +65,7 @@ it.each(["never", "late"])("unlocks the new owner's tabs and fences the %s previ
     expect(cloudTab().disabled).toBe(true);
     await act(async () => finishNew(true));
     expect(cloudTab().getAttribute("aria-pressed")).toBe("true");
+    expect(container.querySelector('[data-testid="editor-owner"]')?.textContent).toBe("synthetic-owner-b");
   } finally {
     await act(async () => root.unmount()); container.remove();
     controls.guard = async () => true;

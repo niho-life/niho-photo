@@ -13151,8 +13151,8 @@
     },
     {
       "path": "apps/camera/src/App-scope-transition.test.tsx",
-      "sha256": "e88e3f7a17e930a050d279a410c8456b533943e80caaab201fc80a909e85e3df",
-      "origin": "NIHO所有の公開sourceとして新規作成。本人写真Mac接続の閉じたsession metadata・即時失効と合成fixtureの境界試験/契約。秘密、内部URL、実写真、個人情報、外部提供の資産を含まない。"
+      "sha256": "9caf4771f48c6d0fda319301714183159308db7d9426722ba1ab5473b3b81e54",
+      "origin": "NIHO所有の公開sourceとして新規作成。本人写真Mac接続の閉じたsession metadata・即時失効と合成fixtureの境界試験/契約。秘密、内部URL、実写真、個人情報、外部提供の資産を含まない。\n変更理由: 本人切替中もローカル編集を保持し、明示切替後だけ新本人になる仕様を照合。"
     },
     {
       "path": "apps/camera/src/native-photo-session.test.ts",
@@ -13268,6 +13268,16 @@
       "path": "apps/camera/src/native-original-save.test.ts",
       "sha256": "6533c11dce51ea6472f150eecab104fd8a6f3edabdb39420d246530c2b9d7468",
       "origin": "NIHO所有の本人Photo Mac bootstrap、実renderer照合、native原本保存の独立実装と合成回帰試験。実写真・秘密・非公開履歴は含まない。\n変更理由: 本人Photo起動接続と原本保存の合成回帰を確定し、fixtureの私有path表記を除外。"
+    },
+    {
+      "path": "apps/camera/src/cloud-build-proof.ts",
+      "sha256": "63bad849bf32087f838fa31facba64041fb7a2da1676283fd1e4adfadfadbd45",
+      "origin": "NIHO所有の新規実装。正式Mac candidateが検証済みSDK source/runtime proofをcompile時に固定し、未設定・未知の宣言ではcloudを閉じる。実写真・private source・第三者資産を含まない。"
+    },
+    {
+      "path": "apps/camera/src/cloud-build-proof.test.ts",
+      "sha256": "0a65e95edc5502c2d86651919d2b3899188ff767e8a7f1bc066c139c3f57a1df",
+      "origin": "NIHO所有の新規実装。正式Mac candidateが検証済みSDK source/runtime proofをcompile時に固定し、未設定・未知の宣言ではcloudを閉じる。実写真・private source・第三者資産を含まない。"
     }
   ],
   "excludedSources": [
