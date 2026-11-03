@@ -461,9 +461,11 @@ describe("captured photo web cloud client", () => {
       const pending = reader.read();
       scope.abort();
       await expect(pending).rejects.toMatchObject({ code: "scope_changed" });
+      expect(source.locked).toBe(false);
       releasePull.resolve();
       await turn();
       expect(cancelled).toHaveBeenCalledTimes(1);
+      expect(source.locked).toBe(false);
       await expect(reader.read()).rejects.toMatchObject({ code: "scope_changed" });
     } finally {
       releasePull.resolve();

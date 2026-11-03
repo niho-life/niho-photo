@@ -13057,8 +13057,8 @@
     },
     {
       "path": "apps/photo-web/test/session-client.test.ts",
-      "sha256": "062b008f02a29c648bc91c1591940d7dec7101a510e6f296c3924d674b5c6a41",
-      "origin": "NIHOが合成session/client/streamによるPhoto Web本人scope・refresh・abort・cleanupの回帰試験として新規作成。実credential・写真・個人情報を含まない。"
+      "sha256": "febe00f4d9d6116305cb1e0ef5603f926619886057108e52bccfbb1ce3c4aaee",
+      "origin": "NIHOが合成session/client/streamによるPhoto Web本人scope・refresh・abort・cleanupの回帰試験として新規作成。実credential・写真・個人情報を含まない。\n変更理由: 本人scope取消中のpending readerが取消直後・pull解決後とも解放済みであることを回帰assertする"
     },
     {
       "path": "apps/photo-web/vitest.session.config.ts",
