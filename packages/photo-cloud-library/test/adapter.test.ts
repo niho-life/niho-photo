@@ -11,6 +11,7 @@ import {
 import type { PhotoOperationMap } from "@niho/photo-personal-cloud-contract";
 
 import { PersonalPhotoCloudError } from "../src/index";
+import { deepEqual, jsonStructuralFingerprint } from "../src/protocol";
 import { FakeClient, FakeIdentity, defaultActor, makeHandle } from "./support";
 
 describe("personal photo cloud adapter", () => {
@@ -97,6 +98,23 @@ describe("personal photo cloud adapter", () => {
     expect(downloaded.blob.size).toBe(futureRecipePhoto.original.sizeBytes);
     expect(downloaded.fileName).toBe(futureRecipePhoto.fileName);
     future.dispose();
+  });
+});
+
+describe("recipe protocol helpers", () => {
+  it("uses structural JSON fingerprints and JSON numeric equality", () => {
+    const left = { future: { retained: true }, values: [1, { nested: "yes" }] };
+    const reordered = { values: [1, { nested: "yes" }], future: { retained: true } };
+    expect(jsonStructuralFingerprint(left)).toBe(jsonStructuralFingerprint(reordered));
+    expect(jsonStructuralFingerprint(left)).not.toBe(jsonStructuralFingerprint({ ...reordered, values: [{ nested: "yes" }, 1] }));
+    expect(jsonStructuralFingerprint(left)).not.toBe(jsonStructuralFingerprint({ ...reordered, future: { retained: false } }));
+    expect(deepEqual({ value: -0 }, { value: 0 })).toBe(true);
+
+    const cyclic: { self?: unknown } = {};
+    cyclic.self = cyclic;
+    for (const invalid of [Number.NaN, Number.POSITIVE_INFINITY, undefined, new Date(), new Map(), cyclic]) {
+      expect(() => jsonStructuralFingerprint(invalid)).toThrow();
+    }
   });
 });
 

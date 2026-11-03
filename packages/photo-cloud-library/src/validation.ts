@@ -9,6 +9,10 @@ import {
   type PhotoLookupMatch,
   type PhotoPage,
   type QuotaUsage,
+  type RecipeCandidate,
+  type RecipeConflict,
+  type RecipeConflictPage,
+  type RecipeConflictResolution,
   type RecipeDocument,
   type RenderCapability,
   type StartUploadResponse,
@@ -220,9 +224,17 @@ export function isUploadTicketShape(value: unknown): value is UploadTicket {
     && safeNonNegative(value.resumeOffsetBytes);
 }
 
-export function validateJsonValue(value: unknown, maximumBytes: number): void {
-  if (!Number.isSafeInteger(maximumBytes) || maximumBytes < 0 || jsonBytes(value) > maximumBytes) invalid();
-  validateJson(value, 0);
+export function validateJsonValue(
+  value: unknown,
+  maximumBytes: number,
+  maximumDepth: number = PHOTO_LIMITS.maxJsonDepth,
+): void {
+  if (
+    !Number.isSafeInteger(maximumBytes) || maximumBytes < 0 ||
+    !Number.isSafeInteger(maximumDepth) || maximumDepth < 0 ||
+    jsonBytes(value) > maximumBytes
+  ) invalid();
+  validateJson(value, 0, maximumDepth);
 }
 
 export function validateJsonDepth(value: unknown, maximumDepth: number = PHOTO_LIMITS.maxJsonDepth): void {
@@ -275,9 +287,9 @@ function validateCapabilities(value: PersonalPhotoLibrary["capabilities"]): void
   validateRenderer(value.renderer);
 }
 
-function validateRecipe(value: RecipeDocument): void {
+export function validateRecipe(value: RecipeDocument): RecipeDocument {
   if (
-    !isRecord(value) ||
+    !isExactRecord(value, ["revision", "settings", "settingsSha256", "baseVersion", "maskSurfaceIds", "updatedAt"]) ||
     !safeNonNegative(value.revision) ||
     !isRecord(value.settings) ||
     !safeNonNegative(value.settings.v) ||
@@ -286,12 +298,85 @@ function validateRecipe(value: RecipeDocument): void {
     (value.baseVersion !== null && !boundedString(value.baseVersion, 1, 512)) ||
     !Array.isArray(value.maskSurfaceIds) ||
     !value.maskSurfaceIds.every(sha256) ||
+    new Set(value.maskSurfaceIds).size !== value.maskSurfaceIds.length ||
     !instant(value.updatedAt) ||
     jsonBytes(value.settings) > PHOTO_LIMITS.maxRecipeBytes
   ) {
     invalid();
   }
   validateJson(value.settings, 0);
+  return value;
+}
+
+export function validateRecipeCandidate(value: RecipeCandidate): RecipeCandidate {
+  if (
+    !isExactRecord(value, ["settings", "baseVersion", "settingsSha256", "maskSurfaceIds"]) ||
+    !isRecord(value.settings) ||
+    !safeNonNegative(value.settings.v) ||
+    !boundedString(value.settings.engine, 1, 128) ||
+    !sha256(value.settingsSha256) ||
+    (value.baseVersion !== null && !boundedString(value.baseVersion, 1, 512)) ||
+    !Array.isArray(value.maskSurfaceIds) ||
+    !value.maskSurfaceIds.every(sha256) ||
+    new Set(value.maskSurfaceIds).size !== value.maskSurfaceIds.length ||
+    jsonBytes(value.settings) > PHOTO_LIMITS.maxRecipeBytes ||
+    jsonBytes(value) > PHOTO_LIMITS.maxRecipeBodyBytes
+  ) invalid();
+  validateJson(value.settings, 0);
+  validateJson(value, 0, PHOTO_LIMITS.maxJsonDepth + 1);
+  return value;
+}
+
+export function validateRecipeConflict(value: RecipeConflict): RecipeConflict {
+  if (
+    !isExactRecord(value, [
+      "id", "expectedRevision", "currentRevision", "conflictingRecipe", "currentRecipe", "createdAt",
+      "resolution", "resolvedAt", "resultingRevision",
+    ]) ||
+    !boundedString(value.id, 1, 512) ||
+    !safeNonNegative(value.expectedRevision) ||
+    !safeNonNegative(value.currentRevision) ||
+    value.currentRevision < value.expectedRevision ||
+    !instant(value.createdAt) ||
+    (value.resolution !== null && value.resolution !== "adopt" && value.resolution !== "keep-current") ||
+    (value.resolvedAt !== null && !instant(value.resolvedAt)) ||
+    (value.resultingRevision !== null && !safeNonNegative(value.resultingRevision)) ||
+    (value.resolution === null) !== (value.resolvedAt === null) ||
+    (value.resolution === null) !== (value.resultingRevision === null)
+  ) invalid();
+  validateRecipeCandidate(value.conflictingRecipe);
+  validateRecipe(value.currentRecipe);
+  if (value.currentRecipe.revision !== value.currentRevision) invalid();
+  return value;
+}
+
+export function validateRecipeConflictPage(value: RecipeConflictPage): RecipeConflictPage {
+  if (
+    !isExactRecord(value, ["items", "nextCursor", "currentRevision"]) ||
+    !Array.isArray(value.items) ||
+    value.items.length > PHOTO_LIMITS.listMaxCount ||
+    (value.nextCursor !== null && !boundedString(value.nextCursor, 1, 4096)) ||
+    !safeNonNegative(value.currentRevision)
+  ) invalid();
+  const ids = new Set<string>();
+  for (const conflict of value.items) {
+    validateRecipeConflict(conflict);
+    if (ids.has(conflict.id)) invalid();
+    ids.add(conflict.id);
+  }
+  return value;
+}
+
+export function validateRecipeConflictResolution(value: RecipeConflictResolution): RecipeConflictResolution {
+  if (!isExactRecord(value, ["conflict", "recipe"])) invalid();
+  validateRecipeConflict(value.conflict);
+  validateRecipe(value.recipe);
+  if (
+    value.conflict.resolution === null ||
+    value.conflict.resultingRevision === null ||
+    value.recipe.revision !== value.conflict.resultingRevision
+  ) invalid();
+  return value;
 }
 
 export function validateMediaState(value: MediaState): MediaState {
@@ -332,8 +417,15 @@ function validateJson(value: unknown, depth: number, maximumDepth: number = PHOT
     for (const item of value) validateJson(item, depth + 1, maximumDepth);
     return;
   }
-  if (!isRecord(value)) invalid();
+  if (!isPlainJsonRecord(value)) invalid();
   for (const item of Object.values(value)) validateJson(item, depth + 1, maximumDepth);
+}
+
+function isPlainJsonRecord(value: unknown): value is Record<string, unknown> {
+  if (!isRecord(value)) return false;
+  const prototype = Object.getPrototypeOf(value) as unknown;
+  if (prototype !== Object.prototype && prototype !== null) return false;
+  return Reflect.ownKeys(value).every((key) => typeof key === "string" && Object.prototype.propertyIsEnumerable.call(value, key));
 }
 
 function jsonBytes(value: unknown): number {
@@ -400,6 +492,13 @@ function positiveInteger(value: unknown): value is number {
 
 function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function isExactRecord<T extends object>(value: T, keys: readonly string[]): boolean {
+  if (!isRecord(value)) return false;
+  const actual = Object.keys(value).sort();
+  const expected = [...keys].sort();
+  return actual.length === expected.length && actual.every((key, index) => key === expected[index]);
 }
 
 function invalid(): never {

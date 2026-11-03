@@ -17,6 +17,7 @@ test("文書変更でもpublicationはworkflow側で常時実行、package実行
   assert.deepEqual(selected(["packages/photo-library-contract/src/v2.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-cloud-session/src/server/service.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-cloud-library/src/index.ts"]), ["photo-editing"]);
+  assert.deepEqual(selected(["packages/photo-cloud-sync/src/index.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-cloud-media/src/index.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["apps/photo-web/src/server/auth.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/develop-engine/core.rs"]), ["camera", "desktop-photo", "develop-engine"]);
@@ -143,5 +144,13 @@ test("Photo Webの変更は公開scopeから型・試験・lintを実行する",
   const root = fileURLToPath(new URL("../../", import.meta.url));
   const commands = await scopeCommands(root, "photo-editing");
   assert.deepEqual(commands.filter(([command, args]) => command === "npm" && args.at(-1) === "apps/photo-web")
+    .map(([, args]) => args[1]), ["typecheck", "test", "lint"]);
+});
+
+// 同期coreのsource変更が必須の三検証へ到達し、UI未注入でも未検査にならない。
+test("Photo補正同期coreを公開workspaceの型・試験・lintへ含める", async () => {
+  const root = fileURLToPath(new URL("../../", import.meta.url));
+  const commands = await scopeCommands(root, "photo-editing");
+  assert.deepEqual(commands.filter(([command, args]) => command === "npm" && args.at(-1) === "packages/photo-cloud-sync")
     .map(([, args]) => args[1]), ["typecheck", "test", "lint"]);
 });

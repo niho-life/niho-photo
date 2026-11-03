@@ -2,7 +2,7 @@ import { PHOTO_LIMITS, type PhotoFormat, type RecipeCandidate, type RecipeDocume
 
 import { PersonalPhotoCloudError } from "../errors";
 import { awaitBounded } from "../await";
-import { validateJsonValue } from "../validation";
+import { validateRecipe, validateRecipeCandidate } from "../validation";
 
 const DATABASE_VERSION = 1;
 const STORE = "entries";
@@ -161,9 +161,8 @@ export function makeEntryId(scope: JournalScope, intentId: string): string { ret
 
 export function validateCandidate(value: unknown): RecipeCandidate | null {
   if (value === null) return null;
-  if (!isRecord(value) || !exactKeys(value, ["settings", "baseVersion", "settingsSha256", "maskSurfaceIds"]) || !isRecord(value.settings) || !safeNonNegative(value.settings.v) || !nonEmpty(value.settings.engine) || value.baseVersion !== null && !nonEmpty(value.baseVersion) || typeof value.settingsSha256 !== "string" || !SHA256.test(value.settingsSha256) || !Array.isArray(value.maskSurfaceIds) || !value.maskSurfaceIds.every((item) => typeof item === "string" && SHA256.test(item))) unavailable();
-  validateJsonValue(value, PHOTO_LIMITS.maxRecipeBytes);
-  return clone(value as unknown as RecipeCandidate);
+  validateRecipeCandidate(value as RecipeCandidate);
+  return clone(value as RecipeCandidate);
 }
 
 function openDatabase(factory: IDBFactory, name: string): Promise<IDBDatabase> {
@@ -208,7 +207,10 @@ function validateEntry(value: unknown): asserts value is TransferJournalEntry {
   const scope = value as unknown as JournalScope;
   if (value.id !== entryId(scope, value.intentId as string)) unavailable();
   validateCandidate(value.candidate);
-  if (value.cloudRecipe !== null) validateJsonValue(value.cloudRecipe, PHOTO_LIMITS.maxRecipeBytes + 4096);
+  if (value.cloudRecipe !== null) {
+    validateRecipe(value.cloudRecipe as RecipeDocument);
+    if (encodedJsonBytes(value.cloudRecipe) > PHOTO_LIMITS.maxRecipeBodyBytes) unavailable();
+  }
   if (value.uploadId !== null && !nonEmpty(value.uploadId) || value.photoId !== null && !nonEmpty(value.photoId) || value.expiresAt !== null && !Number.isFinite(Date.parse(value.expiresAt as string)) || value.failure !== null && !["not-found", "stored", "invalid-response"].includes(value.failure as string)) unavailable();
 }
 function immutableBindingEqual(left: TransferJournalEntry, right: TransferJournalEntry): boolean { return ["id", "schemaVersion", "actorId", "libraryId", "sessionId", "sessionEpoch", "intentId", "startKey", "completeKey", "cancelKey", "fileName", "format", "contentType", "sizeBytes", "sha256", "candidate"].every((key) => JSON.stringify(Reflect.get(left, key)) === JSON.stringify(Reflect.get(right, key))); }

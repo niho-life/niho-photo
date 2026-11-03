@@ -29,3 +29,9 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 - save/upload/versions/masks/native exportは、このread adapterだけで実装済みとしない。
 
 型確認は共通SDK sourceと同じ `strict` policyを用いる。C00契約packageは独立した既存の厳格な設定を維持する。対象のtypecheck/test/lintをpackage scriptsから実行し、全体検証・native build・実DBは規約に従ってCIへ委譲する。
+
+## 完全補正の同期core
+
+C03は `@niho/photo-cloud-sync` と組み合わせ、`recipes.put` / `recipe-conflicts.list` / `recipe-conflicts.get` / `recipe-conflicts.resolve` を同じ固定HTTP/BFFへ接続する。補正文書1MiB/depth32とPUT envelope2MiBを分離し、両版と選択結果を含む競合応答は4MiBまで検証する。`./protocol` はscope/有限待機/純粋なrecipe投影・比較の狭い共有口で、認証やhashの別正本ではない。
+
+この接続だけでPhotoLibraryの編集capabilityは開かない。共有autosaverのdebounce前stage、実mask/base/versions、各hostへの注入と正式環境での受入を続ける。

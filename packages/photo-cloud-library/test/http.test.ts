@@ -58,6 +58,117 @@ async function clientFor(harness: ReturnType<typeof setup>, identity = new FakeI
 }
 
 describe("same-origin HTTP client and BFF", () => {
+  it("routes recipe PUT, direct conflict GET, and conflict resolve through the closed BFF wire", async () => {
+    const candidateSettings = { ...responses["photos.get"].recipe.settings, future: { retained: true } };
+    const putResponse = {
+      ...responses["recipes.put"],
+      value: { ...responses["recipes.put"].value, recipe: { ...responses["recipes.put"].value.recipe, settings: candidateSettings } },
+    };
+    const harness = setup(async (request) => {
+      if (request.url.endsWith("/library")) return json(responses["library.get"]);
+      if (request.url.endsWith("/recipe")) {
+        expect(request.method).toBe("PUT");
+        expect(request.headers.get("idempotency-key")).toBe("recipe-key");
+        expect(await request.json()).toEqual({ expectedRevision: 0, settings: candidateSettings, baseVersion: null });
+        return json(putResponse);
+      }
+      if (request.url.includes("/recipe-conflicts?")) {
+        expect(request.method).toBe("GET");
+        expect(new URL(request.url).searchParams.get("cursor")).toBe("page-1");
+        expect(new URL(request.url).searchParams.get("limit")).toBe("16");
+        return json(responses["recipe-conflicts.list"]);
+      }
+      if (request.url.endsWith(`/recipe-conflicts/${IDS.recipeConflict}`)) {
+        expect(request.method).toBe("GET");
+        return json(responses["recipe-conflicts.get"]);
+      }
+      expect(request.url).toContain(`/recipe-conflicts/${IDS.recipeConflict}/resolve`);
+      expect(request.method).toBe("POST");
+      expect(request.headers.get("idempotency-key")).toBe("resolve-key");
+      expect(await request.json()).toEqual({ expectedRevision: 1, decision: "adopt" });
+      return json(responses["recipe-conflicts.resolve"]);
+    });
+    const client = await clientFor(harness);
+    try {
+      await expect(client.request("recipes.put", {
+        photoId: IDS.photo, expectedRevision: 0, settings: candidateSettings, baseVersion: null,
+      }, { signal: new AbortController().signal, idempotencyKey: "recipe-key" })).resolves.toEqual(putResponse);
+      await expect(client.request("recipe-conflicts.get", {
+        photoId: IDS.photo, conflictId: IDS.recipeConflict,
+      }, { signal: new AbortController().signal })).resolves.toEqual(responses["recipe-conflicts.get"]);
+      await expect(client.request("recipe-conflicts.list", {
+        photoId: IDS.photo, cursor: "page-1", limit: 16,
+      }, { signal: new AbortController().signal })).resolves.toEqual(responses["recipe-conflicts.list"]);
+      await expect(client.request("recipe-conflicts.resolve", {
+        photoId: IDS.photo, conflictId: IDS.recipeConflict, expectedRevision: 1, decision: "adopt",
+      }, { signal: new AbortController().signal, idempotencyKey: "resolve-key" })).resolves.toEqual(responses["recipe-conflicts.resolve"]);
+    } finally { client.dispose(); }
+    expect(harness.auth.calls()).toBe(10);
+  });
+
+  it("accepts near-1MiB recipe settings inside the separate 2MiB PUT envelope", async () => {
+    const base = responses["photos.get"].recipe.settings;
+    const settings = { ...base, retained: "" };
+    const padding = "x".repeat(1024 ** 2 - new TextEncoder().encode(JSON.stringify(settings)).byteLength - 32);
+    const nearLimit = { ...settings, retained: padding };
+    expect(new TextEncoder().encode(JSON.stringify(nearLimit)).byteLength).toBeLessThanOrEqual(1024 ** 2);
+    const receipt = {
+      ...responses["recipes.put"],
+      value: { ...responses["recipes.put"].value, recipe: { ...responses["recipes.put"].value.recipe, settings: nearLimit } },
+    };
+    const harness = setup((request) => request.url.endsWith("/library") ? json(responses["library.get"]) : json(receipt));
+    const client = await clientFor(harness);
+    try {
+      await expect(client.request("recipes.put", {
+        photoId: IDS.photo, expectedRevision: 0, settings: nearLimit, baseVersion: null,
+      }, { signal: new AbortController().signal, idempotencyKey: "near-limit" })).resolves.toEqual(receipt);
+    } finally { client.dispose(); }
+  });
+
+  it("passes a conflict resolution response above 3MiB through the 4MiB response boundary", async () => {
+    const padding = "x".repeat(1024 ** 2 - 400);
+    const source = responses["recipe-conflicts.resolve"];
+    const value = {
+      conflict: {
+        ...source.value.conflict,
+        conflictingRecipe: {
+          ...source.value.conflict.conflictingRecipe,
+          settings: { ...source.value.conflict.conflictingRecipe.settings, retainedCandidate: padding },
+        },
+        currentRecipe: {
+          ...source.value.conflict.currentRecipe,
+          settings: { ...source.value.conflict.currentRecipe.settings, retainedCurrent: padding },
+        },
+      },
+      recipe: { ...source.value.recipe, settings: { ...source.value.recipe.settings, retainedResult: padding } },
+    };
+    const response = { value, replayed: false };
+    const bytes = new TextEncoder().encode(JSON.stringify(response)).byteLength;
+    expect(bytes).toBeGreaterThan(3 * 1024 ** 2);
+    expect(bytes).toBeLessThanOrEqual(4 * 1024 ** 2);
+    const harness = setup((request) => request.url.endsWith("/library") ? json(responses["library.get"]) : json(response));
+    const client = await clientFor(harness);
+    try {
+      await expect(client.request("recipe-conflicts.resolve", {
+        photoId: IDS.photo, conflictId: IDS.recipeConflict, expectedRevision: 1, decision: "adopt",
+      }, { signal: new AbortController().signal, idempotencyKey: "large-conflict" })).resolves.toEqual(response);
+    } finally { client.dispose(); }
+  });
+
+  it("closes an oversized resolve body at 64KiB before upstream dispatch", async () => {
+    const harness = setup(() => json(responses["recipe-conflicts.resolve"]));
+    const headers = captureHeaders();
+    headers.set("Content-Type", "application/json");
+    headers.set("Idempotency-Key", "resolve-key");
+    const response = await harness.proxy(new Request(`${PHOTO_ORIGIN}/cloud/v2/photos/${IDS.photo}/recipe-conflicts/${IDS.recipeConflict}/resolve`, {
+      method: "POST",
+      headers,
+      body: JSON.stringify({ expectedRevision: 1, decision: "adopt", padding: "x".repeat(64 * 1024) }),
+    }));
+    expect(response?.status).toBe(400);
+    expect(harness.seen).toHaveLength(0);
+  });
+
   it.each([32, 33])("bounds the recipe itself at depth %i independently of HTTP envelopes", async (depth) => {
     let nested: unknown = null;
     for (let index = 1; index < depth; index += 1) nested = { next: nested };
@@ -70,6 +181,42 @@ describe("same-origin HTTP client and BFF", () => {
       if (depth === 32) await expect(result).resolves.toEqual(photo);
       else await expect(result).rejects.toBeTruthy();
     } finally { client.dispose(); }
+  });
+
+  it.each([31, 32, 33])("sends a depth-%i settings leaf through the real PUT client and BFF boundary", async (depth) => {
+    let nested: unknown = null;
+    for (let index = 1; index < depth; index += 1) nested = { next: nested };
+    const settings = { ...responses["photos.get"].recipe.settings, future: nested };
+    const receipt = {
+      ...responses["recipes.put"],
+      value: { ...responses["recipes.put"].value, recipe: { ...responses["recipes.put"].value.recipe, settings } },
+    };
+    const harness = setup((request) => request.url.endsWith("/library") ? json(responses["library.get"]) : json(receipt));
+    const client = await clientFor(harness);
+    try {
+      const result = client.request("recipes.put", {
+        photoId: IDS.photo, expectedRevision: 0, settings, baseVersion: null,
+      }, { signal: new AbortController().signal, idempotencyKey: `depth-${depth}` });
+      if (depth <= 32) await expect(result).resolves.toEqual(receipt);
+      else await expect(result).rejects.toBeTruthy();
+    } finally { client.dispose(); }
+    expect(harness.seen.filter((request) => request.url.endsWith("/recipe"))).toHaveLength(depth <= 32 ? 1 : 0);
+  });
+
+  it("rejects non-plain recipe JSON before the browser serializer can normalize it", async () => {
+    const harness = setup((request) => request.url.endsWith("/library") ? json(responses["library.get"]) : json(responses["recipes.put"]));
+    const client = await clientFor(harness);
+    try {
+      for (const future of [new Date(), new Map([["x", 1]]), undefined, Number.POSITIVE_INFINITY]) {
+        await expect(client.request("recipes.put", {
+          photoId: IDS.photo,
+          expectedRevision: 0,
+          settings: { ...responses["photos.get"].recipe.settings, future } as never,
+          baseVersion: null,
+        }, { signal: new AbortController().signal, idempotencyKey: "plain-json" })).rejects.toBeTruthy();
+      }
+    } finally { client.dispose(); }
+    expect(harness.seen.filter((request) => request.url.endsWith("/recipe"))).toHaveLength(0);
   });
 
   it("preserves a depth-32 recipe inside a stored-upload completion receipt", async () => {
