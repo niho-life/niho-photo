@@ -1,5 +1,7 @@
 "use client";
 
+import { X } from "lucide-react";
+
 import { PHOTO_EDITING_DURABLE_DRAFT_COPY } from "../photo-editing-copy";
 import {
   Dialog,
@@ -39,9 +41,18 @@ export function BrowserPhotoPreviousDraftsDialog(props: { model: BrowserPhotoPre
       <DialogContent
         hideClose
         mobileSafeArea
-        className="max-h-[calc(100dvh-24px)] w-[calc(100vw-24px)] max-w-lg overflow-y-auto rounded-2xl"
+        className="w-[calc(100vw-24px)] max-w-lg grid-rows-[auto_minmax(0,1fr)_auto] overflow-hidden rounded-2xl sm:max-h-[calc(100dvh-24px)]"
       >
-        <DialogHeader className="min-w-0">
+        <button
+          type="button"
+          aria-label={PHOTO_EDITING_DURABLE_DRAFT_COPY.close}
+          disabled={model?.busy}
+          onClick={model?.onClose}
+          className="absolute right-4 top-4 flex h-6 w-6 items-center justify-center rounded-sm text-niho-text-sub hover:text-niho-text focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-niho-accent-ink focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50"
+        >
+          <X aria-hidden="true" className="h-4 w-4" />
+        </button>
+        <DialogHeader className="min-w-0 pr-6">
           <DialogTitle className="text-body font-bold text-niho-text">
             {PHOTO_EDITING_DURABLE_DRAFT_COPY.previousTitle}
           </DialogTitle>
@@ -51,7 +62,7 @@ export function BrowserPhotoPreviousDraftsDialog(props: { model: BrowserPhotoPre
         </DialogHeader>
 
         {selected ? (
-          <div className="min-w-0 space-y-4">
+          <div className="min-h-0 min-w-0 space-y-4 overflow-y-auto">
             <p className="break-words text-sm font-bold text-niho-text [overflow-wrap:anywhere]">{selected.photoName}</p>
             {model?.message ? <p role="status" className="text-sm leading-relaxed text-niho-text-sub">{model.message}</p> : null}
             <div className="flex flex-wrap gap-2">
@@ -71,7 +82,7 @@ export function BrowserPhotoPreviousDraftsDialog(props: { model: BrowserPhotoPre
             </div>
           </div>
         ) : (
-          <div className="min-w-0 space-y-3">
+          <div className="min-h-0 min-w-0 space-y-3 overflow-y-auto">
             {model?.busy ? (
               <p role="status" className="text-sm text-niho-text-sub">{PHOTO_EDITING_DURABLE_DRAFT_COPY.previousChecking}</p>
             ) : model?.message ? (

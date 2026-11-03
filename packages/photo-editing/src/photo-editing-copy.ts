@@ -1232,6 +1232,7 @@ export const PHOTO_EDITING_DURABLE_DRAFT_COPY = {
   save: "保存する",
   useDevice: "この端末の補正を使う",
   useCurrent: "現在の補正を使う",
+  close: "閉じる",
   back: "戻る",
   discard: "破棄",
   saveData: "補正データを保存",

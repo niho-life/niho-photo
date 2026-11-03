@@ -644,12 +644,13 @@
         "path": "packages/photo-editing/src/develop-engine/develop-settings-autosave.ts",
         "sha256": "d1ac98de8c7379a1e06c5e7ed67aeb9dad82d94e314b75100a7d29c28f4cef72"
       },
-      "outputSha256": "22d8690bb0d98aecf9f84ebf6bcfdf14f8c3fd320495ef42a18cf723c8823f5e",
+      "outputSha256": "9cc6f4173c2deb19542fd615d00e6fa70e338d993e153aceb1fba196584375f1",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
-        "以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続"
+        "以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続",
+        "strict commit後にも自動送信停止を確認し、以前の下書き一覧の閉じる操作を画面内に保持"
       ]
     },
     {
@@ -2607,9 +2608,10 @@
         "独立Photo WebとPWAの日本語copy・容量表記を共通の正本へ集約する。",
         "mainの本人cloud共通copyとA作成のPhoto Web共通copy・容量表示を両方保持して通常mergeを解消。",
         "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
-        "以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続"
+        "以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続",
+        "strict commit後にも自動送信停止を確認し、以前の下書き一覧の閉じる操作を画面内に保持"
       ],
-      "outputSha256": "5f3eb9c604b6de5dea32942ef316cadb65b9974276cee4d2952b2ca87f609b18"
+      "outputSha256": "c3113dbf34a2bcbdd6d3f1b1d645fcac4cb062a9ca51f2bbfd5e6151578e78ee"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-crop.test.ts",
@@ -13077,8 +13079,8 @@
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-settings-autosave.test.ts",
-      "sha256": "a4dc31fb7f1e98cc858f5c1ca5453cfdb0b9fad13f2d3a4c8f8d7092b7da9664",
-      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続"
+      "sha256": "fa4e2ccae7fb3e9dd8829ea4790dc811054afead9201d5f36e3a5728cb2dbebf",
+      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続\n変更理由: strict commit後にも自動送信停止を確認し、以前の下書き一覧の閉じる操作を画面内に保持"
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-durable-comparison.test.tsx",
@@ -13122,8 +13124,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/browser-photo-previous-drafts.tsx",
-      "sha256": "bd60230fabd98b0a77f116693ae1c413a7f43ec4ecb430418c7326090c6da6f1",
-      "origin": "NIHO original explicit previous-draft recovery UI and synthetic regression tests for C03."
+      "sha256": "067f33790f7cba46dba2633e06e3709b831e03bcbf7cbea84e288060e6454a56",
+      "origin": "NIHO original explicit previous-draft recovery UI and synthetic regression tests for C03.\n変更理由: strict commit後にも自動送信停止を確認し、以前の下書き一覧の閉じる操作を画面内に保持"
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-previous-drafts.test.tsx",

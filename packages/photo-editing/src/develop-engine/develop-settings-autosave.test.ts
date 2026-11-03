@@ -10,9 +10,35 @@ const stage = (committed: PhotoLibraryDevelopDraftStage["committed"] = Promise.r
 afterEach(() => vi.useRealTimers());
 
 describe("createDevelopSettingsSaver durable mode", () => {
+  it("pauses dispatch after an already-running stage barrier and keeps latest B for resume", async () => {
+    vi.useFakeTimers();
+    let commitA!: (value: "committed") => void;
+    const capturedA = stage(new Promise((resolve) => { commitA = resolve; }));
+    const stageDraft = vi.fn((value: DevelopSettings) => value.exposure === 0.1 ? capturedA : stage());
+    const save = vi.fn(async (_value: DevelopSettings) => ({ kind: "saved" as const, revision: 1, updatedAt: null }));
+    const saver = createDevelopSettingsSaver({
+      save: vi.fn(), isPermanentFailure: () => false, delayMs: 10,
+      durable: { stage: stageDraft, save },
+    });
+    saver.schedule(settings(0.1));
+    await vi.advanceTimersByTimeAsync(20);
+    expect(save).not.toHaveBeenCalled();
+    const resume = saver.pauseDurable?.();
+    saver.schedule(settings(0.2));
+    commitA("committed");
+    await vi.advanceTimersByTimeAsync(0);
+    expect(save).not.toHaveBeenCalled();
+    await expect(saver.flush()).resolves.toMatchObject({ ok: false });
+    resume?.();
+    await vi.runAllTimersAsync();
+    await expect(saver.flush()).resolves.toMatchObject({ ok: true });
+    expect(save.mock.calls.map(([value]) => value.exposure)).toEqual([0.2]);
+    saver.dispose();
+  });
+
   it("pauses network while preserving the staged latest input and resumes it once", async () => {
     vi.useFakeTimers();
-    const save = vi.fn(async () => ({ kind: "saved" as const, revision: 1, updatedAt: null }));
+    const save = vi.fn(async (_settings: DevelopSettings) => ({ kind: "saved" as const, revision: 1, updatedAt: null }));
     const saver = createDevelopSettingsSaver({
       save: vi.fn(), isPermanentFailure: () => false, delayMs: 10,
       durable: { stage: vi.fn(() => stage()), save },

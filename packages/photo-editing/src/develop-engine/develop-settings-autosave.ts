@@ -459,6 +459,12 @@ function createDurableDevelopSettingsSaver(
         const committed = await waitForStage(scheduled);
         if (committed === "superseded") return { kind: "superseded" } as const;
         if (committed === "unsaved") return { kind: "unsaved" } as const;
+        if (pauseTokens.size > 0) {
+          // A was admitted to staging before the pause. Keep a later B if present;
+          // otherwise retain this exact committed stage until explicit resume.
+          if (pending === null) pending = scheduled;
+          return { kind: "paused" } as const;
+        }
         if (pendingConflict !== null) {
           // A 競合後に保存できなかった B を再stageした。Bは送らず比較用に保持する。
           pending = scheduled;
@@ -469,7 +475,7 @@ function createDurableDevelopSettingsSaver(
       })
       .then(
         async (result) => {
-          if (result.kind === "conflict-ready") return;
+          if (result.kind === "conflict-ready" || result.kind === "paused") return;
           if (result.kind === "superseded") return;
           if (result.kind === "saved") {
             lastSaved = {
