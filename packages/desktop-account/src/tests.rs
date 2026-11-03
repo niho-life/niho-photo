@@ -792,7 +792,7 @@ fn photo_scope(identity: &PhotoIdentity) -> PhotoScopeCapture {
     user_id: identity.user_id.clone(),
     session_id: identity.session_id.clone(),
     session_epoch: identity.session_epoch.clone(),
-    transport: identity.transport,
+    transport: identity.transport.clone(),
   }
 }
 
