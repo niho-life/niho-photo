@@ -8,6 +8,7 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import type { PhotoLibraryAlbum } from "../library/photo-library";
 import { cn } from "niho-ui/cn";
 
+import { usePhotoEditingImageCors } from "./photo-editing-image-cors";
 import {
   PHOTO_EDITING_DANGER_GHOST_BUTTON_CLASS_NAME,
   PHOTO_EDITING_PRIMARY_BUTTON_CLASS_NAME,
@@ -152,6 +153,7 @@ export function BrowserPhotoAlbumAddDialog(props: {
   onAdd: (albumId: string) => Promise<void>;
   onCreate: (name: string) => Promise<PhotoLibraryAlbum>;
 }) {
+  const useCorsForPhotos = usePhotoEditingImageCors();
   const inputId = useId();
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState("");
@@ -229,7 +231,7 @@ export function BrowserPhotoAlbumAddDialog(props: {
                 <button key={album.id} type="button" disabled={busyAlbumId !== null} onClick={() => void add(album.id)} className="flex min-h-12 w-full items-center gap-3 px-3 text-left text-sub font-bold text-niho-text hover:bg-niho-pale/60 disabled:opacity-50">
                   {album.cover?.imageUrl ? (
                     // 署名付き URL の装飾的な表紙。名前は隣の文字で読み上げる。
-                    <img src={album.cover.imageUrl} alt="" className="h-9 w-9 rounded-lg object-cover" />
+                    <img crossOrigin={useCorsForPhotos ? "anonymous" : undefined} src={album.cover.imageUrl} alt="" className="h-9 w-9 rounded-lg object-cover" />
                   ) : <span className="flex h-9 w-9 items-center justify-center rounded-lg bg-niho-pale/60"><Folder className="h-4 w-4" aria-hidden /></span>}
                   <span className="min-w-0 flex-1 truncate">{album.name}</span>
                   <span className="text-xs tabular-nums text-niho-text-muted">{album.photoCount} 枚</span>

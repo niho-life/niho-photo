@@ -5,6 +5,7 @@ import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import { BrowserPhotoEditingLoupe } from "./browser-photo-editing-loupe";
+import { PhotoEditingImageCorsProvider } from "./photo-editing-image-cors";
 
 /**
  * 1 枚の面の写真のまわりの余白（niho-photo#49）。PC の幅では画の最大の大きさを面より 2rem 小さくし、縦位置の写真を上の線と
@@ -89,5 +90,17 @@ describe("1 枚の面の写真のまわりの余白（niho-photo#49）", () => {
     const image = container.querySelector("img");
     expect(image?.className).toContain(FIT_HEIGHT);
     expect(image?.className).toContain(FIT_WIDTH);
+    expect(image?.hasAttribute("crossorigin")).toBe(false);
+  });
+
+  it("分離文書では閲覧用の img を CORS で読む", () => {
+    act(() =>
+      root.render(
+        <PhotoEditingImageCorsProvider enabled>
+          <Harness cutout={false} viewUrl="https://example.test/signed.jpg?token=fixture" />
+        </PhotoEditingImageCorsProvider>,
+      ),
+    );
+    expect(container.querySelector("img")?.getAttribute("crossorigin")).toBe("anonymous");
   });
 });
