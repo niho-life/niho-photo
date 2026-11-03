@@ -10,15 +10,26 @@ const COMMIT = /^[a-f0-9]{40}$/u;
 const SEMVER = /^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?(?:\+([0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*))?$/u;
 const SAFE_FILE = /^[A-Za-z0-9][A-Za-z0-9._+-]*$/u;
 const RELEASE_REPOSITORIES = new Set(["niho-coliving/niho-photo", "niho-life/niho-photo"]);
-const PACKAGES = new Map([
+const PACKAGES_V1 = Object.freeze([
   ["ui", "niho-photo-ui"],
   ["photo-editing", "niho-photo-editing"],
   ["cloud-contract", "niho-photo-cloud-contract"],
   ["photo-contract", "niho-photo-contract"],
   ["develop-engine-source", "niho-photo-develop-engine-source"],
   ["develop-engine-runtime", "niho-photo-develop-engine-runtime"],
-]);
-const OWNED_PATHS = ["packages/photo-editing", "packages/ui", "packages/niho-cloud-contract", "packages/develop-engine", "packages/desktop-photo", "sdk", "scripts/sdk", "scripts/ci/cloud-contract-sync.mjs", "scripts/ci/image-metadata.mjs", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/ci/photo-sdk-workflow-lib.mjs", "scripts/ci/publication-lib.mjs", "scripts/ci/release-evidence-lib.mjs", "scripts/ci/workflow-lib.mjs", "LICENSE.md", "ASSET_LICENSE.md", "TRADEMARKS.md", "THIRD_PARTY_NOTICES.md"];
+].map(Object.freeze));
+const OWNED_PATHS_V1 = Object.freeze(["packages/photo-editing", "packages/ui", "packages/niho-cloud-contract", "packages/develop-engine", "packages/desktop-photo", "sdk", "scripts/sdk", "scripts/ci/cloud-contract-sync.mjs", "scripts/ci/image-metadata.mjs", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/ci/photo-sdk-workflow-lib.mjs", "scripts/ci/publication-lib.mjs", "scripts/ci/release-evidence-lib.mjs", "scripts/ci/workflow-lib.mjs", "LICENSE.md", "ASSET_LICENSE.md", "TRADEMARKS.md", "THIRD_PARTY_NOTICES.md"]);
+const PERSONAL_CLOUD_PACKAGE = Object.freeze(["personal-cloud-contract", "niho-photo-personal-cloud-contract"]);
+
+export const SDK_RELEASE_PROFILES = Object.freeze({
+  1: Object.freeze({ schemaVersion: 1, packages: PACKAGES_V1, ownedSourcePaths: OWNED_PATHS_V1, directoryFiles: 7 }),
+  2: Object.freeze({
+    schemaVersion: 2,
+    packages: Object.freeze([...PACKAGES_V1.slice(0, 4), PERSONAL_CLOUD_PACKAGE, ...PACKAGES_V1.slice(4)]),
+    ownedSourcePaths: Object.freeze([...OWNED_PATHS_V1, "packages/photo-library-contract"]),
+    directoryFiles: 8,
+  }),
+});
 const TOOLING_PATHS = ["package.json", "package-lock.json"];
 const ENGINE_CONTRACT_PATHS = [
   "packages/photo-editing/src/develop-engine/develop-engine-manifest.ts",
@@ -59,6 +70,17 @@ function ownershipDigest(records) {
   return sha256(Buffer.from(records.map(({ path: ownedPath, sha256: digest, files }) => `${ownedPath}\0${digest}\0${files}\n`).join("")));
 }
 
+function hasExactKeys(value, expected) {
+  return value !== null && typeof value === "object" && !Array.isArray(value) && JSON.stringify(Object.keys(value).sort()) === JSON.stringify([...expected].sort());
+}
+
+export function sdkReleaseProfile(schemaVersion) {
+  if (schemaVersion !== 1 && schemaVersion !== 2) throw new ReleaseArtifactError("release manifest schema profileが不正です");
+  const profile = SDK_RELEASE_PROFILES[schemaVersion];
+  if (!profile) throw new ReleaseArtifactError("release manifest schema profileが不正です");
+  return profile;
+}
+
 function tarEntries(tarball) {
   let output;
   try {
@@ -71,21 +93,24 @@ function tarEntries(tarball) {
 }
 
 export function validateReleaseManifest(manifest, expectedSource) {
+  const profile = sdkReleaseProfile(manifest?.schemaVersion);
+  const packages = new Map(profile.packages);
+  if (!hasExactKeys(manifest, ["schemaVersion", "releaseReady", "repository", "version", "source", "sourceOwnership", "buildTooling", "packages", "engine", "recipeCompatibility", "uiSingleton"])) throw new ReleaseArtifactError("release manifest top-level key集合が不正です");
   strictSemver(manifest?.version);
-  if (manifest?.schemaVersion !== 1 || manifest.releaseReady !== true || !RELEASE_REPOSITORIES.has(manifest.repository) || !COMMIT.test(manifest.source?.commit ?? "") || !COMMIT.test(manifest.source?.tree ?? "") || (expectedSource !== undefined && manifest.source.commit !== expectedSource)) throw new ReleaseArtifactError("release manifest基本契約が不正です");
-  if (!Array.isArray(manifest.packages) || manifest.packages.length !== PACKAGES.size) throw new ReleaseArtifactError("SDK package集合が不正です");
+  if (manifest.releaseReady !== true || !RELEASE_REPOSITORIES.has(manifest.repository) || !COMMIT.test(manifest.source?.commit ?? "") || !COMMIT.test(manifest.source?.tree ?? "") || (expectedSource !== undefined && manifest.source.commit !== expectedSource)) throw new ReleaseArtifactError("release manifest基本契約が不正です");
+  if (!Array.isArray(manifest.packages) || manifest.packages.length !== packages.size) throw new ReleaseArtifactError("SDK package集合が不正です");
   const ids = new Set();
   const names = new Set();
   const files = new Set();
   for (const item of manifest.packages) {
-    if (PACKAGES.get(item?.id) !== item?.name || ids.has(item.id) || names.has(item.name) || files.has(item.file) || !SAFE_FILE.test(item.file ?? "") || !item.file.endsWith(".tgz") || !SHA256.test(item.sha256 ?? "") || item.integrity !== `sha256-${Buffer.from(item.sha256, "hex").toString("base64")}` || !Number.isSafeInteger(item.size) || item.size <= 0) throw new ReleaseArtifactError("SDK package recordが不正です");
+    if (!hasExactKeys(item, ["id", "name", "file", "sha256", "integrity", "size"]) || packages.get(item?.id) !== item?.name || ids.has(item.id) || names.has(item.name) || files.has(item.file) || !SAFE_FILE.test(item.file ?? "") || !item.file.endsWith(".tgz") || !SHA256.test(item.sha256 ?? "") || item.integrity !== `sha256-${Buffer.from(item.sha256, "hex").toString("base64")}` || !Number.isSafeInteger(item.size) || item.size <= 0) throw new ReleaseArtifactError("SDK package recordが不正です");
     ids.add(item.id);
     names.add(item.name);
     files.add(item.file);
   }
-  if ([...PACKAGES.keys()].some((id) => !ids.has(id))) throw new ReleaseArtifactError("SDK package必須集合が不足しています");
+  if ([...packages.keys()].some((id) => !ids.has(id))) throw new ReleaseArtifactError("SDK package必須集合が不足しています");
   const ownership = manifest.sourceOwnership;
-  if (ownership?.algorithm !== "sha256-git-file-set-v1" || !SHA256.test(ownership.digest ?? "") || !Array.isArray(ownership.paths) || ownership.paths.length !== OWNED_PATHS.length || ownership.paths.some((record, index) => record?.path !== OWNED_PATHS[index] || !SHA256.test(record.sha256 ?? "") || !Number.isSafeInteger(record.files) || record.files <= 0) || ownership.digest !== ownershipDigest(ownership.paths)) throw new ReleaseArtifactError("SDK owned source契約が不正です");
+  if (!hasExactKeys(ownership, ["algorithm", "digest", "paths"]) || ownership.algorithm !== "sha256-git-file-set-v1" || !SHA256.test(ownership.digest ?? "") || !Array.isArray(ownership.paths) || ownership.paths.length !== profile.ownedSourcePaths.length || ownership.paths.some((record, index) => !hasExactKeys(record, ["path", "sha256", "files"]) || record.path !== profile.ownedSourcePaths[index] || !SHA256.test(record.sha256 ?? "") || !Number.isSafeInteger(record.files) || record.files <= 0) || ownership.digest !== ownershipDigest(ownership.paths)) throw new ReleaseArtifactError("SDK owned source契約が不正です");
   if (manifest.buildTooling?.node !== "24.x" || !recordsValid(manifest.buildTooling?.files, TOOLING_PATHS)) throw new ReleaseArtifactError("SDK build tooling契約が不正です");
   const engine = manifest.engine;
   if (!/^niho-[1-9]\d*$/u.test(engine?.version ?? "")) throw new ReleaseArtifactError("SDK engine契約が不正です");
@@ -134,7 +159,7 @@ export function verifyReleaseArtifact({ directory, expectedSource, expectedManif
   if (!stat.isDirectory() || stat.isSymbolicLink()) throw new ReleaseArtifactError("artifactは通常directoryが必要です");
   const names = readdirSync(directory).sort();
   const manifests = names.filter((name) => /^niho-photo-sdk-.+-[a-f0-9]{40}\.json$/u.test(name));
-  if (manifests.length !== 1 || names.length !== PACKAGES.size + 1) throw new ReleaseArtifactError("artifact file集合が不正です");
+  if (manifests.length !== 1 || !Object.values(SDK_RELEASE_PROFILES).some(({ directoryFiles }) => names.length === directoryFiles)) throw new ReleaseArtifactError("artifact file集合が不正です");
   for (const name of names) {
     if (!SAFE_FILE.test(name)) throw new ReleaseArtifactError("artifact file名が不正です");
     const item = lstatSync(path.join(directory, name));

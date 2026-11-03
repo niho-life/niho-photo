@@ -1182,3 +1182,17 @@ export const PHOTO_EDITING_FORGET_SELECTED_PHOTOS_DESCRIPTION =
 export const PHOTO_EDITING_FORGET_SELECTED_PHOTOS_FAILED_TEXT = "選んだ写真を一覧から外せませんでした。";
 /** この Mac の写真の一覧を読めなかった（クラウドの「クラウドの写真を読み込めませんでした。」の代わり）。 */
 export const PHOTO_EDITING_LOCAL_PHOTOS_LOAD_FAILED_TEXT = "写真を読み込めませんでした。";
+
+/** 本人クラウドの接続・読取・未対応状態。接続口の内部識別子は画面へ出さない。 */
+export const PHOTO_EDITING_PERSONAL_CLOUD_COPY = {
+  deleteFailedCount: (count: number) => `${count}枚の写真を削除できませんでした。`,
+  notConnected: "クラウドへの接続を確認してから、もう一度お試しください。",
+  unavailable: "クラウドを利用できません。時間をおいて、もう一度お試しください。",
+  invalidResponse: "写真の情報を確認できませんでした。時間をおいて、もう一度お試しください。",
+  notFound: "写真が見つかりません。一覧を更新して、もう一度お試しください。",
+  unsupported: "この操作は現在利用できません。",
+  readOnlySettings: "この写真の補正は、この端末では安全に保存できません。対応する版に更新してください。",
+  tooLarge: "この端末で扱える大きさを超えています。別の端末でお試しください。",
+  transferPending: "保存の受付を確認しています。しばらくしてから、もう一度お試しください。",
+  quotaExceeded: "クラウドの空き容量が足りません。不要な写真を削除してから、もう一度お試しください。",
+} as const;

@@ -1,11 +1,12 @@
 # NIHO photo SDK release set
 
-`sdk/release-set.json` は、NIHOapp が同じ版として固定する写真編集 SDK の構成です。次の 6 package を 1 個の release manifest に束ねます。
+`sdk/release-set.json` は、NIHOapp が同じ版として固定する写真編集 SDK の構成です。SDK 0.1.8では次の 7 package を 1 個の release manifest に束ねます。
 
 - `niho-photo-editing`: PhotoLibrary 境界、editor、develop-engine client と Web Worker の TypeScript source
 - `niho-photo-ui`: SDK 専用名にした editor の UI dependency。React / React DOM は peer dependency のままで、consumer と同じ実体を使う
 - `niho-photo-cloud-contract`: 既存の cloud sharing export が参照する純粋 TypeScript contract
 - `niho-photo-contract`: recipe の読取・編集可否・作業コピー接続・signed RAW 判定・neutral 生成を提供する Node ESM JavaScript と `.d.ts`
+- `niho-photo-personal-cloud-contract`: 本人クラウドv2のport・型・上限・error契約を実sourceから生成したNode ESM JavaScriptと`.d.ts`
 - `niho-photo-develop-engine-source`: 同一 commit の Rust workspace source と、wasm build に必要な埋め込みデータ
 - `niho-photo-develop-engine-runtime`: `manifest-<crate version>.json` が SHA-256 で固定する wasm-bindgen glue、wasm、型定義
 
@@ -33,12 +34,12 @@ recipe contract は `packages/photo-editing/src/develop-engine/develop-settings.
 npm run sdk:pack -- --output sdk-dist/0.1.0
 ```
 
-既定の runtime asset 入力は `packages/develop-engine/public/develop-engine/niho-13/` です。`manifest-0.25.0.json`、その manifest に列挙された `.js`、`.wasm`、`.d.ts` が揃い、bytes と SHA-256 が一致しない限り pack は失敗します。manifest の `source.commit` / `source.tree` は pack 対象の Git object と一致し、固定 Rust `1.98.1`、`wasm-bindgen 0.2.129`、release profile の provenance を持つ必要があります。同じ engine/version 名の任意ファイルを渡すだけでは release-ready になりません。source package だけを release-ready として扱う経路もありません。
+既定の runtime asset 入力は `packages/develop-engine/public/develop-engine/niho-14/` です。`manifest-0.27.0.json`、その manifest に列挙された `.js`、`.wasm`、`.d.ts` が揃い、bytes と SHA-256 が一致しない限り pack は失敗します。manifest の `source.commit` / `source.tree` は pack 対象の Git object と一致し、固定 Rust `1.98.1`、`wasm-bindgen 0.2.129`、release profile の provenance を持つ必要があります。同じ engine/version 名の任意ファイルを渡すだけでは release-ready になりません。source package だけを release-ready として扱う経路もありません。
 
 runtime は固定 toolchain と `wasm-bindgen` が用意された CI で次の helper を実行して作ります。helper は toolchain を install しません。空の Cargo cache から `Cargo.lock` に固定された依存を取得するため、build 時には network access が必要です。
 
 ```sh
-npm run sdk:build-engine-runtime -- --output packages/develop-engine/public/develop-engine/niho-13
+npm run sdk:build-engine-runtime -- --output packages/develop-engine/public/develop-engine/niho-14
 ```
 
 builder は空の一時 `CARGO_HOME` と `CARGO_TARGET_DIR` を使い、外部の Cargo config、credentials、`RUSTFLAGS` を継承しません。source、build user、Cargo registry、Rust toolchain、一時領域は公開成果物へ絶対 path が残らないよう remap します。出力先は既存なら拒否します。
@@ -92,3 +93,11 @@ HOME/Cargo/target/tempとpath remapを使います。生成した3 binaryは実�
 このhelperを実行するのは信頼されたcandidate buildだけです。署名工程はSDK内scriptを実行しません。
 
 SDK publisherは検証済みmanifestにGitHub artifact attestationを付け、workflow path・main ref・tooling SHA・run/attemptを署名付きcertificateへ結び付けます。後段はmanifestの自己申告run IDだけを信用せず、Sigstore bundleをGitHub CLIで検証します。既存updater秘密鍵は公開側へ渡しません。
+
+## 本人クラウド契約 v2（SDK 0.1.8）
+
+SDK 0.1.8は新しいrelease manifest schema 2で7 packageを固定する。既存の6 packageに、C00 v2の型・容量上限・error契約を実sourceからコンパイルした `niho-photo-personal-cloud-contract` を加える。fixture、HTTP配置、token、DB authorityは含めない。旧manifest schema 1の6 package / ownership 18 pathは別の厳密なprofileとして維持する。schema 2はC00 sourceを加えたownership 19 pathであり、同じartifact集合やproofとして混在させない。
+
+本人クラウド契約のESMはNode 24とbrowserで利用できる。公開型の `ReadableStream` / `AbortSignal` は、Nodeでは対応する `@types/node` 24、browserではDOM libを用意する。ES2022とNode型だけのconsumer、DOM consumer、pack済みJavaScriptの実importを検証する。型定義のためにruntime polyfillや別の認証実装を追加しない。
+
+SDK 0.1.8のengineは `niho-14`、crate `0.27.0`。画素変更は無い。新しいSDK source/treeを記録する実WASM buildとimmutable公開は公式CIで行い、0.1.7のtagやassetを置換しない。private consumerは新schema対応後に、公式attestationと実hashの検証を通して選択する。

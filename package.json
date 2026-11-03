@@ -9,6 +9,8 @@
     "packages/photo-editing",
     "apps/camera",
     "packages/photo-cloud-session",
+    "packages/photo-library-contract",
+    "packages/photo-cloud-library",
     "packages/photo-cloud-media"
   ],
   "scripts": {

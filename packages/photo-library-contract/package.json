@@ -10,7 +10,9 @@
     "./cases": "./fixtures/security-cases.json"
   },
   "scripts": {
-    "test": "node --test ../../scripts/ci/personal-photo-contract.test.mjs"
+    "test": "node --test ../../scripts/ci/personal-photo-contract.test.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint ."
   },
   "engines": {
     "node": "24.x"

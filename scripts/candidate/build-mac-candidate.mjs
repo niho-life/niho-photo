@@ -150,7 +150,7 @@ export function buildCandidate(values) {
     appSource: source.commit,
     expectedManifestSha256: values["--sdk-manifest-sha256"],
   });
-  const ownership = sourceOwnership(repoRoot, source.commit);
+  const ownership = sourceOwnership(repoRoot, source.commit, sdk.manifest.schemaVersion);
   assertOwnershipMatches(ownership, sdk.manifest.sourceOwnership);
   const publicFirebaseKey = readPublicConfig(path.resolve(values["--public-firebase-config"]));
   const nodeModules = path.resolve(values["--node-modules"]);
@@ -207,6 +207,7 @@ export function buildCandidate(values) {
       source,
       run: { id: values["--run-id"], attempt: values["--run-attempt"] },
       sdk: {
+        ...(sdk.manifest.schemaVersion === 2 ? { sdkManifestSchemaVersion: 2 } : {}),
         mode: sdk.mode,
         version: sdk.manifest.version,
         source: sdk.manifest.source,
