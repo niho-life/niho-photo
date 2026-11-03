@@ -130,6 +130,44 @@ function binding(actorId = "owner-a", overrides = {}) {
   };
 }
 
+function transferDescriptor(overrides = {}) {
+  return {
+    controller: {
+      async checkCapability() { return true; },
+      async start() { throw new Error("not called"); },
+      async resume() { throw new Error("not called"); },
+      async cancel() { throw new Error("not called"); },
+      async list() { return { items: [], nextCursor: null }; },
+      async readPendingRecipe() { return null; },
+      dispose() {},
+    },
+    formats: [{ format: "jpeg", extensions: ["jpg", "jpeg"], ingest: true, workingCopy: true }],
+    copy: {
+      toolbar: "toolbar",
+      pendingTitle: "pending",
+      add: "add",
+      resume: "resume",
+      chooseSameFile: "choose",
+      cancel: "cancel",
+      refresh: "refresh",
+      next: "next",
+      first: "first",
+      busy: "busy",
+      failed: "failed",
+      unsupported: "unsupported",
+      refreshFailed: "refresh failed",
+      phaseLabels: Object.fromEntries([
+        "start-pending", "uploading", "complete-pending", "verifying", "pending-recipe", "done",
+        "cancel-pending", "cancelled", "expired", "rejected", "purged", "failed", "needs-file",
+      ].map((phase) => [phase, phase])),
+    },
+    describeError() { return "described"; },
+    onSettled() {},
+    privateExtra: "must-not-publish",
+    ...overrides,
+  };
+}
+
 function pageEvent(type, persisted) {
   const event = new Event(type);
   Object.defineProperty(event, "persisted", { value: persisted });
@@ -511,6 +549,72 @@ describe("createPhotoWebRuntime", () => {
         test.runtime.dispose();
       });
     }
+  });
+
+  it("projects a validated transfer descriptor explicitly and preserves its identity within the scope", async () => {
+    const transfer = transferDescriptor();
+    const source = binding("owner-a", { transfer });
+    const handle = new FakeConnection(source);
+    const test = harness({ connect: async () => handle });
+    await test.runtime.start();
+
+    const projected = test.runtime.getSnapshot().binding.transfer;
+    assert.ok(projected);
+    assert.notEqual(projected, transfer);
+    assert.equal(projected.controller, transfer.controller);
+    assert.equal(projected.describeError, transfer.describeError);
+    assert.equal(projected.onSettled, transfer.onSettled);
+    assert.equal("privateExtra" in projected, false);
+    assert.equal(Object.isFrozen(projected), true);
+    assert.equal(Object.isFrozen(projected.formats), true);
+    assert.equal(Object.isFrozen(projected.formats[0].extensions), true);
+    assert.equal(Object.isFrozen(projected.copy.phaseLabels), true);
+
+    handle.emit({ ...source, usage: null });
+    assert.equal(test.runtime.getSnapshot().binding.transfer, projected);
+    test.runtime.dispose();
+
+    const invalidHandle = new FakeConnection(binding("owner-a", {
+      transfer: transferDescriptor({ onSettled: null }),
+    }));
+    const invalid = harness({ connect: async () => invalidHandle });
+    await invalid.runtime.start();
+    assert.equal(invalid.runtime.getSnapshot().binding, null);
+    assert.equal(invalidHandle.disposed, 1);
+    invalid.runtime.dispose();
+  });
+
+  it("accepts and normalizes case-insensitive C02 file extensions", async () => {
+    const transfer = transferDescriptor({ formats: [{ format: "jpeg", extensions: ["JPG", "JpEg"], ingest: true, workingCopy: true }] });
+    const test = harness({ connect: async () => new FakeConnection(binding("owner-a", { transfer })) });
+    await test.runtime.start();
+    assert.deepEqual(test.runtime.getSnapshot().binding?.transfer.formats[0].extensions, ["jpg", "jpeg"]);
+    assert.deepEqual(transfer.formats[0].extensions, ["JPG", "JpEg"]);
+    test.runtime.dispose();
+  });
+
+  it("reused descriptor gets a fresh controller projection after scope changes", async () => {
+    const transfer = transferDescriptor();
+    const oldController = transfer.controller;
+    const newController = transferDescriptor().controller;
+    const handles = [];
+    const test = harness({ connect: async ({ identity: captured }) => {
+      if (handles.length > 0) transfer.controller = newController;
+      const handle = new FakeConnection(binding(captured.userId, { transfer }));
+      handles.push(handle);
+      return handle;
+    } });
+    await test.runtime.start();
+    const previous = test.runtime.getSnapshot().binding.transfer;
+    assert.equal(previous.controller, oldController);
+    test.bridge.refreshQueue.push(identity("owner-b"));
+    await test.runtime.retry();
+    await eventually(() => assert.equal(test.runtime.getSnapshot().binding?.actorId, "owner-b"));
+    const current = test.runtime.getSnapshot().binding.transfer;
+    assert.equal(handles[0].disposed, 1);
+    assert.notEqual(current, previous);
+    assert.equal(current.controller, newController);
+    test.runtime.dispose();
   });
 
   it("downloads only in the accepted scope and clears query/URL resources synchronously", async () => {
