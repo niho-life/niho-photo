@@ -185,6 +185,7 @@ export function useBrowserPhotoDevelop(params: {
   const sentPreviewRevisionsRef = useRef(new Map<string, number>());
   const replaceCloudPhotoRef = useRef(replaceCloudPhoto);
   replaceCloudPhotoRef.current = replaceCloudPhoto;
+  const saveDurableRecoveryHandlerRef = useRef<((photo: PhotoLibraryPhoto) => void) | null>(null);
   const uploadSavedEditedPreviewRef = useRef<
     (session: DevelopSession, saved: DevelopSettingsLastSaved) => Promise<void>
   >(async () => undefined);
@@ -792,7 +793,8 @@ export function useBrowserPhotoDevelop(params: {
           latestSetStatusRef.current({ kind: "error", text: PHOTO_EDITING_DURABLE_DRAFT_COPY.failed });
           return;
         }
-        saveStaleHandlerRef.current?.(photo);
+        if (result.kind === "saved") saveDurableRecoveryHandlerRef.current?.(photo);
+        else saveStaleHandlerRef.current?.(photo);
       } catch {
         if (!mayReload()) return;
         releaseDevelopSession();
@@ -1180,6 +1182,7 @@ export function useBrowserPhotoDevelop(params: {
     leaving,
     leavingRef,
     saveStaleHandlerRef,
+    saveDurableRecoveryHandlerRef,
     frameCacheRef,
     beforeFrameRef,
     developUnavailable,

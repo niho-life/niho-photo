@@ -1961,11 +1961,12 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-develop-reload.ts",
         "sha256": "7a90ed9fb4c5e86103542c25205b53b40fa904ff54672a8ae44ffff3372b1d02"
       },
-      "outputSha256": "20e892ea640a954ba6988b059fbd141d5dcbe79d34a9e4bcf21dced8adb3b17e",
+      "outputSha256": "1d4fac2a763fb7c450ede033bf53236c2fae4fafc92b24b27295b1f4b5872175",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
-        "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する"
+        "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
+        "永続復旧保存後は編集中操作を再読込完了まで止め、保存済み補正で保存係を再生成する。"
       ]
     },
     {
@@ -1976,7 +1977,7 @@
         "path": "packages/photo-editing/src/editor/use-browser-photo-develop.ts",
         "sha256": "491153dcf3675cfd0b822a008f101a77125411c9e18966ea7b7fb96e18ce8228"
       },
-      "outputSha256": "135343f07506c24451df485d6435d2b7da326dc290eeef7f79c7c9a1ce652730",
+      "outputSha256": "19d42f3b7b17c4ccd8881dcc0ced810b06837165e9e95427d313cc75a23e89d1",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -1990,7 +1991,8 @@
         "Add backwards-compatible personal photo library scope key",
         "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
         "自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する",
-        "永続下書きの復旧保存後に現行補正で編集セッションを再開し、通常の自動保存中は編集操作を継続可能にする。"
+        "永続下書きの復旧保存後に現行補正で編集セッションを再開し、通常の自動保存中は編集操作を継続可能にする。",
+        "復旧保存後の編集再開に専用reload経路を使い、別端末通知を誤表示しない。"
       ]
     },
     {
@@ -13090,8 +13092,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-durable-recovery.test.tsx",
-      "sha256": "a339d90dcb5c4bf725b913d1c963f6b56d140fcf18338d7a5a922c1f05d40106",
-      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する\n変更理由: 復旧後の編集再開と通常自動保存中の操作継続を固定する回帰試験を追加。"
+      "sha256": "7c3877cef92a12895ed626e888c74386f58da9935c25d172b9506bdb1f8cf5c1",
+      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 自然CIで検出した重複宣言とcallback内nullable型の不足を閉じたsnapshotで修正する\n変更理由: 復旧後の編集再開と通常自動保存中の操作継続を固定する回帰試験を追加。\n変更理由: 復旧保存時の専用reload経路を通ることを回帰検証する。"
     },
     {
       "path": "packages/photo-editing/src/library/photo-library-durable-drafts.ts",

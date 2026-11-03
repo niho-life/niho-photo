@@ -129,7 +129,7 @@ it("reopens the active edit session after saving a recovered draft", async () =>
       root.render(createElement(PhotoLibraryProvider, { library, host, children: createElement(Harness) }));
       for (let n = 0; n < 10; n++) await Promise.resolve();
     });
-    current.saveStaleHandlerRef.current = reload;
+    current.saveDurableRecoveryHandlerRef.current = reload;
     await act(async () => {
       current.startSession({
         key: "photo", spotId: "test-context", photoId: "photo", saver: null,
