@@ -12636,8 +12636,8 @@
     },
     {
       "path": "apps/photo-web/README.md",
-      "sha256": "c940a1e3a2d5b8a13f8ea03e3a0d99a6d2f425b38d6f92ca4ee5d4be7fe1fa52",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加"
+      "sha256": "f6e78d64ee765a3ad5be800907099064f81dba0b479b1cf83b1191bd83c2a5b4",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加"
     },
     {
       "path": "apps/photo-web/eslint.config.mjs",
@@ -12836,13 +12836,23 @@
     },
     {
       "path": "apps/photo-web/test/browser-bundle.test.mjs",
-      "sha256": "7c1fd4ed65194273125d27c6fa6e33e21aa884182ba4570746c0fa3ebba5df60",
-      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。"
+      "sha256": "5ba6b4b5fd7a868f1aedd8663ac6be76811d9a8c3a1430374b89636d00572819",
+      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加"
     },
     {
       "path": "apps/photo-web/vitest.mount.config.ts",
-      "sha256": "32fb7826691c0132e22b21815746f30574c6b865959127a4eb480b8fb9453175",
-      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。"
+      "sha256": "3fa08094f0b6ff3336ac634b488b5c0715dbb8561157f8add0b10966265953c5",
+      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加"
+    },
+    {
+      "path": "apps/photo-web/src/browser/renderer.ts",
+      "sha256": "31ee500808afa13f656c2d1b5756629e70d6c9f12bebaf6a2c1ca3909c97bdd0",
+      "origin": "NIHO所有の独立Photo Web renderer probeと合成対象試験。C00構造と既存共通engine getterを利用し、能力の静的推測・第二のWASM loader・C02交差計算・private sourceを含まない。C06/Bがownerの自作PR修復許可でleaf公開整合を担当（Issue201 comment6596048972）。"
+    },
+    {
+      "path": "apps/photo-web/test/browser-renderer.test.ts",
+      "sha256": "7165ec854d0a9cde4e5e50b5b904cf0336d947eb0fdee2a573f377ea664b7fa9",
+      "origin": "NIHO所有の独立Photo Web renderer probeと合成対象試験。C00構造と既存共通engine getterを利用し、能力の静的推測・第二のWASM loader・C02交差計算・private sourceを含まない。C06/Bがownerの自作PR修復許可でleaf公開整合を担当（Issue201 comment6596048972）。"
     }
   ],
   "excludedSources": [
