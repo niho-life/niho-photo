@@ -15,6 +15,7 @@ import { awaitBounded } from "./await";
 import {
   isUploadTicketShape,
   validateInfo,
+  validateAsset,
   validateJsonDepth,
   validateJsonValue,
   validateLibrary,
@@ -56,7 +57,7 @@ export type WireOperation =
   | "library.get" | "photos.list" | "photos.get" | "photos.info" | "photos.lookup"
   | "uploads.start" | "uploads.get" | "uploads.renew" | "uploads.complete" | "uploads.cancel"
   | "recipes.put" | "recipe-conflicts.list" | "recipe-conflicts.get" | "recipe-conflicts.resolve"
-  | "photos.delete" | "content.get";
+  | "photos.delete" | "content.get" | "masks.get";
 
 export type EncodedOperation = {
   readonly operation: WireOperation;
@@ -129,6 +130,11 @@ export function encodeOperation(
     const id = encodeOpaqueSegment(value.photoId);
     const suffix = `/photos/${id}${operation === "photos.info" ? "/info" : ""}`;
     return { operation, method: operation === "photos.delete" ? "DELETE" : "GET", suffix, query: "", body: null, range: null, idempotencyKey: operation === "photos.delete" ? requiredKey() : noKey() };
+  }
+  if (operation === "masks.get") {
+    const value = exactRecord(request, ["photoId", "surfaceId"]);
+    if (!isSha256(value.surfaceId)) invalidRequest();
+    return { operation, method: "GET", suffix: `/photos/${encodeOpaqueSegment(value.photoId)}/masks/${value.surfaceId}`, query: "", body: null, range: null, idempotencyKey: noKey() };
   }
   if (operation === "recipes.put") {
     const value = exactRecord(request, ["photoId", "expectedRevision", "settings", "baseVersion"]);
@@ -203,6 +209,7 @@ export function parseIncomingOperation(request: Request): EncodedOperation | nul
     const upload = /^\/uploads\/([^/]+)$/u.exec(relative);
     const uploadAction = /^\/uploads\/([^/]+)\/(renew|complete|cancel)$/u.exec(relative);
     const content = /^\/photos\/([^/]+)\/assets\/([^/]+)\/content$/u.exec(relative);
+    const mask = /^\/photos\/([^/]+)\/masks\/([^/]+)$/u.exec(relative);
     const recipe = /^\/photos\/([^/]+)\/recipe$/u.exec(relative);
     const conflicts = /^\/photos\/([^/]+)\/recipe-conflicts$/u.exec(relative);
     const conflict = /^\/photos\/([^/]+)\/recipe-conflicts\/([^/]+)$/u.exec(relative);
@@ -214,6 +221,9 @@ export function parseIncomingOperation(request: Request): EncodedOperation | nul
     else if (content && method === "GET") {
       operation = "content.get";
       rawRequest = { photoId: decodeRequired(content[1]), assetId: decodeRequired(content[2]), ...(range === null ? {} : { range: parseRequestRange(range) }) };
+    } else if (mask && method === "GET") {
+      operation = "masks.get";
+      rawRequest = { photoId: decodeRequired(mask[1]), surfaceId: decodeRequired(mask[2]) };
     } else if (recipe && method === "PUT") { operation = "recipes.put"; rawRequest = undefined; }
     else if (conflicts && method === "GET") { operation = "recipe-conflicts.list"; rawRequest = { photoId: decodeRequired(conflicts[1]), ...parseConflictListQuery(url.searchParams) }; }
     else if (conflict && method === "GET") { operation = "recipe-conflicts.get"; rawRequest = { photoId: decodeRequired(conflict[1]), conflictId: decodeRequired(conflict[2]) }; }
@@ -279,6 +289,7 @@ export function validateOperationResponse<K extends WireOperation>(
   else if (operation === "photos.list") checked = validatePage(value as PhotoOperationMap["photos.list"]["response"], libraryId);
   else if (operation === "photos.get") checked = validatePhoto(value as PhotoOperationMap["photos.get"]["response"], libraryId);
   else if (operation === "photos.info") checked = validateInfo(value as PhotoOperationMap["photos.info"]["response"]);
+  else if (operation === "masks.get") checked = validateAsset(value as PhotoOperationMap["masks.get"]["response"], "mask");
   else if (operation === "photos.lookup") {
     const record = exactRecord(value, ["matches"]);
     if (context?.kind !== "lookup") invalidResponse();

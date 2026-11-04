@@ -1,8 +1,10 @@
-//! Native-only input for the future P03 authenticated staging transport. No IPC or network is enabled.
+//! Native-only source for the explicit authenticated copy transport.
 //! Never serialize this object: paths, open handles and bytes stay in native code.
 #![allow(dead_code)]
 
 use crate::photos::{CameraPhotos, OpenedPhoto};
+use niho_desktop_photo::library::PhotoLibrary;
+use serde::{Deserialize, Serialize};
 use sha2::{Digest, Sha256};
 use std::fs::{File, Metadata, OpenOptions};
 use std::io::{Read, Seek, SeekFrom, Write};
@@ -20,16 +22,17 @@ pub(crate) enum CopySourceError {
   Transfer,
 }
 
-#[derive(PartialEq, Eq)]
-struct Identity {
-  device: u64,
-  inode: u64,
-  size: u64,
-  modified: (i64, i64),
-  changed: (i64, i64),
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub(crate) struct SourceIdentity {
+  pub(crate) device: u64,
+  pub(crate) inode: u64,
+  pub(crate) size: u64,
+  pub(crate) modified: (i64, i64),
+  pub(crate) changed: (i64, i64),
 }
 
-impl Identity {
+impl SourceIdentity {
   fn of(meta: Metadata) -> Result<Self, CopySourceError> {
     if !meta.is_file() {
       return Err(CopySourceError::Missing);
@@ -51,8 +54,9 @@ impl Identity {
 pub(crate) struct CloudCopySource {
   path: PathBuf,
   file: File,
-  identity: Identity,
+  identity: SourceIdentity,
   sha256: String,
+  file_name: String,
 }
 
 impl CloudCopySource {
@@ -67,6 +71,22 @@ impl CloudCopySource {
     Self::open(&photo)
   }
 
+  /// Resolve an unopened selection through the native PhotoLibrary registration, then open it natively.
+  pub(crate) fn capture_registered(
+    photos: &CameraPhotos,
+    library: &PhotoLibrary,
+    entry_id: &str,
+  ) -> Result<(String, Self), CopySourceError> {
+    if let Some((photo_id, photo)) = photos.find_by_entry_id(entry_id) {
+      return Ok((photo_id, Self::open(&photo)?));
+    }
+    let path = library.entry_path(entry_id).ok_or(CopySourceError::Missing)?;
+    let (photo_id, photo) = photos
+      .open_registered(entry_id, &path)
+      .map_err(|_| CopySourceError::Missing)?;
+    Ok((photo_id, Self::open(&photo)?))
+  }
+
   fn open(photo: &OpenedPhoto) -> Result<Self, CopySourceError> {
     // O_NONBLOCK avoids blocking on a substituted FIFO before regular-file validation.
     let file = OpenOptions::new()
@@ -74,7 +94,7 @@ impl CloudCopySource {
       .custom_flags(libc::O_NOFOLLOW | libc::O_NONBLOCK)
       .open(&photo.path)
       .map_err(|_| CopySourceError::Missing)?;
-    let identity = Identity::of(file.metadata().map_err(|_| CopySourceError::Missing)?)?;
+    let identity = SourceIdentity::of(file.metadata().map_err(|_| CopySourceError::Missing)?)?;
     if identity.size != photo.digest.size_bytes {
       return Err(CopySourceError::Changed);
     }
@@ -83,19 +103,50 @@ impl CloudCopySource {
       file,
       identity,
       sha256: photo.digest.key.clone(),
+      file_name: photo.file_name.clone(),
     };
     source.verify(|| false)?;
     Ok(source)
   }
 
   fn assert_identity(&self) -> Result<(), CopySourceError> {
-    let handle = Identity::of(self.file.metadata().map_err(|_| CopySourceError::Missing)?)?;
+    let handle = SourceIdentity::of(self.file.metadata().map_err(|_| CopySourceError::Missing)?)?;
     // symlink_metadata rejects a final-component symlink even if it targets the original inode.
-    let path = Identity::of(std::fs::symlink_metadata(&self.path).map_err(|_| CopySourceError::Missing)?)?;
+    let path = SourceIdentity::of(std::fs::symlink_metadata(&self.path).map_err(|_| CopySourceError::Missing)?)?;
     if self.identity != handle || self.identity != path {
       return Err(CopySourceError::Changed);
     }
     Ok(())
+  }
+
+  pub(crate) fn identity(&self) -> &SourceIdentity {
+    &self.identity
+  }
+  pub(crate) fn sha256(&self) -> &str {
+    &self.sha256
+  }
+  pub(crate) fn size_bytes(&self) -> u64 {
+    self.identity.size
+  }
+  pub(crate) fn file_name(&self) -> &str {
+    &self.file_name
+  }
+
+  /// Reads one bounded provider chunk without exposing a path or the full original.
+  pub(crate) fn read_chunk(&mut self, offset: u64, maximum: usize) -> Result<Vec<u8>, CopySourceError> {
+    if maximum == 0 || maximum > 8 * 1024 * 1024 || offset >= self.identity.size {
+      return Err(CopySourceError::Transfer);
+    }
+    self.assert_identity()?;
+    self
+      .file
+      .seek(SeekFrom::Start(offset))
+      .map_err(|_| CopySourceError::Missing)?;
+    let wanted = maximum.min((self.identity.size - offset) as usize);
+    let mut bytes = vec![0; wanted];
+    self.file.read_exact(&mut bytes).map_err(|_| CopySourceError::Changed)?;
+    self.assert_identity()?;
+    Ok(bytes)
   }
 
   /// Verify again before renew/complete. A changed file never becomes a new source during retry.
@@ -284,5 +335,22 @@ mod tests {
     assert!(CloudCopySource::capture_entry(&photos, "library-entry").is_ok());
     assert!(CloudCopySource::capture_entry(&photos, &opened_id).is_err());
     assert!(CloudCopySource::capture_entry(&photos, "../synthetic.png").is_err());
+  }
+
+  #[test]
+  fn unopened_library_selection_is_resolved_through_the_native_registry() {
+    use niho_desktop_photo::test_support::library::{entry_id, Fixture as LibraryFixture};
+    let fixture = LibraryFixture::new("cloud-copy-unopened");
+    fixture.file("selected.jpg");
+    let library = fixture.library();
+    let listed = library.add_folder(&fixture.root()).unwrap();
+    let entry = entry_id(&listed, "selected.jpg");
+    let photos = CameraPhotos::new(None);
+    assert!(photos.find_by_entry_id(&entry).is_none());
+    let (opened_id, mut source) = CloudCopySource::capture_registered(&photos, &library, &entry).unwrap();
+    assert!(photos.get(&opened_id).is_some());
+    assert_eq!(source.file_name(), "selected.jpg");
+    source.verify(|| false).unwrap();
+    assert!(CloudCopySource::capture_registered(&photos, &library, "../selected.jpg").is_err());
   }
 }

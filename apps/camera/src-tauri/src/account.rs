@@ -517,7 +517,7 @@ mod photo_operation_integration_tests {
       user_id: "user".into(),
       session_id: "session".into(),
       session_epoch: "epoch".into(),
-      transport: "mac-bearer".into(),
+      transport: niho_desktop_account::PhotoIdentityTransport::MacBearer,
     };
     let result = shared.commit_photo_operation(generation, &scope, || {
       called.set(true);

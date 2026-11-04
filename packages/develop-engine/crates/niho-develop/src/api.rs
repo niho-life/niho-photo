@@ -226,6 +226,12 @@ pub fn encode_mask_surface(width: u32, height: u32, data: &[u8]) -> Result<Vec<u
     crate::mask_surface::encode_surface_png(&surface).map_err(message)
 }
 
+/// Verifies an SDK-encoded, metadata-free sRGB preview (1280) or thumbnail (512).
+pub fn validate_derived_png(png: &[u8], max_edge: u32) -> Result<Size, String> {
+    let (width, height) = crate::encode::validate_derived_png(png, max_edge)?;
+    Ok(Size { width, height })
+}
+
 /// Renders a JPEG / PNG original (`rgba` is sRGB 8-bit, ready for
 /// `new ImageData(rgba, width, height)`). With a geometry the original is
 /// decoded large enough for the crop to reach `max_dimension`, up to

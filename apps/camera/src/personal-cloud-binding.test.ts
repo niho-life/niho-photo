@@ -31,8 +31,9 @@ function fixture(overrides: Partial<MacPhotoCopyNative> = {}) {
   };
   const connection = createMacPersonalCloudPhotoBinding({ scope, currentScope: () => current,
     subscribeScopeChange: (listener) => { notify = listener; return () => { notify = () => {}; }; }, native, library, host });
-  if (!connection.binding) throw new Error("synthetic setup");
-  return { binding: connection.binding, native, dispose: connection.dispose,
+  if (!connection.binding?.copyLocalPhoto) throw new Error("synthetic copy setup");
+  const binding = { ...connection.binding, copyLocalPhoto: connection.binding.copyLocalPhoto };
+  return { binding, native, dispose: connection.dispose,
     switchScope(next: MacPhotoCloudScope | null) { current = next; notify(); } };
 }
 const options = (controller = new AbortController()) => ({ signal: controller.signal, onProgress: vi.fn() });

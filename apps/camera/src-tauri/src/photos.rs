@@ -191,6 +191,11 @@ impl CameraPhotos {
     Ok((photo_id, photo))
   }
 
+  /// Native library registrationから解決したentryだけを開く。entry IDをpathとして扱わない。
+  pub(crate) fn open_registered(&self, entry_id: &str, path: &Path) -> Result<(String, OpenedPhoto), CameraError> {
+    self.open_measured(entry_id, path, |_| {})
+  }
+
   pub fn close(&self, photo_ids: &[String]) {
     let mut opened = self.lock();
     for photo_id in photo_ids {

@@ -12,6 +12,7 @@ import { createLocalPhotoEditingHost } from "./local-library/local-photo-editing
 import { readPhotoCloudBuildProof, type PhotoCloudBuildProof } from "./cloud-build-proof";
 import { probeCameraPhotoRenderer, type CameraPhotoRendererBinding } from "./camera-photo-renderer";
 import { createNativePersonalPhotoCloudClient } from "./native-photo-client";
+import { createMacPhotoCopyNative } from "./native-photo-copy";
 import { readNativePhotoIdentity, watchNativePhotoIdentity } from "./native-photo-session";
 import {
   createMacPersonalCloudPhotoBinding,
@@ -226,18 +227,12 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
       subscribeScopeChange: (listener) => options.identity.subscribe(listener),
       library,
       host,
+      native: createMacPhotoCopyNative(invoke),
     });
     if (connection.state !== "connected") return null;
     let disposed = false;
     return {
-      // Native upload stays absent until the native start/status/cancel authority is installed.
-      // The read/edit library remains usable; App will not render a copy operation for this binding.
-      binding: {
-        library: connection.binding.library,
-        host: connection.binding.host,
-        actorId: connection.binding.actorId,
-        scopeKey: connection.binding.scopeKey,
-      },
+      binding: connection.binding,
       dispose() {
         if (disposed) return;
         disposed = true;

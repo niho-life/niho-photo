@@ -23,7 +23,7 @@ function harness(readIdentity = vi.fn(async () => actor)) {
   const createBinding = vi.fn(async () => ({ binding, dispose: disposeBinding }));
   const bootstrap = new CameraCloudBootstrap({
     commands, proof, readIdentity,
-    watchIdentity: async (next) => { watch = next; return vi.fn(); },
+    watchIdentity: async (next) => { watch = next; return vi.fn<() => void>(); },
     createBinding,
     retryDelay: async () => undefined,
   });
@@ -52,6 +52,7 @@ describe("Camera cloud bootstrap", () => {
     const actorB = { ...actor, userId: "user-b", sessionId: "session-b", sessionEpoch: "epoch-b" };
     const reads = [actor, actorB];
     let watch: NativePhotoIdentityWatch | null = null;
+    const currentWatch = (): NativePhotoIdentityWatch | null => watch;
     const published: Array<PersonalCloudPhotoBinding | undefined> = [];
     const bootstrap = new CameraCloudBootstrap({
       commands, proof,
@@ -64,8 +65,8 @@ describe("Camera cloud bootstrap", () => {
     bootstrap.subscribe((snapshot) => published.push(snapshot.binding));
     const starting = bootstrap.start();
     await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
-    watch?.invalidated();
-    watch?.mayHaveChanged();
+    currentWatch()?.invalidated();
+    currentWatch()?.mayHaveChanged();
     finish({ binding, dispose: firstDisposed });
     await starting;
     await vi.waitFor(() => expect(bootstrap.getSnapshot().binding).toBe(secondBinding));
