@@ -646,8 +646,7 @@ pub async fn camera_photo_mask_upload(
       &input.surface_id,
       &input.idempotency_key,
       &bytes,
-      width,
-      height,
+      (width, height),
     )
   })
   .await
@@ -661,8 +660,7 @@ fn upload_mask_surface(
   surface_id: &str,
   idempotency_key: &str,
   bytes: &[u8],
-  width: u32,
-  height: u32,
+  dimensions: (u32, u32),
 ) -> Result<MaskUploadOutcome, AccountError> {
   let capture = DurableScope::from_scope(scope).capture();
   let target = NativeCopyTarget::Mask {
@@ -680,8 +678,7 @@ fn upload_mask_surface(
       idempotency_key,
     )
   })?;
-  let mut ticket = None;
-  let mut upload = match start {
+  let (mut upload, mut ticket) = match start {
     NativeStartUpload::Existing { photo } => {
       if !existing_mask_photo_matches(&photo, scope, photo_id) {
         return Err(AccountError::InvalidResponse);
@@ -689,10 +686,7 @@ fn upload_mask_surface(
       // The shared cloud adapter performs masks.get/content.get and SDK decoder readback before it reports success.
       return Ok(MaskUploadOutcome::Stored);
     }
-    NativeStartUpload::Upload { upload, ticket: value } => {
-      ticket = value;
-      *upload
-    }
+    NativeStartUpload::Upload { upload, ticket: value } => (*upload, value),
   };
   assert_upload(&upload, &target, bytes.len() as u64, surface_id)?;
   for _ in 0..64 {
@@ -706,8 +700,8 @@ fn upload_mask_surface(
           || asset.get("sha256").and_then(Value::as_str) != Some(surface_id)
           || asset.get("sizeBytes").and_then(Value::as_u64) != Some(bytes.len() as u64)
           || asset.get("contentType").and_then(Value::as_str) != Some("image/png")
-          || asset.get("width").and_then(Value::as_u64) != Some(u64::from(width))
-          || asset.get("height").and_then(Value::as_u64) != Some(u64::from(height))
+          || asset.get("width").and_then(Value::as_u64) != Some(u64::from(dimensions.0))
+          || asset.get("height").and_then(Value::as_u64) != Some(u64::from(dimensions.1))
         {
           return Err(AccountError::InvalidResponse);
         }
