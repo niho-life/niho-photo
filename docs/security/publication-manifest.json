@@ -11980,8 +11980,8 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop-render/tests/serve.rs",
-      "sha256": "0bbe01bfbc57f94c62b4683161233d0d7e5a3a0a31157e5ba8edc05151f35b4e",
-      "origin": "公開Issue #152 のため新規作成。合成写真による native serve の通信と画素の試験。\n変更理由: #141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験\n変更理由: SDK派生PNG検証を含むwasm export件数とnative API契約を同期"
+      "sha256": "25944a0c5b3a76fd535563c7cad4d271a453b171b92c288c514347c296d21c23",
+      "origin": "公開Issue #152 のため新規作成。合成写真による native serve の通信と画素の試験。\n変更理由: #141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験\n変更理由: SDK派生PNG検証を含むwasm export件数とnative API契約を同期\n変更理由: mask surface validation export追加後の公開関数数を実APIと一致させ、全件一致検証を維持する"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/api.rs",
