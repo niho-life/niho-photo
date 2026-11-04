@@ -278,7 +278,7 @@ fn wasm_exports() -> Vec<String> {
 #[test]
 fn the_methods_are_the_wasm_exports() {
     let exports = wasm_exports();
-    assert_eq!(exports.len(), 41, "{exports:?}");
+    assert_eq!(exports.len(), 42, "{exports:?}");
     let mut expected: Vec<String> = exports;
     expected.extend(["Developer.free", "hello", "releaseClient"].map(String::from));
     expected.sort_unstable();
