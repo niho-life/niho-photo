@@ -30,12 +30,14 @@ import {
 const CONTENT_TYPE = /^[!#$%&'*+.^_`|~0-9A-Za-z-]+\/[!#$%&'*+.^_`|~0-9A-Za-z-]+(?:\s*;\s*[!#$%&'*+.^_`|~0-9A-Za-z-]+=(?:[!#$%&'*+.^_`|~0-9A-Za-z-]+|"[^"]*"))*$/u;
 const MAX_CHUNK = 1024 * 1024;
 const OPEN_TIMEOUT_MS = 600_000;
+const MAX_MASK_SELECTORS = 256;
 const ALLOWED_JSON = new Set<WireOperation>([
   "library.get",
   "photos.list",
   "photos.get",
   "photos.info",
   "photos.lookup",
+  "masks.get",
   "recipes.put",
   "recipe-conflicts.list",
   "recipe-conflicts.get",
@@ -105,6 +107,9 @@ export async function createNativePersonalPhotoCloudClient(
 
   let scope: PersonalPhotoScope;
   let disposed = false;
+  // Successful masks.get is the only authority for attaching a surface selector to an opaque asset id.
+  // This map belongs to this captured native scope and is discarded with the client.
+  const maskSelectors = new Map<string, string>();
   const client: PersonalPhotoCloudClient = {
     scope: Object.freeze({ actorId: actor.userId, libraryId, sessionEpoch: actor.sessionEpoch }),
     async request<K extends PhotoOperation>(
@@ -120,12 +125,14 @@ export async function createNativePersonalPhotoCloudClient(
         const encoded = encodeOperation(operation, request, key);
         const capture = currentMacActor(options.identity, now);
         if (operation === "content.get") {
+          const contentRequest = request as PhotoOperationMap["content.get"]["request"];
           const content = await openNativeContent(
             invoke,
             actorScope(capture),
-            request as PhotoOperationMap["content.get"]["request"],
+            contentRequest,
             scoped,
             options.requestId ?? randomRequestId,
+            maskSelectors.get(maskSelectorKey(contentRequest.photoId, contentRequest.assetId)),
           );
           contentOwnsScope = true;
           return content as PhotoOperationMap[K]["response"];
@@ -141,13 +148,25 @@ export async function createNativePersonalPhotoCloudClient(
         );
         scoped.assertCurrent();
         const raw = successfulBody(response, encoded.operation);
-        return validateOperationResponse(
+        const checked = validateOperationResponse(
           encoded.operation,
           raw,
           actor.userId,
           libraryId,
           encoded.responseContext,
         ) as PhotoOperationMap[K]["response"];
+        if (operation === "masks.get") {
+          const requested = request as PhotoOperationMap["masks.get"]["request"];
+          const asset = validateNativeMaskAsset(checked, requested.surfaceId);
+          const selectorKey = maskSelectorKey(requested.photoId, asset.id);
+          maskSelectors.delete(selectorKey);
+          maskSelectors.set(selectorKey, requested.surfaceId);
+          if (maskSelectors.size > MAX_MASK_SELECTORS) {
+            const oldest = maskSelectors.keys().next().value;
+            if (oldest !== undefined) maskSelectors.delete(oldest);
+          }
+        }
+        return checked;
       } catch (error) {
         if (isUnauthenticated(error)) scope.invalidateAuthentication();
         throw error;
@@ -159,10 +178,12 @@ export async function createNativePersonalPhotoCloudClient(
       if (disposed) return;
       disposed = true;
       lifecycle.abort(new PersonalPhotoCloudError("disposed"));
+      maskSelectors.clear();
       scope.dispose();
     },
   };
   scope = new PersonalPhotoScope(client, options.identity, now);
+  scope.onInvalidated(() => maskSelectors.clear());
   return client;
 }
 
@@ -197,6 +218,7 @@ async function openNativeContent(
   request: PhotoOperationMap["content.get"]["request"],
   scoped: ReturnType<PersonalPhotoScope["begin"]>,
   nextRequestId: () => string,
+  maskSurfaceId: string | undefined,
 ): Promise<PhotoContent> {
   const requestId = nextRequestId();
   if (!boundedOpaque(requestId)) invalidResponse();
@@ -205,7 +227,7 @@ async function openNativeContent(
     void invoke("camera_photo_content_cancel", { input: { scope, requestId } }).catch(() => undefined);
   };
   const closeLate = (value: unknown): void => {
-    const open = parseOpen(value, request);
+    const open = parseOpen(value, request, maskSurfaceId);
     const handle = open?.handle ?? extractHandle(value);
     if (handle !== null) void closeHandle(invoke, scope, handle);
   };
@@ -217,6 +239,7 @@ async function openNativeContent(
         requestId,
         photoId: request.photoId,
         assetId: request.assetId,
+        ...(maskSurfaceId === undefined ? {} : { maskSurfaceId }),
         ...(request.range === undefined ? {} : { range: request.range }),
       },
     });
@@ -227,7 +250,7 @@ async function openNativeContent(
       onTimeout: cancelOpen,
       onLateResolve: closeLate,
     });
-    const parsed = parseOpen(raw, request);
+    const parsed = parseOpen(raw, request, maskSurfaceId);
     if (parsed === null) {
       const handle = extractHandle(raw);
       if (handle !== null) void closeHandle(invoke, scope, handle);
@@ -322,11 +345,16 @@ async function openNativeContent(
   };
 }
 
-function parseOpen(value: unknown, request: PhotoOperationMap["content.get"]["request"]): NativeOpenResponse | null {
+function parseOpen(
+  value: unknown,
+  request: PhotoOperationMap["content.get"]["request"],
+  maskSurfaceId?: string,
+): NativeOpenResponse | null {
   if (!isRecord(value) || !exactKeys(value, ["handle", "contentType", "sha256", "totalBytes", "range", "sizeBytes"])) return null;
   if (!boundedOpaque(value.handle) || typeof value.contentType !== "string"
     || new TextEncoder().encode(value.contentType).byteLength > 255 || !CONTENT_TYPE.test(value.contentType)
-    || typeof value.sha256 !== "string" || !/^[0-9a-f]{64}$/u.test(value.sha256)) return null;
+    || typeof value.sha256 !== "string" || !/^[0-9a-f]{64}$/u.test(value.sha256)
+    || maskSurfaceId !== undefined && value.sha256 !== maskSurfaceId) return null;
   if (!safePositive(value.totalBytes) || value.totalBytes > PHOTO_LIMITS.maxFileBytes
     || !safePositive(value.sizeBytes) || value.sizeBytes > PHOTO_LIMITS.maxFileBytes
     || !isRecord(value.range) || !exactKeys(value.range, ["start", "endInclusive"])) return null;
@@ -335,6 +363,31 @@ function parseOpen(value: unknown, request: PhotoOperationMap["content.get"]["re
   const expectedEnd = request.range?.endInclusive ?? value.totalBytes - 1;
   if (value.range.start !== expectedStart || value.range.endInclusive !== expectedEnd || value.sizeBytes !== expectedEnd - expectedStart + 1) return null;
   return value as unknown as NativeOpenResponse;
+}
+
+function validateNativeMaskAsset(value: unknown, expectedSurfaceId: string): { readonly id: string } {
+  if (!isRecord(value) || !exactKeys(value, ["id", "kind", "sha256", "sizeBytes", "contentType", "width", "height"])) {
+    invalidResponse();
+  }
+  if (
+    !boundedOpaque(value.id) ||
+    value.kind !== "mask" ||
+    value.sha256 !== expectedSurfaceId ||
+    value.contentType !== "image/png" ||
+    !safePositive(value.sizeBytes) ||
+    value.sizeBytes > PHOTO_LIMITS.maxMaskBytes ||
+    !safePositive(value.width) ||
+    value.width > PHOTO_LIMITS.maxMaskEdge ||
+    !safePositive(value.height) ||
+    value.height > PHOTO_LIMITS.maxMaskEdge
+  ) {
+    invalidResponse();
+  }
+  return value as { readonly id: string };
+}
+
+function maskSelectorKey(photoId: string, assetId: string): string {
+  return `${photoId.length}:${photoId}${assetId}`;
 }
 
 function extractHandle(value: unknown): string | null {

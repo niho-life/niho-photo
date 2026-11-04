@@ -18,10 +18,11 @@ use super::{panic_text, MAX_DEVELOPERS, PROTOCOL};
 /// by their JS names (a `Developer` method as `Developer.<name>`, its
 /// constructor as `Developer.new`, without the `width` / `height` getters,
 /// which the opening reply carries), then `hello` and `releaseClient`.
-pub const METHODS: [&str; 45] = [
+pub const METHODS: [&str; 46] = [
     "version",
     "capabilities",
     "validateDerivedPng",
+    "validateMaskSurface",
     "maskSurfaceId",
     "encodeMaskSurface",
     "setSkyModel",
@@ -259,6 +260,11 @@ fn call(state: &State, method: &str, request: &Request<'_>) -> Result<Reply, Fai
             let size =
                 api::validate_derived_png(args.blob(0)?, args.u32(1)?).map_err(Fail::call)?;
             Reply::size(size.width, size.height)
+        }
+        "validateMaskSurface" => {
+            args.expect(1, 1)?;
+            let info = api::validate_mask_surface(args.blob(0)?).map_err(Fail::call)?;
+            Reply::ok(json!({"id": info.id, "width": info.width, "height": info.height}))
         }
         "maskSurfaceId" => {
             args.expect(1, 1)?;
@@ -613,6 +619,32 @@ mod tests {
         sorted.sort_unstable();
         sorted.dedup();
         assert_eq!(sorted.len(), METHODS.len());
+    }
+
+    #[test]
+    fn validate_mask_surface_dispatches_the_common_decoder() {
+        let state = State::default();
+        let png = niho_develop::api::encode_mask_surface(2, 1, &[0, 255]).unwrap();
+        let reply = respond(
+            &state,
+            "validateMaskSurface",
+            &body(&serde_json::json!({"args": [{"blob": 0}]}), &[&png]),
+        );
+        assert_eq!(reply.header()["result"]["width"], 2);
+        assert_eq!(reply.header()["result"]["height"], 1);
+        assert_eq!(
+            reply.header()["result"]["id"],
+            niho_develop::api::mask_surface_id(&png)
+        );
+
+        let mut trailing = png;
+        trailing.push(0);
+        let rejected = respond(
+            &state,
+            "validateMaskSurface",
+            &body(&serde_json::json!({"args": [{"blob": 0}]}), &[&trailing]),
+        );
+        assert_eq!(rejected.header()["ok"], false);
     }
 
     /// A panic is an `internal` reply and lets go of the Developer it used.

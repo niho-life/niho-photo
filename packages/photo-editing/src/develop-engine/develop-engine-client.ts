@@ -303,6 +303,11 @@ export type DevelopEngine = {
   dropMaskSurface?: (surfaceId: string) => Promise<boolean>;
   /** 面の値（`width·height` byte、0〜255）を 8bit グレーの PNG と id（sha256）にする（作った PNG は覚える）。面の口の無い wasm は reject */
   encodeMaskSurface?: (width: number, height: number, data: Uint8Array) => Promise<{ id: string; png: Uint8Array<ArrayBuffer> }>;
+  /**
+   * `setMaskSurface` と同じ SDK decoder で PNG を検証する。写真を開かずに呼べる。caller の bytes は copy して transfer するため失われない。
+   * 口の無い旧 runtime、dispose 済み、runtime 交換後の遅い応答は reject。
+   */
+  validateMaskSurface?: (png: Uint8Array) => Promise<{ id: string; width: number; height: number }>;
   /** 面の PNG（覚えた PNG か、開いている写真の読み口から。読めなければ null） */
   maskSurfacePng?: (surfaceId: string) => Promise<Uint8Array | null>;
   /** 開いている写真の面の読み口を替える（null で外す） */
@@ -445,7 +450,8 @@ type Pending = {
     | "withCaptureExif"
     | "setMaskSurface"
     | "dropMaskSurface"
-    | "encodeMaskSurface";
+    | "encodeMaskSurface"
+    | "validateMaskSurface";
   resolve: (response: DevelopEngineWorkerResponse) => void;
   reject: (error: unknown) => void;
 };
@@ -1313,6 +1319,17 @@ async setMaskSurface(surfaceId, png) {
       const png = new Uint8Array(response.png);
       surfaces.remember(response.surfaceId, png.slice());
       return { id: response.surfaceId, png };
+    },
+
+    async validateMaskSurface(png) {
+      const response = await request("validateMaskSurface", (id) => {
+        const buffer = png.slice().buffer;
+        return { message: { type: "validateMaskSurface", id, png: buffer }, transfer: [buffer] };
+      });
+      if (response.type !== "maskSurfaceValidated") {
+        throw new DevelopEngineError("develop engine returned no mask surface info");
+      }
+      return { id: response.surfaceId, width: response.width, height: response.height };
     },
 
     maskSurfacePng(surfaceId) {

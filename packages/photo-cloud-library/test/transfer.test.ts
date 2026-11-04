@@ -47,7 +47,7 @@ function photoFor(request: StartUploadRequest) {
     ...responses["photos.get"],
     fileName: request.target.kind === "original" ? request.target.fileName : "photo.jpg",
     format: request.target.kind === "original" ? request.target.format : "jpeg" as const,
-    original: { ...responses["photos.get"].original, sha256: request.sha256, sizeBytes: request.sizeBytes },
+    original: { ...responses["photos.get"].original, sha256: request.sha256, sizeBytes: request.sizeBytes, contentType: request.contentType },
   };
 }
 

@@ -163,6 +163,23 @@ describe("native fixed C00 JSON transport", () => {
     });
   });
 
+  it("allows only closed masks.get metadata and binds its opaque asset id to the requested surface", async () => {
+    const mask = responses["masks.get"];
+    for (const bad of [
+      { ...mask, id: "" },
+      { ...mask, kind: "preview" },
+      { ...mask, sha256: "b".repeat(64) },
+      { ...mask, width: 4097 },
+      { ...mask, token: "must-not-cross" },
+    ]) {
+      const invoke = jsonAdapter({ "masks.get": { status: 200, body: bad } });
+      const { client } = await clientWith(invoke);
+      await expect(client.request("masks.get", { photoId: IDS.photo, surfaceId: HASH.mask }, {
+        signal: new AbortController().signal,
+      })).rejects.toMatchObject({ code: "invalid_response" });
+    }
+  });
+
   it.each([
     { status: 200, body: { ...library, token: "must-not-cross" } },
     { status: 200, body: { ...library, ticket: { url: "https://example.test" } } },
@@ -245,6 +262,42 @@ describe("native verified content cache bridge", () => {
     await expect(reader.read()).resolves.toEqual({ done: true, value: undefined });
     expect(invoke.mock.calls.filter(([command]) => command === "camera_photo_content_read")).toHaveLength(2);
     expect(invoke.mock.calls.filter(([command]) => command === "camera_photo_content_close")).toHaveLength(1);
+  });
+
+  it("passes a mask selector only after this scoped client resolved the same photo and opaque asset", async () => {
+    const mask = responses["masks.get"];
+    const invoke = vi.fn<NativePhotoInvoke>(async (command, args) => {
+      if (command === "camera_photo_request") {
+        const operation = (args.input as { operation: string }).operation;
+        return { status: 200, body: operation === "library.get" ? library : mask };
+      }
+      if (command === "camera_photo_content_open") {
+        return {
+          handle: "mask-handle", contentType: "image/png", sha256: HASH.mask,
+          totalBytes: mask.sizeBytes, range: { start: 0, endInclusive: mask.sizeBytes - 1 }, sizeBytes: mask.sizeBytes,
+        };
+      }
+      if (command === "camera_photo_content_close" || command === "camera_photo_content_cancel") return {};
+      if (command === "camera_photo_content_read") return new Uint8Array(mask.sizeBytes).buffer;
+      throw new Error(`unexpected ${command}`);
+    });
+    const { client } = await clientWith(invoke);
+    await client.request("masks.get", { photoId: IDS.photo, surfaceId: HASH.mask }, {
+      signal: new AbortController().signal,
+    });
+    const content = await client.request("content.get", { photoId: IDS.photo, assetId: mask.id }, {
+      signal: new AbortController().signal,
+    });
+    expect(invoke).toHaveBeenCalledWith("camera_photo_content_open", {
+      input: expect.objectContaining({ photoId: IDS.photo, assetId: mask.id, maskSurfaceId: HASH.mask }),
+    });
+    await content.body.cancel();
+
+    await client.request("content.get", { photoId: IDS.photo, assetId: "unresolved-asset" }, {
+      signal: new AbortController().signal,
+    }).then((value) => value.body.cancel());
+    const opens = invoke.mock.calls.filter(([command]) => command === "camera_photo_content_open");
+    expect(opens.at(-1)?.[1].input).not.toHaveProperty("maskSurfaceId");
   });
 
   it("validates requested range and all returned metadata before exposing a stream", async () => {

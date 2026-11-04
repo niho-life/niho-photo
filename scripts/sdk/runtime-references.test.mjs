@@ -1,7 +1,24 @@
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import test from "node:test";
 
 import { rewriteVersionedRuntimeReferences } from "./build-develop-engine-runtime.mjs";
+
+test("media producerのSDK契約は実native sourceのtool/decoderと一致する", () => {
+  const source = (relative) => readFileSync(new URL(`../../${relative}`, import.meta.url), "utf8");
+  const api = source("packages/develop-engine/crates/niho-develop/src/api.rs");
+  const swift = source("packages/develop-engine/tools/apple-raw-linear/Sources/apple-raw-linear/CLI.swift");
+  const desktop = source("packages/desktop-photo/src/develop.rs");
+  const match = (text, pattern) => {
+    const value = pattern.exec(text)?.[1];
+    assert.ok(value, "required source version is absent");
+    return value;
+  };
+  assert.equal(match(api, /PERSONAL_MEDIA_PROVIDER_VERSION: &str = "([^"]+)"/u),
+    match(swift, /static let version = "([^"]+)"/u));
+  assert.equal(match(api, /PERSONAL_MEDIA_DECODER_VERSION: &str = "([^"]+)"/u),
+    match(desktop, /const RASTER_DECODER_VERSION: &str = "([^"]+)"/u));
+});
 
 test("web glueの仮想module IDを保ち実ファイル参照だけを版指定する", () => {
   const input = Buffer.from([

@@ -944,7 +944,10 @@ fn content_401_invalidates_only_its_captured_generation() {
   let f = Fixture::with_photo_http(http);
   f.login();
   let scope = photo_scope(&f.account.photo_identity().unwrap());
-  let metadata = f.account.photo_content_metadata(&scope, "photo", "upa_opaque").unwrap();
+  let metadata = f
+    .account
+    .photo_content_metadata(&scope, "photo", "upa_opaque", None)
+    .unwrap();
   assert_eq!(
     f.account
       .photo_content_download(&scope, &metadata, &mut Vec::new(), &PhotoDownloadCancel::default(),),
@@ -967,7 +970,10 @@ fn content_401_invalidates_only_its_captured_generation() {
   let f = Fixture::with_photo_http(http);
   f.login();
   let scope = photo_scope(&f.account.photo_identity().unwrap());
-  let metadata = f.account.photo_content_metadata(&scope, "photo", "upa_opaque").unwrap();
+  let metadata = f
+    .account
+    .photo_content_metadata(&scope, "photo", "upa_opaque", None)
+    .unwrap();
   let account = Arc::clone(&f.account);
   let pending = std::thread::spawn(move || {
     account.photo_content_download(&scope, &metadata, &mut Vec::new(), &PhotoDownloadCancel::default())
@@ -990,7 +996,10 @@ fn content_transient_status_does_not_permanently_logout() {
     let f = Fixture::with_photo_http(Arc::new(ContentStatusPhotoHttp::immediate(status)));
     f.login();
     let scope = photo_scope(&f.account.photo_identity().unwrap());
-    let metadata = f.account.photo_content_metadata(&scope, "photo", "upa_opaque").unwrap();
+    let metadata = f
+      .account
+      .photo_content_metadata(&scope, "photo", "upa_opaque", None)
+      .unwrap();
     let expected = if status == 0 {
       AccountError::Network
     } else {

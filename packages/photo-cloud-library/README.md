@@ -2,7 +2,7 @@
 
 C02 / Photo #195。既存の `niho-photo-editing` の編集面を、`@niho/photo-personal-cloud-contract` v2の本人用portへ接続する。原本・owner・容量・補正revision・物理purgeの正本は既存backendに置く。
 
-read/delete/content adapter、same-origin HTTP client/BFF、IndexedDBの送信前journalと明示コピーcontrollerを実装している。実backend/GCSの転送照合、補正・mask・名前付き版の書込み、Mac native IPC、正式host・端末受入は未完了。HTTP wire・期限・公開前の再認証・容量境界の正本は [転送接続契約](../../docs/architecture/personal-photo-transfers.md)。
+read/delete/content adapter、same-origin HTTP client/BFF、IndexedDBの送信前journalと明示コピーcontrollerを実装している。参照maskの実転送と最終ports接続、Macの派生画像・mask読取、正式hostの接続は残る。クラウドの名前付き版はowner指示（2026-11-04）で今回の実装・完了・出荷条件から除外し、既存Macのローカル版は維持する。HTTP wire・期限・公開前の再認証・容量境界の正本は [転送接続契約](../../docs/architecture/personal-photo-transfers.md)。
 
 `@niho/photo-cloud-library/browser` は `createBrowserPersonalPhotoCloudClient({identity})` で実libraryをprobeし、`createBrowserPersonalPhotoTransferController({client, identity})` で明示コピーを扱う。controllerのstartはintentId/File/format/完全recipe候補を受け、resume/cancelは同じintentを使う。`list({cursor, limit})` は `{items, nextCursor}` を返し、`readPendingRecipe(intentId)` はC03へ引き継ぐ両snapshotを返す。IDB/Web Lockを利用できなければ転送を始めない。disposeで要求・reader・購読を解放する。
 

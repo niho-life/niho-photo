@@ -249,6 +249,7 @@ pub fn capabilities() -> Value {
         "directOriginalMaxPixels": DecodeLimits::BROWSER.max_pixels,
         "renderer": niho_develop::api::renderer_capabilities(),
         "initialRasterSettings": niho_develop::api::initial_raster_settings(),
+        "personalMedia": niho_develop::api::personal_media_capabilities(),
     })
 }
 
