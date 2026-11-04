@@ -39,7 +39,9 @@ test("browser build keeps shared styles and the stateless export worker, without
             + `import {probePhotoWebRenderer} from ${JSON.stringify(root + "src/browser/renderer.ts")};\n`
             + `import {createCapturedPhotoWebCloudClient,createPhotoWebCloudIdentity} from ${JSON.stringify(root + "src/browser/session-client.ts")};\n`
             + `import {createPhotoWebCloudFetch} from ${JSON.stringify(root + "src/browser/auth-fetch.ts")};\n`
-            + "globalThis.__photoWebCompileFixture = {mountPhotoWeb, probePhotoWebRenderer, createCapturedPhotoWebCloudClient, createPhotoWebCloudIdentity, createPhotoWebCloudFetch, copy:PHOTO_WEB_VIEW_COPY};";
+            + `import {createPhotoWebConnectionFactory} from ${JSON.stringify(root + "src/browser/connection.ts")};\n`
+            + `import {startPhotoWebApplication} from ${JSON.stringify(root + "src/browser/application.ts")};\n`
+            + "globalThis.__photoWebCompileFixture = {mountPhotoWeb, probePhotoWebRenderer, createCapturedPhotoWebCloudClient, createPhotoWebCloudIdentity, createPhotoWebCloudFetch, createPhotoWebConnectionFactory, startPhotoWebApplication, copy:PHOTO_WEB_VIEW_COPY};";
         },
       },
       collect("main"),

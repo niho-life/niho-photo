@@ -1,0 +1,69 @@
+import { appDialog } from "niho-ui/app-dialog";
+import {
+  createBrowserPhotoSessionHost,
+  type PhotoIdentity,
+  type PhotoSessionHostBridge,
+} from "../../../../packages/photo-cloud-session/src/index.ts";
+import type { PhotoLibraryPresets } from "niho-photo-editing/library/photo-library";
+import type { PhotoStaticBuildResult } from "../build/types.ts";
+import { PHOTO_WEB_VIEW_COPY } from "../copy.ts";
+import { mountPhotoWeb, type MountedPhotoWeb } from "./mount.tsx";
+import { createPhotoWebConnectionFactory, type PhotoWebRevocationReason } from "./connection.ts";
+import type { CreatePhotoWebRuntimeOptions } from "../runtime/types.ts";
+import type { PhotoWebTransferCopy } from "../view/types.ts";
+import type { PersonalPhotoCloudMemoryBudgets } from "@niho/photo-cloud-library";
+
+export interface StartPhotoWebApplicationOptions {
+  readonly rootElement: HTMLElement;
+  readonly iconUrl: string;
+  readonly enabled: boolean;
+  /** Verified metadata returned by the static build factory used for this exact page. */
+  readonly build: Pick<PhotoStaticBuildResult, "sdk">;
+  /** The C00 preset owner and C08 scope purge port are mandatory runtime dependencies. */
+  readonly presets: PhotoLibraryPresets;
+  readonly clearRevokedScope: (identity: PhotoIdentity, reason: PhotoWebRevocationReason) => void | Promise<void>;
+  readonly memoryBudgets: PersonalPhotoCloudMemoryBudgets;
+  readonly downloadBudget: CreatePhotoWebRuntimeOptions["downloadBudget"];
+  /** Transfer controls stay hidden until the complete shared C00 copy is supplied. */
+  readonly transferCopy?: PhotoWebTransferCopy;
+  readonly sessionHost?: PhotoSessionHostBridge;
+  readonly fetch?: typeof fetch;
+}
+
+/** Official Web/PWA entry point. Deployment code supplies only accepted build and owner ports. */
+export function startPhotoWebApplication(options: StartPhotoWebApplicationOptions): MountedPhotoWeb {
+  if (typeof globalThis.location === "undefined" || globalThis.location.origin.length === 0) {
+    throw new TypeError("Photo Web requires a browser origin");
+  }
+  const composition = createPhotoWebConnectionFactory({
+    origin: globalThis.location.origin,
+    rendererProof: {
+      sdkVersion: options.build.sdk.sdkVersion,
+      crateVersion: options.build.sdk.crateVersion,
+      manifestSha256: options.build.sdk.manifestSha256,
+      manifestUrl: options.build.sdk.manifestUrl,
+    },
+    presets: options.presets,
+    memoryBudgets: options.memoryBudgets,
+    clearRevokedScope: options.clearRevokedScope,
+    ...(options.transferCopy === undefined ? {} : { transferCopy: options.transferCopy }),
+    ...(options.fetch === undefined ? {} : { cloudFetch: options.fetch }),
+  });
+  const sessionHost = options.sessionHost ?? createBrowserPhotoSessionHost(
+    options.fetch === undefined ? {} : { fetch: options.fetch },
+  );
+  return mountPhotoWeb({
+    rootElement: options.rootElement,
+    iconUrl: options.iconUrl,
+    copy: PHOTO_WEB_VIEW_COPY,
+    runtimeOptions: {
+      enabled: options.enabled,
+      copy: PHOTO_WEB_VIEW_COPY,
+      downloadBudget: options.downloadBudget,
+      connect: composition.connect,
+      guards: composition.guards,
+      cancelDialogs: () => appDialog.cancelAll(),
+      sessionHost,
+    },
+  });
+}
