@@ -194,7 +194,7 @@ mod official {
           Cow::Borrowed(&self.payload[record.offset..record.offset + record.bytes]),
         )
       });
-      let immutable = self.immutable_prefix.iter().flat_map(|prefix| {
+      let immutable = self.immutable_prefix.iter().flat_map(move |prefix| {
         self.records.iter().map(move |record| {
           let relative = record.path.strip_prefix(&self.prefix).expect("decoded runtime prefix");
           (
