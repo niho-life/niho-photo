@@ -45,6 +45,14 @@ export type PersonalPhotoCloudMaskUploader = {
   }): Promise<void>;
 };
 
+/** Host SDK decoder used to verify that stored mask PNGs can be drawn by the same renderer. */
+export type PersonalPhotoCloudMaskValidator = {
+  validateMaskSurface(
+    png: Uint8Array,
+    signal: AbortSignal,
+  ): Promise<{ readonly id: string; readonly width: number; readonly height: number }>;
+};
+
 export type CreatePersonalPhotoCloudLibraryOptions = {
   client: PersonalPhotoCloudClient;
   identity: PersonalPhotoCloudIdentity;
@@ -56,6 +64,8 @@ export type CreatePersonalPhotoCloudLibraryOptions = {
   urls?: PersonalPhotoCloudUrlFactory;
   /** Absent until a trusted host can durably upload masks without exposing provider tickets. */
   maskUploader?: PersonalPhotoCloudMaskUploader;
+  /** Absent until the host can validate masks with the same SDK decoder used for rendering. */
+  maskValidator?: PersonalPhotoCloudMaskValidator;
 };
 
 export type PersonalPhotoCloudLibraryHandle = {

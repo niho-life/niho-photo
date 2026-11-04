@@ -83,7 +83,11 @@ async function uploadMask(
     sha256: input.surfaceId,
     contentType: "image/png",
   }, { signal, idempotencyKey: input.idempotencyKey });
-  if (started.value.kind !== "upload") throw new PersonalPhotoCloudError("invalid_response");
+  if (started.value.kind === "existing") {
+    // The adapter will read masks.get + content.get and SDK-validate exact bytes before reporting success.
+    if (started.value.photo.id !== input.photoId) throw new PersonalPhotoCloudError("invalid_response");
+    return;
+  }
   let upload = validateMaskUpload(started.value.upload, client.scope.libraryId, input);
   let ticket = started.value.ticket === null
     ? null

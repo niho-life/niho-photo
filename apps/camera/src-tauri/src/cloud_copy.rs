@@ -671,7 +671,13 @@ fn upload_mask_surface(
   })?;
   let mut ticket = None;
   let mut upload = match start {
-    NativeStartUpload::Existing { .. } => return Err(AccountError::InvalidResponse),
+    NativeStartUpload::Existing { photo } => {
+      if !existing_mask_photo_matches(&photo, scope, photo_id) {
+        return Err(AccountError::InvalidResponse);
+      }
+      // The shared cloud adapter performs masks.get/content.get and SDK decoder readback before it reports success.
+      return Ok(());
+    }
     NativeStartUpload::Upload { upload, ticket: value } => {
       ticket = value;
       *upload
@@ -1772,6 +1778,11 @@ fn assert_upload(upload: &NativeUpload, target: &NativeCopyTarget, size: u64, sh
   }
 }
 
+fn existing_mask_photo_matches(photo: &Value, scope: &CopyScope, photo_id: &str) -> bool {
+  photo.get("id").and_then(Value::as_str) == Some(photo_id)
+    && photo.get("libraryId").and_then(Value::as_str) == Some(scope.library_id.as_str())
+}
+
 fn set_fact(intent: &mut CopyIntent, target: &NativeCopyTarget, sha: &str, upload: &NativeUpload, stored: bool) {
   let uploaded_bytes = match &upload.state {
     NativeUploadState::Reserved { uploaded_bytes } => *uploaded_bytes,
@@ -2367,6 +2378,25 @@ mod tests {
       confirmed_masks: false,
       confirmed_recipe: false,
     }
+  }
+
+  #[test]
+  fn existing_mask_start_is_reconciled_only_for_the_same_photo_and_library() {
+    let scope = CopyScope {
+      user_id: "owner".into(),
+      library_id: "library".into(),
+      session_id: "session".into(),
+      session_epoch: "epoch".into(),
+      transport: niho_desktop_account::PhotoIdentityTransport::MacBearer,
+    };
+    let photo = json!({"id":"photo","libraryId":"library"});
+    assert!(existing_mask_photo_matches(&photo, &scope, "photo"));
+    assert!(!existing_mask_photo_matches(&photo, &scope, "other-photo"));
+    assert!(!existing_mask_photo_matches(
+      &json!({"id":"photo","libraryId":"other-library"}),
+      &scope,
+      "photo"
+    ));
   }
 
   #[test]

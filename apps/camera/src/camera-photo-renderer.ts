@@ -1,7 +1,10 @@
 import type { RenderCapability } from "@niho/photo-personal-cloud-contract";
+import type { PersonalPhotoCloudMaskValidator } from "@niho/photo-cloud-library";
 import { createDevelopEngine, type DevelopEngine } from "niho-photo-editing/develop-engine/develop-engine-client";
 import type { PhotoLibraryEngineAssets } from "niho-photo-editing/library/photo-library";
 
+import { PersonalPhotoCloudError } from "@niho/photo-cloud-library";
+import { abortReason, awaitBounded, linkedAbortController } from "@niho/photo-cloud-library/protocol";
 import type { PhotoCloudBuildProof } from "./cloud-build-proof";
 
 type RendererDeclaration = Omit<RenderCapability, "sdkVersion" | "manifestSha256"> & { readonly schemaVersion: 1 };
@@ -13,6 +16,65 @@ export type CameraPhotoRendererBinding = Readonly<{
   capability: RenderCapability;
   engineAssets: PhotoLibraryEngineAssets;
 }>;
+
+export type CameraPhotoMaskValidator = PersonalPhotoCloudMaskValidator & Readonly<{ dispose(): void }>;
+
+type MaskValidationEngine = Pick<DevelopEngine, "ready" | "dispose" | "validateMaskSurface">;
+
+/** Lazily uses the same verified SDK runtime as Camera rendering to validate durable mask bytes. */
+export function createCameraPhotoMaskValidator(options: {
+  engineAssets: PhotoLibraryEngineAssets;
+  createEngine?: (manifestUrl: string, preferNative: boolean) => MaskValidationEngine;
+  timeoutMs?: number;
+}): CameraPhotoMaskValidator {
+  const lifecycle = new AbortController();
+  let engine: MaskValidationEngine | null = null;
+  let ready: Promise<boolean> | null = null;
+  let disposed = false;
+  const timeoutMs = options.timeoutMs ?? 15_000;
+
+  const getEngine = (): MaskValidationEngine => {
+    if (disposed) throw new PersonalPhotoCloudError("disposed");
+    if (engine === null) {
+      const manifestUrl = options.engineAssets.manifestUrl();
+      if (manifestUrl === null) throw new PersonalPhotoCloudError("unavailable");
+      const created = (options.createEngine ?? ((url, preferNative) => createDevelopEngine({ manifestUrl: url, preferNative })))(
+        manifestUrl,
+        options.engineAssets.preferNative ?? false,
+      );
+      engine = created;
+      ready = Promise.resolve().then(() => created.ready());
+    }
+    return engine;
+  };
+
+  return {
+    async validateMaskSurface(png, signal) {
+      if (signal.aborted) throw abortReason(signal);
+      const linked = linkedAbortController(lifecycle.signal, signal);
+      try {
+        const active = getEngine();
+        if (!(await awaitBounded(ready!, { signal: linked.controller.signal, timeoutMs }))) {
+          throw new PersonalPhotoCloudError("unavailable");
+        }
+        const validate = active.validateMaskSurface;
+        if (typeof validate !== "function") throw new PersonalPhotoCloudError("unsupported");
+        return await awaitBounded(validate.call(active, png.slice()), { signal: linked.controller.signal, timeoutMs });
+      } finally {
+        linked.dispose();
+      }
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      lifecycle.abort(new PersonalPhotoCloudError("disposed"));
+      const active = engine;
+      engine = null;
+      ready = null;
+      try { active?.dispose(); } catch { /* binding teardown is best-effort */ }
+    },
+  };
+}
 
 export function cameraPhotoManifestUrl(proof: PhotoCloudBuildProof, location: Pick<Location, "href"> = globalThis.location): string | null {
   try {

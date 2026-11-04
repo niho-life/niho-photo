@@ -133,6 +133,16 @@ export function maskPngFixture(value = 128): { bytes: Uint8Array; surfaceId: str
   return { bytes, surfaceId };
 }
 
+export const testMaskValidator = Object.freeze({
+  async validateMaskSurface(bytes: Uint8Array) {
+    return {
+      id: Array.from(sha256(bytes), (byte) => byte.toString(16).padStart(2, "0")).join(""),
+      width: 1,
+      height: 1,
+    };
+  },
+});
+
 function deflatePngRow(value: number): Uint8Array {
   return new Uint8Array(zlibDeflateSync(Uint8Array.from([0, value])));
 }

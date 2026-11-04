@@ -5,6 +5,7 @@ export type {
   PersonalPhotoCloudIdentity,
   PersonalPhotoCloudLibraryHandle,
   PersonalPhotoCloudMaskUploader,
+  PersonalPhotoCloudMaskValidator,
   PersonalPhotoCloudMemoryBudgets,
   PersonalPhotoCloudUrlFactory,
 } from "./types";

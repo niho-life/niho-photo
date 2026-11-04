@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createBrowserPersonalPhotoTransferController } from "../src/browser";
 import { PersonalPhotoCloudError } from "../src/index";
 import { IndexedDbTransferJournal, makeEntryId, type JournalScope, type TransferJournalEntry } from "../src/browser/journal";
-import { FakeClient, FakeIdentity, maskPngFixture, stream } from "./support";
+import { FakeClient, FakeIdentity, maskPngFixture, stream, testMaskValidator } from "./support";
 
 const NOW = Date.parse("2026-11-03T00:00:00.000Z");
 const EXPIRES = "2026-11-03T00:30:00.000Z";
@@ -25,12 +25,14 @@ function uuids() {
 
 function makeController(options: {
   client?: FakeClient; identity?: FakeIdentity; factory?: IDBFactory; name?: string; provider?: typeof fetch; now?: () => number; locks?: LockManager;
+  maskValidator?: typeof testMaskValidator | null;
 } = {}) {
   const client = options.client ?? new FakeClient();
   client.libraryResponse ??= responses["library.get"];
   const identity = options.identity ?? new FakeIdentity();
   const controller = createBrowserPersonalPhotoTransferController({
     client, identity, indexedDB: options.factory ?? new IDBFactory(), locks: options.locks ?? locks(),
+    ...(options.maskValidator === null ? {} : { maskValidator: options.maskValidator ?? testMaskValidator }),
     databaseName: options.name ?? `transfer-${Math.random()}`,
     now: options.now ?? (() => NOW), randomUUID: uuids(), trustedUploadOrigin: UPLOAD_ORIGIN,
     fetch: options.provider ?? (async () => { throw new Error("provider should not run"); }),
@@ -296,6 +298,22 @@ describe("browser original copy controller", () => {
       throw new Error(`unexpected ${operation}`);
     };
     expect((await harness.controller.start({ intentId: "intent", file: file(), format: "jpeg", fullRecipeCandidate: local })).phase).toBe("done");
+    harness.controller.dispose();
+  });
+
+  it("keeps a referenced-mask copy pending when the host SDK decoder is disconnected", async () => {
+    const harness = makeController({ maskValidator: null });
+    const { surfaceId } = maskPngFixture();
+    const local = candidate({ maskSurfaceIds: [surfaceId] });
+    harness.client.dispatch = async (operation, request) => {
+      if (operation === "uploads.start") {
+        const photo = photoFor(request as StartUploadRequest);
+        return { value: { kind: "existing", photo: { ...photo, recipe: { ...photo.recipe, maskSurfaceIds: [surfaceId] } } }, replayed: false };
+      }
+      throw new Error(`unexpected ${operation}`);
+    };
+    expect((await harness.controller.start({ intentId: "intent", file: file(), format: "jpeg", fullRecipeCandidate: local })).phase).toBe("pending-recipe");
+    expect(harness.client.calls.some((call) => call.operation === "masks.get" || call.operation === "content.get")).toBe(false);
     harness.controller.dispose();
   });
 

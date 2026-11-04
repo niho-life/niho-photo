@@ -52,6 +52,7 @@ function harness(overrides: {
   readonly locks?: RecipeSyncLocks;
   readonly timeoutMs?: number;
   readonly epoch?: string;
+  readonly maskValidator?: "default" | null;
 } = {}) {
   const identity = overrides.identity ?? new Identity(defaultActor({ sessionEpoch: overrides.epoch ?? "epoch-1" }));
   const calls: Array<{ operation: PhotoOperation; request: unknown; key: string | null }> = [];
@@ -70,6 +71,13 @@ function harness(overrides: {
     client,
     identity,
     hostRenderer: responses["library.get"].capabilities.renderer,
+    ...(overrides.maskValidator === null ? {} : {
+      maskValidator: {
+        async validateMaskSurface(png: Uint8Array) {
+          return { id: hashMaskSurface(png), width: 1, height: 1 };
+        },
+      },
+    }),
     journal,
     locks: overrides.locks ?? new Locks(),
     now: () => NOW,
@@ -1283,6 +1291,22 @@ describe("durable recipe sync", () => {
       await expect(writer.save(writer.stage(candidate({ settings, maskSurfaceIds: [surfaceId] }))))
         .resolves.toMatchObject({ status: "unsupported" });
       expect(setup.calls.filter((call) => call.operation === "recipes.put")).toHaveLength(0);
+    } finally { setup.sync.dispose(); }
+  });
+
+  it("keeps mask-backed corrections read-only when the shared SDK decoder is absent", async () => {
+    const png = testMaskPng();
+    const surfaceId = hashMaskSurface(png);
+    const settings = {
+      ...maskedPhoto.recipe.settings,
+      masks: [{ id: "synthetic-sky", kind: "sky", surface: { id: surfaceId, width: 1, height: 1 }, adjust: { exposure: -0.5 } }],
+    };
+    const setup = harness({ maskValidator: null });
+    const writer = begin(setup);
+    try {
+      await expect(writer.save(writer.stage(candidate({ settings, maskSurfaceIds: [surfaceId] }))))
+        .resolves.toMatchObject({ status: "unsupported" });
+      expect(setup.calls.some((call) => call.operation === "masks.get" || call.operation === "content.get" || call.operation === "recipes.put")).toBe(false);
     } finally { setup.sync.dispose(); }
   });
 

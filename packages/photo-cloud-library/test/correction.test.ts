@@ -23,7 +23,7 @@ import {
 import { PHOTO_EDITING_PERSONAL_CLOUD_COPY } from "niho-photo-editing/photo-editing-copy";
 
 import { PersonalPhotoCloudError } from "../src/index";
-import { FakeClient, FakeIdentity, defaultActor, defaultResponse, makeHandle, maskPngFixture, stream } from "./support";
+import { FakeClient, FakeIdentity, defaultActor, defaultResponse, makeHandle, maskPngFixture, stream, testMaskValidator } from "./support";
 
 describe("scope and per-photo authority fences", () => {
   it("invalidates URLs, refs, and a stalled body when the client library binding changes", async () => {
@@ -343,6 +343,13 @@ describe("recipe-specific renderer and media intersection", () => {
     expect(closed.library.saveMaskSurface).toBeUndefined();
     closed.dispose();
 
+    const uploaderOnly = makeHandle(new FakeClient(), new FakeIdentity(), {
+      maskUploader: { upload: vi.fn(async () => undefined) },
+    });
+    await expect(uploaderOnly.library.capabilities()).resolves.toMatchObject({ maskSurfaces: false });
+    expect(uploaderOnly.library.saveMaskSurface).toBeUndefined();
+    uploaderOnly.dispose();
+
     const { bytes, surfaceId } = maskPngFixture();
     const asset: PhotoAsset = { ...mask, sha256: surfaceId, sizeBytes: bytes.byteLength, width: 1, height: 1 };
     let stored = false;
@@ -364,7 +371,7 @@ describe("recipe-specific renderer and media intersection", () => {
       storedBytes = input.bytes.slice();
       stored = true;
     });
-    const handle = makeHandle(client, new FakeIdentity(), { maskUploader: { upload } });
+    const handle = makeHandle(client, new FakeIdentity(), { maskUploader: { upload }, maskValidator: testMaskValidator });
     try {
       await expect(handle.library.capabilities()).resolves.toMatchObject({ maskSurfaces: true });
       const save = handle.library.saveMaskSurface;

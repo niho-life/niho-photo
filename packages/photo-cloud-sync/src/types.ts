@@ -8,7 +8,7 @@ import type {
   RenderCapability,
   VerifiedPhotoActor,
 } from "@niho/photo-personal-cloud-contract";
-import type { PersonalPhotoCloudIdentity } from "@niho/photo-cloud-library";
+import type { PersonalPhotoCloudIdentity, PersonalPhotoCloudMaskValidator } from "@niho/photo-cloud-library";
 import type { PersonalPhotoResumableUploadState } from "@niho/photo-cloud-library/browser";
 
 export interface LocalRecipeCandidate {
@@ -133,6 +133,8 @@ export interface CreatePersonalPhotoRecipeSyncOptions {
   readonly client: PersonalPhotoCloudClient;
   readonly identity: PersonalPhotoCloudIdentity;
   readonly hostRenderer: RenderCapability;
+  /** SDK decoder for mask PNGs; mask-backed recipes stay read-only until connected. */
+  readonly maskValidator?: PersonalPhotoCloudMaskValidator;
   readonly journal: RecipeSyncJournal;
   readonly locks: RecipeSyncLocks;
   readonly now?: () => number;

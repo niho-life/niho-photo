@@ -10,7 +10,7 @@ import type { PersonalCloudPhotoBinding } from "./App";
 import type { CameraCommands } from "./local-library/commands";
 import { createLocalPhotoEditingHost } from "./local-library/local-photo-editing-host";
 import { readPhotoCloudBuildProof, type PhotoCloudBuildProof } from "./cloud-build-proof";
-import { probeCameraPhotoRenderer, type CameraPhotoRendererBinding } from "./camera-photo-renderer";
+import { createCameraPhotoMaskValidator, probeCameraPhotoRenderer, type CameraPhotoMaskValidator, type CameraPhotoRendererBinding } from "./camera-photo-renderer";
 import { createNativePersonalPhotoCloudClient } from "./native-photo-client";
 import { createNativePersonalPhotoCloudMaskUploader, type NativePhotoBinaryInvoke } from "./native-photo-mask-uploader";
 import { createMacPhotoCopyNative } from "./native-photo-copy";
@@ -196,6 +196,7 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
   const locks = options.locks === undefined ? globalThis.navigator?.locks : options.locks;
   if (factory === undefined || locks === undefined || locks === null || options.signal.aborted) return null;
   let renderer: CameraPhotoRendererBinding | null = null;
+  let maskValidator: CameraPhotoMaskValidator | null = null;
   let client: Awaited<ReturnType<typeof createNativePersonalPhotoCloudClient>> | null = null;
   let maskUploader: ReturnType<typeof createNativePersonalPhotoCloudMaskUploader> | null = null;
   let libraryHandle: ReturnType<typeof createPersonalPhotoCloudLibrary> | null = null;
@@ -209,6 +210,7 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
     client = await createNativePersonalPhotoCloudClient({ identity: options.identity, invoke, now: options.now });
     if (options.signal.aborted) return null;
     maskUploader = createNativePersonalPhotoCloudMaskUploader({ client, identity: options.identity, invokeBinary });
+    if (renderer.capability.maskSurfaces) maskValidator = createCameraPhotoMaskValidator({ engineAssets: renderer.engineAssets });
     libraryHandle = createPersonalPhotoCloudLibrary({
       client,
       identity: options.identity,
@@ -217,6 +219,7 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
       presets: cameraPresets(options.commands),
       memoryBudgets: { originalBytes: 96 * 1024 ** 2, workingCopyBytes: 96 * 1024 ** 2, previewBytes: 32 * 1024 ** 2 },
       maskUploader,
+      ...(maskValidator === null ? {} : { maskValidator }),
       journal: new IndexedDbRecipeSyncJournal(factory, "niho-camera-personal-photo-recipes-v1"),
       locks,
       ...(options.now === undefined ? {} : { clock: { now: options.now } }),
@@ -247,6 +250,7 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
         connection?.dispose();
         libraryHandle?.dispose();
         maskUploader?.dispose();
+        maskValidator?.dispose();
         client?.dispose();
       },
     };
@@ -258,6 +262,7 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
       connection?.dispose();
       libraryHandle?.dispose();
       maskUploader?.dispose();
+      maskValidator?.dispose();
       client?.dispose();
     }
   }

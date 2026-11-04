@@ -1,10 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import type { Upload } from "@niho/photo-personal-cloud-contract";
-import { IDS } from "@niho/photo-personal-cloud-contract/fixtures";
+import { IDS, responses } from "@niho/photo-personal-cloud-contract/fixtures";
 
 import { createBrowserPersonalPhotoCloudMaskUploader } from "../src/browser";
-import { maskPngDimensions } from "../src/mask-surface";
-import { FakeClient, FakeIdentity, maskPngFixture } from "./support";
+import { validateMaskSurfaceBytes } from "../src/mask-surface";
+import { FakeClient, FakeIdentity, maskPngFixture, testMaskValidator } from "./support";
 
 const NOW = Date.parse("2026-11-03T00:00:00.000Z");
 const UPLOAD_URL = "https://storage.googleapis.com/synthetic-mask-upload";
@@ -58,17 +58,18 @@ function ticket(offset = 0) {
 }
 
 describe("browser mask uploader", () => {
-  it("accepts only drawable grayscale PNG surface headers", () => {
-    const { bytes } = maskPngFixture();
-    expect(maskPngDimensions(bytes)).toEqual({ width: 1, height: 1 });
+  it("delegates PNG drawability to the common SDK decoder and binds validation to the content hash", async () => {
+    const { bytes, surfaceId } = maskPngFixture();
+    const signal = new AbortController().signal;
+    await expect(validateMaskSurfaceBytes(bytes, surfaceId, testMaskValidator, signal)).resolves.toEqual({ width: 1, height: 1 });
 
-    const badHeaderChecksum = bytes.slice();
-    badHeaderChecksum[29] ^= 1;
-    expect(maskPngDimensions(badHeaderChecksum)).toBeNull();
+    const wrongHash = bytes.slice();
+    wrongHash[29] ^= 1;
+    await expect(validateMaskSurfaceBytes(wrongHash, surfaceId, testMaskValidator, signal)).resolves.toBeNull();
 
-    const noImageData = bytes.slice();
-    noImageData.set(new TextEncoder().encode("IEND"), 37);
-    expect(maskPngDimensions(noImageData)).toBeNull();
+    const rejectingDecoder = { validateMaskSurface: vi.fn(async () => { throw new Error("mask PNG decoder rejected bytes"); }) };
+    await expect(validateMaskSurfaceBytes(bytes, surfaceId, rejectingDecoder, signal)).resolves.toBeNull();
+    expect(rejectingDecoder.validateMaskSurface).toHaveBeenCalledOnce();
   });
 
   it("uploads a bounded PNG with a photo-bound target and completes only after stored reconciliation", async () => {
@@ -114,6 +115,26 @@ describe("browser mask uploader", () => {
       expect(client.calls.map((call) => call.operation)).toEqual(["uploads.start", "uploads.get", "uploads.complete"]);
       expect(client.calls[0]?.idempotencyKey).toBe("mask-start-key");
       expect(client.calls[2]?.idempotencyKey).toBe("mask-start-key-complete");
+    } finally { uploader.dispose(); }
+  });
+
+  it("lets the adapter reconcile an existing start through a fresh mask readback", async () => {
+    const { bytes, surfaceId } = maskPngFixture();
+    const client = new FakeClient();
+    client.dispatch = async (operation) => {
+      if (operation === "uploads.start") return { value: { kind: "existing", photo: responses["photos.get"] }, replayed: true };
+      throw new Error(`unexpected ${operation}`);
+    };
+    const put = vi.fn();
+    const uploader = createBrowserPersonalPhotoCloudMaskUploader({
+      client, identity: new FakeIdentity(), fetch: put, now: () => NOW,
+      trustedUploadOrigin: "https://storage.googleapis.com",
+    });
+    try {
+      await expect(uploader.upload({ photoId: IDS.photo, surfaceId, bytes, idempotencyKey: "mask-existing", signal: new AbortController().signal }))
+        .resolves.toBeUndefined();
+      expect(client.calls.map((call) => call.operation)).toEqual(["uploads.start"]);
+      expect(put).not.toHaveBeenCalled();
     } finally { uploader.dispose(); }
   });
 

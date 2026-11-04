@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 
-import { cameraPhotoManifestUrl, probeCameraPhotoRenderer } from "./camera-photo-renderer";
+import { cameraPhotoManifestUrl, createCameraPhotoMaskValidator, probeCameraPhotoRenderer } from "./camera-photo-renderer";
 
 const proof = { sdkVersion: "14.0.0", crateVersion: "0.27.0", manifestSha256: "a".repeat(64), sdkSourceCommit: "b".repeat(40) };
 const declaration = { schemaVersion: 1 as const, crateVersion: "0.27.0", settingsVersions: [9], engines: ["niho-14"], features: ["masks" as const], maskKinds: ["brush" as const], maskSurfaces: true };
@@ -42,5 +42,43 @@ describe("Camera bundled renderer proof", () => {
       proof, signal: new AbortController().signal, location: { href: "http://tauri.localhost/" },
       createEngine: () => ({ ready: async () => true, renderCapabilities: async () => ({ ...declaration, crateVersion: "0.26.0" }), dispose() {} }),
     })).toBeNull();
+  });
+});
+
+describe("Camera cloud mask validator", () => {
+  it("lazily validates copied bytes through the bundled SDK and disposes its runtime", async () => {
+    const validateMaskSurface = vi.fn(async (png: Uint8Array) => ({ id: "a".repeat(64), width: png[0]!, height: 1 }));
+    const dispose = vi.fn();
+    const createEngine = vi.fn(() => ({ ready: async () => true, validateMaskSurface, dispose }));
+    const validator = createCameraPhotoMaskValidator({
+      engineAssets: { manifestUrl: () => "tauri://localhost/develop-engine/manifest.json", preferNative: false },
+      createEngine,
+    });
+    const bytes = new Uint8Array([2]);
+    expect(createEngine).not.toHaveBeenCalled();
+    await expect(validator.validateMaskSurface(bytes, new AbortController().signal)).resolves.toEqual({
+      id: "a".repeat(64), width: 2, height: 1,
+    });
+    expect(createEngine).toHaveBeenCalledOnce();
+    expect(validateMaskSurface).toHaveBeenCalledOnce();
+    expect(bytes).toEqual(new Uint8Array([2]));
+    validator.dispose();
+    validator.dispose();
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
+  it("stops waiting when the current identity scope is aborted", async () => {
+    const validateMaskSurface = vi.fn(() => new Promise<{ id: string; width: number; height: number }>(() => undefined));
+    const validator = createCameraPhotoMaskValidator({
+      engineAssets: { manifestUrl: () => "tauri://localhost/develop-engine/manifest.json", preferNative: false },
+      createEngine: () => ({ ready: async () => true, validateMaskSurface, dispose() {} }),
+    });
+    const controller = new AbortController();
+    const pending = validator.validateMaskSurface(new Uint8Array([1]), controller.signal);
+    await Promise.resolve();
+    await Promise.resolve();
+    controller.abort(new DOMException("Aborted", "AbortError"));
+    await expect(pending).rejects.toMatchObject({ name: "AbortError" });
+    validator.dispose();
   });
 });

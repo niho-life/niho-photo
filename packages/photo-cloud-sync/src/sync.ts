@@ -299,7 +299,7 @@ class Sync implements PersonalPhotoRecipeSync {
     assertCurrent: () => void,
   ): Promise<{ readonly library: PersonalPhotoLibrary; readonly photo: Photo } | null> {
     const verified = await this.verifyManualTarget(binding, candidate, signal, assertCurrent);
-    return verified !== null && projectRecipeSettings(verified.photo, verified.library, this.options.hostRenderer) !== null
+    return verified !== null && projectRecipeSettings(verified.photo, verified.library, effectiveHostRenderer(this.options)) !== null
       ? verified
       : null;
   }
@@ -317,10 +317,12 @@ class Sync implements PersonalPhotoRecipeSync {
     assertCurrent();
     const photo = validatePhoto(photoRaw, this.scope.libraryId);
     if (photo.id !== binding.photoId || photo.original.sha256 !== binding.sourceSha256) return null;
-    if (candidate !== null && (!library.capabilities.edits || !candidateUsable(candidate, photo, library, this.options.hostRenderer))) return null;
-    if (candidate !== null) {
-      for (const surfaceId of candidate.maskSurfaceIds) {
-        if (await readVerifiedMaskSurface(this.options.client, binding.photoId, surfaceId, signal) === null) return null;
+    if (candidate !== null && (!library.capabilities.edits || !candidateUsable(candidate, photo, library, effectiveHostRenderer(this.options)))) return null;
+    const surfaceIds = candidate?.maskSurfaceIds ?? photo.recipe.maskSurfaceIds;
+    if (surfaceIds.length > 0) {
+      if (this.options.maskValidator === undefined) return null;
+      for (const surfaceId of surfaceIds) {
+        if (await readVerifiedMaskSurface(this.options.client, binding.photoId, surfaceId, signal, this.options.maskValidator) === null) return null;
         assertCurrent();
       }
     }
@@ -674,7 +676,7 @@ class Writer implements PersonalPhotoRecipeWriter {
             baseVersion: conflict.conflictingRecipe.baseVersion,
             maskSurfaceIds: clone(conflict.conflictingRecipe.maskSurfaceIds),
           };
-          if (!candidateUsable(candidate, photo, library, this.sync.options.hostRenderer)) return { status: "unsupported" };
+          if (!candidateUsable(candidate, photo, library, effectiveHostRenderer(this.sync.options))) return { status: "unsupported" };
           proof = {
             decision: "adopt",
             conflictSnapshotSha256,
@@ -1149,6 +1151,12 @@ function candidateUsable(
     },
   };
   return projectRecipeSettings(projected, library, hostRenderer) !== null;
+}
+
+function effectiveHostRenderer(options: CreatePersonalPhotoRecipeSyncOptions): CreatePersonalPhotoRecipeSyncOptions["hostRenderer"] {
+  return options.maskValidator === undefined
+    ? { ...options.hostRenderer, maskSurfaces: false }
+    : options.hostRenderer;
 }
 
 function validateCandidate(input: LocalRecipeCandidate): LocalRecipeCandidate {
