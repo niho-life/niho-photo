@@ -8,6 +8,7 @@ import {
   jsonStructuralFingerprint,
   linkedAbortController,
   projectRecipeSettings,
+  readVerifiedMaskSurface,
   readPhotoError,
   recipeCandidateBodyMatches,
   recipeCandidateMatches,
@@ -25,7 +26,6 @@ import {
   type RecipeConflict,
   type VerifiedPhotoActor,
 } from "@niho/photo-personal-cloud-contract";
-import { readDevelopMasks } from "niho-photo-editing/develop-engine/develop-masks";
 
 import type {
   CreatePersonalPhotoRecipeSyncOptions,
@@ -318,6 +318,12 @@ class Sync implements PersonalPhotoRecipeSync {
     const photo = validatePhoto(photoRaw, this.scope.libraryId);
     if (photo.id !== binding.photoId || photo.original.sha256 !== binding.sourceSha256) return null;
     if (candidate !== null && (!library.capabilities.edits || !candidateUsable(candidate, photo, library, this.options.hostRenderer))) return null;
+    if (candidate !== null) {
+      for (const surfaceId of candidate.maskSurfaceIds) {
+        if (await readVerifiedMaskSurface(this.options.client, binding.photoId, surfaceId, signal) === null) return null;
+        assertCurrent();
+      }
+    }
     return { library, photo };
   }
 
@@ -856,7 +862,9 @@ class Writer implements PersonalPhotoRecipeWriter {
     verifyPutAttempt(attempt);
     if (this.recovered) {
       try {
-        if (await this.sync.verifyManualTarget(this.binding, attempt.conflictId === null ? attempt.candidate : null, signal, assertCurrent) === null) {
+        // A recovered unknown attempt replays its fixed request and CAS; it must reconcile the
+        // prior outcome even if a newer server recipe is now opaque to this renderer.
+        if (await this.sync.verifyManualTarget(this.binding, null, signal, assertCurrent) === null) {
           return { status: "unsupported", generation: attempt.generation };
         }
       } catch (error) {
@@ -1121,9 +1129,16 @@ function candidateUsable(
   library: PersonalPhotoLibrary,
   hostRenderer: CreatePersonalPhotoRecipeSyncOptions["hostRenderer"],
 ): boolean {
-  if (photo.format === "raw" || candidate.baseVersion !== null || candidate.maskSurfaceIds.length > 0) return false;
-  if (candidate.settings.base !== undefined && candidate.settings.base !== null) return false;
-  if (readDevelopMasks(candidate.settings).length > 0) return false;
+  // Older readers must never replace a current opaque/unsupported recipe with a known subset.
+  if (projectRecipeSettings(photo, library, hostRenderer) === null) return false;
+  const settingsBase = typeof candidate.settings.base === "string" ? candidate.settings.base : null;
+  if (candidate.settings.base !== undefined && candidate.settings.base !== null && settingsBase === null) return false;
+  if (candidate.baseVersion !== settingsBase || photo.format === "raw" && candidate.baseVersion === null) return false;
+  if (candidate.baseVersion !== null && (
+    photo.media.state !== "ready" ||
+    photo.media.workingCopy === null ||
+    photo.media.workingCopy.baseVersion !== candidate.baseVersion
+  )) return false;
   const projected: Photo = {
     ...photo,
     recipe: {

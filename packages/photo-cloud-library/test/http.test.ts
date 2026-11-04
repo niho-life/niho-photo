@@ -452,6 +452,26 @@ describe("same-origin HTTP client and BFF", () => {
     expect((await harness.proxy(new Request(`${PHOTO_ORIGIN}/cloud/v2/uploads/upload/renew`, { method: "POST", headers: renewHeaders, body: "{}" })))?.status).toBe(503);
   });
 
+  it("accepts only PNG-bound renew tickets for an existing mask upload", () => {
+    const upload = {
+      id: IDS.upload,
+      target: { kind: "mask" as const, photoId: IDS.photo },
+      sizeBytes: 3,
+      sha256: HASH.mask,
+      expiresAt: "2030-01-01T00:00:00.000Z",
+      state: "reserved" as const,
+      uploadedBytes: 0,
+    };
+    const response = (contentType: string) => ({ upload, ticket: {
+      url: "https://storage.googleapis.com/synthetic", method: "PUT" as const,
+      headers: { "Content-Type": contentType }, expiresAt: "2030-01-01T00:15:00.000Z", resumeOffsetBytes: 0,
+    } });
+    expect(() => validateResponseTickets("uploads.renew", response("image/png"), undefined,
+      "https://storage.googleapis.com", NOW_FOR_TESTS)).not.toThrow();
+    expect(() => validateResponseTickets("uploads.renew", response("image/jpeg"), undefined,
+      "https://storage.googleapis.com", NOW_FOR_TESTS)).toThrow();
+  });
+
   it("rejects an unrequested lookup hash at both BFF and browser client boundaries", async () => {
     const requested = "a".repeat(64);
     const unrequested = "b".repeat(64);

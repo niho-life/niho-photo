@@ -1,5 +1,6 @@
 export { awaitBounded, linkedAbortController, abortReason } from "./await";
 export { PersonalPhotoCloudError, publicError, readPhotoError } from "./errors";
+export { hashMaskSurface, maskPngDimensions, readVerifiedMaskSurface, sameMaskSurfaceBytes } from "./mask-surface";
 export { PersonalPhotoScope, type ScopedRequest } from "./scope";
 export {
   deepEqual,

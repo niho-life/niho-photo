@@ -33,6 +33,7 @@ import type {
 
 import { contentBytes, readCheckedAsset } from "./content";
 import { PersonalPhotoCloudError, isAbortError, personalPhotoCloudErrors, publicError } from "./errors";
+import { hashMaskSurface, maskPngDimensions, sameMaskSurfaceBytes } from "./mask-surface";
 import { MaterializationBudget, conservativeBytes, type MemoryLease } from "./memory";
 import { PersonalPhotoScope } from "./scope";
 import { projectRecipeSettings, rendererIntersection } from "./recipe";
@@ -180,6 +181,10 @@ class Adapter {
       ensureWorkingCopy: (photoId, requestOptions) => this.ensureWorkingCopy(photoId, requestOptions),
       loadWorkingCopy: (photoId, download, requestOptions) => this.loadWorkingCopy(photoId, download, requestOptions),
       retryWorkingCopy: (photoId) => this.retryWorkingCopy(photoId),
+      loadMaskSurface: (photoId, surfaceId, requestOptions) => this.loadMaskSurface(photoId, surfaceId, requestOptions),
+      ...(options.maskUploader === undefined
+        ? {}
+        : { saveMaskSurface: (photoId: string, png: Uint8Array, requestOptions?: PhotoLibraryRequestOptions) => this.saveMaskSurface(photoId, png, requestOptions) }),
       saveDevelopSettings: async () => {
         throw new PersonalPhotoCloudError("unsupported");
       },
@@ -208,7 +213,9 @@ class Adapter {
       cloud.capabilities.formats.some(
         (format) => format.workingCopy && ["raw", "heic", "heif", "tiff"].includes(format.format),
       );
-    return { ...CLOSED_CAPABILITIES, rawWorkingCopy, info: cloud.state === "active" };
+    const maskSurfaces = cloud.state === "active" && cloud.capabilities.edits &&
+      cloud.capabilities.maskSurfaces && renderer?.maskSurfaces === true && this.options.maskUploader !== undefined;
+    return { ...CLOSED_CAPABILITIES, rawWorkingCopy, maskSurfaces, info: cloud.state === "active" };
   }
 
   private async usage(options?: PhotoLibraryRequestOptions): Promise<QuotaUsage> {
@@ -396,6 +403,97 @@ class Adapter {
     } finally {
       if (!handedOff) operation.release();
     }
+  }
+
+  private async loadMaskSurface(
+    photoId: string,
+    surfaceId: string,
+    options?: PhotoLibraryRequestOptions,
+  ): Promise<Uint8Array | null> {
+    assertId(photoId);
+    if (!isSha256(surfaceId)) throw new PersonalPhotoCloudError("invalid_response");
+    return await this.withPhotoOperation(photoId, options?.signal, async (operation) => {
+      const bytes = await this.readMaskSurfaceBytes(photoId, surfaceId, operation.signal);
+      operation.assertCurrent();
+      return bytes;
+    });
+  }
+
+  private async saveMaskSurface(
+    photoId: string,
+    png: Uint8Array,
+    options?: PhotoLibraryRequestOptions,
+  ): Promise<{ id: string; width: number; height: number }> {
+    const uploader = this.options.maskUploader;
+    if (uploader === undefined) throw new PersonalPhotoCloudError("unsupported");
+    assertId(photoId);
+    if (!(png instanceof Uint8Array) || png.byteLength === 0 || png.byteLength > PHOTO_LIMITS.maxMaskBytes) {
+      throw new PersonalPhotoCloudError("invalid_response");
+    }
+    const bytes = png.slice();
+    const dimensions = maskPngDimensions(bytes);
+    if (dimensions === null) throw new PersonalPhotoCloudError("invalid_response");
+    const surfaceId = hashMaskSurface(bytes);
+    return await this.withPhotoOperation(photoId, options?.signal, async (operation) => {
+      const [photo, cloud] = await Promise.all([
+        this.requirePhoto(photoId, { signal: operation.signal }),
+        this.loadLibrary(operation.signal),
+      ]);
+      const renderer = rendererIntersection(cloud.capabilities.renderer, this.options.hostRenderer);
+      if (photo.id !== photoId || cloud.state !== "active" || !cloud.capabilities.edits ||
+        !cloud.capabilities.maskSurfaces || renderer?.maskSurfaces !== true) {
+        throw new PersonalPhotoCloudError("unsupported");
+      }
+      const stored = await this.readMaskSurfaceBytes(photoId, surfaceId, operation.signal);
+      operation.assertCurrent();
+      if (stored !== null) {
+        if (!sameMaskSurfaceBytes(stored, bytes)) throw new PersonalPhotoCloudError("invalid_response");
+        const storedDimensions = maskPngDimensions(stored);
+        if (storedDimensions === null || storedDimensions.width !== dimensions.width || storedDimensions.height !== dimensions.height) {
+          throw new PersonalPhotoCloudError("invalid_response");
+        }
+        return { id: surfaceId, ...dimensions };
+      }
+      const idempotencyKey = await logicalKey(
+        "mask-surface",
+        this.scope.captured.actorId,
+        this.scope.captured.libraryId,
+        `${photoId}:${surfaceId}`,
+      );
+      operation.assertCurrent();
+      await uploader.upload({ photoId, surfaceId, bytes, idempotencyKey, signal: operation.signal });
+      operation.assertCurrent();
+      const readback = await this.readMaskSurfaceBytes(photoId, surfaceId, operation.signal);
+      operation.assertCurrent();
+      if (readback === null || !sameMaskSurfaceBytes(readback, bytes)) throw new PersonalPhotoCloudError("invalid_response");
+      const readbackDimensions = maskPngDimensions(readback);
+      if (readbackDimensions === null || readbackDimensions.width !== dimensions.width || readbackDimensions.height !== dimensions.height) {
+        throw new PersonalPhotoCloudError("invalid_response");
+      }
+      return { id: surfaceId, ...dimensions };
+    });
+  }
+
+  private async readMaskSurfaceBytes(photoId: string, surfaceId: string, signal: AbortSignal): Promise<Uint8Array | null> {
+    let asset: PhotoAsset;
+    try {
+      asset = validateAsset(
+        await this.withScope(signal, (scoped) => this.options.client.request("masks.get", { photoId, surfaceId }, { signal: scoped })),
+        "mask",
+      );
+    } catch (error) {
+      if (error instanceof PersonalPhotoCloudError && error.code === "not_found") return null;
+      throw error;
+    }
+    if (asset.sha256 !== surfaceId || asset.contentType !== "image/png" || asset.sizeBytes > PHOTO_LIMITS.maxMaskBytes) {
+      throw new PersonalPhotoCloudError("invalid_response");
+    }
+    const content = await this.readAsset(photoId, asset, undefined, { signal });
+    const bytes = await contentBytes(content);
+    if (content.sha256 !== surfaceId || maskPngDimensions(bytes, asset, surfaceId) === null) {
+      throw new PersonalPhotoCloudError("invalid_response");
+    }
+    return bytes;
   }
 
   private async openOriginal(photoId: string, options?: PhotoLibraryRequestOptions) {

@@ -4,6 +4,7 @@ export type {
   CreatePersonalPhotoCloudLibraryOptions,
   PersonalPhotoCloudIdentity,
   PersonalPhotoCloudLibraryHandle,
+  PersonalPhotoCloudMaskUploader,
   PersonalPhotoCloudMemoryBudgets,
   PersonalPhotoCloudUrlFactory,
 } from "./types";

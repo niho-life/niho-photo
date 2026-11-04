@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createBrowserPersonalPhotoTransferController } from "../src/browser";
 import { PersonalPhotoCloudError } from "../src/index";
 import { IndexedDbTransferJournal, makeEntryId, type JournalScope, type TransferJournalEntry } from "../src/browser/journal";
-import { FakeClient, FakeIdentity } from "./support";
+import { FakeClient, FakeIdentity, maskPngFixture, stream } from "./support";
 
 const NOW = Date.parse("2026-11-03T00:00:00.000Z");
 const EXPIRES = "2026-11-03T00:30:00.000Z";
@@ -232,11 +232,14 @@ describe("browser original copy controller", () => {
     harness.controller.dispose();
   });
 
-  it("keeps an existing cloud recipe when local candidate is null", async () => {
+  it("does not report an existing edited cloud photo as a complete copy without a local recipe", async () => {
     const harness = makeController();
-    harness.client.dispatch = async (_operation, request) => ({ value: { kind: "existing", photo: photoFor(request as StartUploadRequest) }, replayed: false });
+    harness.client.dispatch = async (_operation, request) => ({ value: { kind: "existing", photo: {
+      ...photoFor(request as StartUploadRequest), hasEdits: true,
+      recipe: { ...responses["photos.get"].recipe, revision: 1, settings: { ...responses["photos.get"].recipe.settings, exposure: 0.5 } },
+    } }, replayed: false });
     const result = await harness.controller.start({ intentId: "intent", file: file(), format: "jpeg", fullRecipeCandidate: null });
-    expect(result).toMatchObject({ phase: "done", hasPendingRecipe: false });
+    expect(result).toMatchObject({ phase: "failed", hasPendingRecipe: false, failure: "stored", photoId: IDS.photo });
     harness.controller.dispose();
   });
 
@@ -276,8 +279,9 @@ describe("browser original copy controller", () => {
 
   it("marks a referenced-mask candidate done only after fresh photo-bound mask metadata matches", async () => {
     const harness = makeController();
-    const surfaceId = "e".repeat(64);
+    const { bytes, surfaceId } = maskPngFixture();
     const local = candidate({ maskSurfaceIds: [surfaceId] });
+    const asset = { ...responses["masks.get"], sha256: surfaceId, sizeBytes: bytes.byteLength, width: 1, height: 1 };
     harness.client.dispatch = async (operation, request) => {
       if (operation === "uploads.start") {
         const photo = photoFor(request as StartUploadRequest);
@@ -285,11 +289,34 @@ describe("browser original copy controller", () => {
       }
       if (operation === "masks.get") {
         expect(request).toEqual({ photoId: responses["photos.get"].id, surfaceId });
-        return { ...responses["masks.get"], sha256: surfaceId };
+        return asset;
       }
+      if (operation === "content.get") return { body: stream(bytes), contentType: "image/png", sha256: surfaceId,
+        totalBytes: bytes.byteLength, range: { start: 0, endInclusive: bytes.byteLength - 1 } };
       throw new Error(`unexpected ${operation}`);
     };
     expect((await harness.controller.start({ intentId: "intent", file: file(), format: "jpeg", fullRecipeCandidate: local })).phase).toBe("done");
+    harness.controller.dispose();
+  });
+
+  it("keeps a matching mask recipe pending when its downloaded PNG bytes do not match the reference", async () => {
+    const harness = makeController();
+    const { bytes, surfaceId } = maskPngFixture();
+    const local = candidate({ maskSurfaceIds: [surfaceId] });
+    const asset = { ...responses["masks.get"], sha256: surfaceId, sizeBytes: bytes.byteLength, width: 1, height: 1 };
+    const changed = bytes.slice();
+    changed[changed.byteLength - 1] = changed[changed.byteLength - 1]! ^ 1;
+    harness.client.dispatch = async (operation, request) => {
+      if (operation === "uploads.start") {
+        const photo = photoFor(request as StartUploadRequest);
+        return { value: { kind: "existing", photo: { ...photo, recipe: { ...photo.recipe, maskSurfaceIds: [surfaceId] } } }, replayed: false };
+      }
+      if (operation === "masks.get") return asset;
+      if (operation === "content.get") return { body: stream(changed), contentType: "image/png", sha256: surfaceId,
+        totalBytes: bytes.byteLength, range: { start: 0, endInclusive: bytes.byteLength - 1 } };
+      throw new Error(`unexpected ${operation}`);
+    };
+    expect((await harness.controller.start({ intentId: "intent", file: file(), format: "jpeg", fullRecipeCandidate: local })).phase).toBe("pending-recipe");
     harness.controller.dispose();
   });
 

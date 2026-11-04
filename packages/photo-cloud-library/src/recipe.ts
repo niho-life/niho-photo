@@ -31,6 +31,11 @@ export function projectRecipeSettings(
     hasPhotoEditingColorGradingNativeExportUnsupportedLuminance(settings) &&
     !renderer.features.includes("colorGradingLuminance")
   ) return null;
+  const settingsBase = typeof settings.base === "string" ? settings.base : null;
+  if (photo.recipe.baseVersion !== settingsBase) return null;
+  if (photo.format === "raw" && photo.recipe.revision > 0 && settingsBase === null) return null;
+  if (settingsBase !== null && photo.media.state === "ready" &&
+    (photo.media.workingCopy === null || photo.media.workingCopy.baseVersion !== settingsBase)) return null;
   const masks = readDevelopMasks(settings);
   if (masks.length > 0 || photo.recipe.maskSurfaceIds.length > 0) {
     if (!renderer.features.includes("masks")) return null;
@@ -44,8 +49,6 @@ export function projectRecipeSettings(
     const needsSurfaces = photo.recipe.maskSurfaceIds.length > 0 ||
       masks.some((mask) => mask.kind === "brush" || mask.kind === "subject" || mask.kind === "sky");
     if (needsSurfaces && (!renderer.maskSurfaces || !cloud.capabilities.maskSurfaces)) return null;
-    // The public adapter still has no bitmap mask reader. Preserve these recipes as read-only.
-    if (needsSurfaces) return null;
   }
   return settings;
 }

@@ -5,6 +5,8 @@ import type {
   PhotoRequestOptions,
   VerifiedPhotoActor,
 } from "@niho/photo-personal-cloud-contract";
+import { sha256 } from "@noble/hashes/sha2.js";
+import { deflateSync as zlibDeflateSync } from "node:zlib";
 import { IDS, library, responses } from "@niho/photo-personal-cloud-contract/fixtures";
 import type { PhotoLibraryPresets } from "niho-photo-editing/library/photo-library";
 import { afterEach } from "vitest";
@@ -117,6 +119,48 @@ export function stream(bytes: Uint8Array, onCancel?: () => void): ReadableStream
       onCancel?.();
     },
   });
+}
+
+export function maskPngFixture(value = 128): { bytes: Uint8Array; surfaceId: string } {
+  const signature = Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]);
+  const ihdr = Uint8Array.from([0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 0, 0, 0]);
+  const chunks = [pngChunk("IHDR", ihdr), pngChunk("IDAT", new Uint8Array(deflatePngRow(value))), pngChunk("IEND", new Uint8Array())];
+  const bytes = new Uint8Array(signature.byteLength + chunks.reduce((total, chunk) => total + chunk.byteLength, 0));
+  bytes.set(signature);
+  let offset = signature.byteLength;
+  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  const surfaceId = Array.from(sha256(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
+  return { bytes, surfaceId };
+}
+
+function deflatePngRow(value: number): Uint8Array {
+  return new Uint8Array(zlibDeflateSync(Uint8Array.from([0, value])));
+}
+
+function pngChunk(name: string, data: Uint8Array): Uint8Array {
+  const type = new TextEncoder().encode(name);
+  const result = new Uint8Array(12 + data.byteLength);
+  writeU32(result, 0, data.byteLength);
+  result.set(type, 4);
+  result.set(data, 8);
+  writeU32(result, 8 + data.byteLength, pngCrc(result.subarray(4, 8 + data.byteLength)));
+  return result;
+}
+
+function pngCrc(bytes: Uint8Array): number {
+  let crc = 0xffff_ffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb8_8320 : 0);
+  }
+  return (crc ^ 0xffff_ffff) >>> 0;
+}
+
+function writeU32(bytes: Uint8Array, offset: number, value: number): void {
+  bytes[offset] = (value >>> 24) & 0xff;
+  bytes[offset + 1] = (value >>> 16) & 0xff;
+  bytes[offset + 2] = (value >>> 8) & 0xff;
+  bytes[offset + 3] = value & 0xff;
 }
 
 export function defaultResponse(operation: PhotoOperation, request: unknown): unknown {

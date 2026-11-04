@@ -13,6 +13,7 @@ import {
   IDS,
   emptyPage,
   library,
+  mask,
   maskedPhoto,
   original,
   page,
@@ -22,7 +23,7 @@ import {
 import { PHOTO_EDITING_PERSONAL_CLOUD_COPY } from "niho-photo-editing/photo-editing-copy";
 
 import { PersonalPhotoCloudError } from "../src/index";
-import { FakeClient, FakeIdentity, defaultActor, defaultResponse, makeHandle, stream } from "./support";
+import { FakeClient, FakeIdentity, defaultActor, defaultResponse, makeHandle, maskPngFixture, stream } from "./support";
 
 describe("scope and per-photo authority fences", () => {
   it("invalidates URLs, refs, and a stalled body when the client library binding changes", async () => {
@@ -334,6 +335,50 @@ describe("recipe-specific renderer and media intersection", () => {
       }),
     ).rejects.toEqual(new PersonalPhotoCloudError("invalid_response"));
     expect(client.calls).toHaveLength(before);
+  });
+
+  it("keeps mask capability closed without a real uploader and verifies exact stored/read bytes when enabled", async () => {
+    const closed = makeHandle();
+    await expect(closed.library.capabilities()).resolves.toMatchObject({ maskSurfaces: false });
+    expect(closed.library.saveMaskSurface).toBeUndefined();
+    closed.dispose();
+
+    const { bytes, surfaceId } = maskPngFixture();
+    const asset: PhotoAsset = { ...mask, sha256: surfaceId, sizeBytes: bytes.byteLength, width: 1, height: 1 };
+    let stored = false;
+    let storedBytes = bytes.slice();
+    const client = new FakeClient();
+    client.dispatch = async (operation, request) => {
+      if (operation === "photos.get") return readyPhoto;
+      if (operation === "library.get") return library;
+      if (operation === "masks.get") {
+        if (!stored) throw new PersonalPhotoCloudError("not_found");
+        expect(request).toEqual({ photoId: IDS.photo, surfaceId });
+        return asset;
+      }
+      if (operation === "content.get") return assetResponse(asset, stream(storedBytes));
+      throw new Error(`unexpected ${operation}`);
+    };
+    const upload = vi.fn(async (input: { bytes: Uint8Array; surfaceId: string }) => {
+      expect(input.surfaceId).toBe(surfaceId);
+      storedBytes = input.bytes.slice();
+      stored = true;
+    });
+    const handle = makeHandle(client, new FakeIdentity(), { maskUploader: { upload } });
+    try {
+      await expect(handle.library.capabilities()).resolves.toMatchObject({ maskSurfaces: true });
+      const save = handle.library.saveMaskSurface;
+      if (save === undefined) throw new Error("mask upload port was not exposed");
+      await expect(save(IDS.photo, bytes)).resolves.toEqual({ id: surfaceId, width: 1, height: 1 });
+      expect(upload).toHaveBeenCalledOnce();
+      await expect(handle.library.loadMaskSurface?.(IDS.photo, surfaceId)).resolves.toEqual(bytes);
+
+      storedBytes = storedBytes.slice();
+      storedBytes[storedBytes.byteLength - 1] ^= 1;
+      await expect(handle.library.loadMaskSurface?.(IDS.photo, surfaceId)).rejects.toEqual(
+        new PersonalPhotoCloudError("invalid_response"),
+      );
+    } finally { handle.dispose(); }
   });
 });
 

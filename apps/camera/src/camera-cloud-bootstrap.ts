@@ -12,6 +12,7 @@ import { createLocalPhotoEditingHost } from "./local-library/local-photo-editing
 import { readPhotoCloudBuildProof, type PhotoCloudBuildProof } from "./cloud-build-proof";
 import { probeCameraPhotoRenderer, type CameraPhotoRendererBinding } from "./camera-photo-renderer";
 import { createNativePersonalPhotoCloudClient } from "./native-photo-client";
+import { createNativePersonalPhotoCloudMaskUploader, type NativePhotoBinaryInvoke } from "./native-photo-mask-uploader";
 import { createMacPhotoCopyNative } from "./native-photo-copy";
 import { readNativePhotoIdentity, watchNativePhotoIdentity } from "./native-photo-session";
 import {
@@ -48,6 +49,7 @@ export type CameraCloudBootstrapOptions = Readonly<{
   indexedDB?: IDBFactory;
   locks?: LockManager | null;
   invoke?: (command: string, args: { input: unknown }) => Promise<unknown>;
+  invokeBinary?: NativePhotoBinaryInvoke;
   now?: () => number;
   retryDelay?: (attempt: number) => Promise<void>;
   createBinding?: (input: {
@@ -195,15 +197,18 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
   if (factory === undefined || locks === undefined || locks === null || options.signal.aborted) return null;
   let renderer: CameraPhotoRendererBinding | null = null;
   let client: Awaited<ReturnType<typeof createNativePersonalPhotoCloudClient>> | null = null;
+  let maskUploader: ReturnType<typeof createNativePersonalPhotoCloudMaskUploader> | null = null;
   let libraryHandle: ReturnType<typeof createPersonalPhotoCloudLibrary> | null = null;
   let connection: ReturnType<typeof createMacPersonalCloudPhotoBinding> | null = null;
   const scopeAbort = new AbortController();
   const invoke = options.invoke ?? ((command, args) => tauriInvoke(command, args));
+  const invokeBinary = options.invokeBinary ?? ((command, bytes, headers) => tauriInvoke(command, bytes, { headers }));
   try {
     renderer = await (options.probeRenderer ?? probeCameraPhotoRenderer)({ proof: options.proof, signal: options.signal });
     if (renderer === null || options.signal.aborted) return null;
     client = await createNativePersonalPhotoCloudClient({ identity: options.identity, invoke, now: options.now });
     if (options.signal.aborted) return null;
+    maskUploader = createNativePersonalPhotoCloudMaskUploader({ client, identity: options.identity, invokeBinary });
     libraryHandle = createPersonalPhotoCloudLibrary({
       client,
       identity: options.identity,
@@ -211,6 +216,7 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
       engineAssets: renderer.engineAssets,
       presets: cameraPresets(options.commands),
       memoryBudgets: { originalBytes: 96 * 1024 ** 2, workingCopyBytes: 96 * 1024 ** 2, previewBytes: 32 * 1024 ** 2 },
+      maskUploader,
       journal: new IndexedDbRecipeSyncJournal(factory, "niho-camera-personal-photo-recipes-v1"),
       locks,
       ...(options.now === undefined ? {} : { clock: { now: options.now } }),
@@ -240,6 +246,7 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
         scopeAbort.abort();
         connection?.dispose();
         libraryHandle?.dispose();
+        maskUploader?.dispose();
         client?.dispose();
       },
     };
@@ -250,6 +257,7 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
       scopeAbort.abort();
       connection?.dispose();
       libraryHandle?.dispose();
+      maskUploader?.dispose();
       client?.dispose();
     }
   }

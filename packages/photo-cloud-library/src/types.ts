@@ -34,6 +34,17 @@ export type PersonalPhotoCloudUrlFactory = {
   revokeObjectURL(url: string): void;
 };
 
+/** Host-owned binary upload port. Provider tickets and URLs remain inside the host implementation. */
+export type PersonalPhotoCloudMaskUploader = {
+  upload(input: {
+    readonly photoId: string;
+    readonly surfaceId: string;
+    readonly bytes: Uint8Array;
+    readonly idempotencyKey: string;
+    readonly signal: AbortSignal;
+  }): Promise<void>;
+};
+
 export type CreatePersonalPhotoCloudLibraryOptions = {
   client: PersonalPhotoCloudClient;
   identity: PersonalPhotoCloudIdentity;
@@ -43,6 +54,8 @@ export type CreatePersonalPhotoCloudLibraryOptions = {
   memoryBudgets: PersonalPhotoCloudMemoryBudgets;
   clock?: { now(): number };
   urls?: PersonalPhotoCloudUrlFactory;
+  /** Absent until a trusted host can durably upload masks without exposing provider tickets. */
+  maskUploader?: PersonalPhotoCloudMaskUploader;
 };
 
 export type PersonalPhotoCloudLibraryHandle = {

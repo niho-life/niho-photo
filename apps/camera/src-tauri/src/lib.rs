@@ -141,6 +141,7 @@ pub fn run() {
       cloud_copy::camera_photo_copy_start,
       cloud_copy::camera_photo_copy_status,
       cloud_copy::camera_photo_copy_cancel,
+      cloud_copy::camera_photo_mask_upload,
       library::camera_library_add_folder,
       library::camera_library_add_photos,
       library::camera_library_remembered,

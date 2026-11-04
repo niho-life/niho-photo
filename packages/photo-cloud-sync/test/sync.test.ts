@@ -1,6 +1,7 @@
 import { indexedDB } from "fake-indexeddb";
 import "fake-indexeddb/auto";
-import { IDS, responses } from "@niho/photo-personal-cloud-contract/fixtures";
+import { deflateSync } from "node:zlib";
+import { IDS, maskedPhoto, mask, responses } from "@niho/photo-personal-cloud-contract/fixtures";
 import type {
   PersonalPhotoCloudClient,
   PhotoOperation,
@@ -13,6 +14,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { IndexedDbRecipeSyncJournal } from "../src/browser";
 import { createPersonalPhotoRecipeSync } from "../src/sync";
+import { hashMaskSurface } from "@niho/photo-cloud-library/protocol";
 import type { JournalResolutionProof, LocalRecipeCandidate, RecipeJournalScope, RecipeSyncLocks, RecipeWriterBinding } from "../src/types";
 
 const NOW = Date.parse("2026-11-03T00:00:00.000Z");
@@ -88,6 +90,47 @@ function candidate(overrides: Partial<LocalRecipeCandidate> = {}): LocalRecipeCa
 
 function begin(setup: ReturnType<typeof harness>) {
   return setup.sync.beginEditing({ photoId: IDS.photo, sourceSha256: responses["photos.get"].original.sha256, expectedRevision: 0 });
+}
+
+function testMaskPng(): Uint8Array {
+  const chunk = (name: string, data: Uint8Array): Uint8Array => {
+    const result = new Uint8Array(12 + data.byteLength);
+    writeU32(result, 0, data.byteLength);
+    result.set(new TextEncoder().encode(name), 4);
+    result.set(data, 8);
+    writeU32(result, 8 + data.byteLength, crc32(result.subarray(4, 8 + data.byteLength)));
+    return result;
+  };
+  const parts = [
+    Uint8Array.from([137, 80, 78, 71, 13, 10, 26, 10]),
+    chunk("IHDR", Uint8Array.from([0, 0, 0, 1, 0, 0, 0, 1, 8, 0, 0, 0, 0])),
+    chunk("IDAT", new Uint8Array(deflateSync(Uint8Array.from([0, 128])))),
+    chunk("IEND", new Uint8Array()),
+  ];
+  const result = new Uint8Array(parts.reduce((total, part) => total + part.byteLength, 0));
+  let offset = 0;
+  for (const part of parts) { result.set(part, offset); offset += part.byteLength; }
+  return result;
+}
+
+function crc32(bytes: Uint8Array): number {
+  let crc = 0xffff_ffff;
+  for (const byte of bytes) {
+    crc ^= byte;
+    for (let bit = 0; bit < 8; bit += 1) crc = (crc >>> 1) ^ (crc & 1 ? 0xedb8_8320 : 0);
+  }
+  return (crc ^ 0xffff_ffff) >>> 0;
+}
+
+function writeU32(bytes: Uint8Array, offset: number, value: number): void {
+  bytes[offset] = (value >>> 24) & 0xff;
+  bytes[offset + 1] = (value >>> 16) & 0xff;
+  bytes[offset + 2] = (value >>> 8) & 0xff;
+  bytes[offset + 3] = value & 0xff;
+}
+
+function byteStream(bytes: Uint8Array): ReadableStream<Uint8Array> {
+  return new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close(); } });
 }
 
 describe("durable recipe sync", () => {
@@ -1122,6 +1165,125 @@ describe("durable recipe sync", () => {
     await expect(unknownWriter.save(unknownWriter.stage(candidate()))).resolves.toMatchObject({ status: "unsupported" });
     expect(unknownCurrent.calls.filter((call) => call.operation === "recipes.put")).toHaveLength(0);
     unknownCurrent.sync.dispose();
+  });
+
+  it("saves a RAW recipe only against the exact ready versioned working copy", async () => {
+    const baseVersion = "raw-apple.dS5.p1.e1.synthetic";
+    const rawPhoto = {
+      ...responses["photos.get"],
+      format: "raw" as const,
+      media: {
+        ...responses["photos.get"].media,
+        state: "ready" as const,
+        workingCopy: {
+          asset: {
+            id: "raw-working-copy",
+            kind: "working-copy" as const,
+            sha256: "e".repeat(64),
+            sizeBytes: 4096,
+            contentType: "image/png",
+            width: 2560,
+            height: 1707,
+          },
+          baseVersion,
+          encoding: "png16" as const,
+          meta: {},
+        },
+        recipeRevision: 0,
+        rendererManifestSha256: responses["library.get"].capabilities.renderer.manifestSha256,
+      },
+    };
+    const setup = harness({ handler: async (operation, request) => {
+      if (operation === "photos.get") return rawPhoto as never;
+      if (operation === "recipes.put") {
+        const put = request as PhotoOperationMap["recipes.put"]["request"];
+        return { replayed: false, value: {
+          ...rawPhoto,
+          hasEdits: true,
+          recipe: {
+            ...rawPhoto.recipe,
+            revision: put.expectedRevision + 1,
+            settings: put.settings,
+            baseVersion: put.baseVersion,
+            maskSurfaceIds: [],
+            settingsSha256: "f".repeat(64),
+          },
+        } } as never;
+      }
+      return defaultResponse(operation);
+    } });
+    const writer = begin(setup);
+    const local = candidate({ baseVersion, settings: { ...candidate().settings, base: baseVersion } });
+    try {
+      await expect(writer.save(writer.stage(local))).resolves.toMatchObject({ status: "saved" });
+      expect(setup.calls.filter((call) => call.operation === "recipes.put")).toHaveLength(1);
+      await expect(writer.save(writer.stage(candidate()))).resolves.toMatchObject({ status: "unsupported" });
+      expect(setup.calls.filter((call) => call.operation === "recipes.put")).toHaveLength(1);
+    } finally { setup.sync.dispose(); }
+  });
+
+  it("confirms each referenced mask's immutable PNG bytes before sending the correction", async () => {
+    const png = testMaskPng();
+    const surfaceId = hashMaskSurface(png);
+    const asset = { ...mask, sha256: surfaceId, sizeBytes: png.byteLength, width: 1, height: 1 };
+    const settings = {
+      ...maskedPhoto.recipe.settings,
+      masks: [{ id: "synthetic-sky", kind: "sky", surface: { id: surfaceId, width: 1, height: 1 }, adjust: { exposure: -0.5 } }],
+    };
+    const setup = harness({ handler: async (operation, request) => {
+      if (operation === "photos.get") return responses["photos.get"];
+      if (operation === "masks.get") return asset;
+      if (operation === "content.get") return {
+        body: byteStream(png),
+        contentType: "image/png",
+        sha256: surfaceId,
+        totalBytes: png.byteLength,
+        range: { start: 0, endInclusive: png.byteLength - 1 },
+      };
+      if (operation === "recipes.put") {
+        const put = request as PhotoOperationMap["recipes.put"]["request"];
+        return { replayed: false, value: {
+          ...responses["photos.get"],
+          hasEdits: true,
+          recipe: {
+            ...responses["photos.get"].recipe,
+            revision: put.expectedRevision + 1,
+            settings: put.settings,
+            baseVersion: put.baseVersion,
+            maskSurfaceIds: [surfaceId],
+            settingsSha256: "f".repeat(64),
+          },
+        } } as never;
+      }
+      return defaultResponse(operation);
+    } });
+    const writer = begin(setup);
+    try {
+      await expect(writer.save(writer.stage(candidate({ settings, maskSurfaceIds: [surfaceId] }))))
+        .resolves.toMatchObject({ status: "saved" });
+      const operations = setup.calls.map((call) => call.operation);
+      expect(operations.indexOf("masks.get")).toBeGreaterThanOrEqual(0);
+      expect(operations.indexOf("content.get")).toBeGreaterThan(operations.indexOf("masks.get"));
+      expect(operations.indexOf("recipes.put")).toBeGreaterThan(operations.indexOf("content.get"));
+    } finally { setup.sync.dispose(); }
+  });
+
+  it("keeps a mask-backed correction out of the network when the referenced PNG is missing", async () => {
+    const surfaceId = "d".repeat(64);
+    const settings = {
+      ...maskedPhoto.recipe.settings,
+      masks: [{ id: "synthetic-sky", kind: "sky", surface: { id: surfaceId, width: 1, height: 1 }, adjust: { exposure: -0.5 } }],
+    };
+    const setup = harness({ handler: async (operation) => {
+      if (operation === "masks.get") throw { error: { code: "not_found", requestId: "missing-mask", retryable: false } };
+      return defaultResponse(operation);
+    } });
+    const writer = begin(setup);
+    try {
+      await expect(writer.save(writer.stage(candidate({ settings, maskSurfaceIds: [surfaceId] }))))
+        .resolves.toMatchObject({ status: "unsupported" });
+      expect(setup.calls.filter((call) => call.operation === "recipes.put")).toHaveLength(0);
+    } finally { setup.sync.dispose(); }
   });
 
   it("settles a signal-ignoring lock at the finite deadline without dispatch", async () => {
