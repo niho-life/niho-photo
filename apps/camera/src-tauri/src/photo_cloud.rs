@@ -52,6 +52,7 @@ pub struct ContentOpenRequest {
   request_id: String,
   photo_id: String,
   asset_id: String,
+  mask_surface_id: Option<String>,
   range: Option<ContentRange>,
 }
 
@@ -599,6 +600,14 @@ pub async fn camera_photo_content_open(
   validate_id(&input.request_id)?;
   validate_id(&input.photo_id)?;
   validate_id(&input.asset_id)?;
+  if input.mask_surface_id.as_deref().is_some_and(|value| {
+    value.len() != 64
+      || !value
+        .bytes()
+        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+  }) {
+    return Err(AccountError::InvalidResponse);
+  }
   validate_range(input.range.as_ref())?;
   cache.purge_expired();
   let account = Arc::clone(account.inner());
@@ -634,9 +643,12 @@ fn open_content(
   operation.acquire()?;
   operation.check()?;
   account.ensure_photo_operation_current(generation)?;
-  let metadata = account
-    .account
-    .photo_content_metadata(&input.scope, &input.photo_id, &input.asset_id)?;
+  let metadata = account.account.photo_content_metadata(
+    &input.scope,
+    &input.photo_id,
+    &input.asset_id,
+    input.mask_surface_id.as_deref(),
+  )?;
   operation.check()?;
   let range = resolved_range(input.range.clone(), metadata.size_bytes)?;
   operation.reserve(metadata.size_bytes)?;
@@ -1034,6 +1046,12 @@ mod tests {
         sha256: "a".repeat(64),
         size_bytes: 1024,
         content_type: "image/jpeg".into(),
+        kind: "original".into(),
+        width: 1,
+        height: 1,
+        selector: niho_desktop_account::PhotoContentSelector::Original {
+          library_id: "library".into(),
+        },
       },
       scope: scope("epoch"),
       range: ContentRange {

@@ -65,7 +65,7 @@ canonical本人IDは検証済みNIHO userから導く。メール・拠点ID・J
 | `content.get` | 本人確認後の短命原本downloadあり。認証transport/Range/streamの対応が必要 | C02 |
 | `masks.get` | owner/photo/hashに拘束した面の保存/取得不足 | C03 |
 | `recipes.put` | revision CAS・冪等保存・両snapshotあり。完全recipe/base/mask検証と旧64KiB制限の整合不足 | C03 |
-| `versions.get` / `versions.put` | 補正台帳を再利用。名前付き版と独立revision CASのAPI不足 | C03 |
+| `versions.get` / `versions.put` | owner指示で今回対象外。クラウドの能力をfalseに維持 | 対象外 |
 | `recipe-conflicts.list` / `recipe-conflicts.get` / `recipe-conflicts.resolve` | 両snapshot・adopt/keep-current・CAS・再送あり。ID直接取得は履歴のpage数に依存せず本人/Photo/候補IDへ束縛。未知設定/mask/base projectionを接続 | C03 |
 | `media.ensure` | 本人原本用renderer/job/asset/base projection不足。拠点workerと混同しない | C04 |
 | `photos.delete` | 即時非表示・全generation purge・request fence・退会/再試行基盤あり。Photo接続/受入が必要 | C02/C05/C06 |
@@ -103,7 +103,7 @@ C00の `hasEdits` は、Nodeの正式 `niho-photo-contract` で公開する既�
 
 hostは取得した `crateVersion` と正式に固定したbuild metadataのcrateを完全一致で照合し、そのmetadataの `sdkVersion` / `manifestSha256` と実runtimeの設定version/engine/feature/maskをC00 `RenderCapability`へ明示投影する。schemaVersionはruntimeの検証用でありC00へ足さない。固定metadataが無い・不一致ならcloud編集を閉じる。接続probeは本人scopeの取消を確認してdisposeし、受入した同じmanifestでWorkbenchを起動する。getterの追加だけで端末接続・正式SDK配布・実機受入を完了にしない。
 
-完全recipe JSON・version・engine・baseVersion・参照mask hash・revisionを保持する。保存はexpectedRevision必須、冪等keyは本人/操作/写真に拘束。競合時は両snapshotを永続保持し、本人の明示adopt/keep-currentだけをCASで反映。名前付き版は独立versions revisionで管理する。
+完全recipe JSON・version・engine・baseVersion・参照mask hash・revisionを保持する。保存はexpectedRevision必須、冪等keyは本人/操作/写真に拘束。競合時は両snapshotを永続保持し、本人の明示adopt/keep-currentだけをCASで反映。クラウドの名前付き版と独立versions API・保存層・同期はowner指示（2026-11-04）で今回の実装・完了・出荷条件から除外する。既存Macのローカル版は維持する。
 
 未知version/engine/field/maskを落として保存しない。serverと実host rendererの能力の積集合だけを書込可能にし、未知recipeは保持したままread-only/書込拒否。canonicalな作業コピーとbaseが合わないローカル補正を暗黙変換せず、全cloud端末は同じbaseを使う。
 

@@ -89,6 +89,32 @@ pub fn encode_mask_surface(width: u32, height: u32, data: &[u8]) -> Result<Vec<u
     api::encode_mask_surface(width, height, data).map_err(js_error)
 }
 
+/// `niho_develop::api::validate_mask_surface`, using the setMaskSurface decoder.
+#[wasm_bindgen(js_name = validateMaskSurface)]
+pub fn validate_mask_surface(png: &[u8]) -> Result<Object, JsError> {
+    let info = api::validate_mask_surface(png).map_err(js_error)?;
+    let object = Object::new();
+    Reflect::set(
+        &object,
+        &JsValue::from_str("id"),
+        &JsValue::from_str(&info.id),
+    )
+    .map_err(|_| JsError::new("set"))?;
+    Reflect::set(
+        &object,
+        &JsValue::from_str("width"),
+        &JsValue::from_f64(info.width as f64),
+    )
+    .map_err(|_| JsError::new("set"))?;
+    Reflect::set(
+        &object,
+        &JsValue::from_str("height"),
+        &JsValue::from_f64(info.height as f64),
+    )
+    .map_err(|_| JsError::new("set"))?;
+    Ok(object)
+}
+
 /// `niho_develop::api::validate_derived_png`, using the same canonical codec.
 #[wasm_bindgen(js_name = validateDerivedPng)]
 pub fn validate_derived_png(png: &[u8], max_edge: u32) -> Result<Object, JsError> {
@@ -219,6 +245,7 @@ mod tests {
                 },
                 "renderer": niho_develop::api::renderer_capabilities(),
                 "initialRasterSettings": niho_develop::api::initial_raster_settings(),
+                "personalMedia": niho_develop::api::personal_media_capabilities(),
             })
         );
     }

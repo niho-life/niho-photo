@@ -38,6 +38,8 @@ node scripts/sdk/smoke-threads-browser.mjs --runtime <その directory> --thread
 
 `crates/niho-develop-render` は段 2 の native CLI。使い方・終了コードの正は `niho-develop-render --help`。
 
+`capabilities` の `initialRasterSettings` はSDKが作る新規ラスタ用の完全な初期補正。既存の補正の移行には使わない。`personalMedia` はこのsourceと互換のnative producer・decoder・renderer契約で、配置済みworkerの証明は含まない。呼出側で実toolのprobeとSDK/runtime manifestを照合する。`validateDerivedPng`（wasm / `serve`）は長辺512または1280のRGB8/RGBA8出力を、実decode・EOF・metadata拒否・同じencoderの完全re-encodeで検証する。これらの追加で画素の数式や正常な出力bytesを変更しない。
+
 - `render`: 1 枚を 8bit sRGB の PNG に描く（Mac の原寸の書き出し）。stdout は 1 行の JSON（要約か `{"error","message"}`）。
 - `serve`（#152）: Mac アプリの編集画面の現像を 1 つの長く生きるプロセスで受ける。口は wasm の export と同じ名前（`version` … `convertEditSettings`、`Developer.new` … `Developer.free`）と `hello`・`releaseClient`。wasm と serve はどちらも `niho_develop::api` の同じ関数を包むだけなので、画素・bytes・JSON・失敗の message は同じ（`crates/niho-develop/tests/api_cross_target.rs` が native と wasm32 で、`crates/niho-develop-render/tests/serve.rs` が serve で同じ SHA-256 を固定する）。
   - 封（u32 は little endian）: 要求 `u32 id · u32 M · M bytes method · u32 B · B bytes 本文`、応答 `u32 id · u32 B · B bytes 本文`。本文は `u32 H · H bytes header（JSON object）· payload（blob を前から順に）`。

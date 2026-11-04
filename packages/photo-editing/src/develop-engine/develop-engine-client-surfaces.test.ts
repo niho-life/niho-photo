@@ -306,6 +306,30 @@ describe("面の受け渡し（createDevelopEngine）", () => {
     await expect(invalid).rejects.toMatchObject({ code: "maskSurfaceInvalid", surfaceId: surfaceId(43) });
   });
 
+  it("写真なしで面PNGを検証し、caller bytesを失わず、旧runtimeとlate disposeをrejectする", async () => {
+    const { worker, engine } = await readyEngine();
+    const png = new Uint8Array([137, 80, 78, 71]);
+    const validated = engine.validateMaskSurface!(png);
+    const request = worker.requests("validateMaskSurface")[0]!;
+    expect([...new Uint8Array(request.png)]).toEqual([...png]);
+    expect([...png]).toEqual([137, 80, 78, 71]);
+    expect(worker.posted.find((entry) => entry.message === request)?.transfer).toEqual([request.png]);
+    worker.respond({ type: "maskSurfaceValidated", id: request.id, surfaceId: surfaceId(7), width: 2, height: 1 });
+    await expect(validated).resolves.toEqual({ id: surfaceId(7), width: 2, height: 1 });
+
+    const unsupported = engine.validateMaskSurface!(png);
+    const oldRequest = worker.requests("validateMaskSurface")[1]!;
+    worker.respond({ type: "error", id: oldRequest.id, message: "develop engine cannot validate mask surfaces" });
+    await expect(unsupported).rejects.toThrow("cannot validate");
+
+    const late = engine.validateMaskSurface!(png);
+    const lateRequest = worker.requests("validateMaskSurface")[2]!;
+    engine.dispose();
+    await expect(late).rejects.toThrow();
+    worker.respond({ type: "maskSurfaceValidated", id: lateRequest.id, surfaceId: surfaceId(8), width: 1, height: 1 });
+    await flush();
+  });
+
   it("空の検出（niho-photo#141）は skyDetection の付いた wasm だけに送り、作った面の PNG を覚えて読み口を読まずに渡す", async () => {
     const { worker, engine, source } = await readyEngine({ skyDetection: true });
     expect(engine.supportsSkyDetection!()).toBe(true);

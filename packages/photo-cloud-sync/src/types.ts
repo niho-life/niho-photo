@@ -9,6 +9,7 @@ import type {
   VerifiedPhotoActor,
 } from "@niho/photo-personal-cloud-contract";
 import type { PersonalPhotoCloudIdentity } from "@niho/photo-cloud-library";
+import type { PersonalPhotoResumableUploadState } from "@niho/photo-cloud-library/browser";
 
 export interface LocalRecipeCandidate {
   readonly settings: JsonObject & { readonly v: number; readonly engine: string };
@@ -155,6 +156,24 @@ export interface RecipeWriterBinding extends RecipeJournalScope {
   readonly initialRevision: number;
 }
 
+export type MaskSurfaceUploadState = PersonalPhotoResumableUploadState;
+
+export interface MaskSurfaceInput {
+  /** Content-addressed surface id; must equal sha256. */
+  readonly id: string;
+  readonly width: number;
+  readonly height: number;
+  readonly sha256: string;
+  readonly bytes: Uint8Array;
+  readonly uploadState: MaskSurfaceUploadState | null;
+}
+
+export interface PersistedMaskSurface extends MaskSurfaceInput {
+  readonly photoId: string;
+  readonly contentType: "image/png";
+  readonly pinned: boolean;
+}
+
 export interface JournalStage {
   readonly generation: number;
   readonly candidate: LocalRecipeCandidate;
@@ -249,5 +268,10 @@ export interface RecipeSyncJournal {
   reopen(scope: RecipeJournalScope, token: string, signal?: AbortSignal): Promise<ReopenedJournalWriter | null>;
   discard(binding: RecipeWriterBinding, signal?: AbortSignal): Promise<void>;
   releaseCompleted(binding: RecipeWriterBinding, signal?: AbortSignal): Promise<boolean>;
+  putMaskSurface(scope: RecipeJournalScope, photoId: string, surface: MaskSurfaceInput, signal?: AbortSignal): Promise<void>;
+  getMaskSurface(scope: RecipeJournalScope, photoId: string, sha256: string, signal?: AbortSignal): Promise<PersistedMaskSurface | null>;
+  compareAndSetMaskUploadState(scope: RecipeJournalScope, photoId: string, sha256: string, expected: MaskSurfaceUploadState | null, next: MaskSurfaceUploadState | null, signal?: AbortSignal): Promise<boolean>;
+  setMaskSurfacePinned(scope: RecipeJournalScope, photoId: string, sha256: string, pinned: boolean, signal?: AbortSignal): Promise<void>;
+  deleteMaskSurface(scope: RecipeJournalScope, photoId: string, sha256: string, signal?: AbortSignal): Promise<boolean>;
   dispose(): void;
 }

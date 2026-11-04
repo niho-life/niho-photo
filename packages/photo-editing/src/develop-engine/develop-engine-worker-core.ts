@@ -141,6 +141,8 @@ export type DevelopEngineWorkerRequest =
 /** 開いている写真の `Developer` へ面を渡す（`png` は transfer） */
   | { type: "setMaskSurface"; id: number; surfaceId: string; png: ArrayBuffer }
   | { type: "dropMaskSurface"; id: number; surfaceId: string }
+  /** setMaskSurface と同じ共通 decoder で面 PNG を検証する（`png` は caller の copy を transfer）。 */
+  | { type: "validateMaskSurface"; id: number; png: ArrayBuffer }
   /** 面の値（`width·height` byte）を PNG と id にする（`data` は transfer） */
   | { type: "encodeMaskSurface"; id: number; width: number; height: number; data: ArrayBuffer }  | {
       type: "exportJpeg";
@@ -291,6 +293,7 @@ export type DevelopEngineWorkerResponse =
   | { type: "skyDetected"; id: number; surface: DevelopDetectedSkySurface | null }
 | { type: "maskSurfaceSet"; id: number }
   | { type: "maskSurfaceDropped"; id: number; dropped: boolean }
+  | { type: "maskSurfaceValidated"; id: number; surfaceId: string; width: number; height: number }
   /** `encodeMaskSurface` の PNG と id（sha256） */
   | { type: "maskSurfaceEncoded"; id: number; surfaceId: string; png: ArrayBuffer }  | { type: "error"; id: number; message: string };
 
@@ -546,8 +549,10 @@ type DevelopGlue = {
   skyDetection: boolean;
   /** `setSkyModel(layoutJson, weights)`（空の検出のモデルを渡す。niho-photo#141） */
   setSkyModel: ((layoutJson: string, weights: Uint8Array) => unknown) | null;
-/** `encodeMaskSurface(width, height, data)`（面の PNG。無い glue では面を作れない） */
+  /** `encodeMaskSurface(width, height, data)`（面の PNG。無い glue では面を作れない） */
   encodeMaskSurface: ((width: number, height: number, data: Uint8Array) => unknown) | null;
+  /** `validateMaskSurface(png)`（setMaskSurface と同じ共通 decoder）。 */
+  validateMaskSurface: ((png: Uint8Array) => unknown) | null;
   /** `maskSurfaceId(png)`（面の id = sha256） */
   maskSurfaceId: ((png: Uint8Array) => unknown) | null;
   /** `Developer.prototype` の `setMaskSurface`・`dropMaskSurface`・`exportJpeg` が揃っている */
@@ -619,7 +624,7 @@ const estimateUpright: unknown = isRecord(developerPrototype)
   // 空の検出の口（無い glue でも、面は受け渡せる）
   const detectSky: unknown = isRecord(developerPrototype) ? Reflect.get(developerPrototype, "detectSky") : undefined;
 // 面の受け渡しの口（無い glue でも、線形・円形は描ける）
-  const { encodeMaskSurface, maskSurfaceId, setSkyModel } = module;
+  const { encodeMaskSurface, validateMaskSurface, maskSurfaceId, setSkyModel } = module;
   const surfaceMethods = ["setMaskSurface", "dropMaskSurface", "exportJpeg"].every(
     (name) => isRecord(developerPrototype) && typeof Reflect.get(developerPrototype, name) === "function",
   );
@@ -664,6 +669,8 @@ const estimateUpright: unknown = isRecord(developerPrototype)
     skyDetection: typeof detectSky === "function" && typeof setSkyModel === "function",
     setSkyModel: typeof setSkyModel === "function" ? (setSkyModel as DevelopGlue["setSkyModel"]) : null,
 encodeMaskSurface: typeof encodeMaskSurface === "function" ? (encodeMaskSurface as DevelopGlue["encodeMaskSurface"]) : null,
+    validateMaskSurface:
+      typeof validateMaskSurface === "function" ? (validateMaskSurface as DevelopGlue["validateMaskSurface"]) : null,
     maskSurfaceId: typeof maskSurfaceId === "function" ? (maskSurfaceId as DevelopGlue["maskSurfaceId"]) : null,
     surfaces: surfaceMethods,
     analysisTransfer,  };
@@ -2467,6 +2474,29 @@ case "setMaskSurface": {
           }
           const png = transferableBuffer(encoded, wasmMemory());
           deps.post({ type: "maskSurfaceEncoded", id, surfaceId, png }, [png]);          return;
+        }
+        case "validateMaskSurface": {
+          const validate = requireGlue().validateMaskSurface;
+          if (!validate) throw new Error("develop engine cannot validate mask surfaces");
+          const result = validate(new Uint8Array(message.png));
+          if (!isRecord(result)) throw new Error("develop engine returned no mask surface info");
+          const { id: surfaceId, width, height } = result;
+          if (
+            typeof surfaceId !== "string" ||
+            !/^[0-9a-f]{64}$/.test(surfaceId) ||
+            typeof width !== "number" ||
+            !Number.isInteger(width) ||
+            width <= 0 ||
+            width > 4096 ||
+            typeof height !== "number" ||
+            !Number.isInteger(height) ||
+            height <= 0 ||
+            height > 4096
+          ) {
+            throw new Error("develop engine returned invalid mask surface info");
+          }
+          deps.post({ type: "maskSurfaceValidated", id, surfaceId, width, height });
+          return;
         }
         case "exportJpeg": {
           const loaded = requireGlue();

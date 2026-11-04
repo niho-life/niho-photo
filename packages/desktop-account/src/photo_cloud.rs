@@ -57,6 +57,8 @@ pub enum PhotoOperation {
   PhotosInfo,
   #[serde(rename = "photos.lookup")]
   PhotosLookup,
+  #[serde(rename = "masks.get")]
+  MasksGet,
   #[serde(rename = "recipes.put")]
   RecipesPut,
   #[serde(rename = "recipe-conflicts.list")]
@@ -95,6 +97,10 @@ enum Route {
     info: bool,
   },
   Lookup,
+  Mask {
+    photo_id: String,
+    surface_id: String,
+  },
   Recipe {
     photo_id: String,
   },
@@ -132,6 +138,13 @@ struct PhotosList {
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct PhotoId {
   photo_id: String,
+}
+
+#[derive(Debug, Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct MaskGet {
+  photo_id: String,
+  surface_id: String,
 }
 
 #[derive(Debug, Deserialize, Serialize)]
@@ -193,6 +206,13 @@ impl PhotoRequest {
     self.operation
   }
 
+  pub(crate) fn expected_mask_surface(&self) -> Option<&str> {
+    match &self.route {
+      Route::Mask { surface_id, .. } => Some(surface_id),
+      _ => None,
+    }
+  }
+
   pub fn parse(
     operation: PhotoOperation,
     request: Value,
@@ -234,6 +254,20 @@ impl PhotoRequest {
           return Err(AccountError::InvalidResponse);
         }
         (Route::Lookup, Some(json_body(&value, SMALL_BODY_MAX)?))
+      }
+      PhotoOperation::MasksGet => {
+        let value = parse::<MaskGet>(request)?;
+        valid_id(&value.photo_id)?;
+        if !is_sha256(&value.surface_id) {
+          return Err(AccountError::InvalidResponse);
+        }
+        (
+          Route::Mask {
+            photo_id: value.photo_id,
+            surface_id: value.surface_id,
+          },
+          None,
+        )
       }
       PhotoOperation::RecipesPut => {
         let value = parse::<RecipePut>(request)?;
@@ -405,6 +439,17 @@ pub struct PhotoContentMetadata {
   pub sha256: String,
   pub size_bytes: u64,
   pub content_type: String,
+  pub kind: String,
+  pub width: u32,
+  pub height: u32,
+  pub selector: PhotoContentSelector,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub enum PhotoContentSelector {
+  Original { library_id: String },
+  CurrentMedia { library_id: String, context_sha256: String },
+  Mask { surface_id: String },
 }
 
 /// Native-only C00 upload target. Ticket-bearing replies never use the public PhotoOperation enum.
@@ -1094,6 +1139,9 @@ pub(crate) fn native_request(
       Route::Lookup => {
         segments.push("photos").push("lookup");
       }
+      Route::Mask { photo_id, surface_id } => {
+        segments.push("photos").push(photo_id).push("masks").push(surface_id);
+      }
       Route::Recipe { photo_id } => {
         segments.push("photos").push(photo_id).push("recipe");
       }
@@ -1159,6 +1207,7 @@ pub(crate) fn native_request(
     | PhotoOperation::PhotosList
     | PhotoOperation::PhotosGet
     | PhotoOperation::PhotosInfo
+    | PhotoOperation::MasksGet
     | PhotoOperation::RecipeConflictsList
     | PhotoOperation::RecipeConflictsGet => "GET",
     PhotoOperation::PhotosLookup | PhotoOperation::RecipeConflictsResolve => "POST",
@@ -1308,18 +1357,123 @@ pub(crate) fn original_metadata(
   if string(original, "id")? != asset_id || string(original, "kind")? != "original" {
     return Err(AccountError::InvalidResponse);
   }
-  let sha256 = string(original, "sha256")?.to_owned();
-  let size_bytes = integer(original, "sizeBytes")?;
-  let content_type = string(original, "contentType")?.to_owned();
-  if !is_sha256(&sha256) || size_bytes == 0 || size_bytes > CONTENT_MAX || !valid_content_type(&content_type) {
+  asset_metadata(
+    original,
+    photo_id,
+    PhotoContentSelector::Original {
+      library_id: string(photo, "libraryId")?.to_owned(),
+    },
+  )
+}
+
+pub(crate) fn current_metadata(
+  value: &Value,
+  photo_id: &str,
+  asset_id: &str,
+) -> Result<PhotoContentMetadata, AccountError> {
+  validate_photo(value)?;
+  let photo = object(value)?;
+  if string(photo, "id")? != photo_id {
+    return Err(AccountError::InvalidResponse);
+  }
+  if object(field(value, "original")?)?.get("id").and_then(Value::as_str) == Some(asset_id) {
+    return original_metadata(value, photo_id, asset_id);
+  }
+  let media = field(value, "media")?;
+  if object(media)?.get("state").and_then(Value::as_str) != Some("ready") {
+    return Err(AccountError::InvalidResponse);
+  }
+  let media_object = object(media)?;
+  let thumbnail = object(media_object.get("thumbnail").ok_or(AccountError::InvalidResponse)?)?;
+  let preview = object(media_object.get("preview").ok_or(AccountError::InvalidResponse)?)?;
+  let working = media_object.get("workingCopy").filter(|value| !value.is_null());
+  let candidates = [
+    Some(thumbnail),
+    Some(preview),
+    working.map(|value| object(field(value, "asset")?)).transpose()?,
+  ];
+  let mut matches = candidates
+    .into_iter()
+    .flatten()
+    .filter(|asset| asset.get("id").and_then(Value::as_str) == Some(asset_id));
+  let asset = matches.next().ok_or(AccountError::InvalidResponse)?;
+  if matches.next().is_some() {
+    return Err(AccountError::InvalidResponse);
+  }
+  let kind = string(asset, "kind")?;
+  if !matches!(kind, "thumbnail" | "preview" | "working-copy") {
+    return Err(AccountError::InvalidResponse);
+  }
+  asset_metadata(
+    asset,
+    photo_id,
+    PhotoContentSelector::CurrentMedia {
+      library_id: string(photo, "libraryId")?.to_owned(),
+      context_sha256: json_sha256(&serde_json::json!({
+        "recipe": field(value, "recipe")?,
+        "media": media,
+      }))?,
+    },
+  )
+}
+
+fn json_sha256(value: &Value) -> Result<String, AccountError> {
+  let bytes = serde_json::to_vec(value).map_err(|_| AccountError::Internal)?;
+  Ok(format!("{:x}", Sha256::digest(bytes)))
+}
+
+pub(crate) fn mask_metadata(
+  value: &Value,
+  photo_id: &str,
+  asset_id: &str,
+  surface_id: &str,
+) -> Result<PhotoContentMetadata, AccountError> {
+  validate_native_mask_asset(value)?;
+  let asset = object(value)?;
+  if string(asset, "id")? != asset_id || string(asset, "sha256")? != surface_id {
+    return Err(AccountError::InvalidResponse);
+  }
+  asset_metadata(
+    asset,
+    photo_id,
+    PhotoContentSelector::Mask {
+      surface_id: surface_id.to_owned(),
+    },
+  )
+}
+
+fn asset_metadata(
+  asset: &Map<String, Value>,
+  photo_id: &str,
+  selector: PhotoContentSelector,
+) -> Result<PhotoContentMetadata, AccountError> {
+  let asset_id = string(asset, "id")?.to_owned();
+  valid_id(&asset_id)?;
+  let sha256 = string(asset, "sha256")?.to_owned();
+  let size_bytes = integer(asset, "sizeBytes")?;
+  let content_type = string(asset, "contentType")?.to_owned();
+  let kind = string(asset, "kind")?.to_owned();
+  let width = u32::try_from(integer(asset, "width")?).map_err(|_| AccountError::InvalidResponse)?;
+  let height = u32::try_from(integer(asset, "height")?).map_err(|_| AccountError::InvalidResponse)?;
+  if !is_sha256(&sha256)
+    || size_bytes == 0
+    || size_bytes > CONTENT_MAX
+    || !valid_content_type(&content_type)
+    || width == 0
+    || height == 0
+  {
     return Err(AccountError::InvalidResponse);
   }
   Ok(PhotoContentMetadata {
     photo_id: photo_id.to_owned(),
-    asset_id: asset_id.to_owned(),
+    asset_id,
     sha256,
     size_bytes,
     content_type,
+    kind,
+    width,
+    height,
+    selector,
   })
 }
 
@@ -1377,6 +1531,7 @@ fn validate_success(operation: PhotoOperation, value: &Value) -> Result<(), Acco
         exact(item, &["sha256", "photoId", "recipeRevision"])
       })
     }
+    PhotoOperation::MasksGet => validate_native_mask_asset(value),
     PhotoOperation::RecipesPut => validate_receipt(value, validate_photo),
     PhotoOperation::RecipeConflictsList => {
       exact(value, &["items", "nextCursor", "currentRevision"])?;
@@ -1532,11 +1687,11 @@ pub(crate) fn validate_native_mask_asset(value: &Value) -> Result<(), AccountErr
     && asset
       .get("width")
       .and_then(Value::as_u64)
-      .is_some_and(|value| value > 0 && value <= 16_384)
+      .is_some_and(|value| value > 0 && value <= 4096)
     && asset
       .get("height")
       .and_then(Value::as_u64)
-      .is_some_and(|value| value > 0 && value <= 16_384)
+      .is_some_and(|value| value > 0 && value <= 4096)
   {
     Ok(())
   } else {
@@ -1994,6 +2149,14 @@ mod tests {
         None,
       ),
       (
+        PhotoOperation::MasksGet,
+        serde_json::json!({"photoId":"photo/with space","surfaceId":"a".repeat(64)}),
+        None,
+        "GET",
+        "/api/me/photo-cloud/v2/photos/photo%2Fwith%20space/masks/aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+        None,
+      ),
+      (
         PhotoOperation::RecipesPut,
         serde_json::json!({"photoId":"photo","expectedRevision":1,"settings":{"v":1,"engine":"niho-14","token":"opaque-user-json"},"baseVersion":null}),
         Some("recipe-key".into()),
@@ -2060,6 +2223,13 @@ mod tests {
       None
     )
     .is_err());
+    for value in [
+      serde_json::json!({"photoId":"photo","surfaceId":"a".repeat(64),"url":"https://evil.test"}),
+      serde_json::json!({"photoId":"photo","surfaceId":"A".repeat(64)}),
+      serde_json::json!({"photoId":"other\nphoto","surfaceId":"a".repeat(64)}),
+    ] {
+      assert!(PhotoRequest::parse(PhotoOperation::MasksGet, value, None).is_err());
+    }
     assert!(PhotoRequest::parse(
       PhotoOperation::PhotosGet,
       serde_json::json!({"photoId":"photo"}),
@@ -2197,6 +2367,32 @@ mod tests {
   }
 
   #[test]
+  fn mask_response_projection_is_closed_and_uses_mask_bounds() {
+    let valid = serde_json::json!({
+      "id":"mask-asset","kind":"mask","sha256":"a".repeat(64),"sizeBytes":4,
+      "contentType":"image/png","width":2,"height":2
+    });
+    assert!(read_json_response(
+      response(200, "application/json", valid.clone()),
+      PhotoOperation::MasksGet
+    )
+    .is_ok());
+    for (field, value) in [
+      ("kind", serde_json::json!("preview")),
+      ("sha256", serde_json::json!("wrong")),
+      ("width", serde_json::json!(4097)),
+      ("sizeBytes", serde_json::json!(8 * 1024 * 1024 + 1_u64)),
+    ] {
+      let mut rejected = valid.clone();
+      rejected[field] = value;
+      assert!(read_json_response(response(200, "application/json", rejected), PhotoOperation::MasksGet).is_err());
+    }
+    let mut unknown = valid;
+    unknown["url"] = serde_json::json!("https://evil.test");
+    assert!(read_json_response(response(200, "application/json", unknown), PhotoOperation::MasksGet).is_err());
+  }
+
+  #[test]
   fn opaque_recipe_json_preserves_unknown_token_named_user_data() {
     let photo = serde_json::json!({
       "id":"photo","libraryId":"library","storageState":"stored","lifecycle":"active",
@@ -2250,6 +2446,80 @@ mod tests {
     assert_eq!(metadata.size_bytes, 4);
     assert_eq!(name, "synthetic.JPG");
     assert!(original_metadata_for_photo(&photo, "another-photo").is_err());
+  }
+
+  fn ready_photo() -> Value {
+    serde_json::json!({
+      "id":"photo","libraryId":"library","storageState":"stored","lifecycle":"active",
+      "fileName":"synthetic.jpg","format":"jpeg","hasEdits":true,"addedAt":"2026-11-01T00:00:00.000Z",
+      "capturedAt":null,"width":10,"height":10,
+      "original":{"id":"original","kind":"original","sha256":"a".repeat(64),"sizeBytes":4,"contentType":"image/jpeg","width":10,"height":10},
+      "recipe":{"revision":2,"settings":{"v":1,"engine":"niho-14"},"settingsSha256":"b".repeat(64),
+        "baseVersion":null,"maskSurfaceIds":[],"updatedAt":"2026-11-01T00:00:00.000Z"},
+      "media":{"state":"ready",
+        "thumbnail":{"id":"thumbnail","kind":"thumbnail","sha256":"c".repeat(64),"sizeBytes":2,"contentType":"image/jpeg","width":2,"height":2},
+        "preview":{"id":"preview","kind":"preview","sha256":"d".repeat(64),"sizeBytes":3,"contentType":"image/jpeg","width":4,"height":4},
+        "workingCopy":{"asset":{"id":"working","kind":"working-copy","sha256":"e".repeat(64),"sizeBytes":5,"contentType":"image/png","width":8,"height":8},
+          "baseVersion":"base","encoding":"png16","meta":{"kind":"raw"}},
+        "recipeRevision":2,"rendererManifestSha256":"f".repeat(64)}
+    })
+  }
+
+  #[test]
+  fn current_reader_resolves_only_listed_assets_and_fresh_context_changes_fail_equality() {
+    let photo = ready_photo();
+    for (id, kind) in [
+      ("original", "original"),
+      ("thumbnail", "thumbnail"),
+      ("preview", "preview"),
+      ("working", "working-copy"),
+    ] {
+      assert_eq!(current_metadata(&photo, "photo", id).unwrap().kind, kind);
+    }
+    assert!(current_metadata(&photo, "photo", "stale-opaque-asset").is_err());
+    assert!(current_metadata(&photo, "another-photo", "preview").is_err());
+    assert!(original_metadata(&photo, "photo", "preview").is_err());
+
+    let expected = current_metadata(&photo, "photo", "preview").unwrap();
+    for changed in [
+      ("libraryId", serde_json::json!("other-library")),
+      (
+        "recipe",
+        serde_json::json!({
+          "revision":3,"settings":{"v":1,"engine":"niho-14"},"settingsSha256":"b".repeat(64),
+          "baseVersion":null,"maskSurfaceIds":[],"updatedAt":"2026-11-01T00:00:01.000Z"
+        }),
+      ),
+      ("media", serde_json::json!({"state":"pending"})),
+    ] {
+      let mut fresh = photo.clone();
+      fresh[changed.0] = changed.1;
+      if let Ok(metadata) = current_metadata(&fresh, "photo", "preview") {
+        assert_ne!(metadata, expected);
+      }
+    }
+  }
+
+  #[test]
+  fn mask_selector_requires_the_exact_asset_surface_and_contract_bounds() {
+    let surface = "a".repeat(64);
+    let asset = serde_json::json!({
+      "id":"mask-asset","kind":"mask","sha256":surface,"sizeBytes":4,"contentType":"image/png","width":2,"height":2
+    });
+    let metadata = mask_metadata(&asset, "photo", "mask-asset", &"a".repeat(64)).unwrap();
+    assert!(matches!(metadata.selector, PhotoContentSelector::Mask { .. }));
+    assert!(mask_metadata(&asset, "photo", "other-asset", &"a".repeat(64)).is_err());
+    assert!(mask_metadata(&asset, "photo", "mask-asset", &"b".repeat(64)).is_err());
+    for (field, value) in [
+      ("kind", serde_json::json!("preview")),
+      ("contentType", serde_json::json!("image/jpeg")),
+      ("sizeBytes", serde_json::json!(8 * 1024 * 1024 + 1_u64)),
+      ("width", serde_json::json!(4097)),
+    ] {
+      let mut tampered = asset.clone();
+      tampered[field] = value;
+      assert!(mask_metadata(&tampered, "photo", "mask-asset", &"a".repeat(64)).is_err());
+    }
   }
 
   #[test]
@@ -2317,6 +2587,12 @@ mod tests {
       sha256: format!("{:x}", Sha256::digest(bytes)),
       size_bytes: bytes.len() as u64,
       content_type: "image/jpeg".into(),
+      kind: "original".into(),
+      width: 1,
+      height: 1,
+      selector: PhotoContentSelector::Original {
+        library_id: "library".into(),
+      },
     }
   }
 

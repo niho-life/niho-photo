@@ -32,6 +32,7 @@ export const NATIVE_DEVELOP_FUNCTIONS = [
   "version",
   "capabilities",
   "validateDerivedPng",
+  "validateMaskSurface",
   "maskSurfaceId",
   "encodeMaskSurface",
   "setSkyModel",
@@ -277,6 +278,7 @@ export type NativeDevelopGlue = {
   version: () => string;
   capabilities: () => string;
   validateDerivedPng: (png: Uint8Array, maxEdge: number) => unknown;
+  validateMaskSurface: (png: Uint8Array) => unknown;
   maskSurfaceId: (png: Uint8Array) => string;
   encodeMaskSurface: (width: number, height: number, data: Uint8Array) => Uint8Array;
   /** 空の検出のモデルを sidecar に渡す（niho-photo#141。モデルの `{ long, inputs, channels }` の JSON を返す） */
@@ -530,6 +532,7 @@ export function createNativeDevelopGlue(
     version: () => callString("version", []),
     capabilities: () => callString("capabilities", []),
     validateDerivedPng: (png, maxEdge) => call("validateDerivedPng", [png, maxEdge]),
+    validateMaskSurface: (png) => call("validateMaskSurface", [png]),
     maskSurfaceId: (png) => callString("maskSurfaceId", [png]),
     encodeMaskSurface: (width, height, data) => callBytes("encodeMaskSurface", [width, height, data]),
     setSkyModel: (layoutJson, weights) => callString("setSkyModel", [layoutJson, weights]),

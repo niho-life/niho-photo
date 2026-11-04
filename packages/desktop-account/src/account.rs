@@ -1,6 +1,6 @@
 use crate::connect::{equal, secret_43, Pending};
 use crate::photo_cloud::{
-  content_request, native_copy_request, native_request, original_metadata, original_metadata_for_photo,
+  content_request, current_metadata, mask_metadata, native_copy_request, native_request, original_metadata_for_photo,
   parse_renew_upload, parse_start_upload, parse_upload, parse_upload_receipt, provider_ack, read_json_response,
   read_native_upload_response, stream_verified_content, CapturedPhotoAuthority, HttpPhotoCloud, PhotoHttpTransport,
 };
@@ -1017,26 +1017,44 @@ impl Account {
     capture: &PhotoScopeCapture,
     photo_id: &str,
     asset_id: &str,
+    mask_surface_id: Option<&str>,
   ) -> Result<PhotoContentMetadata, AccountError> {
     let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
     let authority = self.capture_photo_authority(adapters, capture)?;
-    let get = PhotoRequest::parse(
-      PhotoOperation::PhotosGet,
-      serde_json::json!({ "photoId": photo_id }),
-      None,
-    )?;
-    let photo = self.send_photo_json(adapters, &authority, &get)?;
-    if photo.status == 401 {
+    let (request, mask) = if let Some(surface_id) = mask_surface_id {
+      (
+        PhotoRequest::parse(
+          PhotoOperation::MasksGet,
+          serde_json::json!({ "photoId": photo_id, "surfaceId": surface_id }),
+          None,
+        )?,
+        Some(surface_id),
+      )
+    } else {
+      (
+        PhotoRequest::parse(
+          PhotoOperation::PhotosGet,
+          serde_json::json!({ "photoId": photo_id }),
+          None,
+        )?,
+        None,
+      )
+    };
+    let response = self.send_photo_json(adapters, &authority, &request)?;
+    if response.status == 401 {
       self.invalidate_photo_identity(adapters, authority.generation, AccountError::Expired)?;
       return Err(AccountError::Expired);
     }
-    if photo.status != 200 {
+    if response.status != 200 {
       return Err(AccountError::Rejected);
     }
-    original_metadata(&photo.body, photo_id, asset_id)
+    match mask {
+      Some(surface_id) => mask_metadata(&response.body, photo_id, asset_id, surface_id),
+      None => current_metadata(&response.body, photo_id, asset_id),
+    }
   }
 
-  /// 実STORED originalをfresh Photo metadataへ束縛し、全bytes/SHA/EOF検証しながらnative writerへ流す。
+  /// Fresh Photo/current media または fresh masks.get に束縛した asset を、全bytes/SHA/EOF検証しながらnative writerへ流す。
   pub fn photo_content_download<W: Write>(
     &self,
     capture: &PhotoScopeCapture,
@@ -1046,20 +1064,36 @@ impl Account {
   ) -> Result<PhotoContentMetadata, AccountError> {
     let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
     let authority = self.capture_photo_authority(adapters, capture)?;
-    let get = PhotoRequest::parse(
-      PhotoOperation::PhotosGet,
-      serde_json::json!({ "photoId": expected.photo_id }),
-      None,
-    )?;
-    let photo = self.send_photo_json(adapters, &authority, &get)?;
-    if photo.status == 401 {
+    let request = match &expected.selector {
+      crate::PhotoContentSelector::Mask { surface_id } => PhotoRequest::parse(
+        PhotoOperation::MasksGet,
+        serde_json::json!({ "photoId": expected.photo_id, "surfaceId": surface_id }),
+        None,
+      )?,
+      crate::PhotoContentSelector::Original { .. } | crate::PhotoContentSelector::CurrentMedia { .. } => {
+        PhotoRequest::parse(
+          PhotoOperation::PhotosGet,
+          serde_json::json!({ "photoId": expected.photo_id }),
+          None,
+        )?
+      }
+    };
+    let response = self.send_photo_json(adapters, &authority, &request)?;
+    if response.status == 401 {
       self.invalidate_photo_identity(adapters, authority.generation, AccountError::Expired)?;
       return Err(AccountError::Expired);
     }
-    if photo.status != 200 {
+    if response.status != 200 {
       return Err(AccountError::Rejected);
     }
-    let metadata = original_metadata(&photo.body, &expected.photo_id, &expected.asset_id)?;
+    let metadata = match &expected.selector {
+      crate::PhotoContentSelector::Mask { surface_id } => {
+        mask_metadata(&response.body, &expected.photo_id, &expected.asset_id, surface_id)?
+      }
+      crate::PhotoContentSelector::Original { .. } | crate::PhotoContentSelector::CurrentMedia { .. } => {
+        current_metadata(&response.body, &expected.photo_id, &expected.asset_id)?
+      }
+    };
     if &metadata != expected {
       return Err(AccountError::InvalidResponse);
     }
@@ -1138,6 +1172,13 @@ impl Account {
       .photo_http
       .send(&adapters.config, &authority.access, &native, false)?;
     let response = read_json_response(response, request.operation())?;
+    if response.status == 200
+      && request
+        .expected_mask_surface()
+        .is_some_and(|surface_id| response.body.get("sha256").and_then(serde_json::Value::as_str) != Some(surface_id))
+    {
+      return Err(AccountError::InvalidResponse);
+    }
     self.ensure_photo_authority(adapters, authority)?;
     Ok(response)
   }
