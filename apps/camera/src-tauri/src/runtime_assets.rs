@@ -14,7 +14,14 @@ struct Record {
   bytes: usize,
 }
 
-fn decode(bytes: &[u8]) -> Result<(Vec<Record>, &[u8], String, Option<String>), &'static str> {
+struct DecodedRuntime<'a> {
+  records: Vec<Record>,
+  payload: &'a [u8],
+  prefix: String,
+  immutable_prefix: Option<String>,
+}
+
+fn decode(bytes: &[u8]) -> Result<DecodedRuntime<'_>, &'static str> {
   if bytes.len() < 24 || bytes.get(..16) != Some(MAGIC.as_slice()) {
     return Err("invalid SDK runtime header");
   }
@@ -76,7 +83,12 @@ fn decode(bytes: &[u8]) -> Result<(Vec<Record>, &[u8], String, Option<String>), 
   } else {
     None
   };
-  Ok((records, payload, prefix, immutable_prefix))
+  Ok(DecodedRuntime {
+    records,
+    payload,
+    prefix,
+    immutable_prefix,
+  })
 }
 
 fn valid_crate_version(value: &str) -> bool {
@@ -199,14 +211,13 @@ mod official {
   }
 
   pub fn install<R: Runtime>(context: &mut Context<R>) {
-    let (records, payload, prefix, immutable_prefix) =
-      decode(&SDK_RUNTIME).expect("official SDK runtime bundle must be valid");
+    let decoded = decode(&SDK_RUNTIME).expect("official SDK runtime bundle must be valid");
     let fallback = Arc::new(OnceLock::new());
     let previous = context.set_assets(Box::new(RuntimeAssets {
-      records,
-      payload,
-      prefix,
-      immutable_prefix,
+      records: decoded.records,
+      payload: decoded.payload,
+      prefix: decoded.prefix,
+      immutable_prefix: decoded.immutable_prefix,
       fallback: fallback.clone(),
     }));
     assert!(fallback.set(previous).is_ok(), "SDK runtime must be installed once");
@@ -229,11 +240,11 @@ mod tests {
       serde_json::json!([{"path":"/develop-engine/niho-13/runtime.wasm","offset":0,"bytes":4}]),
       b"wasm",
     );
-    let (records, payload, prefix, immutable) = decode(&bytes).unwrap();
-    assert_eq!(prefix, "/develop-engine/niho-13/");
-    assert_eq!(immutable, None);
+    let decoded = decode(&bytes).unwrap();
+    assert_eq!(decoded.prefix, "/develop-engine/niho-13/");
+    assert_eq!(decoded.immutable_prefix, None);
     assert_eq!(
-      &payload[records[0].offset..records[0].offset + records[0].bytes],
+      &decoded.payload[decoded.records[0].offset..decoded.records[0].offset + decoded.records[0].bytes],
       b"wasm"
     );
   }
@@ -247,18 +258,33 @@ mod tests {
       ]),
       &[manifest.as_slice(), b"wasm"].concat(),
     );
-    let (records, payload, prefix, alias) = decode(&bytes).unwrap();
-    assert_eq!(alias, Some(format!("/develop-engine/{:x}/", Sha256::digest(manifest))));
-    let immutable_manifest = format!("{}manifest-0.27.0.json", alias.as_deref().unwrap());
-    let record = runtime_record(&records, &prefix, alias.as_deref(), &immutable_manifest).unwrap();
-    assert_eq!(&payload[record.offset..record.offset + record.bytes], manifest);
+    let decoded = decode(&bytes).unwrap();
+    assert_eq!(
+      decoded.immutable_prefix,
+      Some(format!("/develop-engine/{:x}/", Sha256::digest(manifest)))
+    );
+    let immutable_manifest = format!("{}manifest-0.27.0.json", decoded.immutable_prefix.as_deref().unwrap());
+    let record = runtime_record(
+      &decoded.records,
+      &decoded.prefix,
+      decoded.immutable_prefix.as_deref(),
+      &immutable_manifest,
+    )
+    .unwrap();
+    assert_eq!(&decoded.payload[record.offset..record.offset + record.bytes], manifest);
     let unknown_manifest = format!("/develop-engine/{}/manifest-0.27.0.json", "f".repeat(64));
-    assert!(runtime_record(&records, &prefix, alias.as_deref(), &unknown_manifest).is_none());
+    assert!(runtime_record(
+      &decoded.records,
+      &decoded.prefix,
+      decoded.immutable_prefix.as_deref(),
+      &unknown_manifest
+    )
+    .is_none());
     let changed = fixture(
       serde_json::json!([{"path":"/develop-engine/niho-14/manifest-0.27.0.json","offset":0,"bytes":2}]),
       b"{}",
     );
-    assert_ne!(decode(&changed).unwrap().3, alias);
+    assert_ne!(decode(&changed).unwrap().immutable_prefix, decoded.immutable_prefix);
   }
   #[test]
   fn invalid_table_cannot_fall_back_to_another_runtime() {

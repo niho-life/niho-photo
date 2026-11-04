@@ -397,6 +397,7 @@ describe("useBrowserPhotoExportAndDelete canonical guard integration", () => {
     expect(saveOriginalNative).toHaveBeenCalledWith(target.photo, expect.objectContaining({ signal: expect.any(AbortSignal) }));
     expect(downloadOriginal).not.toHaveBeenCalled();
     expect(saveFile).not.toHaveBeenCalled();
+    expect(statusForTest).toHaveBeenCalledWith({ kind: "notice", text: "raw.rw2 を保存しました" });
     expect(result).toBe("done");
   });
 });

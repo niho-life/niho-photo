@@ -667,7 +667,7 @@ test("実DMGをreadonlyで開き、梱包時の改変・追加・実行属性の
   const hidden = temp("niho-photo-hidden-dmg-");
   cpSync(app, path.join(hidden, "NIHO photo.app"), { recursive: true });
   symlinkSync("/Applications", path.join(hidden, "Applications"));
-  put(hidden, ".Trashes/payload.txt", "synthetic hidden content\n");
+  put(hidden, ".unexpected-metadata/payload.txt", "synthetic hidden content\n");
   const hiddenImage = path.join(stage, "hidden.dmg");
   execFileSync("/usr/bin/hdiutil", ["create", "-volname", "NIHO photo", "-srcfolder", hidden, "-format", "UDZO", hiddenImage], { stdio: "pipe", timeout: 120_000 });
   assert.throws(() => verifyDmgInventory(hiddenImage, inventoryTree(app)), /DMG root.*metadata payload/u);

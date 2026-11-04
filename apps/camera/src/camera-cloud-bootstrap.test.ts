@@ -18,16 +18,16 @@ const commands = {} as never;
 const binding = { actorId: actor.userId, library: { place: "cloud" }, host: {} } as PersonalCloudPhotoBinding;
 
 function harness(readIdentity = vi.fn(async () => actor)) {
-  let watch: NativePhotoIdentityWatch | null = null;
+  const watch: { current: NativePhotoIdentityWatch | null } = { current: null };
   const disposeBinding = vi.fn();
   const createBinding = vi.fn(async () => ({ binding, dispose: disposeBinding }));
   const bootstrap = new CameraCloudBootstrap({
     commands, proof, readIdentity,
-    watchIdentity: async (next) => { watch = next; return vi.fn<() => void>(); },
+    watchIdentity: async (next) => { watch.current = next; return () => undefined; },
     createBinding,
     retryDelay: async () => undefined,
   });
-  return { bootstrap, readIdentity, createBinding, disposeBinding, watch: () => watch };
+  return { bootstrap, readIdentity, createBinding, disposeBinding, watch: () => watch.current };
 }
 
 describe("Camera cloud bootstrap", () => {
@@ -51,12 +51,11 @@ describe("Camera cloud bootstrap", () => {
     const secondBinding = { ...binding, actorId: "user-b" };
     const actorB = { ...actor, userId: "user-b", sessionId: "session-b", sessionEpoch: "epoch-b" };
     const reads = [actor, actorB];
-    let watch: NativePhotoIdentityWatch | null = null;
-    const currentWatch = (): NativePhotoIdentityWatch | null => watch;
+    const watch: { current: NativePhotoIdentityWatch | null } = { current: null };
     const published: Array<PersonalCloudPhotoBinding | undefined> = [];
     const bootstrap = new CameraCloudBootstrap({
       commands, proof,
-      watchIdentity: async (next) => { watch = next; return () => undefined; },
+      watchIdentity: async (next) => { watch.current = next; return () => undefined; },
       readIdentity: async () => reads.shift() ?? actorB,
       createBinding: vi.fn()
         .mockImplementationOnce(() => new Promise((resolve) => { finish = resolve; }))
@@ -65,8 +64,8 @@ describe("Camera cloud bootstrap", () => {
     bootstrap.subscribe((snapshot) => published.push(snapshot.binding));
     const starting = bootstrap.start();
     await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
-    currentWatch()?.invalidated();
-    currentWatch()?.mayHaveChanged();
+    watch.current?.invalidated();
+    watch.current?.mayHaveChanged();
     finish({ binding, dispose: firstDisposed });
     await starting;
     await vi.waitFor(() => expect(bootstrap.getSnapshot().binding).toBe(secondBinding));
@@ -87,6 +86,37 @@ describe("Camera cloud bootstrap", () => {
     expect(h.createBinding).toHaveBeenCalledTimes(1);
     expect(h.disposeBinding).not.toHaveBeenCalled();
     h.bootstrap.dispose();
+  });
+
+  it("rebuilds scopes when the same-tuple identity is refreshed after expiry", async () => {
+    let now = Date.parse("2026-11-04T23:59:59.000Z");
+    const watch: { current: NativePhotoIdentityWatch | null } = { current: null };
+    const refreshed = { ...actor, expiresAt: "2026-11-06T00:00:00.000Z" };
+    const reads = [actor, refreshed];
+    const replacement: PersonalCloudPhotoBinding = { ...binding };
+    const firstDispose = vi.fn();
+    const createBinding = vi.fn()
+      .mockResolvedValueOnce({ binding, dispose: firstDispose })
+      .mockResolvedValueOnce({ binding: replacement, dispose: vi.fn() });
+    const readIdentity = vi.fn(async () => reads.shift() ?? refreshed);
+    const bootstrap = new CameraCloudBootstrap({
+      commands, proof,
+      readIdentity,
+      now: () => now,
+      watchIdentity: async (next) => { watch.current = next; return () => undefined; },
+      createBinding,
+      retryDelay: async () => undefined,
+    });
+
+    await bootstrap.start();
+    expect(bootstrap.getSnapshot().binding).toBe(binding);
+    now = Date.parse(actor.expiresAt) + 1;
+    watch.current?.mayHaveChanged();
+    await vi.waitFor(() => expect(createBinding).toHaveBeenCalledTimes(2));
+
+    expect(firstDispose).toHaveBeenCalledTimes(1);
+    expect(bootstrap.getSnapshot().binding).toBe(replacement);
+    bootstrap.dispose();
   });
 
   it("coalesces changes received during the registration-first initial read", async () => {
