@@ -40,6 +40,8 @@ export type PersonalPhotoCloudMaskValidator = {
 export type PersonalPhotoCloudIdentity = {
   getSnapshot(): VerifiedPhotoActor | null;
   subscribe(listener: () => void): () => void;
+  /** Definitive authentication/session revocation only; connection teardown must not invoke it. */
+  subscribeScopeRevoked?(listener: () => void): () => void;
 };
 
 export type PersonalPhotoCloudMemoryBudgets = {

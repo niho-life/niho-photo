@@ -7,7 +7,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createBrowserPersonalPhotoTransferController } from "../src/browser";
 import { PersonalPhotoCloudError } from "../src/index";
 import { IndexedDbTransferJournal, makeEntryId, type JournalScope, type TransferJournalEntry } from "../src/browser/journal";
-import { FakeClient, FakeIdentity, maskPngFixture, stream, testMaskValidator } from "./support";
+import { defaultActor, FakeClient, FakeIdentity, maskPngFixture, stream, testMaskValidator } from "./support";
 
 const NOW = Date.parse("2026-11-03T00:00:00.000Z");
 const EXPIRES = "2026-11-03T00:30:00.000Z";
@@ -121,6 +121,37 @@ describe("IndexedDB transfer journal", () => {
     second.dispose();
   });
 
+  it("upgrades an existing v1 journal without losing resumable entries", async () => {
+    const factory = new IDBFactory();
+    const name = "journal-v1-upgrade";
+    const scope: JournalScope = { actorId: "actor", libraryId: "library", sessionId: "session", sessionEpoch: "epoch" };
+    const entry = journalEntry(scope);
+    const request = factory.open(name, 1);
+    request.onupgradeneeded = () => {
+      const store = request.result.createObjectStore("entries", { keyPath: "id" });
+      store.createIndex("scope", ["actorId", "libraryId", "sessionId", "sessionEpoch"], { unique: false });
+      store.createIndex("scopeIntent", ["actorId", "libraryId", "sessionId", "sessionEpoch", "intentId"], { unique: true });
+    };
+    const database = await new Promise<IDBDatabase>((resolve, reject) => {
+      request.onsuccess = () => resolve(request.result);
+      request.onerror = () => reject(request.error);
+    });
+    const transaction = database.transaction("entries", "readwrite");
+    const complete = new Promise<void>((resolve, reject) => {
+      transaction.oncomplete = () => resolve();
+      transaction.onabort = () => reject(transaction.error);
+      transaction.onerror = () => reject(transaction.error);
+    });
+    transaction.objectStore("entries").put(entry);
+    await complete;
+    database.close();
+
+    const journal = new IndexedDbTransferJournal(factory, name);
+    await expect(journal.get(scope, "intent")).resolves.toEqual(entry);
+    await expect(journal.purgeScope(scope)).resolves.toBe(1);
+    journal.dispose();
+  });
+
   it("isolates list/read by actor, library, session, and epoch", async () => {
     const factory = new IDBFactory();
     const journal = new IndexedDbTransferJournal(factory, "journal-scope");
@@ -128,6 +159,40 @@ describe("IndexedDB transfer journal", () => {
     await journal.add(journalEntry(scope));
     expect((await journal.list(scope)).entries).toHaveLength(1);
     expect((await journal.list({ ...scope, sessionEpoch: "other" })).entries).toHaveLength(0);
+    journal.dispose();
+  });
+
+  it("atomically fences and removes one exact scope while stale tabs cannot recreate its entries", async () => {
+    const factory = new IDBFactory();
+    const journal = new IndexedDbTransferJournal(factory, "journal-scope-purge");
+    const scope: JournalScope = { actorId: "a", libraryId: "l", sessionId: "s", sessionEpoch: "e" };
+    const otherScopes: JournalScope[] = [
+      { ...scope, actorId: "other" },
+      { ...scope, libraryId: "other" },
+      { ...scope, sessionId: "other" },
+      { ...scope, sessionEpoch: "other" },
+    ];
+    const entry = journalEntry(scope);
+    await journal.add(entry);
+    const otherEntries = otherScopes.map((otherScope, index) => ({
+      ...journalEntry(otherScope),
+      id: makeEntryId(otherScope, `intent-other-${index}`),
+      intentId: `intent-other-${index}`,
+    }));
+    for (const other of otherEntries) await journal.add(other);
+    const staleTab = new IndexedDbTransferJournal(factory, "journal-scope-purge");
+    await expect(staleTab.get(scope, "missing")).resolves.toBeNull();
+
+    await expect(journal.purgeScope(scope)).resolves.toBe(1);
+    for (let index = 0; index < otherScopes.length; index += 1) {
+      await expect(journal.list(otherScopes[index]!)).resolves.toMatchObject({ entries: [otherEntries[index]], nextCursor: null });
+    }
+    await expect(journal.get(scope, entry.intentId)).rejects.toMatchObject({ code: "scope_changed" });
+    await expect(staleTab.add({ ...entry, id: makeEntryId(scope, "late"), intentId: "late" }))
+      .rejects.toMatchObject({ code: "scope_changed" });
+    await expect(staleTab.compareAndSet(entry, { ...entry, revision: 1, phase: "uploading" }))
+      .rejects.toMatchObject({ code: "scope_changed" });
+    staleTab.dispose();
     journal.dispose();
   });
 
@@ -188,6 +253,104 @@ describe("browser original copy controller", () => {
     expect(resumed.phase).toBe("done");
     expect(second.client.calls.at(-1)?.idempotencyKey).toBe(firstKey);
     second.controller.dispose();
+  });
+
+  it("purges only the captured transfer scope on logout and preserves entries on ordinary dispose", async () => {
+    const factory = new IDBFactory();
+    const name = "revoke-transfer-scope";
+    const identity = new FakeIdentity();
+    const harness = makeController({ factory, name, identity });
+    harness.client.dispatch = async () => { throw new Error("start response was lost"); };
+    await expect(harness.controller.start({ intentId: "intent", file: file(), format: "jpeg", fullRecipeCandidate: null }))
+      .resolves.toMatchObject({ phase: "start-pending" });
+
+    const oldScope: JournalScope = { actorId: IDS.userA, libraryId: responses["library.get"].id, sessionId: "parent-1", sessionEpoch: "epoch-1" };
+    const otherScope: JournalScope = { ...oldScope, sessionEpoch: "other-epoch" };
+    const otherJournal = new IndexedDbTransferJournal(factory, name);
+    await otherJournal.add({ ...journalEntry(otherScope), id: makeEntryId(otherScope, "other"), intentId: "other" });
+    await otherJournal.add({ ...journalEntry(oldScope), id: makeEntryId(oldScope, "dispose-keeps"), intentId: "dispose-keeps" });
+    otherJournal.dispose();
+
+    identity.set(null);
+    const beforeRevocation = new IndexedDbTransferJournal(factory, name);
+    await expect(beforeRevocation.get(oldScope, "dispose-keeps")).resolves.toMatchObject({ intentId: "dispose-keeps" });
+    beforeRevocation.dispose();
+    identity.revokeScope();
+    await harness.controller.revokeScope!();
+    const observer = new IndexedDbTransferJournal(factory, name);
+    await expect(observer.list(otherScope)).resolves.toMatchObject({ entries: [{ intentId: "other" }] });
+    await expect(observer.get(oldScope, "dispose-keeps")).rejects.toMatchObject({ code: "scope_changed" });
+    observer.dispose();
+    harness.controller.dispose();
+  });
+
+  it("purges the captured scope when the authenticated client reports revocation", async () => {
+    const factory = new IDBFactory();
+    const name = "client-revokes-transfer-scope";
+    const harness = makeController({ factory, name });
+    const scope: JournalScope = { actorId: IDS.userA, libraryId: responses["library.get"].id, sessionId: "parent-1", sessionEpoch: "epoch-1" };
+    const seed = new IndexedDbTransferJournal(factory, name);
+    await seed.add(journalEntry(scope));
+    seed.dispose();
+    harness.client.libraryResponse = null;
+    harness.client.dispatch = async () => { throw { error: { code: "unauthenticated" } }; };
+
+    await expect(harness.controller.checkCapability("jpeg")).rejects.toMatchObject({ error: { code: "unauthenticated" } });
+    await harness.controller.revokeScope!();
+    const observer = new IndexedDbTransferJournal(factory, name);
+    await expect(observer.list(scope)).rejects.toMatchObject({ code: "scope_changed" });
+    observer.dispose();
+    harness.controller.dispose();
+  });
+
+  it("preserves the journal when a connection teardown reports a null identity or scope_changed", async () => {
+    const factory = new IDBFactory();
+    const name = "connection-teardown-keeps-journal";
+    const identity = new FakeIdentity();
+    const harness = makeController({ factory, name, identity });
+    const scope: JournalScope = { actorId: IDS.userA, libraryId: responses["library.get"].id, sessionId: "parent-1", sessionEpoch: "epoch-1" };
+    const seed = new IndexedDbTransferJournal(factory, name);
+    await seed.add(journalEntry(scope));
+    seed.dispose();
+    identity.set(null);
+    harness.client.libraryResponse = null;
+    harness.client.dispatch = async () => { throw new PersonalPhotoCloudError("scope_changed"); };
+
+    await expect(harness.controller.checkCapability("jpeg")).rejects.toMatchObject({ code: "scope_changed" });
+    identity.set(defaultActor());
+    await expect(harness.controller.checkCapability("jpeg")).rejects.toMatchObject({ code: "scope_changed" });
+    const observer = new IndexedDbTransferJournal(factory, name);
+    await expect(observer.get(scope, "intent")).resolves.toMatchObject({ phase: "start-pending" });
+    observer.dispose();
+    harness.controller.dispose();
+
+    const replacement = makeController({ factory, name, identity: new FakeIdentity(defaultActor()) });
+    await expect(replacement.controller.resume({ intentId: "intent" })).resolves.toMatchObject({ phase: "needs-file" });
+    replacement.controller.dispose();
+  });
+
+  it("uses the injected clock to fence and purge a session at expiry", async () => {
+    const factory = new IDBFactory();
+    const name = "expire-transfer-scope";
+    let now = NOW;
+    const identity = new FakeIdentity(defaultActor({ expiresAt: new Date(NOW + 10).toISOString() }));
+    const harness = makeController({ factory, name, identity, now: () => now });
+    try {
+      harness.client.dispatch = async () => { throw new Error("start response was lost"); };
+      await expect(harness.controller.start({ intentId: "intent", file: file(), format: "jpeg", fullRecipeCandidate: null }))
+        .resolves.toMatchObject({ phase: "start-pending" });
+      now = NOW + 11;
+      await new Promise((resolve) => setTimeout(resolve, 25));
+      await expect(harness.controller.resume({ intentId: "intent", file: file() })).rejects.toMatchObject({ code: "scope_changed" });
+      await harness.controller.revokeScope!();
+
+      const scope: JournalScope = { actorId: IDS.userA, libraryId: responses["library.get"].id, sessionId: "parent-1", sessionEpoch: "epoch-1" };
+      const observer = new IndexedDbTransferJournal(factory, name);
+      await expect(observer.list(scope)).rejects.toMatchObject({ code: "scope_changed" });
+      observer.dispose();
+    } finally {
+      harness.controller.dispose();
+    }
   });
 
   it("requires a reselected File and rejects a full-hash mismatch before network", async () => {

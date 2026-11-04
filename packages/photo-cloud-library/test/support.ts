@@ -53,6 +53,7 @@ export class FakeClient implements PersonalPhotoCloudClient {
 
 export class FakeIdentity implements PersonalPhotoCloudIdentity {
   private readonly listeners = new Set<() => void>();
+  private readonly revocationListeners = new Set<() => void>();
 
   constructor(private actor: VerifiedPhotoActor | null = defaultActor()) {}
 
@@ -65,9 +66,18 @@ export class FakeIdentity implements PersonalPhotoCloudIdentity {
     return () => this.listeners.delete(listener);
   }
 
+  subscribeScopeRevoked(listener: () => void): () => void {
+    this.revocationListeners.add(listener);
+    return () => this.revocationListeners.delete(listener);
+  }
+
   set(actor: VerifiedPhotoActor | null): void {
     this.actor = actor;
     for (const listener of this.listeners) listener();
+  }
+
+  revokeScope(): void {
+    for (const listener of this.revocationListeners) listener();
   }
 }
 
