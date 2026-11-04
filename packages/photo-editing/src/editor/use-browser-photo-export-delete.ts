@@ -79,6 +79,7 @@ import {
   photoEditingExportFailedCountText,
   photoEditingExportNarrowNote,
   photoEditingFolderExportStoppedText,
+  photoEditingNativeOriginalSavedText,
   photoEditingSavedText,
 } from "../photo-editing-copy";
 import {
@@ -659,7 +660,7 @@ export function useBrowserPhotoExportAndDelete(params: {
             return "skipped";
           }
           if (!saved.saved) return "cancelled";
-          setStatus({ kind: "notice", text: `${saved.fileName} を保存しました` });
+          setStatus({ kind: "notice", text: photoEditingNativeOriginalSavedText(saved.fileName ?? target.photo.fileName) });
           return "done";
         }
         const downloaded = await library.downloadOriginal(target.photo, { signal: controller.signal });

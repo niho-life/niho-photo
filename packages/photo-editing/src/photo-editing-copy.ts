@@ -449,6 +449,10 @@ export function photoEditingExportNarrowNote(width: number): string {
 export function photoEditingSavedText(actionLabel: string): string {
   return `${actionLabel}しました`;
 }
+/** Macで原本をnative検証保存したときの状態欄。 */
+export function photoEditingNativeOriginalSavedText(fileName: string): string {
+  return `${fileName} を保存しました`;
+}
 
 /**
  * NIHO Desktop の面: 切り抜き・回転のある写真（`developSettings` v2。移行元設計）は、幾何を描けないこの面では閲覧だけ。直すのは

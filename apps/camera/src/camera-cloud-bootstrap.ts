@@ -152,7 +152,8 @@ export class CameraCloudBootstrap {
       if (!this.current(captured)) return;
       if (actor === null) { this.invalidate(); return; }
       const previous = this.identity.getSnapshot();
-      if (previous !== null && sameScope(previous, actor) && this.active !== null) {
+      const now = this.options.now?.() ?? Date.now();
+      if (previous !== null && sameScope(previous, actor) && this.active !== null && identityIsLive(previous, now)) {
         this.identity.set(actor); // expiry refresh is observable but keeps the library/client/editor stable.
         return;
       }
@@ -302,6 +303,10 @@ function cloudScope(actor: VerifiedPhotoActor, libraryId: string): MacPhotoCloud
   return { actorId: actor.userId, libraryId, sessionId: actor.sessionId, sessionEpoch: actor.sessionEpoch, transport: actor.transport };
 }
 function nativeScope(scope: MacPhotoCloudScope) { return { userId: scope.actorId, sessionId: scope.sessionId, sessionEpoch: scope.sessionEpoch, transport: scope.transport }; }
+function identityIsLive(actor: VerifiedPhotoActor, now: number): boolean {
+  const expiresAtMs = Date.parse(actor.expiresAt);
+  return Number.isFinite(expiresAtMs) && expiresAtMs > now;
+}
 function sameScope(left: VerifiedPhotoActor | null, right: VerifiedPhotoActor): boolean {
   return left !== null && left.userId === right.userId && left.sessionId === right.sessionId
     && left.sessionEpoch === right.sessionEpoch && left.transport === right.transport;
