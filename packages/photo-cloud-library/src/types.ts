@@ -14,6 +14,28 @@ import type {
   PhotoLibraryPresets,
   PhotoLibraryRequestOptions,
 } from "niho-photo-editing/library/photo-library";
+import type { PersonalPhotoResumableUploadState } from "./browser/resumable-upload";
+
+/** Native host keeps provider authority private; the shared barrier owns durable PNGs and operation keys. */
+export type PersonalPhotoCloudMaskUploader = {
+  upload(input: {
+    readonly photoId: string;
+    readonly surfaceId: string;
+    readonly bytes: Uint8Array;
+    readonly idempotencyKey: string;
+    readonly uploadState: PersonalPhotoResumableUploadState;
+    readonly compareAndSetUploadState: (
+      expected: PersonalPhotoResumableUploadState,
+      next: PersonalPhotoResumableUploadState,
+      signal: AbortSignal,
+    ) => Promise<boolean>;
+    readonly signal: AbortSignal;
+  }): Promise<void>;
+};
+
+export type PersonalPhotoCloudMaskValidator = {
+  validateMaskSurface(png: Uint8Array, signal: AbortSignal): Promise<{ readonly id: string; readonly width: number; readonly height: number }>;
+};
 
 export type PersonalPhotoCloudIdentity = {
   getSnapshot(): VerifiedPhotoActor | null;
@@ -35,6 +57,8 @@ export type PersonalPhotoCloudUrlFactory = {
 };
 
 export type CreatePersonalPhotoCloudLibraryOptions = {
+  /** Native binary port. Invoked only after the shared journal's durable barrier. */
+  maskUploader?: PersonalPhotoCloudMaskUploader;
   client: PersonalPhotoCloudClient;
   identity: PersonalPhotoCloudIdentity;
   hostRenderer: RenderCapability;

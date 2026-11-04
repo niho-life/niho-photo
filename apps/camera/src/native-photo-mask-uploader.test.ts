@@ -1,0 +1,148 @@
+import { describe, expect, it, vi } from "vitest";
+import { IDS } from "@niho/photo-personal-cloud-contract/fixtures";
+import { hashMaskSurface } from "@niho/photo-cloud-library/protocol";
+import type { PersonalPhotoCloudClient, VerifiedPhotoActor } from "@niho/photo-personal-cloud-contract";
+import type { PersonalPhotoCloudIdentity } from "@niho/photo-cloud-library";
+import type { PersonalPhotoResumableUploadState } from "@niho/photo-cloud-library/browser";
+
+import { createNativePersonalPhotoCloudMaskUploader } from "./native-photo-mask-uploader";
+import type { NativePhotoBinaryInvoke } from "./native-photo-mask-uploader";
+
+const actor: VerifiedPhotoActor = {
+  userId: IDS.userA,
+  sessionId: "synthetic-session",
+  sessionEpoch: "synthetic-epoch",
+  transport: "mac-bearer",
+  expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+};
+
+function identity() {
+  let current: VerifiedPhotoActor | null = actor;
+  const listeners = new Set<() => void>();
+  return {
+    port: {
+      getSnapshot: () => current,
+      subscribe(listener) {
+        listeners.add(listener);
+        return () => listeners.delete(listener);
+      },
+    } satisfies PersonalPhotoCloudIdentity,
+    set(next: VerifiedPhotoActor | null) {
+      current = next;
+      for (const listener of listeners) listener();
+    },
+  };
+}
+
+function client(): PersonalPhotoCloudClient {
+  return {
+    scope: { actorId: actor.userId, libraryId: IDS.library, sessionEpoch: actor.sessionEpoch },
+  } as PersonalPhotoCloudClient;
+}
+
+const bytes = new Uint8Array([1, 2, 3]);
+const surfaceId = hashMaskSurface(bytes);
+
+const input = (signal = new AbortController().signal) => ({
+  photoId: IDS.photo,
+  surfaceId,
+  bytes,
+  idempotencyKey: "mask-synthetic-key",
+  uploadState: {
+    target: { kind: "mask", photoId: IDS.photo },
+    sizeBytes: bytes.byteLength,
+    sha256: surfaceId,
+    contentType: "image/png",
+    startKey: "mask-synthetic-key",
+    completeKey: "mask-synthetic-key-complete",
+    cancelKey: "mask-synthetic-key-cancel",
+    uploadId: null,
+    deadline: null,
+    offsetBytes: 0,
+    phase: "start-pending",
+  } satisfies PersonalPhotoResumableUploadState,
+  async compareAndSetUploadState(_expected: PersonalPhotoResumableUploadState, _next: PersonalPhotoResumableUploadState) {
+    return true;
+  },
+  signal,
+});
+
+describe("native cloud mask uploader", () => {
+  it("passes only the captured Mac scope, photo, content address and bytes to the native port", async () => {
+    const source = identity();
+    const invokeBinary = vi.fn<NativePhotoBinaryInvoke>(async () => "stored");
+    const uploader = createNativePersonalPhotoCloudMaskUploader({ client: client(), identity: source.port, invokeBinary });
+    const uploadInput = input(new AbortController().signal);
+    const compareAndSet = vi.spyOn(uploadInput, "compareAndSetUploadState");
+
+    await expect(uploader.upload(uploadInput)).resolves.toBeUndefined();
+    expect(compareAndSet).toHaveBeenCalledTimes(2);
+    expect(invokeBinary).toHaveBeenCalledWith("camera_photo_mask_upload", bytes, {
+      "x-niho-photo-mask-upload-input": JSON.stringify({
+        scope: {
+          userId: IDS.userA,
+          libraryId: IDS.library,
+          sessionId: actor.sessionId,
+          sessionEpoch: actor.sessionEpoch,
+          transport: "mac-bearer",
+        },
+        photoId: IDS.photo,
+        surfaceId,
+        idempotencyKey: "mask-synthetic-key",
+        completeKey: "mask-synthetic-key-complete",
+        cancelKey: "mask-synthetic-key-cancel",
+        phase: "start-pending",
+      }),
+    });
+    uploader.dispose();
+  });
+
+  it("aborts an in-flight native upload as soon as the identity scope changes", async () => {
+    const source = identity();
+    let finish!: (value: unknown) => void;
+    const invokeBinary = vi.fn<NativePhotoBinaryInvoke>(() => new Promise((resolve) => { finish = resolve; }));
+    const uploader = createNativePersonalPhotoCloudMaskUploader({ client: client(), identity: source.port, invokeBinary });
+    const pending = uploader.upload(input());
+    await vi.waitFor(() => expect(invokeBinary).toHaveBeenCalledTimes(1));
+    source.set({ ...actor, userId: IDS.userB, sessionId: "other-session", sessionEpoch: "other-epoch" });
+
+    await expect(pending).rejects.toMatchObject({ code: "scope_changed" });
+    expect(invokeBinary).toHaveBeenCalledTimes(1);
+    finish("stored");
+    uploader.dispose();
+  });
+
+  it("does not cross IPC after a scope change during the durable barrier", async () => {
+    const source = identity();
+    let release!: () => void;
+    const invokeBinary = vi.fn<NativePhotoBinaryInvoke>(async () => "stored");
+    const uploader = createNativePersonalPhotoCloudMaskUploader({ client: client(), identity: source.port, invokeBinary });
+    const uploadInput = input();
+    uploadInput.compareAndSetUploadState = async () => {
+      await new Promise<void>((resolve) => { release = resolve; });
+      return true;
+    };
+    const pending = uploader.upload(uploadInput);
+    source.set(null);
+    release();
+    await expect(pending).rejects.toMatchObject({ code: "scope_changed" });
+    expect(invokeBinary).not.toHaveBeenCalled();
+    uploader.dispose();
+  });
+
+  it.each([
+    ["expired", "unavailable", "expired"],
+    ["cancelled", "unavailable", "cancelled"],
+  ] as const)("persists native %s before returning a retryable result", async (outcome, errorCode, phase) => {
+    const source = identity();
+    const invokeBinary = vi.fn<NativePhotoBinaryInvoke>(async () => outcome);
+    const uploader = createNativePersonalPhotoCloudMaskUploader({ client: client(), identity: source.port, invokeBinary });
+    const uploadInput = input(new AbortController().signal);
+    const compareAndSet = vi.spyOn(uploadInput, "compareAndSetUploadState");
+
+    await expect(uploader.upload(uploadInput)).rejects.toMatchObject({ code: errorCode });
+    expect(compareAndSet).toHaveBeenCalledTimes(2);
+    expect(compareAndSet.mock.calls[1]?.[1]).toMatchObject({ phase });
+    uploader.dispose();
+  });
+});

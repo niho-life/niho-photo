@@ -60,5 +60,5 @@ commands.allow = ["camera_photo_request", "camera_photo_content_open", "camera_p
 
 [[permission]]
 identifier = "allow-camera-photo-copy"
-description = "同梱main画面だけに、native認証へ束縛した本人の明示copyの再開・開始・状態確認・取消を許可する。opaque IDと固定状態だけを渡し、原本・path・token・ticket・URL・headerはnative内に保つ。原本・全参照mask・完全補正の照合前に完了を返さない。"
-commands.allow = ["camera_photo_copy_recover", "camera_photo_copy_start", "camera_photo_copy_status", "camera_photo_copy_cancel"]
+description = "同梱main画面だけに、native認証へ束縛した本人の明示copyの再開・開始・状態確認・取消と、SHA-256・PNG形状を照合したmaskの保存を許可する。opaque ID・mask PNGだけを渡し、原本・path・token・ticket・URL・headerはnative内に保つ。明示copyは原本・全参照mask・完全補正の照合前に完了を返さない。"
+commands.allow = ["camera_photo_copy_recover", "camera_photo_copy_start", "camera_photo_copy_status", "camera_photo_copy_cancel", "camera_photo_mask_upload"]

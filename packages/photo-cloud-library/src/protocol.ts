@@ -30,3 +30,4 @@ export {
   TRANSPORT_TIMEOUT_MS,
   type WireOperation,
 } from "./wire";
+export { hashMaskSurface } from "./mask-surface";

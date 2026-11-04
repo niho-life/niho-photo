@@ -39,7 +39,6 @@ const MAX_SCOPE_MASKS = 128;
 const MAX_GLOBAL_MASKS = 512;
 const MAX_LIST_COUNT = 16;
 const MAX_LIST_BYTES = 4 * 1024 ** 2;
-const MAX_MASK_GC_SCAN = 64;
 const SHA256 = /^[0-9a-f]{64}$/u;
 const NEVER_ABORTS = new AbortController().signal;
 
@@ -1160,7 +1159,7 @@ async function collectMaskGarbage(
 
   let removedCount = 0;
   let removedBytes = 0;
-  await visitScopeMasks(transaction, scope, MAX_MASK_GC_SCAN, signal, async (raw) => {
+  await visitScopeMasks(transaction, scope, MAX_SCOPE_MASKS, signal, async (raw) => {
     const current = validateMaskRecord(raw);
     if (
       current.pinned || maskLeases(current).length > 0 || current.uploadState !== null ||
@@ -1177,19 +1176,38 @@ async function collectMaskGarbage(
   if (removedCount > 0) {
     await updateCombinedBudgets(transaction.objectStore(META), scope, 0, -removedCount, -removedBytes, signal, transaction);
   }
+  // A previous session's unreferenced read cache must not permanently consume
+  // the shared budget. Draft references, pin leases and unknown uploads remain protected.
+  if (scoped.masks - removedCount + 1 > MAX_SCOPE_MASKS || scoped.bytes - removedBytes + incomingBytes > MAX_SCOPE_BYTES) return;
+  let globalCount = global.masks - removedCount;
+  let globalBytes = global.bytes - removedBytes;
+  if (globalCount + 1 <= MAX_GLOBAL_MASKS && globalBytes + incomingBytes <= MAX_GLOBAL_BYTES) return;
+  await visitScopeMasks(transaction, null, MAX_GLOBAL_MASKS, signal, async (raw) => {
+    const current = validateMaskRecord(raw);
+    if (sameMaskScope(current, scope) || current.pinned || maskLeases(current).length > 0 || current.uploadState !== null ||
+      await anyWriterReferences(transaction.objectStore(WRITERS), current.photoId, current.sha256, signal, transaction)) return true;
+    const bytes = maskBytes(current);
+    await updateCombinedBudgets(transaction.objectStore(META), current, 0, -1, -bytes, signal, transaction);
+    transaction.objectStore(MASKS).delete(current.key);
+    globalCount -= 1;
+    globalBytes -= bytes;
+    return globalCount + 1 > MAX_GLOBAL_MASKS || globalBytes + incomingBytes > MAX_GLOBAL_BYTES;
+  });
 }
 
 async function visitScopeMasks(
   transaction: IDBTransaction,
-  scope: RecipeJournalScope,
+  scope: RecipeJournalScope | null,
   limit: number,
   signal: AbortSignal | undefined,
   visit: (record: unknown) => boolean | Promise<boolean>,
 ): Promise<void> {
   await transactionWait(new Promise<void>((resolve, reject) => {
     let count = 0;
-    const prefix = scopeKey(scope);
-    const request = transaction.objectStore(MASKS).index(MASK_SCOPE).openCursor(IDBKeyRange.bound(prefix, [...prefix, []]));
+    const masks = transaction.objectStore(MASKS);
+    const prefix = scope === null ? null : scopeKey(scope);
+    const request = prefix === null ? masks.openCursor()
+      : masks.index(MASK_SCOPE).openCursor(IDBKeyRange.bound(prefix, [...prefix, []]));
     request.onerror = () => reject(idbError(request.error));
     request.onsuccess = () => {
       const cursor = request.result;

@@ -12,6 +12,7 @@ import type { DevelopSettings } from "niho-photo-editing/develop-engine/develop-
 import type { PhotoLibraryPresets } from "niho-photo-editing/library/photo-library";
 import { describe, expect, it } from "vitest";
 import type { PersonalPhotoResumableUploadState, PersonalPhotoResumableUploadTransport } from "@niho/photo-cloud-library/browser";
+import type { PersonalPhotoCloudMaskUploader } from "@niho/photo-cloud-library";
 
 import { createPersonalPhotoCloudLibrary } from "../src/binding";
 import { IndexedDbRecipeSyncJournal } from "../src/browser";
@@ -40,6 +41,7 @@ function setup(
   masks?: {
     validator: { validateMaskSurface(png: Uint8Array): Promise<{ id: string; width: number; height: number }> };
     transport?: PersonalPhotoResumableUploadTransport;
+    uploader?: PersonalPhotoCloudMaskUploader;
   },
 ) {
   const calls: PhotoOperation[] = [];
@@ -66,6 +68,7 @@ function setup(
     ...(masks === undefined ? {} : {
       maskSurfaceValidator: masks.validator,
       ...(masks.transport === undefined ? {} : { maskSurfaceTransport: masks.transport }),
+      ...(masks.uploader === undefined ? {} : { maskUploader: masks.uploader }),
     }),
   });
   const port = handle.library.durableDevelopDrafts!;
@@ -92,17 +95,17 @@ describe("photo library durable binding", () => {
       },
       read: unused, renew: unused, uploadChunk: unused, complete: unused, cancel: unused,
     };
-    const fixture = setup(async (operation, request) => {
+    const fixture = setup(async <K extends PhotoOperation>(operation: K, request: PhotoOperationMap[K]["request"]): Promise<PhotoOperationMap[K]["response"]> => {
       if (operation === "masks.get") {
         if (!stored) throw { error: { code: "not_found", requestId: "mask", retryable: false } };
-        return asset as PhotoOperationMap[typeof operation]["response"];
+        return asset as PhotoOperationMap[K]["response"];
       }
       if (operation === "recipes.put") {
         const put = request as PhotoOperationMap["recipes.put"]["request"];
         return { ...responses["recipes.put"], value: { ...responses["recipes.put"].value, recipe: {
           ...maskedPhoto.recipe, revision: put.expectedRevision + 1, settings: put.settings,
           baseVersion: put.baseVersion, maskSurfaceIds: [surfaceId],
-        } } } as PhotoOperationMap[typeof operation]["response"];
+        } } } as PhotoOperationMap[K]["response"];
       }
       return defaultResponse(operation);
     }, databaseName, new Identity(), "epoch-1", {
@@ -136,7 +139,7 @@ describe("photo library durable binding", () => {
     } finally { fixture.handle.dispose(); journal.dispose(); }
   });
 
-  it("persists validated mask bytes across reconstruction and waits for fresh STORED proof before recipe PUT", async () => {
+  it.each(["opaque", "native"] as const)("persists validated mask bytes through the %s port and waits for fresh STORED proof before recipe PUT", async (port) => {
     const databaseName = `binding-mask-${crypto.randomUUID()}`;
     const png = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);
     const expectedPng = png.slice();
@@ -162,6 +165,26 @@ describe("photo library durable binding", () => {
     const validator = { async validateMaskSurface(bytes: Uint8Array) {
       return { id: Array.from(sha256(bytes), (byte) => byte.toString(16).padStart(2, "0")).join(""), width: 2, height: 2 };
     } };
+    const uploader: PersonalPhotoCloudMaskUploader = {
+      async upload(input) {
+        order.push("upload.start");
+        const probe = new IndexedDbRecipeSyncJournal(indexedDB, databaseName);
+        const actor = defaultActor();
+        try {
+          const persisted = await probe.getMaskSurface({
+            actorId: actor.userId, libraryId: IDS.library, sessionId: actor.sessionId,
+            sessionEpoch: actor.sessionEpoch, transport: actor.transport,
+          }, IDS.photo, surfaceId);
+          expect(persisted?.uploadState).toEqual(input.uploadState);
+          expect(persisted?.bytes).toEqual(expectedPng);
+        } finally { probe.dispose(); }
+        stored = true;
+        expect(await input.compareAndSetUploadState(input.uploadState, {
+          ...input.uploadState, phase: "verifying", offsetBytes: input.uploadState.sizeBytes,
+        }, input.signal)).toBe(true);
+      },
+    };
+    const maskPorts = port === "opaque" ? { validator, transport } : { validator, uploader };
     const handler = async <K extends PhotoOperation>(operation: K, request: PhotoOperationMap[K]["request"]): Promise<PhotoOperationMap[K]["response"]> => {
       if (operation === "masks.get") {
         const get = request as PhotoOperationMap["masks.get"]["request"];
@@ -184,7 +207,7 @@ describe("photo library durable binding", () => {
       }
       return defaultResponse(operation);
     };
-    const first = setup(handler, databaseName, new Identity(), "epoch-1", { validator, transport });
+    const first = setup(handler, databaseName, new Identity(), "epoch-1", maskPorts);
     const writer = first.port.open({ photoId: IDS.photo, sourceSha256: HASH.original, expectedRevision: 0 });
     try {
       await expect(first.handle.library.saveMaskSurface!(IDS.photo, png)).resolves.toEqual({ id: surfaceId, width: 2, height: 2 });
@@ -199,7 +222,7 @@ describe("photo library durable binding", () => {
       expect(order).toEqual(["mask.missing", "upload.start", "mask.stored", "recipe.put"]);
     } finally { first.handle.dispose(); }
 
-    const reopened = setup(handler, databaseName, new Identity(), "epoch-1", { validator, transport });
+    const reopened = setup(handler, databaseName, new Identity(), "epoch-1", maskPorts);
     try {
       const loaded = await reopened.handle.library.loadMaskSurface!(IDS.photo, surfaceId);
       expect(loaded).toEqual(expectedPng);
@@ -366,7 +389,7 @@ describe("photo library durable binding", () => {
     } finally { current.handle.dispose(); }
   });
 
-  it("uses an explicit previous grant to copy only its referenced PNG into the new scope", async () => {
+  it.each([false, true])("uses an explicit previous grant to copy its PNG and reconcile stored=%s without replaying old keys", async (alreadyStored) => {
     const databaseName = `binding-previous-mask-${crypto.randomUUID()}`;
     const png = new Uint8Array([137, 80, 78, 71, 9, 8, 7]);
     const surfaceId = Array.from(sha256(png), (byte) => byte.toString(16).padStart(2, "0")).join("");
@@ -374,9 +397,11 @@ describe("photo library durable binding", () => {
       return { id: Array.from(sha256(bytes), (byte) => byte.toString(16).padStart(2, "0")).join(""), width: 2, height: 2 };
     } };
     let stored = false;
+    let uploadStarts = 0;
     const asset = { ...responses["masks.get"], id: surfaceId, sha256: surfaceId, sizeBytes: png.byteLength, width: 2, height: 2 };
     const transport: PersonalPhotoResumableUploadTransport = {
       async start(state) {
+        uploadStarts += 1;
         stored = true;
         return { kind: "upload", upload: {
           id: "previous-mask-upload", target: state.target, sizeBytes: state.sizeBytes, sha256: state.sha256,
@@ -411,6 +436,17 @@ describe("photo library durable binding", () => {
     const oldWriter = old.port.open({ photoId: IDS.photo, sourceSha256: HASH.original, expectedRevision: 0 });
     await old.handle.library.saveMaskSurface!(IDS.photo, png);
     await expect(oldWriter.stage(settings).committed).resolves.toBe("committed");
+    if (alreadyStored) {
+      const observer = new IndexedDbRecipeSyncJournal(indexedDB, databaseName);
+      await observer.compareAndSetMaskUploadState({
+        actorId: IDS.userA, libraryId: IDS.library, sessionId: "parent-1", sessionEpoch: "epoch-1", transport: "browser-session",
+      }, IDS.photo, surfaceId, null, {
+        target: { kind: "mask", photoId: IDS.photo }, sizeBytes: png.byteLength, sha256: surfaceId, contentType: "image/png",
+        startKey: "old-start", completeKey: "old-complete", cancelKey: "old-cancel", uploadId: null,
+        deadline: null, offsetBytes: 0, phase: "start-pending",
+      });
+      observer.dispose();
+    }
     old.handle.dispose();
 
     const currentIdentity = new Identity(defaultActor({ sessionId: "parent-2", sessionEpoch: "epoch-2" }));
@@ -421,6 +457,7 @@ describe("photo library durable binding", () => {
       const recovered = await current.port.previous!.reopen(previous.items[0]!.token);
       const snapshot = await recovered.read();
       if (snapshot.latestStage === null) throw new Error("missing previous stage");
+      if (alreadyStored) stored = true;
       await expect(recovered.save(snapshot.latestStage)).resolves.toMatchObject({ kind: "saved" });
       await expect(current.handle.library.loadMaskSurface!(IDS.photo, surfaceId)).resolves.toEqual(png);
 
@@ -429,6 +466,8 @@ describe("photo library durable binding", () => {
         actorId: IDS.userA, libraryId: IDS.library, sessionId: "parent-1", sessionEpoch: "epoch-1", transport: "browser-session",
       }, IDS.photo, surfaceId);
       expect(oldRecord?.uploadState).toBeNull();
+      expect(oldRecord?.bytes).toEqual(png);
+      expect(uploadStarts).toBe(alreadyStored ? 0 : 1);
       observer.dispose();
     } finally { current.handle.dispose(); }
   });

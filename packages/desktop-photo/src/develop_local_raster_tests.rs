@@ -744,7 +744,7 @@ fn explicit_copy_uses_the_bundled_full_initial_recipe_and_actual_raster_base() {
     let photos = FakePhotos::new(&[("photo", &photo)]);
     let develop = camera_develop(&harness);
     let settings = develop.initial_raster_copy_settings(&photos, "photo").unwrap();
-    let mut expected = initial;
+    let mut expected = initial.clone();
     if working {
       let source = develop
         .source_with_options(&photos, "photo", Some((false, false)), mode == 2)

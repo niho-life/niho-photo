@@ -9,7 +9,9 @@ use niho_desktop_account::{
   PhotoOperation, PhotoRequest, PhotoScopeCapture,
 };
 use niho_desktop_photo::develop::{InitialRasterCopyProof, InitialRasterSourceProvider};
-use niho_desktop_photo::mask_surfaces::mask_surface_ids;
+use niho_desktop_photo::mask_surfaces::{
+  inspect_mask_surface_png, mask_surface_id, mask_surface_ids, MAX_MASK_SURFACE_BYTES,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
@@ -19,7 +21,7 @@ use std::io::{Read, Write};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::{
-  atomic::{AtomicBool, AtomicU64, Ordering},
+  atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
   Arc, Mutex,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -31,6 +33,25 @@ const MAX_INTENTS: usize = 32;
 const MAX_JOURNAL_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_INTENT_BYTES: u64 = 2 * 1024 * 1024;
 const CHUNK_BYTES: usize = 8 * 1024 * 1024;
+const MASK_UPLOAD_HEADER: &str = "x-niho-photo-mask-upload-input";
+static ACTIVE_MASK_UPLOADS: AtomicUsize = AtomicUsize::new(0);
+
+struct MaskUploadSlot;
+impl MaskUploadSlot {
+  fn acquire() -> Result<Self, AccountError> {
+    ACTIVE_MASK_UPLOADS
+      .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |count| {
+        (count < 2).then_some(count + 1)
+      })
+      .map(|_| Self)
+      .map_err(|_| AccountError::Rejected)
+  }
+}
+impl Drop for MaskUploadSlot {
+  fn drop(&mut self) {
+    ACTIVE_MASK_UPLOADS.fetch_sub(1, Ordering::SeqCst);
+  }
+}
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -429,6 +450,26 @@ pub struct StatusInput {
   request_id: String,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct MaskUploadInput {
+  scope: CopyScope,
+  photo_id: String,
+  surface_id: String,
+  idempotency_key: String,
+  complete_key: String,
+  cancel_key: String,
+  phase: String,
+}
+
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MaskUploadOutcome {
+  Stored,
+  Expired,
+  Cancelled,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Recovery {
@@ -611,6 +652,213 @@ pub async fn camera_photo_copy_cancel(app: AppHandle, input: StatusInput) -> Res
   }
   schedule(&app, &input.request_id)?;
   Ok(())
+}
+
+/// Native-only mask upload. The page submits PNG bytes and a stable idempotency key; bearer URLs stay in Account.
+#[tauri::command]
+pub async fn camera_photo_mask_upload(
+  app: AppHandle,
+  request: tauri::ipc::Request<'_>,
+) -> Result<MaskUploadOutcome, AccountError> {
+  let tauri::ipc::InvokeBody::Raw(body) = request.body() else {
+    return Err(AccountError::InvalidResponse);
+  };
+  if body.is_empty() || body.len() > MAX_MASK_SURFACE_BYTES {
+    return Err(AccountError::InvalidResponse);
+  }
+  let metadata = request
+    .headers()
+    .get(MASK_UPLOAD_HEADER)
+    .and_then(|value| value.to_str().ok())
+    .filter(|value| value.len() <= 8192)
+    .ok_or(AccountError::InvalidResponse)?;
+  let input: MaskUploadInput = serde_json::from_str(metadata).map_err(|_| AccountError::InvalidResponse)?;
+  validate_scope(&input.scope)?;
+  authorize_scope(&app, &input.scope)?;
+  let slot = MaskUploadSlot::acquire()?;
+  let (width, height) = inspect_mask_surface_png(body).map_err(|_| AccountError::InvalidResponse)?;
+  if width > 4096
+    || height > 4096
+    || !opaque(&input.photo_id)
+    || !is_sha256(&input.surface_id)
+    || mask_surface_id(body) != input.surface_id
+    || !opaque(&input.idempotency_key)
+    || input.idempotency_key.len() > 128
+    || !opaque(&input.complete_key)
+    || input.complete_key.len() > 128
+    || !opaque(&input.cancel_key)
+    || input.cancel_key.len() > 128
+    || !matches!(
+      input.phase.as_str(),
+      "start-pending" | "uploading" | "complete-pending" | "verifying" | "cancel-pending"
+    )
+  {
+    return Err(AccountError::InvalidResponse);
+  }
+  let bytes = body.to_vec();
+  let response_scope = input.scope.clone();
+  let shared = app.state::<Arc<SharedAccount>>().inner().clone();
+  let outcome = tauri::async_runtime::spawn_blocking(move || {
+    let _slot = slot;
+    upload_mask_surface(
+      &shared,
+      &input.scope,
+      &input.photo_id,
+      &input.surface_id,
+      &input.idempotency_key,
+      &input.complete_key,
+      &input.cancel_key,
+      input.phase == "cancel-pending",
+      &bytes,
+      width,
+      height,
+    )
+  })
+  .await
+  .map_err(|_| AccountError::Internal)??;
+  authorize_scope(&app, &response_scope)?;
+  Ok(outcome)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn upload_mask_surface(
+  shared: &SharedAccount,
+  scope: &CopyScope,
+  photo_id: &str,
+  surface_id: &str,
+  idempotency_key: &str,
+  complete_key: &str,
+  cancel_key: &str,
+  cancel_pending: bool,
+  bytes: &[u8],
+  width: u32,
+  height: u32,
+) -> Result<MaskUploadOutcome, AccountError> {
+  let capture = DurableScope::from_scope(scope).capture();
+  let target = NativeCopyTarget::Mask {
+    photo_id: photo_id.to_owned(),
+  };
+  let start = guarded(shared, || {
+    shared.account.photo_copy_start(
+      &capture,
+      &scope.library_id,
+      &target,
+      bytes.len() as u64,
+      surface_id,
+      "image/png",
+      idempotency_key,
+    )
+  })?;
+  let (mut upload, mut ticket) = match start {
+    NativeStartUpload::Existing { photo } => {
+      if !existing_mask_photo_matches(&photo, scope, photo_id) {
+        return Err(AccountError::InvalidResponse);
+      }
+      // The shared cloud adapter performs masks.get/content.get and SDK decoder readback before it reports success.
+      return Ok(MaskUploadOutcome::Stored);
+    }
+    NativeStartUpload::Upload { upload, ticket } => (*upload, ticket),
+  };
+  assert_upload(&upload, &target, bytes.len() as u64, surface_id)?;
+  if cancel_pending {
+    upload = guarded(shared, || {
+      shared
+        .account
+        .photo_copy_cancel(&capture, &scope.library_id, &upload.id, cancel_key)
+    })?;
+    assert_upload(&upload, &target, bytes.len() as u64, surface_id)?;
+    if !matches!(
+      &upload.state,
+      NativeUploadState::StoredMask { .. } | NativeUploadState::Cancelled | NativeUploadState::Expired
+    ) {
+      return Err(AccountError::Network);
+    }
+  }
+  for _ in 0..64 {
+    match upload.state.clone() {
+      NativeUploadState::StoredMask {
+        photo_id: stored_photo_id,
+        asset,
+      } => {
+        if stored_photo_id != photo_id
+          || asset.get("kind").and_then(Value::as_str) != Some("mask")
+          || asset.get("sha256").and_then(Value::as_str) != Some(surface_id)
+          || asset.get("sizeBytes").and_then(Value::as_u64) != Some(bytes.len() as u64)
+          || asset.get("contentType").and_then(Value::as_str) != Some("image/png")
+          || asset.get("width").and_then(Value::as_u64) != Some(u64::from(width))
+          || asset.get("height").and_then(Value::as_u64) != Some(u64::from(height))
+        {
+          return Err(AccountError::InvalidResponse);
+        }
+        return Ok(MaskUploadOutcome::Stored);
+      }
+      NativeUploadState::StoredOriginal { .. } => return Err(AccountError::InvalidResponse),
+      NativeUploadState::Verifying => {
+        std::thread::sleep(std::time::Duration::from_millis(150));
+        upload = guarded(shared, || {
+          shared.account.photo_copy_get(&capture, &scope.library_id, &upload.id)
+        })?;
+        assert_upload(&upload, &target, bytes.len() as u64, surface_id)?;
+      }
+      NativeUploadState::Cancelled => return Ok(MaskUploadOutcome::Cancelled),
+      NativeUploadState::Expired => return Ok(MaskUploadOutcome::Expired),
+      NativeUploadState::Rejected => return Err(AccountError::Rejected),
+      NativeUploadState::Reserved { uploaded_bytes } => {
+        if uploaded_bytes > bytes.len() as u64 {
+          return Err(AccountError::InvalidResponse);
+        }
+        if uploaded_bytes == bytes.len() as u64 {
+          upload = complete_native_upload(
+            shared,
+            &capture,
+            &scope.library_id,
+            &upload,
+            &target,
+            bytes.len() as u64,
+            surface_id,
+            complete_key,
+          )?;
+          ticket = None;
+          continue;
+        }
+        if ticket
+          .as_ref()
+          .is_none_or(|current: &NativeUploadTicket| current.resume_offset_bytes() != uploaded_bytes)
+        {
+          let (current, renewed) = guarded(shared, || {
+            shared
+              .account
+              .photo_copy_renew(&capture, &scope.library_id, &upload.id, "image/png")
+          })?;
+          assert_upload(&current, &target, bytes.len() as u64, surface_id)?;
+          if current.id != upload.id
+            || !matches!(&current.state, NativeUploadState::Reserved { uploaded_bytes: next } if *next == uploaded_bytes)
+            || renewed.resume_offset_bytes() != uploaded_bytes
+          {
+            return Err(AccountError::InvalidResponse);
+          }
+          upload = current;
+          ticket = Some(renewed);
+          continue;
+        }
+        let active_ticket = ticket.take().ok_or(AccountError::Internal)?;
+        let offset = usize::try_from(uploaded_bytes).map_err(|_| AccountError::InvalidResponse)?;
+        upload = put_native_upload_chunk(
+          shared,
+          &capture,
+          &scope.library_id,
+          &upload,
+          &target,
+          bytes.len() as u64,
+          surface_id,
+          &active_ticket,
+          uploaded_bytes,
+          &bytes[offset..],
+        )?;
+      }
+    }
+  }
+  Err(AccountError::Network)
 }
 
 fn new_intent(
@@ -1176,38 +1424,16 @@ fn upload(
         persist(journal, intent)?;
         if uploaded_bytes == size {
           verify()?;
-          upload = match guarded(shared, || {
-            shared.account.photo_copy_complete(
-              &intent.scope.capture(),
-              &intent.scope.library_id,
-              &upload.id,
-              &complete_key,
-            )
-          }) {
-            Ok(value) => value,
-            Err(_) => {
-              let current = guarded(shared, || {
-                shared
-                  .account
-                  .photo_copy_get(&intent.scope.capture(), &intent.scope.library_id, &upload.id)
-              })?;
-              if matches!(&current.state, NativeUploadState::Reserved { uploaded_bytes } if *uploaded_bytes == size) {
-                guarded(shared, || {
-                  shared.account.photo_copy_complete(
-                    &intent.scope.capture(),
-                    &intent.scope.library_id,
-                    &upload.id,
-                    &complete_key,
-                  )
-                })?
-              } else {
-                current
-              }
-            }
-          };
-          if upload.id != upload_id {
-            return Err(AccountError::InvalidResponse);
-          }
+          upload = complete_native_upload(
+            shared,
+            &intent.scope.capture(),
+            &intent.scope.library_id,
+            &upload,
+            &target,
+            size,
+            &sha,
+            &complete_key,
+          )?;
           ticket = None;
           continue;
         }
@@ -1239,27 +1465,18 @@ fn upload(
           return Err(AccountError::InvalidResponse);
         }
         let active_ticket = ticket.take().ok_or(AccountError::Internal)?;
-        let _provider = guarded(shared, || {
-          shared
-            .account
-            .photo_copy_put(&intent.scope.capture(), &active_ticket, uploaded_bytes, size, &bytes)
-        })
-        .or_else(|_| {
-          guarded(shared, || {
-            shared
-              .account
-              .photo_copy_probe(&intent.scope.capture(), &active_ticket, size)
-          })
-        });
-        upload = guarded(shared, || {
-          shared
-            .account
-            .photo_copy_get(&intent.scope.capture(), &intent.scope.library_id, &upload.id)
-        })?;
-        if upload.id != upload_id {
-          return Err(AccountError::InvalidResponse);
-        }
-        assert_upload(&upload, &target, size, &sha)?;
+        upload = put_native_upload_chunk(
+          shared,
+          &intent.scope.capture(),
+          &intent.scope.library_id,
+          &upload,
+          &target,
+          size,
+          &sha,
+          &active_ticket,
+          uploaded_bytes,
+          &bytes,
+        )?;
         if let NativeUploadState::Reserved { uploaded_bytes: next } = &upload.state {
           if *next < uploaded_bytes {
             return Err(AccountError::InvalidResponse);
@@ -1277,6 +1494,84 @@ fn upload(
     }
   }
   Err(AccountError::Network)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn complete_native_upload(
+  shared: &SharedAccount,
+  capture: &PhotoScopeCapture,
+  library_id: &str,
+  upload: &NativeUpload,
+  target: &NativeCopyTarget,
+  size: u64,
+  sha: &str,
+  complete_key: &str,
+) -> Result<NativeUpload, AccountError> {
+  let next = match guarded(shared, || {
+    shared
+      .account
+      .photo_copy_complete(capture, library_id, &upload.id, complete_key)
+  }) {
+    Ok(value) => value,
+    Err(_) => {
+      let current = guarded(shared, || {
+        shared.account.photo_copy_get(capture, library_id, &upload.id)
+      })?;
+      assert_upload(&current, target, size, sha)?;
+      if current.id != upload.id {
+        return Err(AccountError::InvalidResponse);
+      }
+      if matches!(&current.state, NativeUploadState::Reserved { uploaded_bytes } if *uploaded_bytes == size) {
+        guarded(shared, || {
+          shared
+            .account
+            .photo_copy_complete(capture, library_id, &upload.id, complete_key)
+        })?
+      } else {
+        current
+      }
+    }
+  };
+  assert_upload(&next, target, size, sha)?;
+  if next.id != upload.id {
+    return Err(AccountError::InvalidResponse);
+  }
+  Ok(next)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn put_native_upload_chunk(
+  shared: &SharedAccount,
+  capture: &PhotoScopeCapture,
+  library_id: &str,
+  upload: &NativeUpload,
+  target: &NativeCopyTarget,
+  size: u64,
+  sha: &str,
+  ticket: &NativeUploadTicket,
+  offset: u64,
+  bytes: &[u8],
+) -> Result<NativeUpload, AccountError> {
+  if bytes.is_empty()
+    || bytes.len() > CHUNK_BYTES
+    || offset.checked_add(bytes.len() as u64).is_none_or(|end| end > size)
+  {
+    return Err(AccountError::InvalidResponse);
+  }
+  let _provider = guarded(shared, || {
+    shared.account.photo_copy_put(capture, ticket, offset, size, bytes)
+  })
+  .or_else(|_| guarded(shared, || shared.account.photo_copy_probe(capture, ticket, size)));
+  let next = guarded(shared, || {
+    shared.account.photo_copy_get(capture, library_id, &upload.id)
+  })?;
+  assert_upload(&next, target, size, sha)?;
+  if next.id != upload.id
+    || matches!(&next.state, NativeUploadState::Reserved { uploaded_bytes } if *uploaded_bytes < offset)
+  {
+    return Err(AccountError::InvalidResponse);
+  }
+  Ok(next)
 }
 
 fn cancel_intent(state: &CloudCopyState, shared: &SharedAccount, mut intent: CopyIntent) -> Result<(), AccountError> {
@@ -1825,6 +2120,11 @@ fn assert_upload(upload: &NativeUpload, target: &NativeCopyTarget, size: u64, sh
   } else {
     Ok(())
   }
+}
+
+fn existing_mask_photo_matches(photo: &Value, scope: &CopyScope, photo_id: &str) -> bool {
+  photo.get("id").and_then(Value::as_str) == Some(photo_id)
+    && photo.get("libraryId").and_then(Value::as_str) == Some(scope.library_id.as_str())
 }
 
 fn set_fact(intent: &mut CopyIntent, target: &NativeCopyTarget, sha: &str, upload: &NativeUpload, stored: bool) {
@@ -2403,6 +2703,17 @@ fn private_dir(path: &Path) -> Result<(), AccountError> {
 
 #[cfg(test)]
 mod tests {
+  #[test]
+  fn mask_upload_slots_bound_binary_work_and_release_on_drop() {
+    let first = MaskUploadSlot::acquire().unwrap();
+    let second = MaskUploadSlot::acquire().unwrap();
+    assert!(MaskUploadSlot::acquire().is_err());
+    drop(second);
+    let replacement = MaskUploadSlot::acquire().unwrap();
+    drop(replacement);
+    drop(first);
+    assert_eq!(ACTIVE_MASK_UPLOADS.load(Ordering::SeqCst), 0);
+  }
   use super::*;
 
   struct Fixture(PathBuf);
@@ -2474,6 +2785,25 @@ mod tests {
       confirmed_masks: false,
       confirmed_recipe: false,
     }
+  }
+
+  #[test]
+  fn existing_mask_start_is_reconciled_only_for_the_same_photo_and_library() {
+    let scope = CopyScope {
+      user_id: "owner".into(),
+      library_id: "library".into(),
+      session_id: "session".into(),
+      session_epoch: "epoch".into(),
+      transport: niho_desktop_account::PhotoIdentityTransport::MacBearer,
+    };
+    let photo = json!({"id":"photo","libraryId":"library"});
+    assert!(existing_mask_photo_matches(&photo, &scope, "photo"));
+    assert!(!existing_mask_photo_matches(&photo, &scope, "other-photo"));
+    assert!(!existing_mask_photo_matches(
+      &json!({"id":"photo","libraryId":"other-library"}),
+      &scope,
+      "photo"
+    ));
   }
 
   #[test]

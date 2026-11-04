@@ -458,7 +458,7 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
   async capable(signal?: AbortSignal): Promise<boolean> {
     try {
       const scope = this.scope();
-      if (scope.transport === "mac-bearer" && this.options.maskSurfaceTransport === undefined) return false;
+      if (scope.transport === "mac-bearer" && this.options.maskSurfaceTransport === undefined && this.options.maskUploader === undefined) return false;
       const raw = await this.options.client.request("library.get", {}, { signal: signal ?? new AbortController().signal });
       this.assertScope(scope);
       const library = validateLibrary(raw, scope.actorId, scope.libraryId);
@@ -572,14 +572,29 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
       assertCurrent();
       if (existing !== null) {
         assertMaskDimensions(existing, expected);
-        const local = await this.options.journal.getMaskSurface(currentScope, binding.photoId, surfaceId, signal);
+        const checkpointScope = recovered ? scopeOfBinding(binding) : currentScope;
+        const local = await this.options.journal.getMaskSurface(checkpointScope, binding.photoId, surfaceId, signal);
         assertCurrent();
-        if (local !== null && local.uploadState !== null) {
+        if (local !== null) {
           if (local.bytes.byteLength !== existing.sizeBytes || local.width !== existing.width || local.height !== existing.height) invalid();
-          if (!await this.options.journal.compareAndSetMaskUploadState(
-            currentScope, binding.photoId, surfaceId, local.uploadState, null, signal,
-          )) throw new PersonalPhotoCloudError("unavailable");
-          assertCurrent();
+          if (recovered) {
+            const bytes = checkedBytes(local.bytes);
+            const validated = await this.validate(bytes);
+            assertCurrent();
+            if (validated.id !== surfaceId || validated.width !== expected.width || validated.height !== expected.height) invalid();
+            await this.options.journal.putMaskSurface(currentScope, binding.photoId, {
+              id: surfaceId, width: expected.width, height: expected.height, sha256: surfaceId, bytes, uploadState: null,
+            }, signal, null);
+            assertCurrent();
+          }
+          // An explicit recovery grant may reconcile its old binary checkpoint
+          // from immutable storage proof. Old keys are never replayed in the new session.
+          if (local.uploadState !== null) {
+            if (!await this.options.journal.compareAndSetMaskUploadState(
+              checkpointScope, binding.photoId, surfaceId, local.uploadState, null, signal,
+            )) throw new PersonalPhotoCloudError("unavailable");
+            assertCurrent();
+          }
         }
       } else missing.push({ surfaceId, expected });
     }
@@ -666,21 +681,35 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
           durable = next;
         },
       };
-      const result = await runPersonalPhotoResumableUpload({
-        ...(this.options.maskSurfaceTransport === undefined
-          ? { client: this.options.client }
-          : { transport: this.options.maskSurfaceTransport }),
-        state: durable,
-        source: new Blob([bytes.slice().buffer], { type: "image/png" }),
-        store,
-        signal,
-        ...(this.options.clock === undefined ? {} : { now: this.options.clock.now }),
-        assertCurrent,
-      });
+      if (this.options.maskUploader !== undefined) {
+        await this.options.maskUploader.upload({
+          photoId, surfaceId, bytes: bytes.slice(), idempotencyKey: durable.startKey, uploadState: durable,
+          compareAndSetUploadState: async (before, next, storeSignal) => {
+            if (storeSignal.aborted) throw storeSignal.reason;
+            await store.compareAndSet(before, next);
+            assertCurrent();
+            return true;
+          },
+          signal,
+        });
+      } else {
+        const result = await runPersonalPhotoResumableUpload({
+          ...(this.options.maskSurfaceTransport === undefined
+            ? { client: this.options.client }
+            : { transport: this.options.maskSurfaceTransport }),
+          state: durable,
+          source: new Blob([bytes.slice().buffer], { type: "image/png" }),
+          store,
+          signal,
+          ...(this.options.clock === undefined ? {} : { now: this.options.clock.now }),
+          assertCurrent,
+        });
+        assertCurrent();
+        durable = result.state;
+        if (result.error !== null) throw result.error;
+        if (result.stored?.kind === "mask") assertMaskDimensions(result.stored.asset, expected);
+      }
       assertCurrent();
-      durable = result.state;
-      if (result.error !== null) throw result.error;
-      if (result.stored?.kind === "mask") assertMaskDimensions(result.stored.asset, expected);
       const confirmed = await this.freshAsset(photoId, surfaceId, signal);
       assertCurrent();
       if (confirmed !== null) {

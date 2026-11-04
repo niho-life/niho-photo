@@ -161,8 +161,9 @@ class BrowserUploadTransport implements PersonalPhotoResumableUploadTransport {
     signal: AbortSignal,
   ): Promise<{ readonly offsetBytes: number | null }> {
     const ticket = this.tickets.get(input.lease);
+    const source = input.source;
     if (
-      ticket === undefined || input.source === undefined || ticket.resumeOffsetBytes !== input.start ||
+      ticket === undefined || source === undefined || ticket.resumeOffsetBytes !== input.start ||
       Date.parse(ticket.expiresAt) <= this.options.now()
     ) invalid();
     const endInclusive = input.endExclusive - 1;
@@ -175,7 +176,7 @@ class BrowserUploadTransport implements PersonalPhotoResumableUploadTransport {
           "Content-Type": input.state.contentType,
           "Content-Range": `bytes ${input.start}-${endInclusive}/${input.state.sizeBytes}`,
         },
-        body: input.source.slice(input.start, input.endExclusive),
+        body: source.slice(input.start, input.endExclusive),
         signal: providerLink.controller.signal,
         credentials: "omit",
         referrerPolicy: "no-referrer",

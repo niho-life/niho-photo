@@ -121,6 +121,43 @@ describe("IndexedDB v2 mask journal", () => {
     journal.dispose();
   });
 
+  it("reclaims unreferenced cached PNGs from an old scope when only the global budget is full", async () => {
+    const journal = new IndexedDbRecipeSyncJournal(new IDBFactory(), "mask-global-cache-gc");
+    const old: Array<{ scope: RecipeJournalScope; photoId: string; sha: string }> = [];
+    try {
+      for (let session = 0; session < 4; session += 1) {
+        const previous = scope({ sessionId: `old-${session}`, sessionEpoch: `epoch-${session}` });
+        for (let index = 0; index < 4; index += 1) {
+          const bytes = new Uint8Array(7 * 1024 ** 2);
+          bytes[0] = session * 4 + index;
+          const photoId = `old-photo-${session}-${index}`;
+          const input = surface(bytes, photoId, session === 0 && index === 0);
+          await journal.putMaskSurface(previous, photoId, input, undefined, null);
+          old.push({ scope: previous, photoId, sha: input.sha256 });
+        }
+      }
+      const current = scope();
+      for (let index = 0; index < 2; index += 1) {
+        const bytes = new Uint8Array(7 * 1024 ** 2);
+        bytes[0] = 32 + index;
+        // Current unsent saves must stay pinned while old, unreferenced cache entries can be reclaimed.
+        await journal.putMaskSurface(current, `current-${index}`, surface(bytes, `current-${index}`, false));
+      }
+      const incoming = new Uint8Array(7 * 1024 ** 2);
+      incoming[0] = 64;
+      const input = surface(incoming, "new-photo", false);
+      await expect(journal.putMaskSurface(current, "new-photo", input, undefined, null)).resolves.toBeUndefined();
+      await expect(journal.getMaskSurface(current, "new-photo", input.sha256)).resolves.not.toBeNull();
+      const unknown = old[0]!;
+      await expect(journal.getMaskSurface(unknown.scope, unknown.photoId, unknown.sha)).resolves.not.toBeNull();
+      let removed = 0;
+      for (const row of old.slice(1)) {
+        if (await journal.getMaskSurface(row.scope, row.photoId, row.sha) === null) removed += 1;
+      }
+      expect(removed).toBeGreaterThan(0);
+    } finally { journal.dispose(); }
+  });
+
   it("upgrades a v1 writer without changing full JSON, unknown attempt, or previous-scope metadata", async () => {
     const factory = new IDBFactory();
     const name = "journal-v1-upgrade";
