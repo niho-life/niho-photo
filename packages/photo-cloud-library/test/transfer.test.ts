@@ -272,6 +272,10 @@ describe("browser original copy controller", () => {
     otherJournal.dispose();
 
     identity.set(null);
+    const beforeRevocation = new IndexedDbTransferJournal(factory, name);
+    await expect(beforeRevocation.get(oldScope, "dispose-keeps")).resolves.toMatchObject({ intentId: "dispose-keeps" });
+    beforeRevocation.dispose();
+    identity.revokeScope();
     await harness.controller.revokeScope!();
     const observer = new IndexedDbTransferJournal(factory, name);
     await expect(observer.list(otherScope)).resolves.toMatchObject({ entries: [{ intentId: "other" }] });
@@ -289,14 +293,40 @@ describe("browser original copy controller", () => {
     await seed.add(journalEntry(scope));
     seed.dispose();
     harness.client.libraryResponse = null;
-    harness.client.dispatch = async () => { throw new PersonalPhotoCloudError("scope_changed"); };
+    harness.client.dispatch = async () => { throw { error: { code: "unauthenticated" } }; };
 
-    await expect(harness.controller.checkCapability("jpeg")).rejects.toMatchObject({ code: "scope_changed" });
+    await expect(harness.controller.checkCapability("jpeg")).rejects.toMatchObject({ error: { code: "unauthenticated" } });
     await harness.controller.revokeScope!();
     const observer = new IndexedDbTransferJournal(factory, name);
     await expect(observer.list(scope)).rejects.toMatchObject({ code: "scope_changed" });
     observer.dispose();
     harness.controller.dispose();
+  });
+
+  it("preserves the journal when a connection teardown reports a null identity or scope_changed", async () => {
+    const factory = new IDBFactory();
+    const name = "connection-teardown-keeps-journal";
+    const identity = new FakeIdentity();
+    const harness = makeController({ factory, name, identity });
+    const scope: JournalScope = { actorId: IDS.userA, libraryId: responses["library.get"].id, sessionId: "parent-1", sessionEpoch: "epoch-1" };
+    const seed = new IndexedDbTransferJournal(factory, name);
+    await seed.add(journalEntry(scope));
+    seed.dispose();
+    identity.set(null);
+    harness.client.libraryResponse = null;
+    harness.client.dispatch = async () => { throw new PersonalPhotoCloudError("scope_changed"); };
+
+    await expect(harness.controller.checkCapability("jpeg")).rejects.toMatchObject({ code: "scope_changed" });
+    identity.set(defaultActor());
+    await expect(harness.controller.checkCapability("jpeg")).rejects.toMatchObject({ code: "scope_changed" });
+    const observer = new IndexedDbTransferJournal(factory, name);
+    await expect(observer.get(scope, "intent")).resolves.toMatchObject({ phase: "start-pending" });
+    observer.dispose();
+    harness.controller.dispose();
+
+    const replacement = makeController({ factory, name, identity: new FakeIdentity(defaultActor()) });
+    await expect(replacement.controller.resume({ intentId: "intent" })).resolves.toMatchObject({ phase: "needs-file" });
+    replacement.controller.dispose();
   });
 
   it("uses the injected clock to fence and purge a session at expiry", async () => {

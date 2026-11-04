@@ -6,7 +6,7 @@ read/delete/content adapter、same-origin HTTP client/BFF、IndexedDBの送信�
 
 `@niho/photo-cloud-library/browser` は `createBrowserPersonalPhotoCloudClient({identity})` で実libraryをprobeし、`createBrowserPersonalPhotoTransferController({client, identity})` で明示コピーを扱う。controllerのstartはintentId/File/format/完全recipe候補を受け、resume/cancelは同じintentを使う。`list({cursor, limit})` は `{items, nextCursor}` を返し、`readPendingRecipe(intentId)` はC03へ引き継ぐ両snapshotを返す。IDB/Web Lockを利用できなければ転送を始めない。disposeで要求・reader・購読を解放する。
 
-通常の `dispose()` は再起動後のresume用journalを保持する。logout/失効時はidentity変更またはrequest時の期限切れ・client失効検出で旧scopeをfenceしてjournalを消去し、hostは境界上の明示cleanupに `revokeScope()` を呼べる。purgeはactor/library/session/epochの完全一致だけを対象にし、raceする別tabのlate writeは一方向hashのfence keyで拒否する。revoke後の同じscopeは再利用しない。
+通常の `dispose()` と曖昧なnull identity/connection teardownは再起動後のresume用journalを保持する。logout・失効の確定イベント、検証済みの別scope、期限切れ、実認証拒否では旧scopeをfenceしてjournalを消去する。hostは境界上の明示cleanupに `revokeScope()` を呼べる。purgeはactor/library/session/epochの完全一致だけを対象にし、raceする別tabのlate writeは一方向hashのfence keyで拒否する。revoke後の同じscopeは再利用しない。
 
 `@niho/photo-cloud-library/server` の `createPersonalPhotoCloudProxy` は、既存C01のauthService、trustedなupstreamOrigin/upstreamPathPrefixを受け、C06のcloudHandlerへ渡せる `Request => Promise<Response | null>` を返す。credentialはserver callback内だけに置く。`PERSONAL_PHOTO_CLOUD_HOST_LIMITS` をC08のNode設定へ明示し、既定64MiB/120秒のまま実接続を受け入れない。
 

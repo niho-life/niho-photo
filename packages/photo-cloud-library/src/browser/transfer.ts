@@ -118,6 +118,7 @@ class TransferController implements BrowserPersonalPhotoTransferController {
   private readonly capturedScope: JournalScope;
   private readonly lifecycle = new AbortController();
   private readonly unsubscribeIdentity: () => void;
+  private readonly unsubscribeScopeRevoked: () => void;
   private expiryTimer: ReturnType<typeof setTimeout> | null = null;
   private revocationPromise: Promise<void> | null = null;
   private revoked = false;
@@ -145,13 +146,17 @@ class TransferController implements BrowserPersonalPhotoTransferController {
     });
     this.unsubscribeIdentity = options.identity.subscribe(() => {
       const next = options.identity.getSnapshot();
-      const expiresAt = next === null ? Number.NaN : Date.parse(next.expiresAt);
-      if (next === null || !samePhotoIdentityScope(captured, next) || !Number.isFinite(expiresAt) || expiresAt <= this.now()) {
+      // A null snapshot also represents connection disposal and temporary verification gaps.
+      // Only a definitive revocation event or a verifiable replacement identity can purge.
+      if (next === null) return;
+      const expiresAt = Date.parse(next.expiresAt);
+      if (!samePhotoIdentityScope(captured, next) || !Number.isFinite(expiresAt) || expiresAt <= this.now()) {
         this.invalidateScope();
       } else {
         this.armExpiry(expiresAt);
       }
     });
+    this.unsubscribeScopeRevoked = options.identity.subscribeScopeRevoked?.(() => this.invalidateScope()) ?? (() => undefined);
     this.armExpiry(Date.parse(captured.expiresAt));
   }
 
@@ -164,7 +169,7 @@ class TransferController implements BrowserPersonalPhotoTransferController {
       this.assertScope(scope);
       return library.state === "active" && library.capabilities.formats.some((item) => item.format === format && item.ingest);
     } catch (error) {
-      if (!operationLink.controller.signal.aborted && isScopeFailure(error)) this.invalidateScope();
+      if (!operationLink.controller.signal.aborted && isDefinitiveRevocation(error)) this.invalidateScope();
       throw error;
     } finally { operationLink.dispose(); }
   }
@@ -178,7 +183,7 @@ class TransferController implements BrowserPersonalPhotoTransferController {
     const capability: PersonalPhotoLibrary = await (async () => {
       try { return await this.options.client.request("library.get", {}, { signal: capabilityLink.controller.signal }); }
       catch (error) {
-        if (!capabilityLink.controller.signal.aborted && isScopeFailure(error)) this.invalidateScope();
+        if (!capabilityLink.controller.signal.aborted && isDefinitiveRevocation(error)) this.invalidateScope();
         throw error;
       }
       finally { capabilityLink.dispose(); }
@@ -276,6 +281,7 @@ class TransferController implements BrowserPersonalPhotoTransferController {
     if (this.disposed) return;
     this.disposed = true;
     this.unsubscribeIdentity();
+    this.unsubscribeScopeRevoked();
     this.clearExpiry();
     this.lifecycle.abort(new PersonalPhotoCloudError("disposed"));
     if (this.revocationPromise === null) this.journal.dispose();
@@ -392,7 +398,7 @@ class TransferController implements BrowserPersonalPhotoTransferController {
 
   private async handleKnownFailure(entry: TransferJournalEntry, error: unknown, signal: AbortSignal): Promise<TransferJournalEntry> {
     if (signal.aborted) throw abortReason(signal);
-    if (isScopeFailure(error)) {
+    if (isDefinitiveRevocation(error)) {
       this.invalidateScope();
       throw new PersonalPhotoCloudError("scope_changed");
     }
@@ -417,20 +423,24 @@ class TransferController implements BrowserPersonalPhotoTransferController {
   }
   private async requiredEntry(scope: JournalScope, intentId: string, signal: AbortSignal): Promise<TransferJournalEntry> { const entry = await this.journal.get(scope, intentId, signal); if (entry === null) throw new PersonalPhotoCloudError("not_found"); return entry; }
   private scope(): JournalScope {
-    try {
-      const actor = currentActor(this.options.identity, this.now());
-      const scope = { actorId: actor.userId, libraryId: this.options.client.scope.libraryId, sessionId: actor.sessionId, sessionEpoch: actor.sessionEpoch };
-      if (
-        actor.transport !== "browser-session" ||
-        actor.userId !== this.options.client.scope.actorId ||
-        actor.sessionEpoch !== this.options.client.scope.sessionEpoch ||
-        !sameJournalScope(scope, this.capturedScope)
-      ) throw new PersonalPhotoCloudError("scope_changed");
-      return scope;
-    } catch (error) {
-      if (error instanceof PersonalPhotoCloudError && error.code === "scope_changed") this.invalidateScope();
-      throw error;
+    const actor = this.options.identity.getSnapshot();
+    if (actor === null) throw new PersonalPhotoCloudError("scope_changed");
+    const expiresAt = Date.parse(actor.expiresAt);
+    if (!Number.isFinite(expiresAt) || expiresAt <= this.now()) {
+      this.invalidateScope();
+      throw new PersonalPhotoCloudError("scope_changed");
     }
+    const scope = { actorId: actor.userId, libraryId: this.options.client.scope.libraryId, sessionId: actor.sessionId, sessionEpoch: actor.sessionEpoch };
+    if (
+      actor.transport !== "browser-session" ||
+      actor.userId !== this.options.client.scope.actorId ||
+      actor.sessionEpoch !== this.options.client.scope.sessionEpoch ||
+      !sameJournalScope(scope, this.capturedScope)
+    ) {
+      this.invalidateScope();
+      throw new PersonalPhotoCloudError("scope_changed");
+    }
+    return scope;
   }
   private async withLock<T>(scope: JournalScope, intentId: string, signal: AbortSignal | undefined, run: (signal: AbortSignal) => Promise<T>): Promise<T> {
     const operationLink = linkedAbortController(this.lifecycle.signal, ...(signal === undefined ? [] : [signal]));
@@ -458,7 +468,7 @@ class TransferController implements BrowserPersonalPhotoTransferController {
         onTimeout: () => operationLink.controller.abort(new PersonalPhotoCloudError("unavailable")),
       });
     } catch (error) {
-      if (!operationSignal.aborted && isScopeFailure(error)) this.invalidateScope();
+      if (!operationSignal.aborted && isDefinitiveRevocation(error)) this.invalidateScope();
       throw error;
     } finally { operationLink.dispose(); }
   }
@@ -484,9 +494,14 @@ class TransferController implements BrowserPersonalPhotoTransferController {
       this.expiryTimer = null;
       if (this.disposed || this.revoked) return;
       const actor = this.options.identity.getSnapshot();
-      const currentExpiry = actor === null ? Number.NaN : Date.parse(actor.expiresAt);
+      if (actor === null) {
+        if (this.now() >= expiresAt) this.invalidateScope();
+        else this.armExpiry(expiresAt);
+        return;
+      }
+      const currentExpiry = Date.parse(actor.expiresAt);
       if (
-        actor === null || !sameActorScope(actor, this.capturedScope) ||
+        !sameActorScope(actor, this.capturedScope) ||
         !Number.isFinite(currentExpiry) || currentExpiry <= this.now()
       ) {
         this.invalidateScope();
@@ -557,7 +572,7 @@ function emptyFile(): File { return new File([], "resume-placeholder", { type: "
 function validateIntent(value: string): void { if (typeof value !== "string" || value.length === 0 || value.length > 512 || value !== value.trim() || /[\p{Cc}\p{Cf}]/u.test(value)) throw new PersonalPhotoCloudError("invalid_response"); }
 function throwIfAborted(signal: AbortSignal): void { if (signal.aborted) throw signal.reason instanceof Error ? signal.reason : new DOMException("Aborted", "AbortError"); }
 function photoErrorCode(error: unknown): string | null { return isRecord(error) && isRecord(error.error) && typeof error.error.code === "string" ? error.error.code : null; }
-function isScopeFailure(error: unknown): boolean {
-  return error instanceof PersonalPhotoCloudError && (error.code === "scope_changed" || error.code === "invalid_identity") || photoErrorCode(error) === "unauthenticated";
+function isDefinitiveRevocation(error: unknown): boolean {
+  return error instanceof PersonalPhotoCloudError && error.code === "invalid_identity" || photoErrorCode(error) === "unauthenticated";
 }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
