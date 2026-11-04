@@ -13241,8 +13241,8 @@
     },
     {
       "path": "apps/photo-web/vitest.session.config.ts",
-      "sha256": "383fa95a7769d0b71c64578daf015523d04678e4592dea20c15978c2cea29821",
-      "origin": "NIHOがPhoto Web本人capture helperの対象Node環境試験を実行する設定として新規作成。\n変更理由: 固定Photo BFFの401だけをruntimeの世代別本人再確認へ接続し、透過fetchとbrowser graphの対象検証・責務を追加する\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。"
+      "sha256": "23cac82b4900d66d8badec5f93543d071a28c078e2f03a19f8254e86f2359c1c",
+      "origin": "NIHOがPhoto Web本人capture helperの対象Node環境試験を実行する設定として新規作成。\n変更理由: 固定Photo BFFの401だけをruntimeの世代別本人再確認へ接続し、透過fetchとbrowser graphの対象検証・責務を追加する\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: 公式起動口のpublic uploader port分離回帰を対象CIへ登録"
     },
     {
       "path": "apps/photo-web/src/browser/auth-fetch.ts",
@@ -13376,8 +13376,8 @@
     },
     {
       "path": "apps/photo-web/src/browser/application.ts",
-      "sha256": "533a6b1a1e804f3f853c052f047f2153deb01418441c67eca703f2dbfd5de7b8",
-      "origin": "NIHO所有のPhoto Web正式起動composition。既存session・provider・同期library・共有編集面を接続し、実credential・写真・内部URLを含まない。\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。"
+      "sha256": "87638344680923b856d4e6925e7232a00088a7e0c6eb2b67678d941b2988f9d4",
+      "origin": "NIHO所有のPhoto Web正式起動composition。既存session・provider・同期library・共有編集面を接続し、実credential・写真・内部URLを含まない。\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: BFFと公開upload transportを公式起動口から別portで接続"
     },
     {
       "path": "apps/photo-web/src/browser/connection.ts",
@@ -13388,6 +13388,11 @@
       "path": "apps/photo-web/test/connection.test.ts",
       "sha256": "d2e601d5c676a56522f4c13a090d86f0aba7ceb86231795a83dc610cf3d56bf7",
       "origin": "NIHO所有のPhoto Web composition回帰試験。合成HTTP・合成JPEG bytesとfake browser persistenceだけを使い、実credential・写真・個人情報を含まない。\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: Webの固定renderer SDK mask validator接続と対象回帰の追加"
+    },
+    {
+      "path": "apps/photo-web/test/application.test.ts",
+      "sha256": "2680e051bad835c7846ab1e5cdadd05e6fe96766be1c558f2bd46e2e31c70d45",
+      "origin": "NIHO所有のPhoto Web起動composition回帰試験。合成portだけを使い、実credential・写真・個人情報を含まない。\n変更理由: BFFと公開upload transportを公式起動口から別portで接続する回帰を追加。"
     }
   ],
   "excludedSources": [
