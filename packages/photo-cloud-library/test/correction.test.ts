@@ -13,6 +13,7 @@ import {
   IDS,
   emptyPage,
   library,
+  mask,
   maskedPhoto,
   original,
   page,
@@ -22,7 +23,8 @@ import {
 import { PHOTO_EDITING_PERSONAL_CLOUD_COPY } from "niho-photo-editing/photo-editing-copy";
 
 import { PersonalPhotoCloudError } from "../src/index";
-import { FakeClient, FakeIdentity, defaultActor, defaultResponse, makeHandle, stream } from "./support";
+import type { PersonalPhotoCloudMaskUploader } from "../src/index";
+import { FakeClient, FakeIdentity, defaultActor, defaultResponse, makeHandle, maskPngFixture, MemoryMaskJournal, stream, testMaskValidator } from "./support";
 
 describe("scope and per-photo authority fences", () => {
   it("invalidates URLs, refs, and a stalled body when the client library binding changes", async () => {
@@ -334,6 +336,158 @@ describe("recipe-specific renderer and media intersection", () => {
       }),
     ).rejects.toEqual(new PersonalPhotoCloudError("invalid_response"));
     expect(client.calls).toHaveLength(before);
+  });
+
+  it("keeps mask capability closed without a real uploader and verifies exact stored/read bytes when enabled", async () => {
+    const closed = makeHandle();
+    await expect(closed.library.capabilities()).resolves.toMatchObject({ maskSurfaces: false });
+    expect(closed.library.saveMaskSurface).toBeUndefined();
+    closed.dispose();
+
+    const uploaderOnly = makeHandle(new FakeClient(), new FakeIdentity(), {
+      maskUploader: { upload: vi.fn(async () => undefined) },
+    });
+    await expect(uploaderOnly.library.capabilities()).resolves.toMatchObject({ maskSurfaces: false });
+    expect(uploaderOnly.library.saveMaskSurface).toBeUndefined();
+    uploaderOnly.dispose();
+
+    const missingJournal = makeHandle(new FakeClient(), new FakeIdentity(), {
+      maskUploader: { upload: vi.fn(async () => undefined) },
+      maskValidator: testMaskValidator,
+      omitMaskJournal: true,
+    });
+    await expect(missingJournal.library.capabilities()).resolves.toMatchObject({ maskSurfaces: false });
+    expect(missingJournal.library.saveMaskSurface).toBeUndefined();
+    missingJournal.dispose();
+
+    const missingLock = makeHandle(new FakeClient(), new FakeIdentity(), {
+      maskUploader: { upload: vi.fn(async () => undefined) },
+      maskValidator: testMaskValidator,
+      omitMaskLocks: true,
+    });
+    await expect(missingLock.library.capabilities()).resolves.toMatchObject({ maskSurfaces: false });
+    expect(missingLock.library.saveMaskSurface).toBeUndefined();
+    missingLock.dispose();
+
+    const { bytes, surfaceId } = maskPngFixture();
+    const asset: PhotoAsset = { ...mask, sha256: surfaceId, sizeBytes: bytes.byteLength, width: 1, height: 1 };
+    let stored = false;
+    let storedBytes = bytes.slice();
+    let assertJournalBeforeNetwork = false;
+    const client = new FakeClient();
+    const journal = new MemoryMaskJournal();
+    client.dispatch = async (operation, request) => {
+      if (assertJournalBeforeNetwork) {
+        expect(journal.calls).toContain("put");
+        expect(journal.calls).toContain("cas");
+      }
+      if (operation === "photos.get") return readyPhoto;
+      if (operation === "library.get") return library;
+      if (operation === "masks.get") {
+        if (!stored) throw new PersonalPhotoCloudError("not_found");
+        expect(request).toEqual({ photoId: IDS.photo, surfaceId });
+        return asset;
+      }
+      if (operation === "content.get") return assetResponse(asset, stream(storedBytes));
+      throw new Error(`unexpected ${operation}`);
+    };
+    const upload = vi.fn(async (input: { bytes: Uint8Array; surfaceId: string }) => {
+      expect(input.surfaceId).toBe(surfaceId);
+      storedBytes = input.bytes.slice();
+      stored = true;
+    });
+    const handle = makeHandle(client, new FakeIdentity(), {
+      maskUploader: { upload }, maskValidator: testMaskValidator, maskJournal: journal,
+    });
+    try {
+      await expect(handle.library.capabilities()).resolves.toMatchObject({ maskSurfaces: true });
+      const save = handle.library.saveMaskSurface;
+      if (save === undefined) throw new Error("mask upload port was not exposed");
+      assertJournalBeforeNetwork = true;
+      await expect(save(IDS.photo, bytes)).resolves.toEqual({ id: surfaceId, width: 1, height: 1 });
+      expect(upload).toHaveBeenCalledOnce();
+      const persisted = await journal.getMaskSurface({
+        actorId: IDS.userA,
+        libraryId: IDS.library,
+        sessionId: "parent-1",
+        sessionEpoch: "epoch-1",
+        transport: "browser-session",
+      }, IDS.photo, surfaceId);
+      expect(persisted).toBeNull();
+      await expect(handle.library.loadMaskSurface?.(IDS.photo, surfaceId)).resolves.toEqual(bytes);
+
+      storedBytes = storedBytes.slice();
+      storedBytes[storedBytes.byteLength - 1] ^= 1;
+      await expect(handle.library.loadMaskSurface?.(IDS.photo, surfaceId)).rejects.toEqual(
+        new PersonalPhotoCloudError("invalid_response"),
+      );
+      const cloudOnly = makeHandle(client, new FakeIdentity(), {
+        maskValidator: testMaskValidator,
+        omitMaskJournal: true,
+        omitMaskLocks: true,
+      });
+      try {
+        await expect(cloudOnly.library.loadMaskSurface?.(IDS.photo, surfaceId)).rejects.toEqual(
+          new PersonalPhotoCloudError("invalid_response"),
+        );
+      } finally { cloudOnly.dispose(); }
+    } finally { handle.dispose(); }
+  });
+
+  it("retains the exact local PNG and resumable state after an unknown result, then settles after readback", async () => {
+    const { bytes, surfaceId } = maskPngFixture(141);
+    const asset: PhotoAsset = { ...mask, sha256: surfaceId, sizeBytes: bytes.byteLength, width: 1, height: 1 };
+    const journal = new MemoryMaskJournal();
+    const client = new FakeClient();
+    let stored = false;
+    client.dispatch = async (operation, request) => {
+      if (operation === "photos.get") return readyPhoto;
+      if (operation === "library.get") return library;
+      if (operation === "masks.get") {
+        if (!stored) throw new PersonalPhotoCloudError("not_found");
+        expect(request).toEqual({ photoId: IDS.photo, surfaceId });
+        return asset;
+      }
+      if (operation === "content.get") return assetResponse(asset, stream(bytes));
+      throw new Error(`unexpected ${operation}`);
+    };
+    let attempts = 0;
+    const upload = vi.fn(async (input: Parameters<PersonalPhotoCloudMaskUploader["upload"]>[0]) => {
+      attempts += 1;
+      if (attempts === 1) {
+        const interrupted = { ...input.uploadState, phase: "uploading" as const, uploadId: "mask-upload-1", deadline: "2030-01-01T00:00:00.000Z" };
+        expect(await input.compareAndSetUploadState(input.uploadState, interrupted, input.signal)).toBe(true);
+        throw new PersonalPhotoCloudError("unavailable");
+      }
+      expect(input.uploadState).toMatchObject({ phase: "uploading", uploadId: "mask-upload-1" });
+      const verifying = { ...input.uploadState, phase: "verifying" as const, offsetBytes: input.uploadState.sizeBytes };
+      expect(await input.compareAndSetUploadState(input.uploadState, verifying, input.signal)).toBe(true);
+      stored = true;
+    });
+    const handle = makeHandle(client, new FakeIdentity(), {
+      maskUploader: { upload }, maskValidator: testMaskValidator, maskJournal: journal,
+    });
+    const journalScope = {
+      actorId: IDS.userA,
+      libraryId: IDS.library,
+      sessionId: "parent-1",
+      sessionEpoch: "epoch-1",
+      transport: "browser-session" as const,
+    };
+    try {
+      const save = handle.library.saveMaskSurface;
+      if (save === undefined) throw new Error("mask upload port was not exposed");
+      await expect(save(IDS.photo, bytes)).rejects.toEqual(new PersonalPhotoCloudError("unavailable"));
+      const pending = await journal.getMaskSurface(journalScope, IDS.photo, surfaceId);
+      expect(pending?.bytes).toEqual(bytes);
+      expect(pending?.uploadState).toMatchObject({ phase: "uploading", uploadId: "mask-upload-1" });
+      await expect(handle.library.loadMaskSurface?.(IDS.photo, surfaceId)).resolves.toEqual(bytes);
+
+      await expect(save(IDS.photo, bytes)).resolves.toEqual({ id: surfaceId, width: 1, height: 1 });
+      expect(upload).toHaveBeenCalledTimes(2);
+      const settled = await journal.getMaskSurface(journalScope, IDS.photo, surfaceId);
+      expect(settled).toBeNull();
+    } finally { handle.dispose(); }
   });
 });
 

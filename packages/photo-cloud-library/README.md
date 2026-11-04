@@ -14,6 +14,8 @@ read/delete/content adapter、same-origin HTTP client/BFF、IndexedDBの送信�
 
 `createPersonalPhotoCloudLibrary` へ、検証済み本人に拘束したclient、本人snapshotと変更購読、実renderer能力、engine assets、実presets、明示的なメモリ予算を渡す。未認証時に別clientへfallbackしない。認証・libraryの切替時は古いbindingを直ちに失効させる。
 
+mask surface の保存 capability を公開するには、永続uploadを行う `maskUploader`、表示と同じSDK decoderを呼ぶ `maskValidator`、補正journalと同じbytes/upload-state journalを指す `maskJournal`、scopeをまたぐ重複uploadを直列化する `maskLocks` がすべて必要。sync library factoryは補正journalとlockを自動で接続する。adapterはネットワーク要求より前にPNG bytesとstable upload stateを永続化し、共通resumable runnerで送信し、cloud readback・SDK decode・byte identityを確認した後だけupload stateをsettleする。Browser transfer controllerにも同じ `maskValidator` を渡し、未接続時はmask参照付きコピーをpendingのままにする。ホストはbindingの破棄時にvalidator/uploaderを破棄する。
+
 handleの `library` は既存PhotoLibrary、`usage` は予約・削除待ちを含む容量内訳、`rawPhoto` は完全なrecipe JSON、`readAsset` は検査付きstream、`dispose` は資源解放の口になる。metadataのwhole-asset SHA-256をrange本文のdigestと取り違えず、実transportが正本のgenerationとhash検証済みassetへ固定する。
 
 File/Blobを要求する共通口だけを明示的な予算内で実体化する。大きな原本のMacコピー/書出しはnative側、ブラウザの保存はhost側のstream経路へ接続する。空のBlobで保存成功を偽装しない。予算はadapterの一時的な実体化と保持資源を管理するもので、ブラウザ全体のRSSを保証する値ではない。返したFile/Blobの寿命は呼出し元が管理する。

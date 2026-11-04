@@ -51,7 +51,7 @@ import type {
 const DEFAULT_TIMEOUT_MS = 15_000;
 const LIST_LIMIT = 16;
 
-export type CreatePersonalPhotoCloudLibraryWithSyncOptions = CreatePersonalPhotoCloudLibraryOptions & Pick<
+export type CreatePersonalPhotoCloudLibraryWithSyncOptions = Omit<CreatePersonalPhotoCloudLibraryOptions, "maskJournal" | "maskLocks"> & Pick<
   CreatePersonalPhotoRecipeSyncOptions,
   "journal" | "locks" | "randomId" | "timeoutMs"
 >;
@@ -79,13 +79,18 @@ type ChoiceBinding = {
 export function createPersonalPhotoCloudLibrary(
   options: CreatePersonalPhotoCloudLibraryWithSyncOptions,
 ): PersonalPhotoCloudLibraryHandle {
-  const base = createCloudLibrary(options);
+  const base = createCloudLibrary({
+    ...options,
+    maskJournal: options.journal,
+    maskLocks: options.locks,
+  });
   let sync: PersonalPhotoRecipeSync;
   try {
     sync = createPersonalPhotoRecipeSync({
       client: options.client,
       identity: options.identity,
       hostRenderer: options.hostRenderer,
+      ...(options.maskValidator === undefined ? {} : { maskValidator: options.maskValidator }),
       journal: options.journal,
       locks: options.locks,
       ...(options.clock === undefined ? {} : { now: options.clock.now }),
@@ -350,7 +355,9 @@ class DurableBinding {
       owner,
       conflict: conflictBinding,
       expectedRevision: photo.recipe.revision,
-      canAdopt: projectRecipeSettings(projected, cloud, this.options.hostRenderer) !== null,
+      canAdopt: projectRecipeSettings(projected, cloud, this.options.maskValidator === undefined
+        ? { ...this.options.hostRenderer, maskSurfaces: false }
+        : this.options.hostRenderer) !== null,
       intent: null,
     };
     this.choices.set(choice, choiceBinding);

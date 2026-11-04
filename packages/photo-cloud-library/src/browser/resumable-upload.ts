@@ -142,8 +142,8 @@ class Runner {
       }));
       const response = receipt.value;
       if (response.kind === "existing") {
-        if (state.target.kind !== "original") invalid();
-        assertOriginalPhoto(state, response.photo);
+        if (state.target.kind === "original") assertOriginalPhoto(state, response.photo);
+        else if (response.photo.id !== state.target.photoId || response.photo.libraryId !== this.options.client.scope.libraryId) invalid();
         return { state, ticket: null, result: result(state, null, response.photo) };
       }
       assertUploadBinding(state, response.upload);
@@ -205,11 +205,13 @@ class Runner {
           if (ticket.resumeOffsetBytes !== state.offsetBytes) invalid();
         } catch (error) { return result(state, null, null, error); }
       }
-      if (this.options.source === undefined) invalid();
+      const source = this.options.source;
+      if (source === undefined || ticket === null) invalid();
+      const activeTicket = ticket;
       const endExclusive = Math.min(state.offsetBytes + GCS_CHUNK_BYTES, state.sizeBytes);
       const endInclusive = endExclusive - 1;
-      const uploadUrl = ticket.url;
-      const uploadBody = this.options.source.slice(state.offsetBytes, endExclusive);
+      const uploadUrl = activeTicket.url;
+      const uploadBody = source.slice(state.offsetBytes, endExclusive);
       let response: Response;
       try {
         const providerLink = linkedAbortController(this.options.signal);

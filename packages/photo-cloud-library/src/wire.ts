@@ -346,8 +346,12 @@ export function validateResponseTickets(
   if (!isRecord(upload) || !isRecord(upload.target) || !safePositive(upload.sizeBytes)) invalidResponse();
   let expectedContentType: string | null = null;
   if (operation === "uploads.start" && context?.kind === "start") expectedContentType = context.contentType;
-  else if (operation === "uploads.renew" && upload.target.kind === "original" && isFormat(upload.target.format)) {
-    expectedContentType = canonicalContentType(upload.target.format);
+  else if (operation === "uploads.renew") {
+    if (upload.target.kind === "original" && isFormat(upload.target.format)) {
+      expectedContentType = canonicalContentType(upload.target.format);
+    } else if (upload.target.kind === "mask") {
+      expectedContentType = "image/png";
+    }
   }
   if (expectedContentType === null) invalidResponse();
   validateTicket(ticket, { trustedOrigin, expectedContentType, expectedSize: upload.sizeBytes, now });
