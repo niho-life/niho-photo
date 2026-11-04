@@ -175,6 +175,43 @@ describe("photo web session identity bridge", () => {
       session.dispose();
     }
   });
+
+  it("distinguishes definitive scope revocation from ordinary host teardown and disposal", async () => {
+    const session = controller(host());
+    const scope = new AbortController();
+    try {
+      await session.read();
+      const bridge = createPhotoWebCloudIdentity({ session, identity: session.getSnapshot().identity!, scopeSignal: scope.signal });
+      const revoked = vi.fn();
+      const unsubscribe = bridge.subscribeScopeRevoked?.(revoked);
+      scope.abort();
+      expect(revoked).not.toHaveBeenCalled();
+      session.dispose();
+      expect(revoked).not.toHaveBeenCalled();
+      unsubscribe?.();
+    } finally {
+      session.dispose();
+    }
+  });
+
+  it("reports logout as a definitive scope revocation", async () => {
+    const session = controller(host());
+    try {
+      await session.read();
+      const bridge = createPhotoWebCloudIdentity({
+        session,
+        identity: session.getSnapshot().identity!,
+        scopeSignal: new AbortController().signal,
+      });
+      const revoked = vi.fn();
+      const unsubscribe = bridge.subscribeScopeRevoked?.(revoked);
+      await session.logout();
+      expect(revoked).toHaveBeenCalledTimes(1);
+      unsubscribe?.();
+    } finally {
+      session.dispose();
+    }
+  });
 });
 
 describe("captured photo web cloud client", () => {
