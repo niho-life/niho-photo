@@ -12252,8 +12252,8 @@
     },
     {
       "path": "package-lock.json",
-      "sha256": "ac594a66c971987ff0ac0f73d271f7734a2ca2fcabadac8f47573f40d6adc441",
-      "origin": "公開SDKのReact 19型consumer smokeだけで使う開発依存のlockfile。runtime依存を変更しない。\n変更理由: 依存追加なしでPhoto session workspace linkとpackage metadataをnpmで同期\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02・SDK profileのmain lockを保持し、検証済みPhoto Webの3 lock entryとworkspace登録だけを統合。\n変更理由: C02の公開workspaceと固定hashおよびIndexedDB試験依存をintegrityで固定する\n変更理由: 既存固定依存だけで本人補正同期workspaceを登録\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。"
+      "sha256": "0906b799187f34e6a33829afa8f811bb308a2e2a13525ea8851733aae96787e4",
+      "origin": "公開SDKのReact 19型consumer smokeだけで使う開発依存のlockfile。runtime依存を変更しない。\n変更理由: 依存追加なしでPhoto session workspace linkとpackage metadataをnpmで同期\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02・SDK profileのmain lockを保持し、検証済みPhoto Webの3 lock entryとworkspace登録だけを統合。\n変更理由: C02の公開workspaceと固定hashおよびIndexedDB試験依存をintegrityで固定する\n変更理由: 既存固定依存だけで本人補正同期workspaceを登録\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: Photo Webの本人cloud client・同期library・契約workspace依存をlockへ追加"
     },
     {
       "path": "scripts/sdk/smoke-consumer.mjs",
@@ -12782,8 +12782,8 @@
     },
     {
       "path": "apps/photo-web/package.json",
-      "sha256": "e09b94ceaaf0c74282083fa2b04d4c50939c61d1cf6917164956ca5ce6a4241d",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加\n変更理由: 本人captureと受信streamの対象Vitestを既存Photo Web検証へ追加する。"
+      "sha256": "cefc089c9534623ef18df7e2f67fda3d2d68252b979bd35f995426617bb8dfbb",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加\n変更理由: 本人captureと受信streamの対象Vitestを既存Photo Web検証へ追加する。\n変更理由: 本人cloud provider・同期library・personal contractを製品依存として登録"
     },
     {
       "path": "apps/photo-web/provenance.json",
@@ -12972,8 +12972,8 @@
     },
     {
       "path": "apps/photo-web/test/browser-bundle.test.mjs",
-      "sha256": "b0ad0b1a6d44c888ddf8531ff2a6847039a4661c9152f12bc955cc733c2f0393",
-      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加\n変更理由: 本人capture helperを実配布graphへ含め、server/native依存の混入がないことを確認する。\n変更理由: 固定Photo BFFの401だけをruntimeの世代別本人再確認へ接続し、透過fetchとbrowser graphの対象検証・責務を追加する"
+      "sha256": "c71c7300f09fe36691a9949f89351c976caf11413adf941a02af796d1c282058",
+      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加\n変更理由: 本人capture helperを実配布graphへ含め、server/native依存の混入がないことを確認する。\n変更理由: 固定Photo BFFの401だけをruntimeの世代別本人再確認へ接続し、透過fetchとbrowser graphの対象検証・責務を追加する\n変更理由: 正式compositionをVite graphへ含めbrowserへのnative/server依存漏れを検査"
     },
     {
       "path": "apps/photo-web/vitest.mount.config.ts",
@@ -13222,8 +13222,8 @@
     },
     {
       "path": "apps/photo-web/vitest.session.config.ts",
-      "sha256": "f52940f89359c82bed6bd1985bbc126890021d22765c85af9166157eab71d832",
-      "origin": "NIHOがPhoto Web本人capture helperの対象Node環境試験を実行する設定として新規作成。\n変更理由: 固定Photo BFFの401だけをruntimeの世代別本人再確認へ接続し、透過fetchとbrowser graphの対象検証・責務を追加する"
+      "sha256": "383fa95a7769d0b71c64578daf015523d04678e4592dea20c15978c2cea29821",
+      "origin": "NIHOがPhoto Web本人capture helperの対象Node環境試験を実行する設定として新規作成。\n変更理由: 固定Photo BFFの401だけをruntimeの世代別本人再確認へ接続し、透過fetchとbrowser graphの対象検証・責務を追加する\n変更理由: 実C02/C03 Photo Web compositionの接続回帰を既存session suiteへ追加"
     },
     {
       "path": "apps/photo-web/src/browser/auth-fetch.ts",
@@ -13319,6 +13319,21 @@
       "path": "apps/camera/src/native-photo-copy.test.ts",
       "sha256": "cae5d90911df43016a7e6cde0aefa2dcd02e527d5d01fb6da2cf3c5825e93e93",
       "origin": "NIHO Photo公開クライアントで新規作成。明示コピーのnative journal・安全なIPC・合成データによる回帰検証。内部ソース・秘密・実写真を含まない。\n変更理由: IPC拒否のfixtureに合成パスを使い公開境界を維持"
+    },
+    {
+      "path": "apps/photo-web/src/browser/application.ts",
+      "sha256": "533a6b1a1e804f3f853c052f047f2153deb01418441c67eca703f2dbfd5de7b8",
+      "origin": "NIHO所有のPhoto Web正式起動composition。既存session・provider・同期library・共有編集面を接続し、実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "apps/photo-web/src/browser/connection.ts",
+      "sha256": "b5c6353387d085039699b0a7dc2ed339b8c1f08ef67a0225b7f51e6ea35db48c",
+      "origin": "NIHO所有のPhoto Web本人media/provider composition。既存C01/C02/C03 portsとrenderer proofを接続し、別journal・decoder・editorや実credential・写真・内部URLを含まない。"
+    },
+    {
+      "path": "apps/photo-web/test/connection.test.ts",
+      "sha256": "a1c39fa90993f33b966e8759a1714accb73a9d50947c48b47c20d0aa44d1e2a1",
+      "origin": "NIHO所有のPhoto Web composition回帰試験。合成HTTP・合成JPEG bytesとfake browser persistenceだけを使い、実credential・写真・個人情報を含まない。"
     }
   ],
   "excludedSources": [
