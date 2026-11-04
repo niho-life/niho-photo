@@ -132,7 +132,9 @@ pub fn renderer_capabilities() -> serde_json::Value {
 /// masks of those kinds render, at most `max` of them, `Developer.maskPlane`
 /// exists, a Developer holds surfaces for `brush` / `subject` / `sky`
 /// masks, and `skyDetection`: [`Developer::detect_sky`] makes a `sky`
-/// mask's surface once [`set_sky_model`] gave a model.
+/// mask's surface once [`set_sky_model`] gave a model. It also publishes the
+/// complete `initialRasterSettings` recipe for new raster edits; existing saved
+/// recipes are never migrated to it.
 pub fn capabilities() -> String {
     serde_json::json!({
         "masks": {
