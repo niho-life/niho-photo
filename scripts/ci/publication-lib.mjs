@@ -5,7 +5,7 @@ import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 import { workflowFailures } from "./workflow-lib.mjs";
 import { photoSdkWorkflowFailures } from "./photo-sdk-workflow-lib.mjs";
-import { photoRendererWorkflowFailures } from "./photo-renderer-workflow-lib.mjs";
+import { photoRendererWorkflowFailures } from "../sdk/native-workflow-lib.mjs";
 import { photoCandidateWorkflowFailures } from "./photo-candidate-workflow-lib.mjs";
 import { imageMetadataFailures } from "./image-metadata.mjs";
 

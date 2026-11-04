@@ -3,7 +3,7 @@ import { spawnSync } from "node:child_process";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 
-import { photoRendererWorkflowFailures } from "./photo-renderer-workflow-lib.mjs";
+import { photoRendererWorkflowFailures } from "../sdk/native-workflow-lib.mjs";
 
 const workflow = JSON.parse(await readFile(new URL("../../.github/workflows/photo-renderer-release.yml", import.meta.url), "utf8"));
 
