@@ -997,6 +997,8 @@ export type PhotoLibraryPreset = {
 };
 
 export type PhotoLibraryPresets = {
+  /** 保存先が読み取り専用なら true。適用はできるが、作成・取り込み・名前変更・削除を表示しない。省略時は従来どおり編集可能。 */
+  readonly readOnly?: boolean;
   /** 作成順（古いものが先） */
   list(options?: PhotoLibraryRequestOptions): Promise<PhotoLibraryPreset[]>;
   /** 作る（`source` を省けば取り込んだ XMP と同じ扱い。クラウドは API の既定） */

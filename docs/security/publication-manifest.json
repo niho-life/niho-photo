@@ -1823,7 +1823,7 @@
         "path": "packages/photo-editing/src/editor/photo-editing-presets-panel.tsx",
         "sha256": "7f0524e5e1764f9274b39979d5887193faa96e37dcb6944fdd44d10a3e406541"
       },
-      "outputSha256": "8570d405ef1c470679abe824805aedf6e32ced9368182db240a542055c8eedbb",
+      "outputSha256": "47a8fa46a44ba01291cf2c90ead6007207b18e546885c4e524df9c6b5b2141e9",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
@@ -1831,7 +1831,8 @@
         "niho-photo#51のプリセット面切替を#35統合後のパネルへ反映する。",
         "L4 #53: ブラウザ版のプリセット一覧をサムネイルの升の2列にし、升の見本を長辺192pxで描く。NIHO Desktop・スマホの行と見本の大きさは据え置き。",
         "Issue #49の統合確認: panelの⋯を右パネルの見出し行（actionsSlot）へ描く。",
-        "Add backwards-compatible personal photo library scope key"
+        "Add backwards-compatible personal photo library scope key",
+        "独立Photoの読み取り専用プリセット管理と共有転送表示を接続"
       ]
     },
     {
@@ -2408,9 +2409,10 @@
         "#171 正規切替の停止箇所を同じ試行IDで記録する診断",
         "C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録",
         "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
-        "公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。"
+        "公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。",
+        "独立Photoの読み取り専用プリセット管理と共有転送表示を接続"
       ],
-      "outputSha256": "3e4d9279f2e130a948bc8ea4d593ac304a6f9d28fd3974bd33e8412a0f48319a"
+      "outputSha256": "6e6552b7ff7010639298f0d8b9eb96efdac2101640d28c9009d306fc44ea174f"
     },
     {
       "path": "packages/photo-editing/src/photo-cloud-add-queue.ts",
@@ -2625,9 +2627,10 @@
         "以前の下書きを明示確認し、現在の補正を保持したまま自動送信を一時停止する共有UIを接続",
         "strict commit後にも自動送信停止を確認し、以前の下書き一覧の閉じる操作を画面内に保持",
         "以前の補正が現在の写真や端末で保存不可の場合の日本語説明を追加",
-        "native検証済み原本保存の状態欄copy formatterを追加する"
+        "native検証済み原本保存の状態欄copy formatterを追加する",
+        "独立Photoの読み取り専用プリセット管理と共有転送表示を接続"
       ],
-      "outputSha256": "7b02b1fc9046d516f517aa21cc16cc4a95e47f24ae5782f0e417e715dd5fc2e5"
+      "outputSha256": "64d965aae6be09979666f0b260fd3483ae3308fbfd495cb1e13a829dd622b99e"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-crop.test.ts",
@@ -10487,8 +10490,8 @@
     },
     {
       "path": "packages/photo-editing/src/editor/photo-editing-presets-panel.test.tsx",
-      "sha256": "f84cf4ab96b6712af8ece79e66ed40f909823892fb6c1da1323157882815d08f",
-      "origin": "L4 #53でNIHOが独立新規作成した合成テスト。実写真・個人情報・秘密を含まず、見本は描かない偽の口で置き換える。\n変更理由: プリセットの升の2列（見本・名前・当てている升の見分け・仮の表示・拠点の⋯）と、見本を描けない wasm や layout を省く面で行のままになること、見本の長辺（192px／96px）を検証する。"
+      "sha256": "286b4a31412e82195c502f23e29be92eda62ba5a8985ec9d7e160978b30818b3",
+      "origin": "L4 #53でNIHOが独立新規作成した合成テスト。実写真・個人情報・秘密を含まず、見本は描かない偽の口で置き換える。\n変更理由: プリセットの升の2列（見本・名前・当てている升の見分け・仮の表示・拠点の⋯）と、見本を描けない wasm や layout を省く面で行のままになること、見本の長辺（192px／96px）を検証する。\n変更理由: 独立Photoの読み取り専用プリセット管理と共有転送表示を接続"
     },
     {
       "path": "docs/color-mixer.md",
@@ -12957,8 +12960,8 @@
     },
     {
       "path": "apps/photo-web/src/copy.ts",
-      "sha256": "fe3a8c2b5b6bb0d8ceda605c1cb743454336984f57b25bfe02e901626adc4424",
-      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。"
+      "sha256": "22d53256b301de28563741f6b0815f8273de65d3e44402cbfd4b5593f00f069c",
+      "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。\n変更理由: 独立Photoの読み取り専用プリセット管理と共有転送表示を接続"
     },
     {
       "path": "apps/photo-web/src/styles.css",

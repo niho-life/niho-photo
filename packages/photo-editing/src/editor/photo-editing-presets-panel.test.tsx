@@ -9,7 +9,7 @@ import type { DevelopEngine } from "../develop-engine/develop-engine-client";
 import { neutralDevelopSettings } from "../develop-engine/develop-settings";
 import type { PhotoLibrary, PhotoLibraryPreset } from "../library/photo-library";
 import { PhotoLibraryProvider, type PhotoEditingHost } from "../library/photo-library-context";
-import { PHOTO_EDITING_PRESET_NONE_LABEL, photoEditingPresetRowActionsLabel } from "../photo-editing-copy";
+import { PHOTO_EDITING_PRESET_ACTIONS_LABEL, PHOTO_EDITING_PRESET_NONE_LABEL, photoEditingPresetRowActionsLabel } from "../photo-editing-copy";
 import type { PhotoEditingBuiltinPreset } from "../photo-editing-types";
 
 import {
@@ -47,11 +47,12 @@ const host: PhotoEditingHost = {
   isDesktopApp: () => false,
 };
 
-function fakeLibrary(spotPresets: PhotoLibraryPreset[]): PhotoLibrary {
+function fakeLibrary(spotPresets: PhotoLibraryPreset[], readOnly = false): PhotoLibrary {
   return {
     place: "local",
     errors: { describeNative: () => "" },
     presets: {
+      readOnly,
       list: vi.fn(async () => spotPresets),
       create: vi.fn(),
       rename: vi.fn(),
@@ -79,6 +80,7 @@ type PanelOptions = {
   canApply?: boolean;
   canClear?: boolean;
   spotPresets?: PhotoLibraryPreset[];
+  presetsReadOnly?: boolean;
 };
 
 let container: HTMLDivElement;
@@ -116,7 +118,7 @@ async function settle() {
 }
 
 async function renderPanel(options: PanelOptions = {}) {
-  const library = fakeLibrary(options.spotPresets ?? []);
+  const library = fakeLibrary(options.spotPresets ?? [], options.presetsReadOnly);
   await act(async () => {
     root.render(
       <QueryClientProvider client={client}>
@@ -141,6 +143,7 @@ async function renderPanel(options: PanelOptions = {}) {
     );
   });
   await settle();
+  return library;
 }
 
 function presetButton(name: string): HTMLButtonElement {
@@ -164,6 +167,20 @@ function pointer(type: string, element: Element, init: PointerEventInit = {}) {
 }
 
 describe("PhotoEditingPresetsPanel（升の 2 列）", () => {
+  it("保存先が読み取り専用でもプリセットを適用でき、管理操作は表示しない", async () => {
+    const library = await renderPanel({ presetsReadOnly: true, spotPresets: [SPOT_PRESET] });
+    expect(container.querySelector(`button[aria-label="${PHOTO_EDITING_PRESET_ACTIONS_LABEL}"]`)).toBeNull();
+    expect(container.querySelector(`button[aria-label="${photoEditingPresetRowActionsLabel(SPOT_PRESET.name)}"]`)).toBeNull();
+    expect(container.querySelector('input[type="file"]')).toBeNull();
+    await act(async () => presetButton("青空").click());
+    expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ key: "builtin:niho-bluesky2" }));
+    await act(async () => presetButton(SPOT_PRESET.name).click());
+    expect(onApply).toHaveBeenCalledWith(expect.objectContaining({ key: "spot:spot-1" }));
+    expect(library.presets.create).not.toHaveBeenCalled();
+    expect(library.presets.rename).not.toHaveBeenCalled();
+    expect(library.presets.delete).not.toHaveBeenCalled();
+  });
+
   it("見本を描けるブラウザ版は、「なし」を先頭にした升の 2 列で、升ごとに上へ見本・下へ名前を置く", async () => {
     const thumbnails = fakeThumbnails();
     await renderPanel({ layout: "grid", thumbnails });
