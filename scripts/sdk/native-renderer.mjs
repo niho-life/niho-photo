@@ -440,7 +440,8 @@ export function verifyBuildArtifact(directory, expected) {
   if (record.file !== archives[0]) fail("renderer artifactのarchive名が不正です");
   const bytes = readFileSync(path.join(directory, record.file));
   if (sha256(bytes) !== record.sha256 || bytes.length !== record.bytes) fail("renderer archive bytesがbuild recordと一致しません");
-  const verified = verifyRendererTarball(bytes, expected);
+  const rendererExpected = Object.fromEntries(Object.entries(expected).filter(([key]) => key !== "sha256" && key !== "binarySha256"));
+  const verified = verifyRendererTarball(bytes, rendererExpected);
   if (JSON.stringify(verified.binary) !== JSON.stringify(record.binary)) fail("renderer binary identityがbuild recordと一致しません");
   return { record, bytes };
 }

@@ -242,3 +242,25 @@ test("publisherはsource/tree/target/binary/archive/artifact identityの取り�
   assert.throws(() => createNativeReleaseManifest({ artifacts: [], outputDirectory: path.join(temp("native-release-invalid-"), "out"), sourceCommit: commit, builderSourceCommit: tree, runId: "1", runAttempt: "1" }), /exact 2/u);
   assert.throws(() => createNativeReleaseManifest({ artifacts: [{ target: "x86_64-unknown-linux-gnu", directory: artifact.outputDirectory, publication: { target: "x86_64-unknown-linux-gnu", id: "0", digest: "x", name: "bad" } }], outputDirectory: path.join(temp("native-release-invalid-id-"), "out"), sourceCommit: commit, builderSourceCommit: tree, runId: "1", runAttempt: "1" }), /identity|exact 2/u);
 });
+
+
+test("publish CLIは完全なbuild digest期待値で成功しdigest改竄は拒否する", () => {
+  const linux = packageFixture("x86_64-unknown-linux-gnu");
+  const macos = packageFixture("aarch64-apple-darwin");
+  const releaseRoot = temp("native-cli-release-");
+  const args = [new URL("./native-renderer.mjs", import.meta.url).pathname, "publish", "--output", path.join(releaseRoot, "release"), "--source", commit, "--builder-source", "e".repeat(40), "--run-id", "77", "--run-attempt", "1"];
+  for (const [prefix, fixture, id] of [["linux", linux, "101"], ["macos", macos, "102"]]) {
+    const record = fixture.result;
+    args.push(`--${prefix}-directory`, fixture.outputDirectory, `--${prefix}-artifact-id`, id, `--${prefix}-artifact-digest`, "c".repeat(64), `--${prefix}-artifact-name`, `niho-renderer-${commit}-run-77-attempt-1-${record.target}`, `--${prefix}-engine-tree`, record.engineTree, `--${prefix}-engine-version`, record.engineVersion, `--${prefix}-target`, record.target, `--${prefix}-archive-sha256`, record.sha256, `--${prefix}-binary-sha256`, record.binary.sha256);
+  }
+  execFileSync(process.execPath, args, { stdio: "pipe" });
+  const manifest = JSON.parse(readFileSync(path.join(releaseRoot, "release", `niho-photo-renderer-${commit}.json`), "utf8"));
+  assert.equal(manifest.assets.length, 2);
+  assert.equal(manifest.assets.find((item) => item.target === linux.result.target).binary.sha256, linux.result.binary.sha256);
+  for (const field of ["--linux-archive-sha256", "--linux-binary-sha256"]) {
+    const changed = [...args];
+    changed[changed.indexOf("--output") + 1] = path.join(releaseRoot, field.slice(2));
+    changed[changed.indexOf(field) + 1] = "0".repeat(64);
+    assert.throws(() => execFileSync(process.execPath, changed, { stdio: "pipe" }), /一致しません/u);
+  }
+});
