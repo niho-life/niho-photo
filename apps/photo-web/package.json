@@ -10,8 +10,11 @@
     "lint": "eslint src"
   },
   "dependencies": {
+    "@niho/photo-cloud-library": "*",
     "@niho/photo-cloud-session": "*",
     "@niho/photo-cloud-media": "*",
+    "@niho/photo-cloud-sync": "*",
+    "@niho/photo-personal-cloud-contract": "*",
     "@tanstack/react-query": "^5.103.2",
     "niho-photo-editing": "*",
     "niho-ui": "*",

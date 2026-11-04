@@ -620,11 +620,14 @@ describe("createPhotoWebRuntime", () => {
   it("downloads only in the accepted scope and clears query/URL resources synchronously", async () => {
     const test = harness();
     await test.runtime.start();
+    let usageRefreshes = 0;
+    test.connections[0].refreshUsage = () => { usageRefreshes += 1; };
     const host = test.hosts[0];
     assert.equal(await host.saveFile({ blob: new Blob(["photo"]), fileName: "photo.jpg" }), "downloaded");
     assert.deepEqual(test.urls.created, ["blob:owned-1"]);
     host.notifyPhotosChanged();
     assert.equal(test.queryClient.invalidations, 1);
+    assert.equal(usageRefreshes, 1);
 
     test.bridge.refreshQueue.push(new PhotoSessionHostError("temporarily-unavailable"));
     await test.runtime.retry();
