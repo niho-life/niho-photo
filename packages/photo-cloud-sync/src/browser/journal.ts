@@ -11,8 +11,11 @@ import type {
   JournalStage,
   JournalPreviousPendingWriter,
   JournalPreviousPendingWriterPage,
+  MaskSurfaceInput,
+  MaskSurfaceUploadState,
   PendingWriterPage,
   PendingWriterToken,
+  PersistedMaskSurface,
   RecipeConflictIntent,
   RecipeJournalScope,
   RecipeSyncJournal,
@@ -20,15 +23,19 @@ import type {
   ReopenedJournalWriter,
 } from "../types";
 
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const WRITERS = "writers";
 const META = "meta";
+const MASKS = "masks";
 const SCOPE_TOKEN = "scopeToken";
+const MASK_SCOPE = "maskScope";
 const IDB_TIMEOUT_MS = 15_000;
 const MAX_SCOPE_WRITERS = 16;
 const MAX_SCOPE_BYTES = 32 * 1024 ** 2;
 const MAX_GLOBAL_WRITERS = 64;
 const MAX_GLOBAL_BYTES = 128 * 1024 ** 2;
+const MAX_SCOPE_MASKS = 128;
+const MAX_GLOBAL_MASKS = 512;
 const MAX_LIST_COUNT = 16;
 const MAX_LIST_BYTES = 4 * 1024 ** 2;
 const SHA256 = /^[0-9a-f]{64}$/u;
@@ -52,7 +59,22 @@ interface WriterRecord extends RecipeWriterBinding {
 interface BudgetRecord {
   readonly key: string;
   readonly writers: number;
+  readonly masks: number;
   readonly bytes: number;
+}
+
+interface MaskRecord extends RecipeJournalScope {
+  readonly schemaVersion: 1;
+  readonly key: string;
+  readonly photoId: string;
+  readonly id: string;
+  readonly width: number;
+  readonly height: number;
+  readonly sha256: string;
+  readonly contentType: "image/png";
+  readonly bytes: Uint8Array;
+  readonly uploadState: MaskSurfaceUploadState | null;
+  readonly pinned: boolean;
 }
 
 export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
@@ -484,7 +506,7 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
       const current = validateRecord(currentRaw);
       if (!sameBinding(current, binding)) { abort(transaction); unavailable(); }
       if (current.attempt !== null || current.resolution !== null) { abort(transaction); unavailable(); }
-      await updateBudgets(transaction.objectStore(META), binding, current, null, signal, transaction);
+      await updateCombinedBudgets(transaction.objectStore(META), binding, -1, 0, -jsonBytes(current), signal, transaction);
       store.delete(current.id);
     }
     await transactionWait(barrier, transaction, signal);
@@ -503,13 +525,173 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
       const current = validateRecord(currentRaw);
       if (!sameBinding(current, binding)) { abort(transaction); unavailable(); }
       if (!hasRetainedState(current) && current.terminalReason === null) {
-        await updateBudgets(transaction.objectStore(META), binding, current, null, signal, transaction);
+        await updateCombinedBudgets(transaction.objectStore(META), binding, -1, 0, -jsonBytes(current), signal, transaction);
         store.delete(current.id);
         released = true;
       }
     }
     await transactionWait(barrier, transaction, signal);
     return released;
+  }
+
+  async putMaskSurface(
+    scope: RecipeJournalScope,
+    photoId: string,
+    surface: MaskSurfaceInput,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    validateScope(scope);
+    validateOpaque(photoId);
+    const bytes = new Uint8Array(surface.bytes);
+    validateMaskInput(photoId, surface, bytes);
+    if (digestBytes(bytes) !== surface.sha256) unavailable();
+    const record: MaskRecord = {
+      ...clone(scope),
+      schemaVersion: 1,
+      key: maskKey(scope, photoId, surface.sha256),
+      photoId,
+      id: surface.id,
+      width: surface.width,
+      height: surface.height,
+      sha256: surface.sha256,
+      contentType: "image/png",
+      bytes,
+      uploadState: clone(surface.uploadState),
+      pinned: true,
+    };
+    validateMaskRecord(record);
+    const database = await this.database(signal);
+    const transaction = strictTransaction(database, [MASKS, META], "readwrite");
+    const barrier = transactionBarrier(transaction);
+    void barrier.catch(() => undefined);
+    const store = transaction.objectStore(MASKS);
+    const raw = await transactionWait(requestResult(store.get(record.key)), transaction, signal);
+    if (raw !== undefined) {
+      const current = validateMaskRecord(raw);
+      if (!sameMaskScope(current, scope) || current.photoId !== photoId || current.sha256 !== surface.sha256) { abort(transaction); unavailable(); }
+      if (
+        current.id !== record.id || current.width !== record.width || current.height !== record.height ||
+        !equalBytes(current.bytes, record.bytes) || !deepEqual(current.uploadState, record.uploadState)
+      ) { abort(transaction); unavailable(); }
+      if (!current.pinned) {
+        const next = { ...current, pinned: true };
+        await updateCombinedBudgets(transaction.objectStore(META), scope, 0, 0, maskBytes(next) - maskBytes(current), signal, transaction);
+        store.put(next);
+      }
+    } else {
+      await updateCombinedBudgets(transaction.objectStore(META), scope, 0, 1, maskBytes(record), signal, transaction);
+      store.add(record);
+    }
+    await transactionWait(barrier, transaction, signal);
+  }
+
+  async getMaskSurface(
+    scope: RecipeJournalScope,
+    photoId: string,
+    sha: string,
+    signal?: AbortSignal,
+  ): Promise<PersistedMaskSurface | null> {
+    validateScope(scope);
+    validateOpaque(photoId);
+    validateSha(sha);
+    const database = await this.database(signal);
+    const transaction = strictTransaction(database, [MASKS], "readonly");
+    const barrier = transactionBarrier(transaction);
+    void barrier.catch(() => undefined);
+    const raw = await transactionWait(requestResult(transaction.objectStore(MASKS).get(maskKey(scope, photoId, sha))), transaction, signal);
+    await transactionWait(barrier, transaction, signal);
+    if (raw === undefined) return null;
+    const record = validateMaskRecord(raw);
+    if (!sameMaskScope(record, scope) || record.photoId !== photoId || record.sha256 !== sha) unavailable();
+    return maskValue(record);
+  }
+
+  async compareAndSetMaskUploadState(
+    scope: RecipeJournalScope,
+    photoId: string,
+    sha: string,
+    expected: MaskSurfaceUploadState | null,
+    next: MaskSurfaceUploadState | null,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    validateScope(scope);
+    validateOpaque(photoId);
+    validateSha(sha);
+    validateMaskUploadState(expected, photoId, sha);
+    validateMaskUploadState(next, photoId, sha);
+    const database = await this.database(signal);
+    const transaction = strictTransaction(database, [MASKS, META], "readwrite");
+    const barrier = transactionBarrier(transaction);
+    void barrier.catch(() => undefined);
+    const store = transaction.objectStore(MASKS);
+    const raw = await transactionWait(requestResult(store.get(maskKey(scope, photoId, sha))), transaction, signal);
+    if (raw === undefined) { abort(transaction); unavailable(); }
+    const current = validateMaskRecord(raw);
+    if (!sameMaskScope(current, scope) || current.photoId !== photoId || current.sha256 !== sha) { abort(transaction); unavailable(); }
+    if (expected !== null && expected.sizeBytes !== current.bytes.byteLength || next !== null && next.sizeBytes !== current.bytes.byteLength) { abort(transaction); unavailable(); }
+    if (!deepEqual(current.uploadState, expected)) { await transactionWait(barrier, transaction, signal); return false; }
+    const updated = { ...current, uploadState: clone(next) };
+    validateMaskRecord(updated);
+    await updateCombinedBudgets(transaction.objectStore(META), scope, 0, 0, maskBytes(updated) - maskBytes(current), signal, transaction);
+    store.put(updated);
+    await transactionWait(barrier, transaction, signal);
+    return true;
+  }
+
+  async setMaskSurfacePinned(
+    scope: RecipeJournalScope,
+    photoId: string,
+    sha: string,
+    pinned: boolean,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    validateScope(scope);
+    validateOpaque(photoId);
+    validateSha(sha);
+    if (typeof pinned !== "boolean") unavailable();
+    const database = await this.database(signal);
+    const transaction = strictTransaction(database, [MASKS, META], "readwrite");
+    const barrier = transactionBarrier(transaction);
+    void barrier.catch(() => undefined);
+    const store = transaction.objectStore(MASKS);
+    const raw = await transactionWait(requestResult(store.get(maskKey(scope, photoId, sha))), transaction, signal);
+    if (raw === undefined) { abort(transaction); unavailable(); }
+    const current = validateMaskRecord(raw);
+    if (!sameMaskScope(current, scope) || current.photoId !== photoId || current.sha256 !== sha) { abort(transaction); unavailable(); }
+    if (current.pinned !== pinned) {
+      const next = { ...current, pinned };
+      await updateCombinedBudgets(transaction.objectStore(META), scope, 0, 0, maskBytes(next) - maskBytes(current), signal, transaction);
+      store.put(next);
+    }
+    await transactionWait(barrier, transaction, signal);
+  }
+
+  async deleteMaskSurface(
+    scope: RecipeJournalScope,
+    photoId: string,
+    sha: string,
+    signal?: AbortSignal,
+  ): Promise<boolean> {
+    validateScope(scope);
+    validateOpaque(photoId);
+    validateSha(sha);
+    const database = await this.database(signal);
+    const transaction = strictTransaction(database, [MASKS, WRITERS, META], "readwrite");
+    const barrier = transactionBarrier(transaction);
+    void barrier.catch(() => undefined);
+    const masks = transaction.objectStore(MASKS);
+    const raw = await transactionWait(requestResult(masks.get(maskKey(scope, photoId, sha))), transaction, signal);
+    if (raw === undefined) { await transactionWait(barrier, transaction, signal); return false; }
+    const current = validateMaskRecord(raw);
+    if (!sameMaskScope(current, scope) || current.photoId !== photoId || current.sha256 !== sha) { abort(transaction); unavailable(); }
+    if (current.pinned || current.uploadState !== null || await anyWriterReferences(transaction.objectStore(WRITERS), photoId, sha, signal, transaction)) {
+      await transactionWait(barrier, transaction, signal);
+      return false;
+    }
+    await updateCombinedBudgets(transaction.objectStore(META), scope, 0, -1, -maskBytes(current), signal, transaction);
+    masks.delete(current.key);
+    await transactionWait(barrier, transaction, signal);
+    return true;
   }
 
   dispose(): void {
@@ -535,7 +717,15 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     validateRecord(next);
     if (next.id !== current.id || next.revision < current.revision || !sameBinding(next, binding)) { abort(transaction); unavailable(); }
     if (!deepEqual(next, current)) {
-      await updateBudgets(transaction.objectStore(META), binding, raw === undefined ? null : current, next, signal, transaction);
+      await updateCombinedBudgets(
+        transaction.objectStore(META),
+        binding,
+        raw === undefined ? 1 : 0,
+        0,
+        jsonBytes(next) - (raw === undefined ? 0 : jsonBytes(current)),
+        signal,
+        transaction,
+      );
       store.put(next);
     }
     await transactionWait(barrier, transaction, signal);
@@ -557,29 +747,29 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
   }
 }
 
-async function updateBudgets(
+async function updateCombinedBudgets(
   store: IDBObjectStore,
-  binding: RecipeWriterBinding,
-  before: WriterRecord | null,
-  after: WriterRecord | null,
+  scope: RecipeJournalScope,
+  writerDelta: number,
+  maskDelta: number,
+  byteDelta: number,
   signal: AbortSignal | undefined,
   transaction: IDBTransaction,
 ): Promise<void> {
-  const scopeBudgetKey = `scope:${JSON.stringify(scopeKey(binding))}`;
+  const scopeBudgetKey = `scope:${JSON.stringify(scopeKey(scope))}`;
   const [globalRaw, scopeRaw] = await Promise.all([
     transactionWait(requestResult(store.get("global")), transaction, signal),
     transactionWait(requestResult(store.get(scopeBudgetKey)), transaction, signal),
   ]);
   const global = budget(globalRaw, "global");
   const scoped = budget(scopeRaw, scopeBudgetKey);
-  const countDelta = (after === null ? 0 : 1) - (before === null ? 0 : 1);
-  const byteDelta = (after === null ? 0 : jsonBytes(after)) - (before === null ? 0 : jsonBytes(before));
-  const nextGlobal = { key: "global", writers: global.writers + countDelta, bytes: global.bytes + byteDelta };
-  const nextScope = { key: scopeBudgetKey, writers: scoped.writers + countDelta, bytes: scoped.bytes + byteDelta };
+  const nextGlobal = { key: "global", writers: global.writers + writerDelta, masks: global.masks + maskDelta, bytes: global.bytes + byteDelta };
+  const nextScope = { key: scopeBudgetKey, writers: scoped.writers + writerDelta, masks: scoped.masks + maskDelta, bytes: scoped.bytes + byteDelta };
   if (
-    nextScope.writers < 0 || nextScope.bytes < 0 || nextGlobal.writers < 0 || nextGlobal.bytes < 0 ||
+    nextScope.writers < 0 || nextScope.masks < 0 || nextScope.bytes < 0 || nextGlobal.writers < 0 || nextGlobal.masks < 0 || nextGlobal.bytes < 0 ||
     nextScope.writers > MAX_SCOPE_WRITERS || nextScope.bytes > MAX_SCOPE_BYTES ||
-    nextGlobal.writers > MAX_GLOBAL_WRITERS || nextGlobal.bytes > MAX_GLOBAL_BYTES
+    nextGlobal.writers > MAX_GLOBAL_WRITERS || nextGlobal.bytes > MAX_GLOBAL_BYTES ||
+    nextScope.masks > MAX_SCOPE_MASKS || nextGlobal.masks > MAX_GLOBAL_MASKS
   ) {
     abort(transaction);
     throw new DOMException("Recipe journal budget exceeded", "QuotaExceededError");
@@ -760,20 +950,132 @@ function bindingOf(record: WriterRecord): RecipeWriterBinding {
 }
 
 function budget(value: unknown, key: string): BudgetRecord {
-  if (value === undefined) return { key, writers: 0, bytes: 0 };
-  if (!isRecord(value) || value.key !== key || !safeNonNegative(value.writers) || !safeNonNegative(value.bytes)) unavailable();
-  return value as unknown as BudgetRecord;
+  if (value === undefined) return { key, writers: 0, masks: 0, bytes: 0 };
+  if (!isRecord(value) || value.key !== key || !safeNonNegative(value.writers) || !safeNonNegative(value.bytes) || value.masks !== undefined && !safeNonNegative(value.masks)) unavailable();
+  return { key, writers: value.writers, masks: value.masks ?? 0, bytes: value.bytes };
 }
+
+function validateMaskInput(photoId: string, surface: MaskSurfaceInput, bytes: Uint8Array): void {
+  if (
+    !isRecord(surface) || !exactKeys(surface, ["id", "width", "height", "sha256", "bytes", "uploadState"]) ||
+    !(surface.bytes instanceof Uint8Array) || bytes.byteLength < 1 || bytes.byteLength > 8 * 1024 ** 2 ||
+    !safePositive(surface.width) || surface.width > 4096 || !safePositive(surface.height) || surface.height > 4096 ||
+    !SHA256.test(surface.id) || surface.id !== surface.sha256
+  ) unavailable();
+  validateSha(surface.sha256);
+  validateMaskUploadState(surface.uploadState, photoId, surface.sha256);
+  if (surface.uploadState !== null && surface.uploadState.sizeBytes !== bytes.byteLength) unavailable();
+}
+
+function validateMaskRecord(value: unknown): MaskRecord {
+  if (!isRecord(value)) unavailable();
+  const record = value as unknown as MaskRecord;
+  validateScope(record);
+  if (
+    !exactKeys(value, [
+      "actorId", "libraryId", "sessionId", "sessionEpoch", "transport", "schemaVersion", "key", "photoId",
+      "id", "width", "height", "sha256", "contentType", "bytes", "uploadState", "pinned",
+    ]) || record.schemaVersion !== 1 || record.key !== maskKey(record, record.photoId, record.sha256) ||
+    record.contentType !== "image/png" || typeof record.pinned !== "boolean"
+  ) unavailable();
+  validateOpaque(record.photoId);
+  validateMaskInput(record.photoId, {
+    id: record.id,
+    width: record.width,
+    height: record.height,
+    sha256: record.sha256,
+    bytes: record.bytes,
+    uploadState: record.uploadState,
+  }, record.bytes);
+  if (digestBytes(record.bytes) !== record.sha256) unavailable();
+  return record;
+}
+
+function validateMaskUploadState(state: MaskSurfaceUploadState | null, photoId: string, sha: string): void {
+  if (state === null) return;
+  if (
+    !isRecord(state) || !exactKeys(state, [
+      "target", "sizeBytes", "sha256", "contentType", "startKey", "completeKey", "cancelKey", "uploadId",
+      "deadline", "offsetBytes", "phase",
+    ]) || !isRecord(state.target) || !exactKeys(state.target, ["kind", "photoId"]) || state.target.kind !== "mask" ||
+    state.target.photoId !== photoId || state.sha256 !== sha || state.contentType !== "image/png" ||
+    !safePositive(state.sizeBytes) || state.sizeBytes > 8 * 1024 ** 2 || !safeNonNegative(state.offsetBytes) ||
+    state.offsetBytes > state.sizeBytes || !["start-pending", "uploading", "complete-pending", "verifying", "cancel-pending", "cancelled", "expired", "rejected"].includes(state.phase) ||
+    state.uploadId !== null && !nonEmpty(state.uploadId) || state.deadline !== null && !Number.isFinite(Date.parse(state.deadline))
+  ) unavailable();
+  validateKey(state.startKey);
+  validateKey(state.completeKey);
+  validateKey(state.cancelKey);
+}
+
+function maskValue(record: MaskRecord): PersistedMaskSurface {
+  return {
+    photoId: record.photoId,
+    id: record.id,
+    width: record.width,
+    height: record.height,
+    sha256: record.sha256,
+    contentType: "image/png",
+    bytes: new Uint8Array(record.bytes),
+    uploadState: clone(record.uploadState),
+    pinned: record.pinned,
+  };
+}
+
+function maskBytes(record: MaskRecord): number {
+  const { bytes, ...metadata } = record;
+  return bytes.byteLength + jsonBytes(metadata);
+}
+
+async function anyWriterReferences(
+  store: IDBObjectStore,
+  photoId: string,
+  sha: string,
+  signal: AbortSignal | undefined,
+  transaction: IDBTransaction,
+): Promise<boolean> {
+  return await transactionWait(new Promise<boolean>((resolve, reject) => {
+    const request = store.openCursor();
+    request.onerror = () => reject(idbError(request.error));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor === null) { resolve(false); return; }
+      try {
+        const record = validateRecord(cursor.value);
+        if (record.photoId === photoId && writerReferences(record, sha)) { resolve(true); return; }
+        cursor.continue();
+      } catch (error) { reject(error); }
+    };
+  }), transaction, signal);
+}
+
+function writerReferences(record: WriterRecord, sha: string): boolean {
+  // Conflict metadata retains hashes rather than full candidates. Keep this
+  // photo's surfaces until those snapshots are explicitly settled/discarded.
+  if (record.conflicts.length > 0) return true;
+  if (record.latest?.candidate.maskSurfaceIds.includes(sha) || record.attempt?.candidate.maskSurfaceIds.includes(sha)) return true;
+  return record.resolution?.proof.decision === "adopt" && record.resolution.proof.selectedCandidate.maskSurfaceIds.includes(sha);
+}
+
+function maskKey(scope: RecipeJournalScope, photoId: string, sha: string): string { return JSON.stringify([...scopeKey(scope), photoId, sha]); }
+function sameMaskScope(record: MaskRecord, scope: RecipeJournalScope): boolean { return record.actorId === scope.actorId && record.libraryId === scope.libraryId && record.sessionId === scope.sessionId && record.sessionEpoch === scope.sessionEpoch && record.transport === scope.transport; }
+function equalBytes(left: Uint8Array, right: Uint8Array): boolean { return left.byteLength === right.byteLength && left.every((byte, index) => byte === right[index]); }
+function validateSha(value: unknown): asserts value is string { if (typeof value !== "string" || !SHA256.test(value)) unavailable(); }
+function digestBytes(value: Uint8Array): string { return Array.from(sha256(value), (byte) => byte.toString(16).padStart(2, "0")).join(""); }
 
 function openDatabase(factory: IDBFactory, name: string): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     let request: IDBOpenDBRequest;
     try { request = factory.open(name, DATABASE_VERSION); } catch (error) { reject(idbError(error)); return; }
     request.onupgradeneeded = (event) => {
-      if ((event as IDBVersionChangeEvent).oldVersion !== 0) { request.transaction?.abort(); return; }
-      const writers = request.result.createObjectStore(WRITERS, { keyPath: "id" });
-      writers.createIndex(SCOPE_TOKEN, ["actorId", "libraryId", "sessionId", "sessionEpoch", "transport", "token"], { unique: true });
-      request.result.createObjectStore(META, { keyPath: "key" });
+      const oldVersion = (event as IDBVersionChangeEvent).oldVersion;
+      if (oldVersion === 0) {
+        const writers = request.result.createObjectStore(WRITERS, { keyPath: "id" });
+        writers.createIndex(SCOPE_TOKEN, ["actorId", "libraryId", "sessionId", "sessionEpoch", "transport", "token"], { unique: true });
+        request.result.createObjectStore(META, { keyPath: "key" });
+      } else if (oldVersion !== 1) { request.transaction?.abort(); return; }
+      const masks = request.result.createObjectStore(MASKS, { keyPath: "key" });
+      masks.createIndex(MASK_SCOPE, ["actorId", "libraryId", "sessionId", "sessionEpoch", "transport", "photoId", "sha256"], { unique: true });
     };
     request.onsuccess = () => {
       const database = request.result;
@@ -864,6 +1166,7 @@ function clone<T>(value: T): T { return value === null ? value : structuredClone
 function exactKeys(value: Record<string, unknown>, keys: readonly string[]): boolean { const actual = Object.keys(value).sort(); const expected = [...keys].sort(); return actual.length === expected.length && actual.every((key, index) => key === expected[index]); }
 function isRecord(value: unknown): value is Record<string, unknown> { return typeof value === "object" && value !== null && !Array.isArray(value); }
 function safeNonNegative(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0; }
+function safePositive(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value > 0; }
 function nonEmpty(value: unknown): value is string { return typeof value === "string" && value.length > 0 && value.length <= 1024 && value === value.trim() && !/[\p{Cc}\p{Cf}]/u.test(value); }
 function validateOpaque(value: unknown): asserts value is string { if (!nonEmpty(value) || new TextEncoder().encode(value).byteLength > 512) unavailable(); }
 function validateKey(value: unknown): asserts value is string { validateOpaque(value); if ((value as string).includes(",") || new TextEncoder().encode(value as string).byteLength > PHOTO_LIMITS.maxIdempotencyKeyBytes) unavailable(); }

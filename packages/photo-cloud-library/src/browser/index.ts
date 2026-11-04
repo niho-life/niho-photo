@@ -10,3 +10,12 @@ export {
   type ResumePersonalPhotoTransferInput,
   type StartPersonalPhotoTransferInput,
 } from "./transfer";
+export {
+  cancelPersonalPhotoResumableUpload,
+  runPersonalPhotoResumableUpload,
+  type PersonalPhotoResumableUploadOptions,
+  type PersonalPhotoResumableUploadPhase,
+  type PersonalPhotoResumableUploadResult,
+  type PersonalPhotoResumableUploadState,
+  type PersonalPhotoResumableUploadStorePort,
+} from "./resumable-upload";
