@@ -4870,7 +4870,7 @@
         "path": "packages/desktop-photo/src/develop.rs",
         "sha256": "7f13c1e41e82bf4bc91bef5e4a8b61f092ab0b986a6a95c5559c2246bb74d864"
       },
-      "outputSha256": "1f7c53776a5376f10a44b78ffa85aac6a3cb0809225fc2c5b64e2d01a9a3e3c0",
+      "outputSha256": "f5bf5ca00a718212c6fa4affdf5714420dbe386bdb08a2fc5c2b2f8389fbe9ef",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #5の共有入力能力レジストリ、段階別検証、公開回帰契約に合わせて更新。",
@@ -4889,7 +4889,8 @@
         "Issue #155: 解析再利用と共有メモリ予算の変更を統合",
         "#171 正規切替の停止箇所を同じ試行IDで記録する診断",
         "未編集ラスタのコピーを同梱SDKの完全初期補正と実canonical baseへ接続",
-        "SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正"
+        "SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正",
+        "元画像の実寸法とSDKのbrowser pixel budgetからcanonical working copyを選択"
       ]
     },
     {
@@ -4900,7 +4901,7 @@
         "path": "packages/desktop-photo/src/develop_local_raster_tests.rs",
         "sha256": "b45869e304ecb1bfa8cc4c3aea903fd7771f60c1b140f6f3c7be2f9f2b929bc2"
       },
-      "outputSha256": "58213957d28343ca50273c45ffceb5634429a0f740d0b299571d411cab08d25d",
+      "outputSha256": "4833f3e589a808fe2905fd13d63cfeb34a410e937dba27abbceef2221a2f96c6",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #5の共有入力能力レジストリ、段階別検証、公開回帰契約に合わせて更新。",
@@ -4916,7 +4917,8 @@
         "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。",
         "#171 正規切替の停止箇所を同じ試行IDで記録する診断",
         "未編集ラスタのコピーを同梱SDKの完全初期補正と実canonical baseへ接続",
-        "SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正"
+        "SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正",
+        "元画像の実寸法とSDKのbrowser pixel budgetからcanonical working copyを選択"
       ]
     },
     {
@@ -6084,7 +6086,7 @@
         "path": "packages/develop-engine/crates/niho-develop-render/src/lib.rs",
         "sha256": "a9ac3a784a2eb9250747dc2eaabc10c958c1a10d71c7ca16ffdd0d96b40456bc"
       },
-      "outputSha256": "ac8ae3ea5b5411f5b24e2bde8a7cdab29935802716f24cab108368456f5f9654",
+      "outputSha256": "96a69ca7907639b9abb7c457e6f9b951a08f5892f1de1f4da5061d4f41172189",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
@@ -6108,7 +6110,8 @@
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
         "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。",
         "未編集ラスタのコピーを同梱SDKの完全初期補正と実canonical baseへ接続",
-        "SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正"
+        "SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正",
+        "元画像の実寸法とSDKのbrowser pixel budgetからcanonical working copyを選択"
       ]
     },
     {

@@ -246,6 +246,7 @@ pub fn capabilities() -> Value {
         "maskKinds": MaskKind::ALL.map(MaskKind::as_str),
         "maxMasks": MAX_LOCAL_MASKS,
         "maxPixels": LIMITS.max_pixels,
+        "directOriginalMaxPixels": DecodeLimits::BROWSER.max_pixels,
         "renderer": niho_develop::api::renderer_capabilities(),
         "initialRasterSettings": niho_develop::api::initial_raster_settings(),
     })

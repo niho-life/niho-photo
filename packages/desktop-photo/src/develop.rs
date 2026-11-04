@@ -107,6 +107,7 @@ pub struct RenderCapabilities {
   pub max_pixels: u64,
   /// Full initial raster recipe from the bundled SDK; absent on older builds.
   pub initial_raster_settings: Option<Value>,
+  pub direct_original_max_pixels: Option<u64>,
 }
 
 thread_local! {
@@ -184,6 +185,10 @@ impl RenderCapabilities {
       mask_kinds: names("maskKinds")?,
       max_pixels,
       initial_raster_settings: value.get("initialRasterSettings").filter(|v| v.is_object()).cloned(),
+      direct_original_max_pixels: value
+        .get("directOriginalMaxPixels")
+        .and_then(Value::as_u64)
+        .filter(|v| *v > 0),
     })
   }
 
@@ -2799,7 +2804,19 @@ impl PhotoDevelop {
     if !settings.get("base").is_some_and(Value::is_null) {
       return Err(unavailable("the SDK initial recipe has an unexpected base"));
     }
-    let source = self.source_with_context(photos, photo_id, Some((false, false)))?;
+    let pixel_limit = sidecars
+      .develop_render_capabilities
+      .as_ref()
+      .and_then(|caps| caps.direct_original_max_pixels)
+      .ok_or_else(|| unavailable("the bundled SDK has no direct-original pixel budget"))?;
+    let photo = photos
+      .open_photo(photo_id)
+      .ok_or_else(|| unavailable("the source photo is not open"))?;
+    let (width, height) = self
+      .full_size_dimensions(&sidecars, &photo.path, ExportInput::Raster)
+      .ok_or_else(|| unavailable("source dimensions are unavailable"))?;
+    let force_working = width.checked_mul(height).is_none_or(|pixels| pixels > pixel_limit);
+    let source = self.source_with_options(photos, photo_id, Some((false, false)), force_working)?;
     if let Some(token) = source.get("token").and_then(Value::as_str) {
       lock(&self.tokens).remove(token);
     }

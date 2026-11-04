@@ -719,19 +719,17 @@ fn render_capabilities_decide_which_settings_reach_the_full_size_render() {
 
 #[test]
 fn explicit_copy_uses_the_bundled_full_initial_recipe_and_actual_raster_base() {
-  for working in [false, true] {
-    let harness = SidecarHarness::new(if working {
-      "copy-initial-working"
-    } else {
-      "copy-initial-original"
-    });
+  for mode in 0..3 {
+    let working = mode != 0;
+    let harness = SidecarHarness::new(&format!("copy-initial-{mode}"));
     let mut capabilities: Value = serde_json::from_str(&render_capabilities_line(&[1], &[])).unwrap();
     let initial = json!({"v":1,"engine":"niho-14","look":"niho-standard-1","base":null,
       "exposure":0,"whiteBalance":{"mode":"asShot","temperature":6500,"tint":0}});
     capabilities["initialRasterSettings"] = initial.clone();
+    capabilities["directOriginalMaxPixels"] = json!(40_000_000);
     harness.mark("render-capabilities", &capabilities.to_string());
     let photo = photo_file(&harness, "synthetic.png", b"synthetic pixels");
-    if working {
+    if mode == 1 {
       fs::OpenOptions::new()
         .write(true)
         .open(&photo)
@@ -739,12 +737,17 @@ fn explicit_copy_uses_the_bundled_full_initial_recipe_and_actual_raster_base() {
         .set_len(DIRECT_RASTER_MAX_BYTES + 1)
         .unwrap();
     }
+    if mode == 2 {
+      harness.mark("image-size", "10000 6000");
+    }
     let photos = FakePhotos::new(&[("photo", &photo)]);
     let develop = camera_develop(&harness);
     let settings = develop.initial_raster_copy_settings(&photos, "photo").unwrap();
     let mut expected = initial;
     if working {
-      let source = develop.source(&photos, "photo").unwrap();
+      let source = develop
+        .source_with_options(&photos, "photo", Some((false, false)), mode == 2)
+        .unwrap();
       expected["base"] = source["baseVersion"].clone();
       assert!(harness
         .work_calls()
