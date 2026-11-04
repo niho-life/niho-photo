@@ -380,9 +380,23 @@ describe("Photo Web product composition", () => {
       expect(reloaded?.editedPreview).toMatchObject({
         revision: 1,
         thumbUrl: expect.stringMatching(/^blob:/u),
+        url: null,
+      });
+
+      // Explicit selection owns preview loading. openOriginal can consume that lease, while
+      // metadata-only get() calls do not cancel or revoke it.
+      const selectedPreview = await binding.library.loadSelectedEditedPreview!(IDS.photo, { signal: scope.signal });
+      expect(selectedPreview).toMatchObject({ revision: 1, url: expect.stringMatching(/^blob:/u) });
+      const selected = await binding.library.openOriginal(IDS.photo, { signal: scope.signal });
+      expect(selected.photo.editedPreview).toMatchObject({
+        revision: 1,
         url: expect.stringMatching(/^blob:/u),
       });
-      const fullPreviewUrl = reloaded?.editedPreview?.url;
+      const fullPreviewUrl = selected.photo.editedPreview?.url;
+      await binding.library.get(IDS.photo, { signal: scope.signal });
+      expect(revokeObjectURL).not.toHaveBeenCalledWith(fullPreviewUrl);
+      await expect(binding.library.loadSelectedEditedPreview!(addedPhotoId, { signal: scope.signal })).resolves.toBeNull();
+      expect(revokeObjectURL).toHaveBeenCalledWith(fullPreviewUrl);
       expect(cloudRequests).toContain(`GET /photos/${IDS.photo}/assets/${previewAsset.id}/content`);
       await expect(composition.guards.canLeave(actor, { release: false, signal: scope.signal })).resolves.toBe(true);
 

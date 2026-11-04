@@ -78,6 +78,14 @@ export type PhotoLibrary = {
    */
   openOriginal(photoId: string, options?: PhotoLibraryRequestOptions): Promise<PhotoLibraryOriginal>;
   /**
+   * 選択中の写真だけに使う、現在版の補正済みプレビュー（無ければ null）。実装が選択所有権と Blob URL の寿命を管理する。別の写真・null を渡すと
+   * 前の選択を解放する。metadata read や書き出しのための {@link PhotoLibrary.get} / {@link PhotoLibrary.openOriginal} は選択を変更しない。
+   */
+  loadSelectedEditedPreview?(
+    photoId: string | null,
+    options?: PhotoLibraryRequestOptions,
+  ): Promise<PhotoLibraryEditedPreview | null>;
+  /**
    * {@link PhotoLibrary.openOriginal} の `source` のオリジナルを読む（`fileName` の File にする）。`maxBytes` を超えたら読むのを
    * やめて `BrowserPhotoSourceError("too_large")`、読めなければ `BrowserPhotoSourceError("fetch_failed")`（どちらも
    * `browser-photo-source.ts`）。止めたら（`signal`）AbortError をそのまま投げる

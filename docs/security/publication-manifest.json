@@ -108,13 +108,16 @@
         "path": "packages/photo-editing/src/browser-photo-cloud-source.test.ts",
         "sha256": "73f11fab7530c3dc6f23114d2e7518f48c7a39c998a5096a293a19cc8eb23d91"
       },
-      "outputSha256": "bee30698c082873465da58b795c28bcd68a0461ec051cab29342f9026cb372ba",
+      "outputSha256": "3dd261df1ae35e79f9490867a28f07e954f1820d4f84d99334d36ca547f758c3",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "任意の個別写真ソース契約と選んだ写真のUI、復元、取消、再試行、失敗時参照保持を追加",
         "PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。",
-        "PR #98で選別フラグの保存経路とUIを更新する。"
+        "PR #98で選別フラグの保存経路とUIを更新する。",
+        "編集不可の選択表示で現行previewを表示し、原本bytesを読まない回帰を追加",
+        "編集不可の選択表示で現行previewを使う回帰を追加",
+        "編集不可の選択表示で選択済みpreviewを使う回帰を追加"
       ]
     },
     {
@@ -125,14 +128,17 @@
         "path": "packages/photo-editing/src/browser-photo-cloud-source.ts",
         "sha256": "ebfa29ade40c103e39f3ef888ca5d0ac2871fc0f8e16bc85a65e16a30fb83832"
       },
-      "outputSha256": "43fc8e1836a90d9ebdcde8ffec728ad9b2367a42f11c6c9d09ea436b7f7552b4",
+      "outputSha256": "ca0d220b297552a0fdab66c20b0569f1277f531cbdd508bffcb551329eceb471",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
         "行末空白と余分な末尾空行を整理。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "任意の個別写真ソース契約と選んだ写真のUI、復元、取消、再試行、失敗時参照保持を追加",
         "PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。",
-        "PR #98で選別フラグの保存経路とUIを更新する。"
+        "PR #98で選別フラグの保存経路とUIを更新する。",
+        "選択したcloud photoの閲覧時も現行の補正済previewを使い、原本bytesは読まない",
+        "狭い幅の選択表示でも現行cloud previewを使い原本bytesを読まない",
+        "狭い幅の選択表示でも現行cloud previewを使い原本bytesは読まない"
       ]
     },
     {
@@ -2199,9 +2205,11 @@
         "プリセットを押した・乗せたときは先に粗い画を出してから丁寧な画に差し替え、乗せた丁寧な画を押したときに使い回す（#127）",
         "Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。",
         "Issue #155 第2段階としてPCとスマホの共有論理メモリ予算・allocation retry・対象試験を追加",
-        "#171 正規切替の停止箇所を同じ試行IDで記録する診断"
+        "#171 正規切替の停止箇所を同じ試行IDで記録する診断",
+        "選択したcloud photoの閲覧だけでも現行preview行を取得する",
+        "写真選択時に専用preview portを呼び、選択変更で前のBlob URLを解放する"
       ],
-      "outputSha256": "3bba9561771d7345fa64d8e88dc222e5d1d8be0d54db2103aaec01aec409fe28"
+      "outputSha256": "5731cc30f2109a2cc4845a27a7471f016d40e6b5275e609803ce605f593a18be"
     },
     {
       "path": "packages/photo-editing/src/editor/use-browser-photo-preset-support.ts",
@@ -2411,9 +2419,10 @@
         "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
         "公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。",
         "独立Photoの読み取り専用プリセット管理と共有転送表示を接続",
-        "共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。"
+        "共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。",
+        "選択中previewの読込・解放を表す任意portを追加"
       ],
-      "outputSha256": "cd5d119454f2d0059703031a2dde0034a17b1a199878f09361b561946e3cd030"
+      "outputSha256": "283b425c850d4899cd29f4c8dfdaf9d8b8308079946a4641958fe997f3752fea"
     },
     {
       "path": "packages/photo-editing/src/photo-cloud-add-queue.ts",
@@ -12556,8 +12565,8 @@
     },
     {
       "path": "packages/photo-cloud-media/src/index.ts",
-      "sha256": "95c33de032d4156740ef59eaf866c9ecf7e222592593e51cb66256ceef7dd46b",
-      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+      "sha256": "ea9cbeb5738ffea5333017f45b8df180575778af170a36a6728add0de32ce52e",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。\n変更理由: 現在previewの派生物整合を検証し、未接続working-copy能力を閉じたままWeb接続を回帰する"
     },
     {
       "path": "packages/photo-cloud-media/src/server/identity.ts",
@@ -12621,8 +12630,8 @@
     },
     {
       "path": "packages/photo-cloud-media/test/selector.test.mjs",
-      "sha256": "87ec9d616050b70f4ba1dbaf54cbcd60be424cdcd95f9b8c277ea878563ca6ae",
-      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
+      "sha256": "8e0ad28952a2ee7a9062f42743820c072c88cf239d940702fde2de05f911a103",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。\n変更理由: 現在previewの派生物整合を検証し、未接続working-copy能力を閉じたままWeb接続を回帰する"
     },
     {
       "path": "packages/photo-cloud-media/test/synthetic-jpeg.mjs",
@@ -13381,13 +13390,13 @@
     },
     {
       "path": "apps/photo-web/src/browser/connection.ts",
-      "sha256": "3c2b94586c70653dd734034d1985ab58917004204ddb546f1cc1a9d93449e0bf",
-      "origin": "NIHO所有のPhoto Web本人media/provider composition。既存C01/C02/C03 portsとrenderer proofを接続し、別journal・decoder・editorや実credential・写真・内部URLを含まない。\n変更理由: 写真変更後の本人cloud usage再取得を接続する\n変更理由: 写真変更後の本人cloud usage再取得を接続する\n変更理由: 写真変更後の本人cloud usage再取得を接続する\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: Webの固定renderer SDK mask validator接続と対象回帰の追加"
+      "sha256": "9275d9465a07050fa24f75a6c6771d88e32a0eb8be32175d1b9318984ff55fd8",
+      "origin": "NIHO所有のPhoto Web本人media/provider composition。既存C01/C02/C03 portsとrenderer proofを接続し、別journal・decoder・editorや実credential・写真・内部URLを含まない。\n変更理由: 写真変更後の本人cloud usage再取得を接続する\n変更理由: 写真変更後の本人cloud usage再取得を接続する\n変更理由: 写真変更後の本人cloud usage再取得を接続する\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: Webの固定renderer SDK mask validator接続と対象回帰の追加\n変更理由: 現在previewの派生物整合を検証し、未接続working-copy能力を閉じたままWeb接続を回帰する\n変更理由: 補正後プレビューを実際のopenOriginal表示経路へ接続し、選択中URLの寿命を保つ\n変更理由: 選択専用preview portでBlob URL寿命を管理し、get/openOriginalの読み取りを選択扱いしない\n変更理由: 選択専用preview portでBlob URL寿命を管理し、get/openOriginalの読み取りを選択扱いしない\n変更理由: 選択専用preview portでBlob URL寿命を管理し、get/openOriginalの読み取りを選択扱いしない\n変更理由: 選択専用preview portでBlob URL寿命を管理し、get/openOriginalの読み取りを選択扱いしない"
     },
     {
       "path": "apps/photo-web/test/connection.test.ts",
-      "sha256": "d2e601d5c676a56522f4c13a090d86f0aba7ceb86231795a83dc610cf3d56bf7",
-      "origin": "NIHO所有のPhoto Web composition回帰試験。合成HTTP・合成JPEG bytesとfake browser persistenceだけを使い、実credential・写真・個人情報を含まない。\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: Webの固定renderer SDK mask validator接続と対象回帰の追加"
+      "sha256": "d1046bb21d0036918d73db4116b779610e12cd9580e7362d4bcb7eda025a4fcc",
+      "origin": "NIHO所有のPhoto Web composition回帰試験。合成HTTP・合成JPEG bytesとfake browser persistenceだけを使い、実credential・写真・個人情報を含まない。\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: Webの固定renderer SDK mask validator接続と対象回帰の追加\n変更理由: 現在previewの派生物整合を検証し、未接続working-copy能力を閉じたままWeb接続を回帰する\n変更理由: openOriginal表示経路とmetadata readによるURL非失効を確認する\n変更理由: 選択専用preview portとmetadata read後もURLを保つcomposition回帰を確認する\n変更理由: 選択専用preview port・metadata read維持・選択変更時のURL解放を確認する\n変更理由: 選択専用preview port・metadata read維持・選択変更時のURL解放を確認する\n変更理由: 選択専用preview port・metadata read維持・選択変更時のURL解放を確認する"
     },
     {
       "path": "apps/photo-web/test/application.test.ts",

@@ -1390,6 +1390,13 @@ export function useBrowserPhotoOpen(params: {
       abort.signal.addEventListener("abort", abortPreview, { once: true });
       try {
         const allowEditing = editingAllowedRef.current;
+        const selectedPreview = library.loadSelectedEditedPreview === undefined
+          ? Promise.resolve(null)
+          : library.loadSelectedEditedPreview(
+              library.place === "cloud" && item.localPreviewUrl === null && item.photo.hasOriginal ? item.photo.id : null,
+              { signal: abort.signal },
+            );
+        void selectedPreview.catch(() => undefined);
         // 作業コピーで直す写真（RAW など。移行元設計）は、開いた瞬間はクラウドのプレビューを見せる（揃ったら 1 回だけ差し替える）
         const showWorkPreview = () => {
           const preview = workPreviewOpened(item);
@@ -1451,6 +1458,8 @@ export function useBrowserPhotoOpen(params: {
                 }),
                 copy: null,
               };
+          if (isStale()) return "stale";
+          await selectedPreview;
           if (isStale()) return "stale";
           const context = atomicHandoff
             ? { ...openFlowRef.current.context, rememberOpenedFrame: () => undefined }
@@ -1552,10 +1561,13 @@ export function useBrowserPhotoOpen(params: {
           return;
         }
         try {
+          const selectedEditedPreview = await selectedPreview;
+          if (isStale()) return;
           // wasm を使えない RAW などは S1 と同じく閲覧だけ（理由と次の一歩を 1 行）
           const source = await loadBrowserCloudPhotoSource(library, item.photo, abort.signal, {
             allowEditing,
             canDevelop: engine !== null,
+            selectedEditedPreview,
           });
           if (isStale()) return;
           const result = await openEditableSource(

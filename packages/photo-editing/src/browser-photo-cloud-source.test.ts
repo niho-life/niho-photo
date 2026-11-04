@@ -1,4 +1,4 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 
 import type { PhotoLibraryItem } from "./library/photo-library";
 import * as cloudSource from "./browser-photo-cloud-source";
@@ -219,5 +219,21 @@ describe("木と印", () => {
     for (const [name, value] of Object.entries(cloudSource)) {
       if (typeof value === "string" && name.endsWith("_MESSAGE")) expect(value).not.toContain("NIHO Desktop");
     }
+  });
+});
+
+describe("クラウド写真を開く", () => {
+  it("編集不可の選択表示では原本を読まず、選択済みの補正済みpreviewを表示する", async () => {
+    const editedPreview = { revision: 2, width: 1200, height: 800, url: "blob:verified-preview", thumbUrl: null };
+    const openOriginal = vi.fn();
+    const signal = new AbortController().signal;
+    const result = await cloudSource.loadBrowserCloudPhotoSource({
+      openOriginal,
+      loadOriginal: vi.fn(),
+      readArticleImage: vi.fn(),
+    } as never, cloudPhoto(), signal, { allowEditing: false, selectedEditedPreview: editedPreview });
+
+    expect(openOriginal).not.toHaveBeenCalled();
+    expect(result).toMatchObject({ file: null, viewUrl: "blob:verified-preview", lockedReason: null, photo: null });
   });
 });

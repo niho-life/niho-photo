@@ -181,12 +181,12 @@ function createPhotoWebPreviewLibrary(options: {
   readonly previewMemoryBytes: number;
   readonly isCurrent: () => boolean;
 }): { readonly library: PhotoLibrary; dispose(): void } {
-  const get = options.library.get.bind(options.library);
+  const openOriginal = options.library.openOriginal.bind(options.library);
   const deletePhotos = options.library.delete.bind(options.library);
   let generation = 0;
-  let activeRead: AbortController | null = null;
-  let activeReadPhotoId: string | null = null;
-  let activePreview: { readonly photoId: string; readonly key: string; readonly url: string } | null = null;
+  let activeSelection: AbortController | null = null;
+  let activeSelectionPhotoId: string | null = null;
+  let activePreview: { readonly photoId: string; readonly revision: number; readonly url: string } | null = null;
   let disposed = false;
   const revokeActive = (): void => {
     const previous = activePreview;
@@ -195,90 +195,89 @@ function createPhotoWebPreviewLibrary(options: {
       try { URL.revokeObjectURL(previous.url); } catch { /* The scope is still cleared even if URL release fails. */ }
     }
   };
-  const getPhoto: PhotoLibrary["get"] = async (photoId, requestOptions) => {
+  const loadSelectedEditedPreview: NonNullable<PhotoLibrary["loadSelectedEditedPreview"]> = async (photoId, requestOptions) => {
     const requestGeneration = ++generation;
-    activeRead?.abort(new Error("Photo Web preview selection changed"));
-    activeRead = null;
-    activeReadPhotoId = null;
-    const item = await get(photoId, requestOptions);
-    const operationSignal = requestOptions?.signal ?? options.scopeSignal;
-    if (item === null) {
-      if (requestGeneration === generation) revokeActive();
-      return item;
-    }
-    let photo: Photo;
-    try {
-      photo = await options.client.request("photos.get", { photoId }, { signal: operationSignal });
-    } catch (error) {
-      if (operationSignal.aborted || options.scopeSignal.aborted) throw error;
-      if (requestGeneration === generation) revokeActive();
-      return item;
-    }
-    if (requestGeneration !== generation || disposed || !options.isCurrent()) return item;
-    const preview = item.editedPreview;
-    if (preview === null || preview === undefined || preview.revision !== item.developRevision
-      || preview.revision !== photo.recipe.revision || !isCurrentCloudPreview(photo, options.rendererManifestSha256)
-      || photo.media.state !== "ready") {
-      revokeActive();
-      return item;
-    }
-    const asset = photo.media.preview;
-    const key = JSON.stringify([photo.id, photo.recipe.revision, asset.id, asset.sha256, options.rendererManifestSha256]);
-    if (activePreview?.key === key) return { ...item, editedPreview: { ...preview, url: activePreview.url } };
-    const maxBytes = Math.floor(options.previewMemoryBytes / 3);
-    if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || asset.sizeBytes > maxBytes) {
-      revokeActive();
-      return item;
-    }
+    activeSelection?.abort(new Error("Photo Web preview selection changed"));
+    activeSelection = null;
+    activeSelectionPhotoId = photoId;
     revokeActive();
-    const linked = linkAbortSignals([options.scopeSignal, operationSignal]);
-    activeRead = linked.controller;
-    activeReadPhotoId = photoId;
+    if (photoId === null) {
+      activeSelectionPhotoId = null;
+      return null;
+    }
+    const linked = linkAbortSignals([options.scopeSignal, ...(requestOptions?.signal ? [requestOptions.signal] : [])]);
+    activeSelection = linked.controller;
     try {
+      const currentPhoto = await options.client.request("photos.get", { photoId }, { signal: linked.controller.signal });
+      if (requestGeneration !== generation || disposed || !options.isCurrent() || currentPhoto.id !== photoId
+        || !isCurrentCloudPreview(currentPhoto, options.rendererManifestSha256) || currentPhoto.media.state !== "ready") {
+        return null;
+      }
+      const asset = currentPhoto.media.preview;
+      const preview = {
+        revision: currentPhoto.recipe.revision,
+        width: asset.width,
+        height: asset.height,
+        url: null,
+        thumbUrl: null,
+      };
+      const maxBytes = Math.floor(options.previewMemoryBytes / 3);
+      if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || asset.sizeBytes > maxBytes) return null;
       const verified = await readVerifiedMediaAsset(options.client, photoId, asset, {
         maxBytes,
         timeoutMs: 30_000,
         signal: linked.controller.signal,
       });
       try {
-        if (requestGeneration !== generation || disposed || !options.isCurrent() || linked.controller.signal.aborted) return item;
+        if (requestGeneration !== generation || disposed || !options.isCurrent() || linked.controller.signal.aborted) return null;
         const blob = new Blob([verified.bytes], { type: asset.contentType });
-        if (blob.size !== asset.sizeBytes) return item;
+        if (blob.size !== asset.sizeBytes) return null;
         const url = URL.createObjectURL(blob);
         if (requestGeneration !== generation || disposed || !options.isCurrent() || linked.controller.signal.aborted) {
           URL.revokeObjectURL(url);
-          return item;
+          return null;
         }
-        activePreview = { photoId, key, url };
-        return { ...item, editedPreview: { ...preview, url } };
+        activePreview = { photoId, revision: preview.revision, url };
+        return { ...preview, url };
       } finally {
         verified.release();
       }
     } catch (error) {
-      if (operationSignal.aborted || options.scopeSignal.aborted) throw error;
-      return item;
+      if (linked.controller.signal.aborted || options.scopeSignal.aborted) throw error;
+      return null;
     } finally {
       linked.dispose();
-      if (activeRead === linked.controller) {
-        activeRead = null;
-        activeReadPhotoId = null;
+      if (activeSelection === linked.controller) {
+        activeSelection = null;
+        activeSelectionPhotoId = null;
       }
     }
   };
+  const openWithSelectedPreview: PhotoLibrary["openOriginal"] = async (photoId, requestOptions) => {
+    const original = await openOriginal(photoId, requestOptions);
+    const preview = activePreview;
+    const photoPreview = original.photo.editedPreview;
+    if (preview === null || preview.photoId !== photoId || photoPreview?.revision !== preview.revision) return original;
+    return { ...original, photo: { ...original.photo, editedPreview: { ...photoPreview, url: preview.url } } };
+  };
   const deletePhoto: PhotoLibrary["delete"] = async (photoIds) => {
     const result = await deletePhotos(photoIds);
-    if (result.deleted.length > 0) generation += 1;
-    if (activeReadPhotoId !== null && result.deleted.includes(activeReadPhotoId)) {
-      activeRead?.abort(new Error("Photo Web preview photo was deleted"));
-      activeRead = null;
-      activeReadPhotoId = null;
+    if (activeSelectionPhotoId !== null && result.deleted.includes(activeSelectionPhotoId)) {
+      generation += 1;
+      activeSelection?.abort(new Error("Photo Web preview photo was deleted"));
+      activeSelection = null;
+      activeSelectionPhotoId = null;
     }
-    if (activePreview !== null && result.deleted.includes(activePreview.photoId)) revokeActive();
+    if (activePreview !== null && result.deleted.includes(activePreview.photoId)) {
+      generation += 1;
+      revokeActive();
+    }
     return result;
   };
   const library = new Proxy(options.library, {
     get(target, property, receiver) {
-      if (property === "get") return getPhoto;
+      if (property === "loadSelectedEditedPreview") return loadSelectedEditedPreview;
+      if (property === "openOriginal") return openWithSelectedPreview;
       if (property === "delete") return deletePhoto;
       return Reflect.get(target, property, receiver);
     },
@@ -289,9 +288,9 @@ function createPhotoWebPreviewLibrary(options: {
       if (disposed) return;
       disposed = true;
       generation += 1;
-      activeRead?.abort(new Error("Photo Web scope changed"));
-      activeRead = null;
-      activeReadPhotoId = null;
+      activeSelection?.abort(new Error("Photo Web scope changed"));
+      activeSelection = null;
+      activeSelectionPhotoId = null;
       revokeActive();
     },
   };
