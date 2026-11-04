@@ -188,6 +188,29 @@ impl SharedAccount {
     }
   }
 
+  /// Keep both the UI invalidation fence and native authority locked until the
+  /// short filesystem commit finishes. The callback must not reenter Account.
+  pub(crate) fn commit_photo_operation<T>(
+    &self,
+    generation: u64,
+    scope: &niho_desktop_account::PhotoScopeCapture,
+    commit: impl FnOnce() -> std::io::Result<T>,
+  ) -> Result<T, niho_desktop_account::AccountError> {
+    let state = self
+      .photo_identity
+      .state
+      .lock()
+      .map_err(|_| niho_desktop_account::AccountError::Internal)?;
+    if state.invalidated || state.generation != generation {
+      return Err(niho_desktop_account::AccountError::Cancelled);
+    }
+    let result = self.account.with_current_photo_scope(scope, || {
+      commit().map_err(|_| niho_desktop_account::AccountError::Storage)
+    });
+    drop(state);
+    result
+  }
+
   pub(crate) fn read_photo_chunk_guarded(
     &self,
     read: impl FnOnce() -> Result<Vec<u8>, niho_desktop_account::AccountError>,
@@ -482,5 +505,25 @@ mod photo_operation_integration_tests {
       Ok(vec![1, 2, 3])
     });
     assert_eq!(result, Err(AccountError::Cancelled));
+  }
+
+  #[test]
+  fn logout_before_file_commit_never_runs_the_commit() {
+    let shared = SharedAccount::new(Account::disabled());
+    let generation = shared.begin_photo_operation().unwrap();
+    shared.photo_identity.invalidate_terminal();
+    let called = Cell::new(false);
+    let scope = niho_desktop_account::PhotoScopeCapture {
+      user_id: "user".into(),
+      session_id: "session".into(),
+      session_epoch: "epoch".into(),
+      transport: niho_desktop_account::PhotoIdentityTransport::MacBearer,
+    };
+    let result = shared.commit_photo_operation(generation, &scope, || {
+      called.set(true);
+      Ok(())
+    });
+    assert_eq!(result, Err(AccountError::Cancelled));
+    assert!(!called.get());
   }
 }

@@ -235,6 +235,8 @@ pub const FEATURES: [&str; 1] = ["colorGradingLuminance"];
 /// `subject` and `sky` draw from `--mask-surface`) and their number, and the
 /// most pixels of a source (original or working copy) it decodes ([`LIMITS`]).
 pub fn capabilities() -> Value {
+    // The SDK owns the complete initial recipe. Native copy must not recreate
+    // a partial neutral object or upgrade an existing saved recipe.
     json!({
         "tool": TOOL_NAME,
         "version": env!("CARGO_PKG_VERSION"),
@@ -244,7 +246,9 @@ pub fn capabilities() -> Value {
         "maskKinds": MaskKind::ALL.map(MaskKind::as_str),
         "maxMasks": MAX_LOCAL_MASKS,
         "maxPixels": LIMITS.max_pixels,
+        "directOriginalMaxPixels": DecodeLimits::BROWSER.max_pixels,
         "renderer": niho_develop::api::renderer_capabilities(),
+        "initialRasterSettings": niho_develop::api::initial_raster_settings(),
     })
 }
 

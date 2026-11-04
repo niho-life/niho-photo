@@ -796,6 +796,60 @@ fn photo_scope(identity: &PhotoIdentity) -> PhotoScopeCapture {
   }
 }
 
+#[test]
+fn native_file_commit_checks_scope_and_expiry_before_touching_destination() {
+  let f = Fixture::with_photo_session(Arc::new(StaticPhotoSession::new(200, valid_photo_identity())));
+  f.login();
+  let mut scope = photo_scope(&f.account.photo_identity().unwrap());
+  assert_eq!(f.account.with_current_photo_scope(&scope, || Ok(7)), Ok(7));
+  scope.session_epoch.push_str("-other");
+  assert_eq!(
+    f.account
+      .with_current_photo_scope(&scope, || panic!("wrong scope must not commit")),
+    Err::<(), _>(AccountError::Cancelled)
+  );
+  scope = photo_scope(&f.account.photo_identity().unwrap());
+  f.clock.0.store(3_600_001, Ordering::SeqCst);
+  assert_eq!(
+    f.account
+      .with_current_photo_scope(&scope, || panic!("expired scope must not commit")),
+    Err::<(), _>(AccountError::Cancelled)
+  );
+}
+
+#[test]
+fn logout_waits_for_an_already_authorized_native_file_commit() {
+  use std::sync::mpsc;
+  let f = Fixture::with_photo_session(Arc::new(StaticPhotoSession::new(200, valid_photo_identity())));
+  f.login();
+  let scope = photo_scope(&f.account.photo_identity().unwrap());
+  let account = Arc::clone(&f.account);
+  let (entered_tx, entered_rx) = mpsc::channel();
+  let (release_tx, release_rx) = mpsc::channel();
+  let commit = std::thread::spawn(move || {
+    account.with_current_photo_scope(&scope, || {
+      entered_tx.send(()).unwrap();
+      release_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+      Ok(())
+    })
+  });
+  entered_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+  let account = Arc::clone(&f.account);
+  let (attempt_tx, attempt_rx) = mpsc::channel();
+  let (done_tx, done_rx) = mpsc::channel();
+  let logout = std::thread::spawn(move || {
+    attempt_tx.send(()).unwrap();
+    let result = account.logout();
+    done_tx.send(()).unwrap();
+    result
+  });
+  attempt_rx.recv_timeout(Duration::from_secs(3)).unwrap();
+  assert!(done_rx.recv_timeout(Duration::from_millis(50)).is_err());
+  release_tx.send(()).unwrap();
+  assert_eq!(commit.join().unwrap(), Ok(()));
+  assert_eq!(logout.join().unwrap(), Ok(()));
+}
+
 fn native_photo_value() -> Value {
   json!({
     "id":"photo","libraryId":"library","storageState":"stored","lifecycle":"active",

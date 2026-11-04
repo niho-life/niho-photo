@@ -191,6 +191,11 @@ impl CameraPhotos {
     Ok((photo_id, photo))
   }
 
+  /// Native library registrationから解決したentryだけを開く。entry IDをpathとして扱わない。
+  pub(crate) fn open_registered(&self, entry_id: &str, path: &Path) -> Result<(String, OpenedPhoto), CameraError> {
+    self.open_measured(entry_id, path, |_| {})
+  }
+
   pub fn close(&self, photo_ids: &[String]) {
     let mut opened = self.lock();
     for photo_id in photo_ids {
@@ -201,6 +206,15 @@ impl CameraPhotos {
 
   pub fn get(&self, photo_id: &str) -> Option<OpenedPhoto> {
     self.lock().photos.get(photo_id).cloned()
+  }
+
+  /// Resolve the public library entry ID to the newest still-open native photo ID.
+  pub(crate) fn find_by_entry_id(&self, entry_id: &str) -> Option<(String, OpenedPhoto)> {
+    let opened = self.lock();
+    opened.order.iter().rev().find_map(|photo_id| {
+      let photo = opened.photos.get(photo_id)?;
+      (photo.entry_id == entry_id).then(|| (photo_id.clone(), photo.clone()))
+    })
   }
 
   /// 開いた後も元ファイルが同じ中身かを SHA-256 で確かめて返す。背景除去のようにパスを native の道具へ渡す直前・直後に使い、

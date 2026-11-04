@@ -126,6 +126,7 @@ let capabilitiesForTest: PhotoLibraryCapabilities;
 let settingsRefForTest: { current: DevelopSettings };
 let statusForTest: ReturnType<typeof vi.fn<(status: FooterStatus | null) => void>>;
 let nativeExport: ReturnType<typeof vi.fn>;
+let libraryForTest: PhotoLibrary;
 
 function Harness() {
   const mountedRef = useRef(true);
@@ -202,7 +203,7 @@ beforeEach(async () => {
     source: { ref: "original", expiresAt: null },
     photo: { ...photo(), id: photoId },
   }));
-  const library = {
+  libraryForTest = {
     downloadOriginal,
     openOriginal,
     exportNative: nativeExport,
@@ -225,7 +226,7 @@ beforeEach(async () => {
   root = createRoot(container);
   await act(async () => {
     root.render(
-      <PhotoLibraryProvider library={library} host={host}>
+      <PhotoLibraryProvider library={libraryForTest} host={host}>
         <Harness />
       </PhotoLibraryProvider>,
     );
@@ -383,6 +384,20 @@ describe("useBrowserPhotoExportAndDelete canonical guard integration", () => {
     expect(pendingEdits.waitForPending).not.toHaveBeenCalled();
     expect(engine.exportWorkingCopyJpeg).not.toHaveBeenCalled();
     expect(vi.getTimerCount()).toBe(0);
+    expect(result).toBe("done");
+  });
+
+  it("native原本保存portがあるときはBlob downloadを作らない", async () => {
+    const saveOriginalNative = vi.fn(async () => ({ saved: true as const, fileName: "raw.rw2" }));
+    libraryForTest.saveOriginalNative = saveOriginalNative;
+    let result: BrowserPhotoExportResult | undefined;
+    await act(async () => {
+      result = await runExport("original", { size: "long2048", jpegRoute: null });
+    });
+    expect(saveOriginalNative).toHaveBeenCalledWith(target.photo, expect.objectContaining({ signal: expect.any(AbortSignal) }));
+    expect(downloadOriginal).not.toHaveBeenCalled();
+    expect(saveFile).not.toHaveBeenCalled();
+    expect(statusForTest).toHaveBeenCalledWith({ kind: "notice", text: "raw.rw2 を保存しました" });
     expect(result).toBe("done");
   });
 });

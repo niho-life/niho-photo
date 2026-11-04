@@ -17,6 +17,14 @@ const scope: MacPhotoCloudScope = {
 const library = { place: "cloud" } as PersonalCloudPhotoBinding["library"];
 const host = {} as PersonalCloudPhotoBinding["host"];
 const photoId = "opaque-photo";
+type CopyEnabledBinding = PersonalCloudPhotoBinding & {
+  copyLocalPhoto: NonNullable<PersonalCloudPhotoBinding["copyLocalPhoto"]>;
+};
+
+function assertCopyEnabledBinding(binding: PersonalCloudPhotoBinding | undefined): asserts binding is CopyEnabledBinding {
+  if (!binding?.copyLocalPhoto) throw new Error("synthetic setup");
+}
+
 function stored(requestId: string): MacPhotoCopyStatus {
   return { requestId, photoId, phase: "stored", fraction: 1, completed: {
     original: true, masks: true, recipe: true, cloudPhotoId: "opaque-cloud-photo",
@@ -31,14 +39,28 @@ function fixture(overrides: Partial<MacPhotoCopyNative> = {}) {
   };
   const connection = createMacPersonalCloudPhotoBinding({ scope, currentScope: () => current,
     subscribeScopeChange: (listener) => { notify = listener; return () => { notify = () => {}; }; }, native, library, host });
-  if (!connection.binding) throw new Error("synthetic setup");
-  return { binding: connection.binding, native, dispose: connection.dispose,
+  const binding = connection.binding;
+  assertCopyEnabledBinding(binding);
+  return { binding, native, dispose: connection.dispose,
     switchScope(next: MacPhotoCloudScope | null) { current = next; notify(); } };
 }
 const options = (controller = new AbortController()) => ({ signal: controller.signal, onProgress: vi.fn() });
 afterEach(() => vi.useRealTimers());
 
 describe("Mac personal cloud binding (synthetic native port only)", () => {
+  it("keeps read/edit connected but omits copy when native authority is absent", () => {
+    const connection = createMacPersonalCloudPhotoBinding({
+      scope,
+      currentScope: () => scope,
+      subscribeScopeChange: () => () => undefined,
+      library,
+      host,
+    });
+    expect(connection.state).toBe("connected");
+    expect(connection.binding?.copyLocalPhoto).toBeUndefined();
+    connection.dispose();
+  });
+
   it("keeps unconfigured production local-only and does no work at construction/login", () => {
     expect(createMacPersonalCloudPhotoBinding(null)).toMatchObject({ state: "not_connected", binding: undefined });
     const { binding, native } = fixture();

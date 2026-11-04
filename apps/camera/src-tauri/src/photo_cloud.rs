@@ -1,10 +1,12 @@
 use crate::account::SharedAccount;
+use crate::{dialog, save};
 use niho_desktop_account::{
   photo_ephemeral_id, AccountError, PhotoContentMetadata, PhotoDownloadCancel, PhotoJsonResponse, PhotoOperation,
   PhotoRequest, PhotoScopeCapture,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use sha2::{Digest, Sha256};
 use std::collections::HashMap;
 use std::fs::{self, File, OpenOptions};
 use std::io::{Read, Seek, SeekFrom};
@@ -85,6 +87,29 @@ pub struct ContentCloseRequest {
 pub struct ContentCancelRequest {
   scope: PhotoScopeCapture,
   request_id: String,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct OriginalSaveRequest {
+  scope: PhotoScopeCapture,
+  photo: OriginalSavePhoto,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct OriginalSavePhoto {
+  id: String,
+  file_name: String,
+  size_bytes: u64,
+  has_original: bool,
+}
+
+struct UnlinkOnDrop(PathBuf);
+impl Drop for UnlinkOnDrop {
+  fn drop(&mut self) {
+    let _ = fs::remove_file(&self.0);
+  }
 }
 
 struct CacheEntry {
@@ -353,6 +378,19 @@ struct DownloadOperation {
   operation_id: u64,
 }
 
+struct CacheReservation {
+  state: Arc<PhotoCloudState>,
+  bytes: u64,
+}
+
+impl Drop for CacheReservation {
+  fn drop(&mut self) {
+    if let Ok(mut inner) = self.state.inner.lock() {
+      inner.reserved_bytes = inner.reserved_bytes.saturating_sub(self.bytes);
+    }
+  }
+}
+
 impl DownloadOperation {
   fn check(&self) -> Result<(), AccountError> {
     let inner = self.state.inner.lock().map_err(|_| AccountError::Internal)?;
@@ -433,6 +471,20 @@ impl DownloadOperation {
       unlink_entries(vec![entry]);
     }
     result
+  }
+
+  fn transfer_reservation(&self) -> Result<CacheReservation, AccountError> {
+    let mut inner = self.state.inner.lock().map_err(|_| AccountError::Internal)?;
+    self.current(&inner)?.cancel.check()?;
+    let bytes = self.current(&inner)?.reserved_bytes;
+    if bytes == 0 {
+      return Err(AccountError::Internal);
+    }
+    self.current_mut(&mut inner)?.reserved_bytes = 0;
+    Ok(CacheReservation {
+      state: Arc::clone(&self.state),
+      bytes,
+    })
   }
 
   fn current<'a>(&self, inner: &'a CacheInner) -> Result<&'a Download, AccountError> {
@@ -700,6 +752,133 @@ pub fn camera_photo_content_cancel(
   validate_id(&input.request_id)?;
   account.account.photo_scope_current(&input.scope)?;
   cache.cancel_download(&input.scope, &input.request_id)
+}
+
+/// Saves native-verified cached original bytes. No path, token, URL, header or bytes cross IPC.
+#[tauri::command]
+pub async fn camera_photo_original_save(
+  app: AppHandle,
+  account: State<'_, Arc<SharedAccount>>,
+  cache: State<'_, Arc<PhotoCloudState>>,
+  input: OriginalSaveRequest,
+) -> Result<Value, AccountError> {
+  validate_id(&input.photo.id)?;
+  if !input.photo.has_original
+    || input.photo.size_bytes == 0
+    || input.photo.size_bytes > 200 * 1024 * 1024
+    || input.photo.file_name.is_empty()
+    || input.photo.file_name.len() > 1024
+  {
+    return Err(AccountError::InvalidResponse);
+  }
+  let generation = account.begin_photo_operation()?;
+  let account = Arc::clone(account.inner());
+  let cache = Arc::clone(cache.inner());
+  let scope = input.scope.clone();
+  let requested_id = input.photo.id.clone();
+  let requested_name = input.photo.file_name.clone();
+  let requested_size = input.photo.size_bytes;
+  let operation_id = photo_ephemeral_id()?;
+  let worker_account = Arc::clone(&account);
+  let worker_cache = Arc::clone(&cache);
+  let downloaded = tauri::async_runtime::spawn_blocking(move || {
+    let operation = worker_cache.register_download(scope.clone(), operation_id, requested_id.clone())?;
+    operation.acquire()?;
+    operation.check()?;
+    operation.reserve(requested_size)?;
+    let root = worker_cache.root.as_deref().ok_or(AccountError::Storage)?;
+    let (path, mut file) = create_cache_file(root)?;
+    let cached_file = UnlinkOnDrop(path.clone());
+    let cancel = operation.current_cancel()?;
+    let downloaded = worker_account
+      .account
+      .photo_original_download(&scope, &requested_id, &mut file, &cancel);
+    let (metadata, file_name) = match downloaded {
+      Ok(value) => value,
+      Err(error) => {
+        drop(file);
+        let _ = fs::remove_file(&path);
+        return Err(error);
+      }
+    };
+    if metadata.size_bytes != requested_size
+      || file_name != requested_name
+      || !save::is_plain_file_name(&file_name)
+      || file.sync_all().is_err()
+      || file.seek(SeekFrom::Start(0)).is_err()
+    {
+      drop(file);
+      let _ = fs::remove_file(&path);
+      return Err(AccountError::InvalidResponse);
+    }
+    let reservation = operation.transfer_reservation()?;
+    Ok((cached_file, file, metadata, file_name, reservation))
+  })
+  .await
+  .map_err(|_| AccountError::Internal)?;
+  let current_before_observe = account.ensure_photo_operation_current(generation);
+  account.observe(&app);
+  let (cached_file, file, metadata, file_name, reservation) = downloaded?;
+  current_before_observe?;
+  let extension = save::extension_of(&file_name).ok_or(AccountError::InvalidResponse)?;
+  let allowed = [extension.as_str()];
+  let destination = dialog::save_file("オリジナルを書き出す", &file_name, ("写真", &allowed))
+    .await
+    .map_err(|_| AccountError::Storage)?;
+  account.ensure_photo_operation_current(generation)?;
+  let Some(destination) = destination else {
+    drop(file);
+    return Ok(serde_json::json!({ "saved": false }));
+  };
+  let destination = save::with_extension_of_kind(destination, &allowed, &extension);
+  let photos = crate::photos::photos(&app).map_err(|_| AccountError::Storage)?;
+  save::refuse_open_original(&photos, &destination).map_err(|_| AccountError::Rejected)?;
+  let final_account = Arc::clone(&account);
+  let commit_scope = input.scope;
+  tauri::async_runtime::spawn_blocking(move || {
+    let _cached_file = cached_file;
+    let _reservation = reservation;
+    let result = save::write_replacing_guarded(
+      &destination,
+      |output| {
+        let mut source = file;
+        let mut digest = Sha256::new();
+        let mut total = 0_u64;
+        let mut buffer = [0_u8; 64 * 1024];
+        loop {
+          final_account
+            .ensure_photo_operation_current(generation)
+            .map_err(std::io::Error::other)?;
+          let count = source.read(&mut buffer)?;
+          if count == 0 {
+            break;
+          }
+          total = total
+            .checked_add(count as u64)
+            .ok_or_else(|| std::io::Error::other("size"))?;
+          if total > metadata.size_bytes {
+            return Err(std::io::Error::other("size"));
+          }
+          digest.update(&buffer[..count]);
+          std::io::Write::write_all(output, &buffer[..count])?;
+        }
+        if total != metadata.size_bytes || format!("{:x}", digest.finalize()) != metadata.sha256 {
+          return Err(std::io::Error::other("digest"));
+        }
+        Ok(())
+      },
+      |temporary, destination| {
+        final_account
+          .commit_photo_operation(generation, &commit_scope, || std::fs::rename(temporary, destination))
+          .map_err(std::io::Error::other)
+      },
+    );
+    result
+      .map(|_| serde_json::json!({ "saved": true, "fileName": save::saved_name(&destination) }))
+      .map_err(|_| AccountError::Storage)
+  })
+  .await
+  .map_err(|_| AccountError::Internal)?
 }
 
 fn resolved_range(range: Option<ContentRange>, size: u64) -> Result<ContentRange, AccountError> {

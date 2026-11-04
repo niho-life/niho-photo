@@ -55,5 +55,10 @@ commands.allow = ["camera_photo_identity"]
 
 [[permission]]
 identifier = "allow-camera-photo-cloud"
-description = "同梱のmain画面だけに、native認証に束縛した固定本人写真操作と、検証済み一時原本handleの最大1MiB読取・取消・解放を許可する。URL、header、token、path、upload ticketは受け渡さない。"
-commands.allow = ["camera_photo_request", "camera_photo_content_open", "camera_photo_content_read", "camera_photo_content_close", "camera_photo_content_cancel"]
+description = "同梱のmain画面だけに、native認証に束縛した固定本人写真操作と、検証済み一時原本handleの最大1MiB読取・取消・解放と、本人fence内で確定する原本保存を許可する。URL、header、token、path、upload ticketは受け渡さない。"
+commands.allow = ["camera_photo_request", "camera_photo_content_open", "camera_photo_content_read", "camera_photo_content_close", "camera_photo_content_cancel", "camera_photo_original_save"]
+
+[[permission]]
+identifier = "allow-camera-photo-copy"
+description = "同梱main画面だけに、native認証へ束縛した本人の明示copyの再開・開始・状態確認・取消を許可する。opaque IDと固定状態だけを渡し、原本・path・token・ticket・URL・headerはnative内に保つ。原本・全参照mask・完全補正の照合前に完了を返さない。"
+commands.allow = ["camera_photo_copy_recover", "camera_photo_copy_start", "camera_photo_copy_status", "camera_photo_copy_cancel"]

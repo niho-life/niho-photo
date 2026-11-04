@@ -38,7 +38,7 @@ fn save_kind(extension: &str) -> Option<(&'static str, &'static [&'static str])>
   }
 }
 
-fn extension_of(name: &str) -> Option<String> {
+pub(crate) fn extension_of(name: &str) -> Option<String> {
   Path::new(name)
     .extension()
     .and_then(|extension| extension.to_str())
@@ -64,7 +64,7 @@ pub fn percent_decode(value: &str) -> Option<String> {
 }
 
 /// 保存ダイアログの既定の名前として使えるか（パスの区切り・制御文字・先頭の `.` を含まず、255 バイトまで）。
-fn is_plain_file_name(name: &str) -> bool {
+pub(crate) fn is_plain_file_name(name: &str) -> bool {
   !name.is_empty()
     && name.len() <= MAX_FILE_NAME_BYTES
     && name.trim() == name
@@ -96,7 +96,7 @@ pub fn with_extension_of_kind(path: PathBuf, allowed: &[&str], extension: &str) 
 }
 
 /// 開いている写真の元ファイルへは書かない。
-fn refuse_open_original(photos: &CameraPhotos, destination: &Path) -> Result<(), CameraError> {
+pub(crate) fn refuse_open_original(photos: &CameraPhotos, destination: &Path) -> Result<(), CameraError> {
   if photos.is_open_original(destination) {
     Err(CameraError::new(code::EXPORT_FAILED, ORIGINAL_OVERWRITE_MESSAGE))
   } else {
@@ -108,6 +108,16 @@ fn refuse_open_original(photos: &CameraPhotos, destination: &Path) -> Result<(),
 pub fn write_replacing(
   destination: &Path,
   write: impl FnOnce(&mut std::fs::File) -> std::io::Result<()>,
+) -> Result<(), CameraError> {
+  write_replacing_guarded(destination, write, |temporary, destination| {
+    std::fs::rename(temporary, destination)
+  })
+}
+
+pub(crate) fn write_replacing_guarded(
+  destination: &Path,
+  write: impl FnOnce(&mut std::fs::File) -> std::io::Result<()>,
+  commit: impl FnOnce(&Path, &Path) -> std::io::Result<()>,
 ) -> Result<(), CameraError> {
   let failed = || CameraError::new(code::EXPORT_FAILED, WRITE_FAILED_MESSAGE);
   let folder = destination
@@ -122,7 +132,8 @@ pub fn write_replacing(
       .open(&temporary)?;
     write(&mut file)?;
     file.sync_all()?;
-    std::fs::rename(&temporary, destination)
+    commit(&temporary, destination)?;
+    std::fs::File::open(folder)?.sync_all()
   })();
   if result.is_err() {
     let _ = std::fs::remove_file(&temporary);
@@ -130,7 +141,7 @@ pub fn write_replacing(
   result.map_err(|_| failed())
 }
 
-fn saved_name(destination: &Path) -> String {
+pub(crate) fn saved_name(destination: &Path) -> String {
   destination
     .file_name()
     .map(|name| name.to_string_lossy().into_owned())
@@ -299,6 +310,13 @@ mod tests {
       .collect();
     assert_eq!(names, vec!["P1.jpg".to_string()], "一時ファイルを残さない");
     assert!(write_replacing(&dir.join("missing").join("P1.jpg"), |_| Ok(())).is_err());
+    let late_fence = write_replacing_guarded(
+      &destination,
+      |file| file.write_all(b"must-not-commit"),
+      |_, _| Err(std::io::Error::other("identity changed")),
+    );
+    assert!(late_fence.is_err());
+    assert_eq!(std::fs::read(&destination).unwrap(), b"new");
     let _ = std::fs::remove_dir_all(&dir);
   }
 

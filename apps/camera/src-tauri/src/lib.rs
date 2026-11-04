@@ -19,6 +19,7 @@
 mod account;
 mod activity;
 mod app_log;
+mod cloud_copy;
 mod cloud_copy_source;
 mod cutout;
 mod cutout_commands;
@@ -107,6 +108,7 @@ pub fn run() {
       photo_cloud::install(app.handle());
       library::install(app.handle());
       photos::install(app.handle());
+      cloud_copy::install(app.handle());
       flags::install(app.handle());
       develop::install(app.handle());
       develop_engine_sidecar::install(app.handle());
@@ -134,6 +136,11 @@ pub fn run() {
       photo_cloud::camera_photo_content_read,
       photo_cloud::camera_photo_content_close,
       photo_cloud::camera_photo_content_cancel,
+      photo_cloud::camera_photo_original_save,
+      cloud_copy::camera_photo_copy_recover,
+      cloud_copy::camera_photo_copy_start,
+      cloud_copy::camera_photo_copy_status,
+      cloud_copy::camera_photo_copy_cancel,
       library::camera_library_add_folder,
       library::camera_library_add_photos,
       library::camera_library_remembered,

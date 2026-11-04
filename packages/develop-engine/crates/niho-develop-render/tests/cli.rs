@@ -1187,6 +1187,11 @@ fn capabilities_name_what_this_build_renders() {
     );
     assert_eq!(capabilities["maxMasks"], 8);
     assert_eq!(capabilities["maxPixels"], 100_000_000);
+    let initial = DevelopSettings::from_value(&capabilities["initialRasterSettings"]).unwrap();
+    assert_eq!(initial.engine, niho_develop::settings::ENGINE_NIHO_14);
+    assert_eq!(initial.look, niho_develop::settings::LOOK_NIHO_STANDARD_1);
+    assert!(initial.base.is_none());
+    assert!(initial.is_neutral());
     assert_eq!(
         capabilities["renderer"],
         niho_develop::api::renderer_capabilities()

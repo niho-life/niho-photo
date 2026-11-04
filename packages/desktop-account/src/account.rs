@@ -1,13 +1,15 @@
 use crate::connect::{equal, secret_43, Pending};
 use crate::photo_cloud::{
-  content_request, native_request, original_metadata, read_json_response, stream_verified_content,
-  CapturedPhotoAuthority, HttpPhotoCloud, PhotoHttpTransport,
+  content_request, native_copy_request, native_request, original_metadata, original_metadata_for_photo,
+  parse_renew_upload, parse_start_upload, parse_upload, parse_upload_receipt, provider_ack, read_json_response,
+  read_native_upload_response, stream_verified_content, CapturedPhotoAuthority, HttpPhotoCloud, PhotoHttpTransport,
 };
 use crate::photo_session::{parse_response, parse_strict_iso, HttpPhotoSession, PhotoSessionTransport};
 use crate::{
-  AccountError, Browser, Cancel, ClientId, Config, CredentialStore, ExternalBrowser, HttpTransport,
-  PhotoContentMetadata, PhotoDownloadCancel, PhotoIdentity, PhotoJsonResponse, PhotoOperation, PhotoRequest,
-  PhotoScopeCapture, Request, Response, Secret, SecretKind, Transport, SAFETY_CONTRACT_VERSION,
+  AccountError, Browser, Cancel, ClientId, Config, CredentialStore, ExternalBrowser, HttpTransport, NativeCopyTarget,
+  NativeProviderAck, NativeStartUpload, NativeUpload, NativeUploadTicket, PhotoContentMetadata, PhotoDownloadCancel,
+  PhotoIdentity, PhotoJsonResponse, PhotoOperation, PhotoRequest, PhotoScopeCapture, Request, Response, Secret,
+  SecretKind, Transport, SAFETY_CONTRACT_VERSION,
 };
 use serde::{Deserialize, Serialize};
 use std::io::Write;
@@ -745,6 +747,253 @@ impl Account {
     Ok(response)
   }
 
+  /// Native-only upload bootstrap. Ticket-bearing replies stay in Rust memory.
+  #[allow(clippy::too_many_arguments)]
+  pub fn photo_copy_start(
+    &self,
+    capture: &PhotoScopeCapture,
+    library_id: &str,
+    target: &NativeCopyTarget,
+    size_bytes: u64,
+    sha256: &str,
+    content_type: &str,
+    idempotency_key: &str,
+  ) -> Result<NativeStartUpload, AccountError> {
+    if size_bytes == 0
+      || size_bytes > 200 * 1024 * 1024
+      || sha256.len() != 64
+      || !sha256
+        .bytes()
+        .all(|byte| byte.is_ascii_digit() || (b'a'..=b'f').contains(&byte))
+      || match target {
+        NativeCopyTarget::Original { file_name, format } => {
+          file_name.is_empty()
+            || file_name.len() > 255
+            || file_name.contains('/')
+            || file_name.contains('\\')
+            || !matches!(
+              (format.as_str(), content_type),
+              ("jpeg", "image/jpeg") | ("png", "image/png")
+            )
+        }
+        NativeCopyTarget::Mask { photo_id } => {
+          photo_id.is_empty() || size_bytes > 8 * 1024 * 1024 || content_type != "image/png"
+        }
+      }
+    {
+      return Err(AccountError::InvalidResponse);
+    }
+    let body = match target {
+      NativeCopyTarget::Original { file_name, format } => serde_json::json!({
+        "target": { "kind": "original", "fileName": file_name, "format": format },
+        "sizeBytes": size_bytes, "sha256": sha256, "contentType": content_type,
+      }),
+      NativeCopyTarget::Mask { photo_id } => serde_json::json!({
+        "target": { "kind": "mask", "photoId": photo_id },
+        "sizeBytes": size_bytes, "sha256": sha256, "contentType": content_type,
+      }),
+    };
+    let bytes = serde_json::to_vec(&body).map_err(|_| AccountError::Internal)?;
+    if bytes.len() > 64 * 1024 {
+      return Err(AccountError::InvalidResponse);
+    }
+    let value = self.send_native_copy(
+      capture,
+      library_id,
+      "POST",
+      &["uploads"],
+      Some(bytes),
+      Some(idempotency_key.to_owned()),
+    )?;
+    let result = parse_start_upload(&value, library_id, content_type)?;
+    if let NativeStartUpload::Upload {
+      ticket: Some(ticket), ..
+    } = &result
+    {
+      self.validate_live_ticket(ticket)?;
+    }
+    Ok(result)
+  }
+
+  pub fn photo_copy_get(
+    &self,
+    capture: &PhotoScopeCapture,
+    library_id: &str,
+    upload_id: &str,
+  ) -> Result<NativeUpload, AccountError> {
+    let value = self.send_native_copy(capture, library_id, "GET", &["uploads", upload_id], None, None)?;
+    parse_upload(&value, library_id)
+  }
+
+  pub fn photo_copy_renew(
+    &self,
+    capture: &PhotoScopeCapture,
+    library_id: &str,
+    upload_id: &str,
+    content_type: &str,
+  ) -> Result<(NativeUpload, NativeUploadTicket), AccountError> {
+    let value = self.send_native_copy(
+      capture,
+      library_id,
+      "POST",
+      &["uploads", upload_id, "renew"],
+      Some(b"{}".to_vec()),
+      None,
+    )?;
+    let result = parse_renew_upload(&value, library_id, content_type)?;
+    self.validate_live_ticket(&result.1)?;
+    Ok(result)
+  }
+
+  pub fn photo_copy_complete(
+    &self,
+    capture: &PhotoScopeCapture,
+    library_id: &str,
+    upload_id: &str,
+    idempotency_key: &str,
+  ) -> Result<NativeUpload, AccountError> {
+    let value = self.send_native_copy(
+      capture,
+      library_id,
+      "POST",
+      &["uploads", upload_id, "complete"],
+      Some(b"{}".to_vec()),
+      Some(idempotency_key.to_owned()),
+    )?;
+    parse_upload_receipt(&value, library_id)
+  }
+
+  pub fn photo_copy_cancel(
+    &self,
+    capture: &PhotoScopeCapture,
+    library_id: &str,
+    upload_id: &str,
+    idempotency_key: &str,
+  ) -> Result<NativeUpload, AccountError> {
+    let value = self.send_native_copy(
+      capture,
+      library_id,
+      "POST",
+      &["uploads", upload_id, "cancel"],
+      Some(b"{}".to_vec()),
+      Some(idempotency_key.to_owned()),
+    )?;
+    parse_upload_receipt(&value, library_id)
+  }
+
+  pub fn photo_copy_mask_get(
+    &self,
+    capture: &PhotoScopeCapture,
+    library_id: &str,
+    photo_id: &str,
+    surface_id: &str,
+  ) -> Result<serde_json::Value, AccountError> {
+    let value = self.send_native_copy(
+      capture,
+      library_id,
+      "GET",
+      &["photos", photo_id, "masks", surface_id],
+      None,
+      None,
+    )?;
+    crate::photo_cloud::validate_native_mask_asset(&value)?;
+    Ok(value)
+  }
+
+  pub fn photo_copy_put(
+    &self,
+    capture: &PhotoScopeCapture,
+    ticket: &NativeUploadTicket,
+    offset: u64,
+    total: u64,
+    body: &[u8],
+  ) -> Result<NativeProviderAck, AccountError> {
+    self.validate_live_ticket(ticket)?;
+    if total != ticket.size_bytes
+      || ticket.resume_offset_bytes != offset
+      || body.is_empty()
+      || body.len() > 8 * 1024 * 1024
+      || offset.checked_add(body.len() as u64).is_none_or(|end| end > total)
+    {
+      return Err(AccountError::InvalidResponse);
+    }
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    let authority = self.capture_photo_authority(adapters, capture)?;
+    let response = adapters
+      .photo_http
+      .provider_put(&ticket.url, &ticket.content_type, offset, total, body)?;
+    self.ensure_photo_authority(adapters, &authority)?;
+    provider_ack(response, offset, body.len() as u64, total)
+  }
+
+  pub fn photo_copy_probe(
+    &self,
+    capture: &PhotoScopeCapture,
+    ticket: &NativeUploadTicket,
+    total: u64,
+  ) -> Result<NativeProviderAck, AccountError> {
+    self.validate_live_ticket(ticket)?;
+    if total != ticket.size_bytes {
+      return Err(AccountError::InvalidResponse);
+    }
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    let authority = self.capture_photo_authority(adapters, capture)?;
+    let response = adapters
+      .photo_http
+      .provider_probe(&ticket.url, &ticket.content_type, total)?;
+    self.ensure_photo_authority(adapters, &authority)?;
+    let acknowledgement = provider_ack(response, 0, total, total)?;
+    if acknowledgement.next_offset < ticket.resume_offset_bytes {
+      return Err(AccountError::InvalidResponse);
+    }
+    Ok(acknowledgement)
+  }
+
+  fn send_native_copy(
+    &self,
+    capture: &PhotoScopeCapture,
+    library_id: &str,
+    method: &'static str,
+    suffix: &[&str],
+    body: Option<Vec<u8>>,
+    idempotency_key: Option<String>,
+  ) -> Result<serde_json::Value, AccountError> {
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    let authority = self.capture_photo_authority(adapters, capture)?;
+    let request = native_copy_request(
+      &adapters.config,
+      &authority.scope,
+      method,
+      suffix,
+      body,
+      idempotency_key,
+    )?;
+    let response = adapters
+      .photo_http
+      .send(&adapters.config, &authority.access, &request, false)?;
+    let value = match read_native_upload_response(response, library_id) {
+      Ok(value) => value,
+      Err(AccountError::Expired) => {
+        self.invalidate_photo_identity(adapters, authority.generation, AccountError::Expired)?;
+        return Err(AccountError::Expired);
+      }
+      Err(error) => return Err(error),
+    };
+    self.ensure_photo_authority(adapters, &authority)?;
+    Ok(value)
+  }
+
+  fn validate_live_ticket(&self, ticket: &NativeUploadTicket) -> Result<(), AccountError> {
+    let expires = parse_strict_iso(&ticket.expires_at).ok_or(AccountError::InvalidResponse)?;
+    if expires <= self.clock.now_ms()?
+      || !crate::photo_cloud::trusted_upload_url(&ticket.url)
+      || !matches!(ticket.content_type.as_str(), "image/jpeg" | "image/png")
+    {
+      return Err(AccountError::Expired);
+    }
+    Ok(())
+  }
+
   pub fn photo_scope_current(&self, capture: &PhotoScopeCapture) -> Result<(), AccountError> {
     let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
     self.capture_photo_authority(adapters, capture).map(|_| ())
@@ -836,6 +1085,47 @@ impl Account {
     Ok(metadata)
   }
 
+  /// Native Save As専用。fresh Photoからoriginal IDをnative内で解決し、検証済み全bytesだけをwriterへ渡す。
+  pub fn photo_original_download<W: Write>(
+    &self,
+    capture: &PhotoScopeCapture,
+    photo_id: &str,
+    writer: &mut W,
+    cancel: &PhotoDownloadCancel,
+  ) -> Result<(PhotoContentMetadata, String), AccountError> {
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    let authority = self.capture_photo_authority(adapters, capture)?;
+    let get = PhotoRequest::parse(
+      PhotoOperation::PhotosGet,
+      serde_json::json!({ "photoId": photo_id }),
+      None,
+    )?;
+    let photo = self.send_photo_json(adapters, &authority, &get)?;
+    if photo.status == 401 {
+      self.invalidate_photo_identity(adapters, authority.generation, AccountError::Expired)?;
+      return Err(AccountError::Expired);
+    }
+    if photo.status != 200 {
+      return Err(AccountError::Rejected);
+    }
+    let (metadata, file_name) = original_metadata_for_photo(&photo.body, photo_id)?;
+    self.ensure_photo_authority(adapters, &authority)?;
+    cancel.check()?;
+    let request = content_request(&adapters.config, &authority.scope, photo_id, &metadata.asset_id);
+    let response = adapters
+      .photo_http
+      .send(&adapters.config, &authority.access, &request, true)?;
+    if response.status == 401 {
+      self.invalidate_photo_identity(adapters, authority.generation, AccountError::Expired)?;
+      return Err(AccountError::Expired);
+    }
+    stream_verified_content(response, &metadata, writer, cancel, || {
+      self.ensure_photo_authority(adapters, &authority)
+    })?;
+    self.ensure_photo_authority(adapters, &authority)?;
+    Ok((metadata, file_name))
+  }
+
   fn send_photo_json(
     &self,
     adapters: &Adapters,
@@ -904,6 +1194,36 @@ impl Account {
       user_id: connection.user_id,
       scope: capture.clone(),
     })
+  }
+
+  /// Runs a short native commit under the same lock as logout, refresh and
+  /// session revocation. The callback must not call back into this Account.
+  pub fn with_current_photo_scope<T>(
+    &self,
+    capture: &PhotoScopeCapture,
+    commit: impl FnOnce() -> Result<T, AccountError>,
+  ) -> Result<T, AccountError> {
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    let inner = self.inner.lock().map_err(|_| AccountError::Internal)?;
+    let now = self.clock.now_ms()?;
+    if adapters.config.client != ClientId::Camera
+      || inner.phase != AccountPhase::Connected
+      || inner.cancel.is_some()
+      || inner.access.is_none()
+      || now >= inner.expires_at_ms
+      || now >= inner.photo_identity_expires_at_ms
+      || inner.photo_identity.as_ref().is_none_or(|identity| {
+        identity.user_id != capture.user_id
+          || identity.session_id != capture.session_id
+          || identity.session_epoch != capture.session_epoch
+          || identity.transport != capture.transport
+      })
+    {
+      return Err(AccountError::Cancelled);
+    }
+    let result = commit();
+    drop(inner);
+    result
   }
 
   fn ensure_photo_authority(

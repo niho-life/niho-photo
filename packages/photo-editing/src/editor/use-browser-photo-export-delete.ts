@@ -79,6 +79,7 @@ import {
   photoEditingExportFailedCountText,
   photoEditingExportNarrowNote,
   photoEditingFolderExportStoppedText,
+  photoEditingNativeOriginalSavedText,
   photoEditingSavedText,
 } from "../photo-editing-copy";
 import {
@@ -653,6 +654,15 @@ export function useBrowserPhotoExportAndDelete(params: {
       let exportedSettingsKey: string | null = null;
       let narrowWidth: number | null = null;
       if (format === "original") {
+        if (library.saveOriginalNative) {
+          const saved = await library.saveOriginalNative(target.photo, { signal: controller.signal });
+          if (!mountedRef.current || controller.signal.aborted || latestAccessRef.current.spotId !== operationSpotId) {
+            return "skipped";
+          }
+          if (!saved.saved) return "cancelled";
+          setStatus({ kind: "notice", text: photoEditingNativeOriginalSavedText(saved.fileName ?? target.photo.fileName) });
+          return "done";
+        }
         const downloaded = await library.downloadOriginal(target.photo, { signal: controller.signal });
         blob = downloaded.blob;
         fileName = downloaded.fileName;

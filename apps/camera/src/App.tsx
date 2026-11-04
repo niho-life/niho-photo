@@ -43,7 +43,7 @@ export type PersonalCloudPhotoBinding = {
   actorId: string;
   /** actor/library/session/epoch/transport の衝突しないtuple。認可には使わず、query/editorを論理sessionごとに分ける。 */
   scopeKey?: string;
-  copyLocalPhoto: BrowserPhotoCopyToCloudBinding["copyLocalPhoto"];
+  copyLocalPhoto?: BrowserPhotoCopyToCloudBinding["copyLocalPhoto"];
 };
 
 export type AppProps = {
@@ -98,7 +98,7 @@ function PhotoSourceTabs(props: {
 }
 
 let defaultCommands: CameraCommands | null = null;
-function cameraCommands(): CameraCommands {
+export function cameraCommands(): CameraCommands {
   defaultCommands ??= createCameraCommands();
   return defaultCommands;
 }
@@ -225,12 +225,12 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
   const activeSource: PhotoSource = cloud ? source : "local";
   const library = activeSource === "cloud" && cloud ? cloud.library : localLibrary;
   const host = activeSource === "cloud" && cloud ? cloud.host : localHost;
-  const sourceKey = cloud ? personalPhotoScope(cloud.actorId, activeSource) : "local";
+  const sourceKey = activeSource === "cloud" && cloud ? personalPhotoScope(cloud.actorId, activeSource) : "local";
   const queryScopeKey = activeSource === "cloud" ? cloud?.scopeKey : undefined;
   const libraryKey = queryScopeKey === undefined ? sourceKey : `${sourceKey}:scope:${queryScopeKey}`;
-  const actorId = cloud ? cloud.actorId : "local";
+  const actorId = activeSource === "cloud" && cloud ? cloud.actorId : "local";
   const copyToCloud = useMemo<BrowserPhotoCopyToCloudBinding | undefined>(() =>
-    cloud && !cloudBindingTransition.switching && !cloudBindingTransition.failed ? {
+    cloud?.copyLocalPhoto && !cloudBindingTransition.switching && !cloudBindingTransition.failed ? {
       copyLocalPhoto: cloud.copyLocalPhoto,
       onOpenCloudPhoto: (photoId) => {
         void selectSource("cloud", photoId);

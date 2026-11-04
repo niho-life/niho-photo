@@ -12,6 +12,7 @@
     "allow-camera-account",
     "allow-camera-photo-session",
     "allow-camera-photo-cloud",
+    "allow-camera-photo-copy",
     "allow-camera-app-info",
     "allow-camera-library",
     "allow-camera-photos",

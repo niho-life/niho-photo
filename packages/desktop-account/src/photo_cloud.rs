@@ -1,4 +1,5 @@
 use crate::connect::equal;
+use crate::photo_session::parse_strict_iso;
 use crate::{AccountError, ClientId, Config, PhotoIdentityTransport, Secret};
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
@@ -31,6 +32,9 @@ const EPOCH_HEADER: &str = "X-NIHO-Photo-Session-Epoch";
 const IDEMPOTENCY_HEADER: &str = "Idempotency-Key";
 const SHA_HEADER: &str = "X-NIHO-Photo-Sha256";
 const TOTAL_HEADER: &str = "X-NIHO-Photo-Total-Bytes";
+const TRUSTED_UPLOAD_ORIGIN: &str = "https://storage.googleapis.com";
+const UPLOAD_URL_MAX: usize = 8192;
+const PROVIDER_CHUNK_MAX: usize = 8 * 1024 * 1024;
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -403,6 +407,74 @@ pub struct PhotoContentMetadata {
   pub content_type: String,
 }
 
+/// Native-only C00 upload target. Ticket-bearing replies never use the public PhotoOperation enum.
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum NativeCopyTarget {
+  Original {
+    #[serde(rename = "fileName")]
+    file_name: String,
+    format: String,
+  },
+  Mask {
+    #[serde(rename = "photoId")]
+    photo_id: String,
+  },
+}
+
+#[derive(Clone)]
+pub struct NativeUploadTicket {
+  pub(crate) url: url::Url,
+  pub(crate) content_type: String,
+  pub(crate) expires_at: String,
+  pub(crate) resume_offset_bytes: u64,
+  pub(crate) size_bytes: u64,
+}
+
+impl NativeUploadTicket {
+  pub fn resume_offset_bytes(&self) -> u64 {
+    self.resume_offset_bytes
+  }
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum NativeUploadState {
+  Reserved { uploaded_bytes: u64 },
+  Verifying,
+  StoredOriginal { photo: Value },
+  StoredMask { photo_id: String, asset: Value },
+  Cancelled,
+  Expired,
+  Rejected,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct NativeUpload {
+  pub id: String,
+  pub target: NativeCopyTarget,
+  pub size_bytes: u64,
+  pub sha256: String,
+  pub expires_at: String,
+  pub state: NativeUploadState,
+}
+
+#[derive(Clone)]
+pub enum NativeStartUpload {
+  Existing {
+    photo: Value,
+  },
+  Upload {
+    upload: Box<NativeUpload>,
+    ticket: Option<NativeUploadTicket>,
+  },
+}
+
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct NativeProviderAck {
+  pub next_offset: u64,
+  pub complete: bool,
+}
+
 #[derive(Clone)]
 pub(crate) struct CapturedPhotoAuthority {
   pub generation: u64,
@@ -461,6 +533,31 @@ pub(crate) trait PhotoHttpTransport: Send + Sync {
     request: &NativePhotoRequest,
     content: bool,
   ) -> Result<PhotoHttpResponse, AccountError>;
+
+  fn provider_put(
+    &self,
+    _url: &url::Url,
+    _content_type: &str,
+    _offset: u64,
+    _total: u64,
+    _body: &[u8],
+  ) -> Result<ProviderResponse, AccountError> {
+    Err(AccountError::NotConfigured)
+  }
+
+  fn provider_probe(
+    &self,
+    _url: &url::Url,
+    _content_type: &str,
+    _total: u64,
+  ) -> Result<ProviderResponse, AccountError> {
+    Err(AccountError::NotConfigured)
+  }
+}
+
+pub(crate) struct ProviderResponse {
+  status: u16,
+  range: Option<String>,
 }
 
 pub(crate) struct HttpPhotoCloud;
@@ -525,6 +622,68 @@ impl PhotoHttpTransport for HttpPhotoCloud {
       body: Box::new(DeadlineReader::new(Box::new(response), deadline)),
     })
   }
+
+  fn provider_put(
+    &self,
+    url: &url::Url,
+    content_type: &str,
+    offset: u64,
+    total: u64,
+    body: &[u8],
+  ) -> Result<ProviderResponse, AccountError> {
+    if body.is_empty() || body.len() > PROVIDER_CHUNK_MAX {
+      return Err(AccountError::InvalidResponse);
+    }
+    let end = offset
+      .checked_add(body.len() as u64)
+      .and_then(|value| value.checked_sub(1))
+      .ok_or(AccountError::InvalidResponse)?;
+    if end >= total {
+      return Err(AccountError::InvalidResponse);
+    }
+    send_provider(
+      url,
+      content_type,
+      format!("bytes {offset}-{end}/{total}"),
+      body.to_vec(),
+    )
+  }
+
+  fn provider_probe(&self, url: &url::Url, content_type: &str, total: u64) -> Result<ProviderResponse, AccountError> {
+    send_provider(url, content_type, format!("bytes */{total}"), Vec::new())
+  }
+}
+
+fn send_provider(
+  url: &url::Url,
+  content_type: &str,
+  content_range: String,
+  body: Vec<u8>,
+) -> Result<ProviderResponse, AccountError> {
+  if !trusted_upload_url(url) || !valid_content_type(content_type) {
+    return Err(AccountError::InvalidResponse);
+  }
+  let _ = rustls::crypto::ring::default_provider().install_default();
+  let client = reqwest::blocking::Client::builder()
+    .redirect(reqwest::redirect::Policy::none())
+    .connect_timeout(Duration::from_secs(5))
+    .timeout(Duration::from_secs(120))
+    .https_only(true)
+    .no_proxy()
+    .build()
+    .map_err(|_| AccountError::Network)?;
+  let response = client
+    .put(url.clone())
+    .header("Content-Type", content_type)
+    .header("Content-Range", content_range)
+    .header("Content-Length", body.len())
+    .body(body)
+    .send()
+    .map_err(|_| AccountError::Network)?;
+  Ok(ProviderResponse {
+    status: response.status().as_u16(),
+    range: header(&response, "range"),
+  })
 }
 
 fn header(response: &reqwest::blocking::Response, name: &str) -> Option<String> {
@@ -539,6 +698,376 @@ fn valid_fixed_url(config: &Config, url: &url::Url) -> bool {
     && url.fragment().is_none()
     && url.username().is_empty()
     && url.password().is_none()
+}
+
+pub(crate) fn trusted_upload_url(url: &url::Url) -> bool {
+  let Ok(origin) = url::Url::parse(TRUSTED_UPLOAD_ORIGIN) else {
+    return false;
+  };
+  url.as_str().len() <= UPLOAD_URL_MAX
+    && url.scheme() == "https"
+    && url.origin() == origin.origin()
+    && url.port_or_known_default() == Some(443)
+    && url.username().is_empty()
+    && url.password().is_none()
+    && url.fragment().is_none()
+}
+
+pub(crate) fn native_copy_request(
+  config: &Config,
+  capture: &PhotoScopeCapture,
+  method: &'static str,
+  suffix: &[&str],
+  body: Option<Vec<u8>>,
+  idempotency_key: Option<String>,
+) -> Result<NativePhotoRequest, AccountError> {
+  if suffix.is_empty() || suffix.iter().any(|value| valid_id(value).is_err()) {
+    return Err(AccountError::InvalidResponse);
+  }
+  if idempotency_key.as_deref().is_some_and(|value| !valid_key(value)) {
+    return Err(AccountError::InvalidResponse);
+  }
+  let mut url = config.api_url(API_PREFIX);
+  let mut segments = url.path_segments_mut().map_err(|_| AccountError::InvalidConfig)?;
+  for value in suffix {
+    segments.push(value);
+  }
+  drop(segments);
+  Ok(NativePhotoRequest {
+    method,
+    url,
+    body,
+    idempotency_key,
+    capture: capture.clone(),
+  })
+}
+
+pub(crate) fn read_native_upload_response(
+  response: PhotoHttpResponse,
+  expected_library: &str,
+) -> Result<Value, AccountError> {
+  if response.content_length.is_some_and(|value| value > JSON_SUCCESS_MAX)
+    || response
+      .content_type
+      .as_deref()
+      .and_then(|value| value.split(';').next())
+      != Some("application/json")
+  {
+    return Err(AccountError::InvalidResponse);
+  }
+  let limit = if (200..300).contains(&response.status) {
+    JSON_SUCCESS_MAX
+  } else {
+    ERROR_BODY_MAX
+  };
+  let mut bytes = Zeroizing::new(Vec::new());
+  response
+    .body
+    .take(limit + 1)
+    .read_to_end(&mut bytes)
+    .map_err(|_| AccountError::Network)?;
+  if bytes.len() as u64 > limit {
+    return Err(AccountError::InvalidResponse);
+  }
+  let value: Value = serde_json::from_slice(&bytes).map_err(|_| AccountError::InvalidResponse)?;
+  validate_json_shape(&value, 0, MAX_DEPTH)?;
+  if !(200..300).contains(&response.status) {
+    validate_error(&value)?;
+    return Err(match response.status {
+      401 => AccountError::Expired,
+      400 | 403 | 404 | 409 | 410 | 413 | 415 | 416 | 422 => AccountError::Rejected,
+      _ => AccountError::Network,
+    });
+  }
+  if response.status != 200 || valid_id(expected_library).is_err() {
+    return Err(AccountError::InvalidResponse);
+  }
+  Ok(value)
+}
+
+pub(crate) fn parse_start_upload(
+  value: &Value,
+  expected_library: &str,
+  content_type: &str,
+) -> Result<NativeStartUpload, AccountError> {
+  exact(value, &["value", "replayed"])?;
+  field(value, "replayed")?
+    .as_bool()
+    .ok_or(AccountError::InvalidResponse)?;
+  let root = field(value, "value")?;
+  let kind = object(root)?
+    .get("kind")
+    .and_then(Value::as_str)
+    .ok_or(AccountError::InvalidResponse)?;
+  match kind {
+    "existing" => {
+      exact(root, &["kind", "photo"])?;
+      let photo = field(root, "photo")?.clone();
+      validate_photo(&photo)?;
+      if object(&photo)?.get("libraryId").and_then(Value::as_str) != Some(expected_library) {
+        return Err(AccountError::InvalidResponse);
+      }
+      Ok(NativeStartUpload::Existing { photo })
+    }
+    "upload" => {
+      exact(root, &["kind", "upload", "ticket"])?;
+      let upload = parse_upload(field(root, "upload")?, expected_library)?;
+      let ticket = if field(root, "ticket")?.is_null() {
+        None
+      } else {
+        Some(parse_ticket(field(root, "ticket")?, content_type, upload.size_bytes)?)
+      };
+      if let Some(ticket) = &ticket {
+        if !matches!(&upload.state, NativeUploadState::Reserved { uploaded_bytes } if *uploaded_bytes == ticket.resume_offset_bytes)
+        {
+          return Err(AccountError::InvalidResponse);
+        }
+      }
+      Ok(NativeStartUpload::Upload {
+        upload: Box::new(upload),
+        ticket,
+      })
+    }
+    _ => Err(AccountError::InvalidResponse),
+  }
+}
+
+pub(crate) fn parse_upload(value: &Value, expected_library: &str) -> Result<NativeUpload, AccountError> {
+  let item = object(value)?;
+  let id = string(item, "id")?.to_owned();
+  let sha256 = string(item, "sha256")?.to_owned();
+  let expires_at = string(item, "expiresAt")?.to_owned();
+  let size_bytes = integer(item, "sizeBytes")?;
+  valid_id(&id)?;
+  if !is_sha256(&sha256) || size_bytes == 0 || size_bytes > CONTENT_MAX || parse_strict_iso(&expires_at).is_none() {
+    return Err(AccountError::InvalidResponse);
+  }
+  let target_value = field(value, "target")?;
+  let target_object = object(target_value)?;
+  let target = match string(target_object, "kind")? {
+    "original" => {
+      exact(target_value, &["kind", "fileName", "format"])?;
+      let file_name = string(target_object, "fileName")?.to_owned();
+      let format = string(target_object, "format")?.to_owned();
+      if file_name.is_empty() || file_name.len() > 255 || !matches!(format.as_str(), "jpeg" | "png") {
+        return Err(AccountError::InvalidResponse);
+      }
+      NativeCopyTarget::Original { file_name, format }
+    }
+    "mask" => {
+      exact(target_value, &["kind", "photoId"])?;
+      let photo_id = string(target_object, "photoId")?.to_owned();
+      valid_id(&photo_id)?;
+      NativeCopyTarget::Mask { photo_id }
+    }
+    _ => return Err(AccountError::InvalidResponse),
+  };
+  if matches!(&target, NativeCopyTarget::Mask { .. }) && size_bytes > 8 * 1024 * 1024 {
+    return Err(AccountError::InvalidResponse);
+  }
+  let state_name = string(item, "state")?;
+  let state = match state_name {
+    "reserved" => {
+      exact(
+        value,
+        &[
+          "id",
+          "target",
+          "sizeBytes",
+          "sha256",
+          "expiresAt",
+          "state",
+          "uploadedBytes",
+        ],
+      )?;
+      NativeUploadState::Reserved {
+        uploaded_bytes: integer(item, "uploadedBytes")?,
+      }
+    }
+    "verifying" => {
+      exact(
+        value,
+        &["id", "target", "sizeBytes", "sha256", "expiresAt", "state", "jobId"],
+      )?;
+      valid_id(string(item, "jobId")?)?;
+      NativeUploadState::Verifying
+    }
+    "cancelled" => {
+      exact(value, &["id", "target", "sizeBytes", "sha256", "expiresAt", "state"])?;
+      NativeUploadState::Cancelled
+    }
+    "expired" => {
+      exact(value, &["id", "target", "sizeBytes", "sha256", "expiresAt", "state"])?;
+      NativeUploadState::Expired
+    }
+    "rejected" => {
+      exact(
+        value,
+        &["id", "target", "sizeBytes", "sha256", "expiresAt", "state", "code"],
+      )?;
+      if !matches!(
+        string(item, "code")?,
+        "content_rejected" | "unsupported_format" | "pixel_limit_exceeded"
+      ) {
+        return Err(AccountError::InvalidResponse);
+      }
+      NativeUploadState::Rejected
+    }
+    "stored" => {
+      exact(
+        value,
+        &["id", "target", "sizeBytes", "sha256", "expiresAt", "state", "result"],
+      )?;
+      let result = field(value, "result")?;
+      match object(result)?.get("kind").and_then(Value::as_str) {
+        Some("original") => {
+          exact(result, &["kind", "photo"])?;
+          let photo = field(result, "photo")?.clone();
+          validate_photo(&photo)?;
+          if object(&photo)?.get("libraryId").and_then(Value::as_str) != Some(expected_library) {
+            return Err(AccountError::InvalidResponse);
+          }
+          NativeUploadState::StoredOriginal { photo }
+        }
+        Some("mask") => {
+          exact(result, &["kind", "photoId", "asset"])?;
+          let photo_id = object(result)?
+            .get("photoId")
+            .and_then(Value::as_str)
+            .ok_or(AccountError::InvalidResponse)?
+            .to_owned();
+          valid_id(&photo_id)?;
+          let asset = field(result, "asset")?.clone();
+          validate_native_mask_asset(&asset)?;
+          NativeUploadState::StoredMask { photo_id, asset }
+        }
+        _ => return Err(AccountError::InvalidResponse),
+      }
+    }
+    _ => return Err(AccountError::InvalidResponse),
+  };
+  if matches!(&state, NativeUploadState::Reserved { uploaded_bytes } if *uploaded_bytes > size_bytes) {
+    return Err(AccountError::InvalidResponse);
+  }
+  Ok(NativeUpload {
+    id,
+    target,
+    size_bytes,
+    sha256,
+    expires_at,
+    state,
+  })
+}
+
+pub(crate) fn parse_renew_upload(
+  value: &Value,
+  expected_library: &str,
+  content_type: &str,
+) -> Result<(NativeUpload, NativeUploadTicket), AccountError> {
+  exact(value, &["upload", "ticket"])?;
+  let upload = parse_upload(field(value, "upload")?, expected_library)?;
+  if !matches!(&upload.state, NativeUploadState::Reserved { .. }) {
+    return Err(AccountError::InvalidResponse);
+  }
+  let ticket = parse_ticket(field(value, "ticket")?, content_type, upload.size_bytes)?;
+  if !matches!(&upload.state, NativeUploadState::Reserved { uploaded_bytes } if *uploaded_bytes == ticket.resume_offset_bytes)
+  {
+    return Err(AccountError::InvalidResponse);
+  }
+  Ok((upload, ticket))
+}
+
+pub(crate) fn parse_upload_receipt(value: &Value, expected_library: &str) -> Result<NativeUpload, AccountError> {
+  exact(value, &["value", "replayed"])?;
+  field(value, "replayed")?
+    .as_bool()
+    .ok_or(AccountError::InvalidResponse)?;
+  parse_upload(field(value, "value")?, expected_library)
+}
+
+fn parse_ticket(value: &Value, content_type: &str, size_bytes: u64) -> Result<NativeUploadTicket, AccountError> {
+  exact(value, &["url", "method", "headers", "expiresAt", "resumeOffsetBytes"])?;
+  let item = object(value)?;
+  if string(item, "method")? != "PUT" {
+    return Err(AccountError::InvalidResponse);
+  }
+  let url_text = string(item, "url")?;
+  let url = url::Url::parse(url_text).map_err(|_| AccountError::InvalidResponse)?;
+  if !trusted_upload_url(&url) {
+    return Err(AccountError::InvalidResponse);
+  }
+  let headers = object(field(value, "headers")?)?;
+  if headers.len() != 1 {
+    return Err(AccountError::InvalidResponse);
+  }
+  let header_content_type = headers
+    .iter()
+    .find(|(key, _)| key.eq_ignore_ascii_case("content-type"))
+    .and_then(|(_, value)| value.as_str())
+    .ok_or(AccountError::InvalidResponse)?;
+  if header_content_type != content_type || !valid_content_type(header_content_type) {
+    return Err(AccountError::InvalidResponse);
+  }
+  let resume_offset_bytes = integer(item, "resumeOffsetBytes")?;
+  if resume_offset_bytes > size_bytes {
+    return Err(AccountError::InvalidResponse);
+  }
+  Ok(NativeUploadTicket {
+    url,
+    content_type: header_content_type.to_owned(),
+    expires_at: {
+      let value = string(item, "expiresAt")?;
+      if parse_strict_iso(value).is_none() {
+        return Err(AccountError::InvalidResponse);
+      }
+      value.to_owned()
+    },
+    resume_offset_bytes,
+    size_bytes,
+  })
+}
+
+pub(crate) fn provider_ack(
+  response: ProviderResponse,
+  offset: u64,
+  sent: u64,
+  total: u64,
+) -> Result<NativeProviderAck, AccountError> {
+  if response.status == 200 || response.status == 201 {
+    if offset.checked_add(sent) != Some(total) {
+      return Err(AccountError::InvalidResponse);
+    }
+    return Ok(NativeProviderAck {
+      next_offset: total,
+      complete: true,
+    });
+  }
+  if response.status != 308 {
+    return Err(AccountError::Network);
+  }
+  let next_offset = match response.range {
+    None if offset == 0 => 0,
+    Some(value) => {
+      let digits = value.strip_prefix("bytes=0-").ok_or(AccountError::InvalidResponse)?;
+      if digits.contains(',') || !digits.bytes().all(|byte| byte.is_ascii_digit()) {
+        return Err(AccountError::InvalidResponse);
+      }
+      digits
+        .parse::<u64>()
+        .ok()
+        .and_then(|last| last.checked_add(1))
+        .ok_or(AccountError::InvalidResponse)?
+    }
+    None => return Err(AccountError::InvalidResponse),
+  };
+  let maximum = offset.checked_add(sent).ok_or(AccountError::InvalidResponse)?;
+  if next_offset < offset || next_offset > maximum || next_offset > total {
+    return Err(AccountError::InvalidResponse);
+  }
+  Ok(NativeProviderAck {
+    next_offset,
+    complete: false,
+  })
 }
 
 pub(crate) fn native_request(
@@ -794,6 +1323,21 @@ pub(crate) fn original_metadata(
   })
 }
 
+pub(crate) fn original_metadata_for_photo(
+  value: &Value,
+  photo_id: &str,
+) -> Result<(PhotoContentMetadata, String), AccountError> {
+  validate_photo(value)?;
+  let photo = object(value)?;
+  if string(photo, "id")? != photo_id {
+    return Err(AccountError::InvalidResponse);
+  }
+  let file_name = string(photo, "fileName")?.to_owned();
+  let original = object(photo.get("original").ok_or(AccountError::InvalidResponse)?)?;
+  let asset_id = string(original, "id")?;
+  Ok((original_metadata(value, photo_id, asset_id)?, file_name))
+}
+
 fn validate_success(operation: PhotoOperation, value: &Value) -> Result<(), AccountError> {
   match operation {
     PhotoOperation::LibraryGet => validate_library(value),
@@ -969,6 +1513,35 @@ fn validate_asset(value: &Value) -> Result<(), AccountError> {
     return Err(AccountError::InvalidResponse);
   }
   Ok(())
+}
+
+pub(crate) fn validate_native_mask_asset(value: &Value) -> Result<(), AccountError> {
+  validate_asset(value)?;
+  let asset = object(value)?;
+  if asset
+    .get("id")
+    .and_then(Value::as_str)
+    .is_some_and(|value| valid_id(value).is_ok())
+    && asset.get("kind").and_then(Value::as_str) == Some("mask")
+    && asset.get("sha256").and_then(Value::as_str).is_some_and(is_sha256)
+    && asset
+      .get("sizeBytes")
+      .and_then(Value::as_u64)
+      .is_some_and(|size| size > 0 && size <= 8 * 1024 * 1024)
+    && asset.get("contentType").and_then(Value::as_str) == Some("image/png")
+    && asset
+      .get("width")
+      .and_then(Value::as_u64)
+      .is_some_and(|value| value > 0 && value <= 16_384)
+    && asset
+      .get("height")
+      .and_then(Value::as_u64)
+      .is_some_and(|value| value > 0 && value <= 16_384)
+  {
+    Ok(())
+  } else {
+    Err(AccountError::InvalidResponse)
+  }
 }
 
 fn validate_recipe(value: &Value) -> Result<(), AccountError> {
@@ -1663,6 +2236,23 @@ mod tests {
   }
 
   #[test]
+  fn native_original_metadata_is_bound_to_the_requested_photo_and_safe_name() {
+    let photo = serde_json::json!({
+      "id":"photo","libraryId":"library","storageState":"stored","lifecycle":"active",
+      "fileName":"synthetic.JPG","format":"jpeg","hasEdits":false,"addedAt":"2026-11-01T00:00:00.000Z",
+      "capturedAt":null,"width":10,"height":10,
+      "original":{"id":"asset","kind":"original","sha256":"a".repeat(64),"sizeBytes":4,"contentType":"image/jpeg","width":10,"height":10},
+      "recipe":{"revision":0,"settings":{"v":1,"engine":"niho-14"},"settingsSha256":"b".repeat(64),"baseVersion":null,"maskSurfaceIds":[],"updatedAt":"2026-11-01T00:00:00.000Z"},
+      "media":{"state":"pending"}
+    });
+    let (metadata, name) = original_metadata_for_photo(&photo, "photo").unwrap();
+    assert_eq!(metadata.asset_id, "asset");
+    assert_eq!(metadata.size_bytes, 4);
+    assert_eq!(name, "synthetic.JPG");
+    assert!(original_metadata_for_photo(&photo, "another-photo").is_err());
+  }
+
+  #[test]
   fn response_bounds_content_type_and_depth_are_closed() {
     let mut deep = serde_json::json!({});
     for _ in 0..40 {
@@ -1804,5 +2394,112 @@ mod tests {
     let mut rejected = request.url.clone();
     rejected.set_scheme("http").unwrap();
     assert!(!valid_fixed_url(&config(), &rejected));
+  }
+
+  #[test]
+  fn native_upload_routes_are_fixed_without_extending_the_public_operation_enum() {
+    let request = native_copy_request(
+      &config(),
+      &capture(),
+      "POST",
+      &["uploads", "synthetic-upload", "complete"],
+      Some(b"{}".to_vec()),
+      Some("fixed-complete-key".into()),
+    )
+    .unwrap();
+    assert_eq!(request.method, "POST");
+    assert_eq!(
+      request.url.path(),
+      "/api/me/photo-cloud/v2/uploads/synthetic-upload/complete"
+    );
+    assert_eq!(request.body.as_deref(), Some(b"{}".as_slice()));
+    assert_eq!(request.idempotency_key.as_deref(), Some("fixed-complete-key"));
+  }
+
+  #[test]
+  fn upload_ticket_accepts_only_the_exact_trusted_provider_and_content_type() {
+    let ticket = |url: &str, content_type: &str| {
+      serde_json::json!({
+        "url": url,
+        "method": "PUT",
+        "headers": { "Content-Type": content_type },
+        "expiresAt": "2026-11-05T00:00:00.000Z",
+        "resumeOffsetBytes": 4,
+      })
+    };
+    let accepted = parse_ticket(
+      &ticket(
+        "https://storage.googleapis.com/upload/resumable?session=synthetic",
+        "image/jpeg",
+      ),
+      "image/jpeg",
+      10,
+    )
+    .unwrap();
+    assert_eq!(accepted.resume_offset_bytes, 4);
+    for bad in [
+      ticket("https://example.test/upload", "image/jpeg"),
+      ticket("http://storage.googleapis.com/upload", "image/jpeg"),
+      ticket("https://storage.googleapis.com.evil.test/upload", "image/jpeg"),
+      ticket("https://storage.googleapis.com/upload", "application/octet-stream"),
+    ] {
+      assert!(parse_ticket(&bad, "image/jpeg", 10).is_err());
+    }
+  }
+
+  #[test]
+  fn provider_range_rejects_short_or_out_of_bounds_acknowledgements() {
+    assert_eq!(
+      provider_ack(
+        ProviderResponse {
+          status: 308,
+          range: Some("bytes=0-7".into())
+        },
+        4,
+        4,
+        12
+      )
+      .unwrap(),
+      NativeProviderAck {
+        next_offset: 8,
+        complete: false
+      }
+    );
+    assert!(provider_ack(
+      ProviderResponse {
+        status: 308,
+        range: Some("bytes=0-9".into())
+      },
+      4,
+      4,
+      12
+    )
+    .is_err());
+    assert!(provider_ack(
+      ProviderResponse {
+        status: 200,
+        range: None
+      },
+      4,
+      4,
+      12
+    )
+    .is_err());
+    assert_eq!(
+      provider_ack(
+        ProviderResponse {
+          status: 200,
+          range: None
+        },
+        8,
+        4,
+        12
+      )
+      .unwrap(),
+      NativeProviderAck {
+        next_offset: 12,
+        complete: true
+      }
+    );
   }
 }

@@ -132,7 +132,9 @@ pub fn renderer_capabilities() -> serde_json::Value {
 /// masks of those kinds render, at most `max` of them, `Developer.maskPlane`
 /// exists, a Developer holds surfaces for `brush` / `subject` / `sky`
 /// masks, and `skyDetection`: [`Developer::detect_sky`] makes a `sky`
-/// mask's surface once [`set_sky_model`] gave a model.
+/// mask's surface once [`set_sky_model`] gave a model. It also publishes the
+/// complete `initialRasterSettings` recipe for new raster edits; existing saved
+/// recipes are never migrated to it.
 pub fn capabilities() -> String {
     serde_json::json!({
         "masks": {
@@ -143,8 +145,17 @@ pub fn capabilities() -> String {
             "skyDetection": true,
         },
         "renderer": renderer_capabilities(),
+        "initialRasterSettings": initial_raster_settings(),
     })
     .to_string()
+}
+
+/// The complete initial recipe for a new raster edit. Existing recipes retain
+/// their own engine, look and base; this is never a migration or a fallback.
+pub fn initial_raster_settings() -> serde_json::Value {
+    let mut settings = crate::DevelopSettings::new_edit();
+    settings.engine = crate::settings::ENGINE_NIHO_14.to_owned();
+    settings.to_value()
 }
 
 /// The sky model of [`Developer::detect_sky`], one for the process (every
@@ -224,6 +235,12 @@ pub fn encode_mask_surface(width: u32, height: u32, data: &[u8]) -> Result<Vec<u
     let surface = crate::mask_surface::MaskSurface::new(width, height, data.to_vec())
         .map_err(|reason| format!("{}: {reason}", crate::MASK_SURFACE_INVALID))?;
     crate::mask_surface::encode_surface_png(&surface).map_err(message)
+}
+
+/// Verifies an SDK-encoded, metadata-free sRGB preview (1280) or thumbnail (512).
+pub fn validate_derived_png(png: &[u8], max_edge: u32) -> Result<Size, String> {
+    let (width, height) = crate::encode::validate_derived_png(png, max_edge)?;
+    Ok(Size { width, height })
 }
 
 /// Renders a JPEG / PNG original (`rgba` is sRGB 8-bit, ready for

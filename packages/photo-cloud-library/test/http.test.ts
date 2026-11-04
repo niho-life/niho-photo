@@ -59,6 +59,19 @@ async function clientFor(harness: ReturnType<typeof setup>, identity = new FakeI
 }
 
 describe("same-origin HTTP client and BFF", () => {
+  it("routes masks.get through the closed wire and validates the immutable mask asset", async () => {
+    const harness = setup((request) => {
+      if (request.url.endsWith("/library")) return json(responses["library.get"]);
+      expect(new URL(request.url).pathname).toBe(`${PREFIX}/photos/${IDS.photo}/masks/${HASH.mask}`);
+      return json(responses["masks.get"]);
+    });
+    const client = await clientFor(harness);
+    await expect(client.request("masks.get", { photoId: IDS.photo, surfaceId: HASH.mask }, {
+      signal: new AbortController().signal,
+    })).resolves.toEqual(responses["masks.get"]);
+    client.dispose();
+  });
+
   it("routes recipe PUT, direct conflict GET, and conflict resolve through the closed BFF wire", async () => {
     const candidateSettings = { ...responses["photos.get"].recipe.settings, future: { retained: true } };
     const putResponse = {

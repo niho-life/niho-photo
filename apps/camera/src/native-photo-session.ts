@@ -7,6 +7,7 @@ import {
 } from "../../../packages/photo-cloud-session/src/index.ts";
 
 export const PHOTO_IDENTITY_INVALIDATED_EVENT = "camera-photo-identity-invalidated";
+export const PHOTO_IDENTITY_MAY_HAVE_CHANGED_EVENT = "camera-photo-identity-may-have-changed";
 type IdentityInvoke = (command: "camera_photo_identity") => Promise<unknown>;
 type InvalidationListen = (
   event: typeof PHOTO_IDENTITY_INVALIDATED_EVENT,
@@ -43,6 +44,16 @@ export function invalidateNativePhotoIdentity(): void {
   localInvalidations.dispatchEvent(new Event(PHOTO_IDENTITY_INVALIDATED_EVENT));
 }
 
+/** Account restore/login/refresh may have completed; coalescing and reads stay in the bootstrap owner. */
+export function notifyNativePhotoIdentityMayHaveChanged(): void {
+  localInvalidations.dispatchEvent(new Event(PHOTO_IDENTITY_MAY_HAVE_CHANGED_EVENT));
+}
+
+export type NativePhotoIdentityWatch = Readonly<{
+  invalidated(): void;
+  mayHaveChanged(): void;
+}>;
+
 /** Subscribes to both the synchronous UI fence and the native account invalidation event. */
 export async function watchNativePhotoIdentityInvalidation(
   handler: () => void,
@@ -63,6 +74,25 @@ export async function watchNativePhotoIdentityInvalidation(
     };
   } catch (error) {
     localInvalidations.removeEventListener(PHOTO_IDENTITY_INVALIDATED_EVENT, local);
+    throw error;
+  }
+}
+
+/** Registers both fences before the bootstrap performs its first identity read. */
+export async function watchNativePhotoIdentity(
+  watch: NativePhotoIdentityWatch,
+  options: { listen?: InvalidationListen } = {},
+): Promise<() => void> {
+  const changed = () => watch.mayHaveChanged();
+  localInvalidations.addEventListener(PHOTO_IDENTITY_MAY_HAVE_CHANGED_EVENT, changed);
+  try {
+    const stopInvalidation = await watchNativePhotoIdentityInvalidation(watch.invalidated, options);
+    return () => {
+      localInvalidations.removeEventListener(PHOTO_IDENTITY_MAY_HAVE_CHANGED_EVENT, changed);
+      stopInvalidation();
+    };
+  } catch (error) {
+    localInvalidations.removeEventListener(PHOTO_IDENTITY_MAY_HAVE_CHANGED_EVENT, changed);
     throw error;
   }
 }

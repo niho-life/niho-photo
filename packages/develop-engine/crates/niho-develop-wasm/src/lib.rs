@@ -89,6 +89,13 @@ pub fn encode_mask_surface(width: u32, height: u32, data: &[u8]) -> Result<Vec<u
     api::encode_mask_surface(width, height, data).map_err(js_error)
 }
 
+/// `niho_develop::api::validate_derived_png`, using the same canonical codec.
+#[wasm_bindgen(js_name = validateDerivedPng)]
+pub fn validate_derived_png(png: &[u8], max_edge: u32) -> Result<Object, JsError> {
+    let size = api::validate_derived_png(png, max_edge).map_err(js_error)?;
+    size_object(size.width, size.height)
+}
+
 /// `niho_develop::api::set_sky_model`: the sky model of
 /// `Developer.detectSky` (`layout.json` text and `weights.f32` bytes).
 #[wasm_bindgen(js_name = setSkyModel)]
@@ -211,6 +218,7 @@ mod tests {
                     "max": 8, "maskPlane": true, "surfaces": true, "skyDetection": true
                 },
                 "renderer": niho_develop::api::renderer_capabilities(),
+                "initialRasterSettings": niho_develop::api::initial_raster_settings(),
             })
         );
     }

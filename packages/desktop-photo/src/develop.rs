@@ -105,6 +105,9 @@ pub struct RenderCapabilities {
   pub mask_kinds: Vec<String>,
   /// 読める元（オリジナル・作業コピー）の最大の画素数
   pub max_pixels: u64,
+  /// Full initial raster recipe from the bundled SDK; absent on older builds.
+  pub initial_raster_settings: Option<Value>,
+  pub direct_original_max_pixels: Option<u64>,
 }
 
 thread_local! {
@@ -181,6 +184,11 @@ impl RenderCapabilities {
       features: names("features")?,
       mask_kinds: names("maskKinds")?,
       max_pixels,
+      initial_raster_settings: value.get("initialRasterSettings").filter(|v| v.is_object()).cloned(),
+      direct_original_max_pixels: value
+        .get("directOriginalMaxPixels")
+        .and_then(Value::as_u64)
+        .filter(|v| *v > 0),
     })
   }
 
@@ -2774,6 +2782,64 @@ impl PhotoDevelop {
       .ready
       .as_ref()
       .and_then(|sidecars| sidecars.develop_render_capabilities.clone())
+  }
+
+  /// Explicit copy of an unedited raster. The SDK supplies the full recipe;
+  /// the actual native source provider supplies its canonical working base.
+  /// Missing support is closed, never replaced with a locally invented recipe.
+  pub fn initial_raster_copy_settings(
+    &self,
+    photos: &dyn DevelopPhotos,
+    photo_id: &str,
+  ) -> Result<Value, DevelopError> {
+    if photos.has_saved_settings(photo_id) {
+      return Err(unavailable("use the existing saved recipe instead of initializing it"));
+    }
+    let sidecars = self.sidecars()?;
+    let mut settings = sidecars
+      .develop_render_capabilities
+      .as_ref()
+      .and_then(|caps| caps.initial_raster_settings.clone())
+      .ok_or_else(|| unavailable("the bundled SDK has no initial raster recipe"))?;
+    if !settings.get("base").is_some_and(Value::is_null) {
+      return Err(unavailable("the SDK initial recipe has an unexpected base"));
+    }
+    let pixel_limit = sidecars
+      .develop_render_capabilities
+      .as_ref()
+      .and_then(|caps| caps.direct_original_max_pixels)
+      .ok_or_else(|| unavailable("the bundled SDK has no direct-original pixel budget"))?;
+    let photo = photos
+      .open_photo(photo_id)
+      .ok_or_else(|| unavailable("the source photo is not open"))?;
+    let (width, height) = self
+      .full_size_dimensions(&sidecars, &photo.path, ExportInput::Raster)
+      .ok_or_else(|| unavailable("source dimensions are unavailable"))?;
+    let force_working = width.checked_mul(height).map_or(true, |pixels| pixels > pixel_limit);
+    let source = self.source_with_options(photos, photo_id, Some((false, false)), force_working)?;
+    if let Some(token) = source.get("token").and_then(Value::as_str) {
+      lock(&self.tokens).remove(token);
+    }
+    match source.get("kind").and_then(Value::as_str) {
+      Some("raster") => {}
+      Some("workingCopy") => {
+        let meta = source
+          .get("meta")
+          .ok_or_else(|| unavailable("working copy metadata is missing"))?;
+        let icc = match meta.get("iccSha256") {
+          Some(Value::Null) => None,
+          Some(Value::String(sha)) => Some(sha.as_str()),
+          _ => return Err(unavailable("working copy ICC receipt is invalid")),
+        };
+        let base = build_raster_base_version(icc).map_err(|_| unavailable("working copy base is invalid"))?;
+        if source.get("baseVersion").and_then(Value::as_str) != Some(base.as_str()) {
+          return Err(unavailable("working copy base does not match its metadata"));
+        }
+        settings["base"] = Value::String(base);
+      }
+      _ => return Err(unavailable("the source is not a supported raster")),
+    }
+    Ok(settings)
   }
 
   /// 原寸ラスタ書き出しで必要な `raster --long-edge full` を持つ sidecar が使えるときだけ true（待たない）。
