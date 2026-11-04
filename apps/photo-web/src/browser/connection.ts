@@ -30,7 +30,7 @@ export interface CreatePhotoWebConnectionFactoryOptions {
   readonly presets: PhotoLibraryPresets;
   /** C08's accepted budgets; no browser-memory default is inferred here. */
   readonly memoryBudgets: PersonalPhotoCloudMemoryBudgets;
-  /** Existing C03 scope cleanup port. It must delete only the supplied old identity tuple. */
+  /** Required owner-supplied C03 scope cleanup port; there is deliberately no successful no-op fallback. */
   readonly clearRevokedScope: (identity: PhotoIdentity, reason: PhotoWebRevocationReason) => void | Promise<void>;
   /** Shared copy is optional until C00/C08 publishes the complete transfer labels. */
   readonly transferCopy?: PhotoWebTransferCopy;
