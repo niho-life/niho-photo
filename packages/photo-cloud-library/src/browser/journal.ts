@@ -1,11 +1,13 @@
+import { sha256 } from "@noble/hashes/sha2.js";
 import { PHOTO_LIMITS, type PhotoFormat, type RecipeCandidate, type RecipeDocument } from "@niho/photo-personal-cloud-contract";
 
 import { PersonalPhotoCloudError } from "../errors";
 import { awaitBounded } from "../await";
 import { validateRecipe, validateRecipeCandidate } from "../validation";
 
-const DATABASE_VERSION = 1;
+const DATABASE_VERSION = 2;
 const STORE = "entries";
+const FENCES = "scopeFences";
 const SCOPE_INDEX = "scope";
 const SCOPE_INTENT_INDEX = "scopeIntent";
 const SHA256 = /^[0-9a-f]{64}$/u;
@@ -59,18 +61,20 @@ export class IndexedDbTransferJournal {
   async add(entry: TransferJournalEntry, signal?: AbortSignal): Promise<void> {
     validateEntry(entry);
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, "readwrite");
+    const transaction = strictTransaction(database, [STORE, FENCES], "readwrite");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(FENCES), scopeFromEntry(entry), transaction, signal);
     transaction.objectStore(STORE).add(entry);
     await transactionWait(barrier, transaction, signal);
   }
 
   async get(scope: JournalScope, intentId: string, signal?: AbortSignal): Promise<TransferJournalEntry | null> {
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, "readonly");
+    const transaction = strictTransaction(database, [STORE, FENCES], "readonly");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(FENCES), scope, transaction, signal);
     const request = transaction.objectStore(STORE).get(entryId(scope, intentId));
     const result = await transactionWait(requestResult(request), transaction, signal);
     await transactionWait(barrier, transaction, signal);
@@ -86,9 +90,10 @@ export class IndexedDbTransferJournal {
     if (options.cursor !== undefined && !validIntent(options.cursor)) unavailable();
     validateScope(scope);
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, "readonly");
+    const transaction = strictTransaction(database, [STORE, FENCES], "readonly");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(FENCES), scope, transaction, signal);
     const index = transaction.objectStore(STORE).index(SCOPE_INTENT_INDEX);
     const prefix = scopeKey(scope);
     const range = options.cursor === undefined
@@ -129,9 +134,10 @@ export class IndexedDbTransferJournal {
     validateEntry(expected); validateEntry(next);
     if (expected.id !== next.id || expected.revision + 1 !== next.revision || !immutableBindingEqual(expected, next)) unavailable();
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, "readwrite");
+    const transaction = strictTransaction(database, [STORE, FENCES], "readwrite");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(FENCES), scopeFromEntry(expected), transaction, signal);
     const store = transaction.objectStore(STORE);
     const current = await transactionWait(requestResult(store.get(expected.id)), transaction, signal);
     if (current === undefined) { transaction.abort(); unavailable(); }
@@ -139,6 +145,32 @@ export class IndexedDbTransferJournal {
     if (current.revision !== expected.revision || JSON.stringify(current) !== JSON.stringify(expected)) { transaction.abort(); unavailable(); }
     store.put(next);
     await transactionWait(barrier, transaction, signal);
+  }
+
+  /** Atomically fences this exact identity tuple and removes only its persisted transfers. */
+  async purgeScope(scope: JournalScope, signal?: AbortSignal): Promise<number> {
+    validateScope(scope);
+    const database = await this.database(signal);
+    const transaction = strictTransaction(database, [STORE, FENCES], "readwrite");
+    const barrier = transactionBarrier(transaction);
+    void barrier.catch(() => undefined);
+    transaction.objectStore(FENCES).put({ key: scopeFenceKey(scope), revoked: true });
+    const index = transaction.objectStore(STORE).index(SCOPE_INDEX);
+    let removed = 0;
+    const deletion = new Promise<void>((resolve, reject) => {
+      const request = index.openCursor(IDBKeyRange.only(scopeKey(scope)), "next");
+      request.onerror = () => reject(new PersonalPhotoCloudError("unavailable"));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor === null) { resolve(); return; }
+        cursor.delete();
+        removed += 1;
+        cursor.continue();
+      };
+    });
+    await transactionWait(deletion, transaction, signal);
+    await transactionWait(barrier, transaction, signal);
+    return removed;
   }
 
   dispose(): void {
@@ -171,10 +203,13 @@ function openDatabase(factory: IDBFactory, name: string): Promise<IDBDatabase> {
     try { request = factory.open(name, DATABASE_VERSION); } catch { reject(new PersonalPhotoCloudError("unavailable")); return; }
     request.onupgradeneeded = (event) => {
       const database = request.result;
-      if ((event as IDBVersionChangeEvent).oldVersion !== 0) { request.transaction?.abort(); return; }
-      const store = database.createObjectStore(STORE, { keyPath: "id" });
-      store.createIndex(SCOPE_INDEX, ["actorId", "libraryId", "sessionId", "sessionEpoch"], { unique: false });
-      store.createIndex(SCOPE_INTENT_INDEX, ["actorId", "libraryId", "sessionId", "sessionEpoch", "intentId"], { unique: true });
+      const oldVersion = (event as IDBVersionChangeEvent).oldVersion;
+      if (oldVersion === 0) {
+        const store = database.createObjectStore(STORE, { keyPath: "id" });
+        store.createIndex(SCOPE_INDEX, ["actorId", "libraryId", "sessionId", "sessionEpoch"], { unique: false });
+        store.createIndex(SCOPE_INTENT_INDEX, ["actorId", "libraryId", "sessionId", "sessionEpoch", "intentId"], { unique: true });
+      } else if (oldVersion !== 1) { request.transaction?.abort(); return; }
+      database.createObjectStore(FENCES, { keyPath: "key" });
     };
     request.onsuccess = () => {
       const database = request.result;
@@ -186,8 +221,8 @@ function openDatabase(factory: IDBFactory, name: string): Promise<IDBDatabase> {
   });
 }
 
-function strictTransaction(database: IDBDatabase, mode: IDBTransactionMode): IDBTransaction {
-  try { return database.transaction(STORE, mode, mode === "readwrite" ? { durability: "strict" } : undefined); }
+function strictTransaction(database: IDBDatabase, stores: string | string[], mode: IDBTransactionMode): IDBTransaction {
+  try { return database.transaction(stores, mode, mode === "readwrite" ? { durability: "strict" } : undefined); }
   catch { unavailable(); }
 }
 function requestResult<T>(request: IDBRequest<T>): Promise<T> { return new Promise((resolve, reject) => { request.onsuccess = () => resolve(request.result); request.onerror = () => reject(new PersonalPhotoCloudError("unavailable")); }); }
@@ -200,6 +235,19 @@ async function transactionWait<T>(promise: Promise<T>, transaction: IDBTransacti
     onAbort: abort,
     onTimeout: abort,
   });
+}
+
+async function assertScopeNotRevoked(
+  fences: IDBObjectStore,
+  scope: JournalScope,
+  transaction: IDBTransaction,
+  signal?: AbortSignal,
+): Promise<void> {
+  const fence = await transactionWait(requestResult(fences.get(scopeFenceKey(scope))), transaction, signal);
+  if (fence !== undefined) {
+    try { transaction.abort(); } catch { /* transaction already settled */ }
+    throw new PersonalPhotoCloudError("scope_changed");
+  }
 }
 
 function validateEntry(value: unknown): asserts value is TransferJournalEntry {
@@ -216,6 +264,13 @@ function validateEntry(value: unknown): asserts value is TransferJournalEntry {
 function immutableBindingEqual(left: TransferJournalEntry, right: TransferJournalEntry): boolean { return ["id", "schemaVersion", "actorId", "libraryId", "sessionId", "sessionEpoch", "intentId", "startKey", "completeKey", "cancelKey", "fileName", "format", "contentType", "sizeBytes", "sha256", "candidate"].every((key) => JSON.stringify(Reflect.get(left, key)) === JSON.stringify(Reflect.get(right, key))); }
 function entryId(scope: JournalScope, intentId: string): string { validateScope(scope); if (!validIntent(intentId)) unavailable(); return JSON.stringify([...scopeKey(scope), intentId]); }
 function scopeKey(scope: JournalScope): [string, string, string, string] { return [scope.actorId, scope.libraryId, scope.sessionId, scope.sessionEpoch]; }
+function scopeFenceKey(scope: JournalScope): string {
+  const bytes = new TextEncoder().encode(JSON.stringify(["niho-photo-transfer-scope-fence-v1", ...scopeKey(scope)]));
+  return Array.from(sha256(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
+}
+function scopeFromEntry(entry: TransferJournalEntry): JournalScope {
+  return { actorId: entry.actorId, libraryId: entry.libraryId, sessionId: entry.sessionId, sessionEpoch: entry.sessionEpoch };
+}
 function validateScope(scope: JournalScope): void { if (![scope.actorId, scope.libraryId, scope.sessionId, scope.sessionEpoch].every(nonEmpty)) unavailable(); }
 function validIntent(value: unknown): value is string { return nonEmpty(value) && value.length <= 512; }
 function sameScope(entry: TransferJournalEntry, scope: JournalScope): boolean { return entry.actorId === scope.actorId && entry.libraryId === scope.libraryId && entry.sessionId === scope.sessionId && entry.sessionEpoch === scope.sessionEpoch; }
