@@ -6191,7 +6191,7 @@
         "path": "packages/develop-engine/crates/niho-develop-wasm/src/lib.rs",
         "sha256": "bb2c416ce23b4e3ca3208f32736f22254ed82276b24fd7f49f1a022e4eb85fbd"
       },
-      "outputSha256": "f6fea4eb0b5670db0176f2417882ee732f3483b8b018782673afb6fb6eaf6568",
+      "outputSha256": "f5a26592b027f9ca02061567cfc67751dd3754a193f60287dce13bd71d509069",
       "modifications": [
         "Issue #30 Oklch色ミキサーとengine 10/11対応を反映",
         "部分補正（マスク）#65: validateSettingsのマスク読み取り回帰テストを追加",
@@ -6215,7 +6215,9 @@
         "Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新",
         "#141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験",
         "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。",
-        "本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映"
+        "本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映",
+        "Keep wasm capability fixture in sync with the complete initial raster recipe",
+        "PR229のmain修復と本人media能力契約を通常mergeで保持し、期待capabilityを実体へ同期"
       ]
     },
     {
@@ -11980,8 +11982,8 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/api.rs",
-      "sha256": "c8294e15f69b6ff629eca7c7bf346b7a9997dc1761afb24071adf4c9afa07681",
-      "origin": "公開Issue #152 のため新規作成。wasm と native が共有する現像 API。既存の公開実装を移動。\n変更理由: #141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正\n変更理由: 署名SDKのmedia互換producer契約を実native sourceの版に束縛して公開\n変更理由: 署名SDKのmedia互換producer契約と実sourceの版照合を記録"
+      "sha256": "c4d676e80cb71e08d5089d39232c1216e189eb3a28128f1ce24689b081acd505",
+      "origin": "公開Issue #152 のため新規作成。wasm と native が共有する現像 API。既存の公開実装を移動。\n変更理由: #141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正\n変更理由: 署名SDKのmedia互換producer契約を実native sourceの版に束縛して公開\n変更理由: 署名SDKのmedia互換producer契約と実sourceの版照合を記録\n変更理由: Document initial raster recipe in the capabilities contract\n変更理由: PR229のmain修復と本人media能力契約を通常mergeで保持し、期待capabilityを実体へ同期"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/api_cross_target.rs",

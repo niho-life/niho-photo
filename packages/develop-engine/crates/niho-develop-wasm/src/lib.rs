@@ -218,6 +218,8 @@ mod tests {
                     "max": 8, "maskPlane": true, "surfaces": true, "skyDetection": true
                 },
                 "renderer": niho_develop::api::renderer_capabilities(),
+                "initialRasterSettings": niho_develop::api::initial_raster_settings(),
+                "personalMedia": niho_develop::api::personal_media_capabilities(),
             })
         );
     }
