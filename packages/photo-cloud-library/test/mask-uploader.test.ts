@@ -3,6 +3,7 @@ import type { Upload } from "@niho/photo-personal-cloud-contract";
 import { IDS, responses } from "@niho/photo-personal-cloud-contract/fixtures";
 
 import { createBrowserPersonalPhotoCloudMaskUploader } from "../src/browser";
+import type { PersonalPhotoResumableUploadState } from "../src/browser";
 import { validateMaskSurfaceBytes } from "../src/mask-surface";
 import { FakeClient, FakeIdentity, maskPngFixture, testMaskValidator } from "./support";
 
@@ -57,6 +58,38 @@ function ticket(offset = 0) {
   };
 }
 
+function uploadInput(bytes: Uint8Array, surfaceId: string, idempotencyKey: string, signal: AbortSignal) {
+  let current: PersonalPhotoResumableUploadState = {
+    target: { kind: "mask", photoId: IDS.photo },
+    sizeBytes: bytes.byteLength,
+    sha256: surfaceId,
+    contentType: "image/png",
+    startKey: idempotencyKey,
+    completeKey: `${idempotencyKey}-complete`,
+    cancelKey: `${idempotencyKey}-cancel`,
+    uploadId: null,
+    deadline: null,
+    offsetBytes: 0,
+    phase: "start-pending",
+  };
+  const transitions: string[] = [current.phase];
+  return {
+    photoId: IDS.photo,
+    surfaceId,
+    bytes,
+    idempotencyKey,
+    uploadState: current,
+    transitions,
+    async compareAndSetUploadState(expected: PersonalPhotoResumableUploadState, next: PersonalPhotoResumableUploadState) {
+      if (JSON.stringify(current) !== JSON.stringify(expected)) return false;
+      current = structuredClone(next);
+      transitions.push(next.phase);
+      return true;
+    },
+    signal,
+  };
+}
+
 describe("browser mask uploader", () => {
   it("delegates PNG drawability to the common SDK decoder and binds validation to the content hash", async () => {
     const { bytes, surfaceId } = maskPngFixture();
@@ -105,16 +138,15 @@ describe("browser mask uploader", () => {
       trustedUploadOrigin: "https://storage.googleapis.com",
     });
     try {
-      await expect(uploader.upload({
-        photoId: IDS.photo,
-        surfaceId,
-        bytes,
-        idempotencyKey: "mask-start-key",
-        signal: new AbortController().signal,
-      })).resolves.toBeUndefined();
+      const input = uploadInput(bytes, surfaceId, "mask-start-key", new AbortController().signal);
+      await expect(uploader.upload(input))
+        .resolves.toBeUndefined();
       expect(client.calls.map((call) => call.operation)).toEqual(["uploads.start", "uploads.get", "uploads.complete"]);
       expect(client.calls[0]?.idempotencyKey).toBe("mask-start-key");
       expect(client.calls[2]?.idempotencyKey).toBe("mask-start-key-complete");
+      expect(input.transitions).toContain("uploading");
+      expect(input.transitions).toContain("complete-pending");
+      expect(input.transitions).toContain("verifying");
     } finally { uploader.dispose(); }
   });
 
@@ -131,10 +163,26 @@ describe("browser mask uploader", () => {
       trustedUploadOrigin: "https://storage.googleapis.com",
     });
     try {
-      await expect(uploader.upload({ photoId: IDS.photo, surfaceId, bytes, idempotencyKey: "mask-existing", signal: new AbortController().signal }))
+      await expect(uploader.upload(uploadInput(bytes, surfaceId, "mask-existing", new AbortController().signal)))
         .resolves.toBeUndefined();
       expect(client.calls.map((call) => call.operation)).toEqual(["uploads.start"]);
       expect(put).not.toHaveBeenCalled();
+    } finally { uploader.dispose(); }
+  });
+
+  it("rejects an existing upload receipt bound to a different library", async () => {
+    const { bytes, surfaceId } = maskPngFixture();
+    const client = new FakeClient();
+    client.dispatch = async (operation) => {
+      if (operation === "uploads.start") {
+        return { value: { kind: "existing", photo: { ...responses["photos.get"], libraryId: IDS.library + "-other" } }, replayed: true };
+      }
+      throw new Error(`unexpected ${operation}`);
+    };
+    const uploader = createBrowserPersonalPhotoCloudMaskUploader({ client, identity: new FakeIdentity(), fetch: vi.fn() });
+    try {
+      await expect(uploader.upload(uploadInput(bytes, surfaceId, "mask-wrong-library", new AbortController().signal)))
+        .rejects.toMatchObject({ code: "invalid_response" });
     } finally { uploader.dispose(); }
   });
 
@@ -153,13 +201,8 @@ describe("browser mask uploader", () => {
       trustedUploadOrigin: "https://storage.googleapis.com",
     });
     try {
-      await expect(uploader.upload({
-        photoId: IDS.photo,
-        surfaceId,
-        bytes,
-        idempotencyKey: "mask-unknown-key",
-        signal: new AbortController().signal,
-      })).resolves.toBeUndefined();
+      await expect(uploader.upload(uploadInput(bytes, surfaceId, "mask-unknown-key", new AbortController().signal)))
+        .resolves.toBeUndefined();
       expect(put).toHaveBeenCalledOnce();
       expect(client.calls.filter((call) => call.operation === "uploads.get")).toHaveLength(1);
       expect(client.calls.filter((call) => call.operation === "uploads.complete")).toHaveLength(1);

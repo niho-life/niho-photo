@@ -1,7 +1,7 @@
 import { samePhotoIdentityScope } from "@niho/photo-cloud-session";
 import { PHOTO_LIMITS, type PersonalPhotoCloudClient, type VerifiedPhotoActor } from "@niho/photo-personal-cloud-contract";
 import type { PersonalPhotoCloudMaskUploader, PersonalPhotoCloudIdentity } from "@niho/photo-cloud-library";
-import { PersonalPhotoCloudError, awaitBounded, linkedAbortController } from "@niho/photo-cloud-library/protocol";
+import { PersonalPhotoCloudError, awaitBounded, hashMaskSurface, linkedAbortController } from "@niho/photo-cloud-library/protocol";
 
 const UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
 const SHA256 = /^[0-9a-f]{64}$/u;
@@ -35,12 +35,19 @@ export function createNativePersonalPhotoCloudMaskUploader(options: {
       if (disposed) throw new PersonalPhotoCloudError("disposed");
       if (!input.photoId.trim() || input.photoId.length > 512 || !SHA256.test(input.surfaceId) ||
         !(input.bytes instanceof Uint8Array) || input.bytes.byteLength === 0 ||
-        input.bytes.byteLength > PHOTO_LIMITS.maxMaskBytes || !/^[\x21-\x7e]{1,128}$/u.test(input.idempotencyKey)) {
+        input.bytes.byteLength > PHOTO_LIMITS.maxMaskBytes || !/^[\x21-\x7e]{1,128}$/u.test(input.idempotencyKey) ||
+        hashMaskSurface(input.bytes) !== input.surfaceId || input.uploadState === null || input.uploadState.target?.kind !== "mask" || input.uploadState.target.photoId !== input.photoId ||
+        input.uploadState.sizeBytes !== input.bytes.byteLength || input.uploadState.sha256 !== input.surfaceId ||
+        input.uploadState.contentType !== "image/png" || input.uploadState.startKey !== input.idempotencyKey) {
         throw new PersonalPhotoCloudError("invalid_response");
       }
       const link = linkedAbortController(lifecycle.signal, input.signal);
       try {
         assertCurrent(options.identity, options.client, captured);
+        const initialState = input.uploadState;
+        if (!await input.compareAndSetUploadState(initialState, initialState, link.controller.signal)) {
+          throw new PersonalPhotoCloudError("unavailable");
+        }
         await awaitBounded(options.invokeBinary(
           "camera_photo_mask_upload",
           input.bytes,
@@ -60,6 +67,10 @@ export function createNativePersonalPhotoCloudMaskUploader(options: {
           },
         ), { signal: link.controller.signal, timeoutMs: UPLOAD_TIMEOUT_MS });
         assertCurrent(options.identity, options.client, captured);
+        const verifyingState = { ...initialState, phase: "verifying" as const, offsetBytes: initialState.sizeBytes };
+        if (!await input.compareAndSetUploadState(initialState, verifyingState, link.controller.signal)) {
+          throw new PersonalPhotoCloudError("unavailable");
+        }
       } finally { link.dispose(); }
     },
     dispose() {

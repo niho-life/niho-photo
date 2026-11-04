@@ -12,7 +12,15 @@ import type { PhotoLibraryPresets } from "niho-photo-editing/library/photo-libra
 import { afterEach } from "vitest";
 
 import { createPersonalPhotoCloudLibrary } from "../src/index";
-import type { CreatePersonalPhotoCloudLibraryOptions, PersonalPhotoCloudIdentity } from "../src/index";
+import type {
+  CreatePersonalPhotoCloudLibraryOptions,
+  PersonalPhotoCloudIdentity,
+  PersonalPhotoCloudMaskJournal,
+  PersonalPhotoCloudMaskJournalScope,
+  PersonalPhotoCloudMaskSurfaceInput,
+  PersonalPhotoCloudPersistedMaskSurface,
+} from "../src/index";
+import type { PersonalPhotoResumableUploadState } from "../src/browser";
 
 export type RecordedCall = {
   operation: PhotoOperation;
@@ -71,6 +79,86 @@ export class FakeIdentity implements PersonalPhotoCloudIdentity {
   }
 }
 
+export class MemoryMaskJournal implements PersonalPhotoCloudMaskJournal {
+  readonly calls: string[] = [];
+  private readonly rows = new Map<string, PersonalPhotoCloudPersistedMaskSurface>();
+
+  async putMaskSurface(scope: PersonalPhotoCloudMaskJournalScope, photoId: string, surface: PersonalPhotoCloudMaskSurfaceInput): Promise<void> {
+    this.calls.push("put");
+    const key = this.key(scope, photoId, surface.sha256);
+    const current = this.rows.get(key);
+    if (current !== undefined) {
+      if (current.id !== surface.id || current.width !== surface.width || current.height !== surface.height ||
+        !sameBytes(current.bytes, surface.bytes) || !sameState(current.uploadState, surface.uploadState)) {
+        throw new Error("mask journal conflict");
+      }
+      this.rows.set(key, { ...current, pinned: true });
+      return;
+    }
+    this.rows.set(key, {
+      ...scope,
+      ...surface,
+      bytes: surface.bytes.slice(),
+      uploadState: cloneState(surface.uploadState),
+      photoId,
+      contentType: "image/png",
+      pinned: true,
+    });
+  }
+
+  async getMaskSurface(scope: PersonalPhotoCloudMaskJournalScope, photoId: string, sha256: string): Promise<PersonalPhotoCloudPersistedMaskSurface | null> {
+    this.calls.push("get");
+    const record = this.rows.get(this.key(scope, photoId, sha256));
+    return record === undefined ? null : { ...record, bytes: record.bytes.slice(), uploadState: cloneState(record.uploadState) };
+  }
+
+  async compareAndSetMaskUploadState(
+    scope: PersonalPhotoCloudMaskJournalScope,
+    photoId: string,
+    sha256: string,
+    expected: PersonalPhotoResumableUploadState | null,
+    next: PersonalPhotoResumableUploadState | null,
+  ): Promise<boolean> {
+    this.calls.push("cas");
+    const record = this.rows.get(this.key(scope, photoId, sha256));
+    if (record === undefined || !sameState(record.uploadState, expected)) return false;
+    if (next !== null && next.sizeBytes !== record.bytes.byteLength) return false;
+    this.rows.set(this.key(scope, photoId, sha256), { ...record, uploadState: cloneState(next) });
+    return true;
+  }
+
+  async setMaskSurfacePinned(scope: PersonalPhotoCloudMaskJournalScope, photoId: string, sha256: string, pinned: boolean): Promise<void> {
+    this.calls.push("pin");
+    const record = this.rows.get(this.key(scope, photoId, sha256));
+    if (record === undefined) throw new Error("missing mask");
+    this.rows.set(this.key(scope, photoId, sha256), { ...record, pinned });
+  }
+
+  async deleteMaskSurface(scope: PersonalPhotoCloudMaskJournalScope, photoId: string, sha256: string): Promise<boolean> {
+    this.calls.push("delete");
+    const key = this.key(scope, photoId, sha256);
+    const record = this.rows.get(key);
+    if (record === undefined || record.pinned || record.uploadState !== null) return false;
+    return this.rows.delete(key);
+  }
+
+  private key(scope: PersonalPhotoCloudMaskJournalScope, photoId: string, sha256: string): string {
+    return JSON.stringify([scope.actorId, scope.libraryId, scope.sessionId, scope.sessionEpoch, scope.transport, photoId, sha256]);
+  }
+}
+
+function cloneState(value: PersonalPhotoResumableUploadState | null): PersonalPhotoResumableUploadState | null {
+  return value === null ? null : structuredClone(value);
+}
+
+function sameState(left: PersonalPhotoResumableUploadState | null, right: PersonalPhotoResumableUploadState | null): boolean {
+  return JSON.stringify(left) === JSON.stringify(right);
+}
+
+function sameBytes(left: Uint8Array, right: Uint8Array): boolean {
+  return left.byteLength === right.byteLength && left.every((value, index) => value === right[index]);
+}
+
 export function defaultActor(overrides: Partial<VerifiedPhotoActor> = {}): VerifiedPhotoActor {
   return {
     userId: IDS.userA,
@@ -85,8 +173,9 @@ export function defaultActor(overrides: Partial<VerifiedPhotoActor> = {}): Verif
 export function makeHandle(
   client = new FakeClient(),
   identity = new FakeIdentity(),
-  overrides: Partial<CreatePersonalPhotoCloudLibraryOptions> = {},
+  overrides: Partial<CreatePersonalPhotoCloudLibraryOptions> & { omitMaskJournal?: boolean; omitMaskLocks?: boolean } = {},
 ) {
+  const { omitMaskJournal = false, omitMaskLocks = false, ...optionOverrides } = overrides;
   const handle = createPersonalPhotoCloudLibrary({
     client,
     identity,
@@ -98,12 +187,21 @@ export function makeHandle(
       workingCopyBytes: 2 * 1024 ** 2,
       previewBytes: 1024 ** 2,
     },
+    ...(omitMaskJournal ? {} : { maskJournal: new MemoryMaskJournal() }),
+    ...(omitMaskLocks ? {} : {
+      maskLocks: {
+        async request<T>(_name: string, { signal }: { readonly mode: "exclusive"; readonly signal: AbortSignal }, callback: () => Promise<T>): Promise<T> {
+          if (signal.aborted) throw signal.reason;
+          return await callback();
+        },
+      },
+    }),
     clock: { now: () => Date.parse("2026-11-03T00:00:00.000Z") },
     urls: {
       createObjectURL: () => "blob:synthetic",
       revokeObjectURL: () => undefined,
     },
-    ...overrides,
+    ...optionOverrides,
   });
   activeHandles.add(handle);
   return handle;

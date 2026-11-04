@@ -1,7 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
-import { IDS, HASH } from "@niho/photo-personal-cloud-contract/fixtures";
+import { IDS } from "@niho/photo-personal-cloud-contract/fixtures";
+import { sha256 } from "@noble/hashes/sha2.js";
 import type { PersonalPhotoCloudClient, VerifiedPhotoActor } from "@niho/photo-personal-cloud-contract";
 import type { PersonalPhotoCloudIdentity } from "@niho/photo-cloud-library";
+import type { PersonalPhotoResumableUploadState } from "@niho/photo-cloud-library/browser";
 
 import { createNativePersonalPhotoCloudMaskUploader } from "./native-photo-mask-uploader";
 import type { NativePhotoBinaryInvoke } from "./native-photo-mask-uploader";
@@ -38,22 +40,43 @@ function client(): PersonalPhotoCloudClient {
   } as PersonalPhotoCloudClient;
 }
 
+const bytes = new Uint8Array([1, 2, 3]);
+const surfaceId = Array.from(sha256(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
+
 const input = (signal = new AbortController().signal) => ({
   photoId: IDS.photo,
-  surfaceId: HASH.mask,
-  bytes: new Uint8Array([1, 2, 3]),
+  surfaceId,
+  bytes,
   idempotencyKey: "mask-synthetic-key",
+  uploadState: {
+    target: { kind: "mask", photoId: IDS.photo },
+    sizeBytes: bytes.byteLength,
+    sha256: surfaceId,
+    contentType: "image/png",
+    startKey: "mask-synthetic-key",
+    completeKey: "mask-synthetic-key-complete",
+    cancelKey: "mask-synthetic-key-cancel",
+    uploadId: null,
+    deadline: null,
+    offsetBytes: 0,
+    phase: "start-pending",
+  } satisfies PersonalPhotoResumableUploadState,
+  async compareAndSetUploadState(_expected: PersonalPhotoResumableUploadState, _next: PersonalPhotoResumableUploadState) {
+    return true;
+  },
   signal,
 });
 
 describe("native cloud mask uploader", () => {
   it("passes only the captured Mac scope, photo, content address and bytes to the native port", async () => {
     const source = identity();
-    const bytes = new Uint8Array([1, 2, 3]);
     const invokeBinary = vi.fn<NativePhotoBinaryInvoke>(async () => undefined);
     const uploader = createNativePersonalPhotoCloudMaskUploader({ client: client(), identity: source.port, invokeBinary });
+    const uploadInput = input(new AbortController().signal);
+    const compareAndSet = vi.spyOn(uploadInput, "compareAndSetUploadState");
 
-    await expect(uploader.upload(input(new AbortController().signal))).resolves.toBeUndefined();
+    await expect(uploader.upload(uploadInput)).resolves.toBeUndefined();
+    expect(compareAndSet).toHaveBeenCalledTimes(2);
     expect(invokeBinary).toHaveBeenCalledWith("camera_photo_mask_upload", bytes, {
       "x-niho-photo-mask-upload-input": JSON.stringify({
         scope: {
@@ -64,7 +87,7 @@ describe("native cloud mask uploader", () => {
           transport: "mac-bearer",
         },
         photoId: IDS.photo,
-        surfaceId: HASH.mask,
+        surfaceId,
         idempotencyKey: "mask-synthetic-key",
       }),
     });

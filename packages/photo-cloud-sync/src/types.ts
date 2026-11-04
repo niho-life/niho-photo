@@ -6,9 +6,15 @@ import type {
   RecipeConflictResolution,
   RecipeDocument,
   RenderCapability,
-  VerifiedPhotoActor,
 } from "@niho/photo-personal-cloud-contract";
-import type { PersonalPhotoCloudIdentity, PersonalPhotoCloudMaskValidator } from "@niho/photo-cloud-library";
+import type {
+  PersonalPhotoCloudIdentity,
+  PersonalPhotoCloudMaskJournal,
+  PersonalPhotoCloudMaskJournalScope,
+  PersonalPhotoCloudMaskSurfaceInput,
+  PersonalPhotoCloudPersistedMaskSurface,
+  PersonalPhotoCloudMaskValidator,
+} from "@niho/photo-cloud-library";
 import type { PersonalPhotoResumableUploadState } from "@niho/photo-cloud-library/browser";
 
 export interface LocalRecipeCandidate {
@@ -142,13 +148,7 @@ export interface CreatePersonalPhotoRecipeSyncOptions {
   readonly timeoutMs?: number;
 }
 
-export interface RecipeJournalScope {
-  readonly actorId: string;
-  readonly libraryId: string;
-  readonly sessionId: string;
-  readonly sessionEpoch: string;
-  readonly transport: VerifiedPhotoActor["transport"];
-}
+export type RecipeJournalScope = PersonalPhotoCloudMaskJournalScope;
 
 export interface RecipeWriterBinding extends RecipeJournalScope {
   readonly token: string;
@@ -160,21 +160,9 @@ export interface RecipeWriterBinding extends RecipeJournalScope {
 
 export type MaskSurfaceUploadState = PersonalPhotoResumableUploadState;
 
-export interface MaskSurfaceInput {
-  /** Content-addressed surface id; must equal sha256. */
-  readonly id: string;
-  readonly width: number;
-  readonly height: number;
-  readonly sha256: string;
-  readonly bytes: Uint8Array;
-  readonly uploadState: MaskSurfaceUploadState | null;
-}
+export type MaskSurfaceInput = PersonalPhotoCloudMaskSurfaceInput;
 
-export interface PersistedMaskSurface extends MaskSurfaceInput {
-  readonly photoId: string;
-  readonly contentType: "image/png";
-  readonly pinned: boolean;
-}
+export type PersistedMaskSurface = PersonalPhotoCloudPersistedMaskSurface;
 
 export interface JournalStage {
   readonly generation: number;
@@ -254,7 +242,7 @@ export interface JournalPreviousPendingWriterPage {
   readonly nextCursor: string | null;
 }
 
-export interface RecipeSyncJournal {
+export interface RecipeSyncJournal extends PersonalPhotoCloudMaskJournal {
   /** 同canonical user/libraryの旧tupleを最大16件/4MiBで返す。通常listのscope条件は変えない。 */
   listPrevious?(scope: RecipeJournalScope, options?: { readonly cursor?: string; readonly limit?: number }, signal?: AbortSignal): Promise<JournalPreviousPendingWriterPage>;
   stage(binding: RecipeWriterBinding, stage: JournalStage, signal?: AbortSignal): Promise<void>;
@@ -270,10 +258,5 @@ export interface RecipeSyncJournal {
   reopen(scope: RecipeJournalScope, token: string, signal?: AbortSignal): Promise<ReopenedJournalWriter | null>;
   discard(binding: RecipeWriterBinding, signal?: AbortSignal): Promise<void>;
   releaseCompleted(binding: RecipeWriterBinding, signal?: AbortSignal): Promise<boolean>;
-  putMaskSurface(scope: RecipeJournalScope, photoId: string, surface: MaskSurfaceInput, signal?: AbortSignal): Promise<void>;
-  getMaskSurface(scope: RecipeJournalScope, photoId: string, sha256: string, signal?: AbortSignal): Promise<PersistedMaskSurface | null>;
-  compareAndSetMaskUploadState(scope: RecipeJournalScope, photoId: string, sha256: string, expected: MaskSurfaceUploadState | null, next: MaskSurfaceUploadState | null, signal?: AbortSignal): Promise<boolean>;
-  setMaskSurfacePinned(scope: RecipeJournalScope, photoId: string, sha256: string, pinned: boolean, signal?: AbortSignal): Promise<void>;
-  deleteMaskSurface(scope: RecipeJournalScope, photoId: string, sha256: string, signal?: AbortSignal): Promise<boolean>;
   dispose(): void;
 }
