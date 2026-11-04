@@ -534,8 +534,7 @@ export function verifyDmgInventory(dmgPath, expectedFiles, { allowedPublicFireba
     assertDmgRoot(mount);
     // 実際に配布するreadonly imageを読む。候補のprogram/scriptは実行しない。
     const actual = inventoryTree(path.join(mount, `${PRODUCT}.app`), { allowedPublicFirebaseKey });
-    const normalize = (records) => records.map(({ path: name, sha256: hash, bytes, executable }) => ({ path: name, sha256: hash, bytes, executable })).sort((a, b) => a.path.localeCompare(b.path, "en"));
-    if (JSON.stringify(normalize(actual)) !== JSON.stringify(normalize(expectedFiles))) throw new CandidateError("DMGの実app inventoryが検証済みappと一致しません");
+    if (!sameInventory(actual, expectedFiles)) throw new CandidateError("DMGの実app inventoryが検証済みappと一致しません");
   } finally {
     if (attached) run("/usr/bin/hdiutil", ["detach", mount], { env, timeout: 120_000 });
     // detach失敗時はmount directoryを削除しない。
@@ -546,8 +545,17 @@ export function verifyDmgInventory(dmgPath, expectedFiles, { allowedPublicFireba
   return { sha256: digest, bytes: after.size };
 }
 
+function sameInventory(left, right) {
+  const normalize = (records) => records
+    .map(({ path: name, sha256: hash, bytes, executable }) => ({ path: name, sha256: hash, bytes, executable }))
+    .sort((a, b) => a.path.localeCompare(b.path, "en"));
+  return JSON.stringify(normalize(left)) === JSON.stringify(normalize(right));
+}
+
 export function packDmg(appPath, output, expectedFiles, options = {}) {
   if (process.platform !== "darwin") throw new CandidateError("DMG生成はmacOS専用です");
+  if (!Array.isArray(expectedFiles) || !expectedFiles.length) throw new CandidateError("DMGには検証済みapp inventoryが必要です");
+  if (!sameInventory(inventoryTree(appPath, options), expectedFiles)) throw new CandidateError("DMG source app inventoryが検証済みappと一致しません");
   if (lstatSync(output, { throwIfNoEntry: false })) throw new CandidateError("DMGは上書きできません");
   const stage = mkdtempSync(path.join(tmpdir(), "niho-photo-dmg-"));
   try {
