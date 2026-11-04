@@ -5,6 +5,7 @@ import {
 } from "@niho/photo-cloud-library";
 import {
   PersonalPhotoCloudError,
+  abortReason,
   awaitBounded,
   contentBytes,
   linkedAbortController,
@@ -136,8 +137,8 @@ export function createPersonalPhotoCloudLibrary(
           ...await base.library.capabilities(requestOptions),
           maskSurfaces: await maskService.capable(requestOptions?.signal),
         }),
-        saveMaskSurface: (photoId: string, png: Uint8Array) => durable.saveMaskSurface(photoId, png),
-        loadMaskSurface: (photoId: string, surfaceId: string) => maskService.load(photoId, surfaceId),
+        saveMaskSurface: (photoId: string, png: Uint8Array, requestOptions?: PhotoLibraryRequestOptions) => durable.saveMaskSurface(photoId, png, requestOptions?.signal),
+        loadMaskSurface: (photoId: string, surfaceId: string, requestOptions?: PhotoLibraryRequestOptions) => maskService.load(photoId, surfaceId, requestOptions?.signal),
       }),
     },
     dispose() {
@@ -212,11 +213,11 @@ class DurableBinding {
     if (writers?.size === 0) this.activeWriters.delete(writer.photoId);
   }
 
-  async saveMaskSurface(photoId: string, png: Uint8Array): Promise<{ id: string; width: number; height: number }> {
+  async saveMaskSurface(photoId: string, png: Uint8Array, signal?: AbortSignal): Promise<{ id: string; width: number; height: number }> {
     this.assertCurrent();
     const writers = [...(this.activeWriters.get(photoId) ?? [])].filter((writer) => writer.open);
     if (this.masks === null || writers.length !== 1) throw new PersonalPhotoCloudError("unavailable");
-    return await this.masks.save(photoId, png, writers[0]!.core.token);
+    return await this.masks.save(photoId, png, writers[0]!.core.token, signal);
   }
 
   isCurrent(): boolean {
@@ -472,10 +473,12 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
     photoId: string,
     input: Uint8Array,
     writerId: string,
+    signal = new AbortController().signal,
   ): Promise<{ id: string; width: number; height: number }> {
+    if (signal.aborted) throw abortReason(signal);
     const scope = this.scope();
     const bytes = checkedBytes(input);
-    const validated = await this.validate(bytes);
+    const validated = await this.validate(bytes, signal);
     this.assertScope(scope);
     const lease = { writerId, pinToken: this.newId() } satisfies MaskSurfacePinLease;
     await this.options.journal.putMaskSurface(scope, photoId, {
@@ -483,7 +486,7 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
       sha256: validated.id,
       bytes,
       uploadState: null,
-    }, undefined, lease);
+    }, signal, lease);
     this.assertScope(scope);
     const bySurface = this.pending.get(writerId) ?? new Map<string, MaskSurfacePinLease[]>();
     bySurface.set(validated.id, [...(bySurface.get(validated.id) ?? []), lease]);
@@ -492,20 +495,21 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
   }
 
   async load(photoId: string, surfaceId: string, signal = new AbortController().signal): Promise<Uint8Array | null> {
+    if (signal.aborted) throw abortReason(signal);
     const scope = this.scope();
     validateSha(surfaceId);
     const local = await this.options.journal.getMaskSurface(scope, photoId, surfaceId, signal);
     this.assertScope(scope);
     if (local !== null) {
       const bytes = checkedBytes(local.bytes);
-      const validated = await this.validate(bytes);
+      const validated = await this.validate(bytes, signal);
       this.assertScope(scope);
       if (validated.id !== surfaceId || validated.width !== local.width || validated.height !== local.height) invalid();
       return bytes;
     }
     let asset: PhotoAsset;
     try {
-      asset = await this.options.client.request("masks.get", { photoId, surfaceId }, { signal });
+      asset = await awaitBounded(this.options.client.request("masks.get", { photoId, surfaceId }, { signal }), { signal, timeoutMs: 15_000 });
     } catch (error) {
       if (readPhotoError(error)?.code === "not_found") return null;
       throw error;
@@ -515,7 +519,7 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
     const content = await this.handle.readAsset(photoId, asset, undefined, { signal });
     const bytes = checkedBytes(await contentBytes(content));
     this.assertScope(scope);
-    const validated = await this.validate(bytes);
+    const validated = await this.validate(bytes, signal);
     this.assertScope(scope);
     if (validated.id !== surfaceId || validated.width !== asset.width || validated.height !== asset.height) invalid();
     await this.options.journal.putMaskSurface(scope, photoId, {
@@ -523,7 +527,7 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
       sha256: validated.id,
       bytes,
       uploadState: null,
-    }, undefined, null);
+    }, signal, null);
     this.assertScope(scope);
     return bytes;
   }
@@ -578,7 +582,7 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
         if (local !== null) {
           if (local.bytes.byteLength !== existing.sizeBytes || local.width !== existing.width || local.height !== existing.height) invalid();
           const bytes = checkedBytes(local.bytes);
-          const validated = await this.validate(bytes);
+          const validated = await this.validate(bytes, signal);
           assertCurrent();
           if (validated.id !== surfaceId || validated.width !== expected.width || validated.height !== expected.height) invalid();
           if (recovered) {
@@ -613,7 +617,7 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
       if (source === null || source.id !== surfaceId || source.sha256 !== surfaceId ||
         source.width !== expected.width || source.height !== expected.height) throw new PersonalPhotoCloudError("unsupported");
       const bytes = checkedBytes(source.bytes);
-      const validated = await this.validate(bytes);
+      const validated = await this.validate(bytes, signal);
       assertCurrent();
       if (validated.id !== surfaceId || validated.width !== expected.width || validated.height !== expected.height) invalid();
 
@@ -743,10 +747,12 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
     }
   }
 
-  private async validate(bytes: Uint8Array): Promise<{ id: string; width: number; height: number }> {
+  private async validate(bytes: Uint8Array, signal: AbortSignal): Promise<{ id: string; width: number; height: number }> {
     const validator = this.options.maskSurfaceValidator;
     if (validator === undefined) invalid();
-    const result = await validator.validateMaskSurface(bytes.slice());
+    if (signal.aborted) throw abortReason(signal);
+    const result = await awaitBounded(validator.validateMaskSurface(bytes.slice()), { signal, timeoutMs: 15_000 });
+    if (signal.aborted) throw abortReason(signal);
     if (!isMaskInfo(result) || result.id !== digestBytes(bytes)) invalid();
     return Object.freeze({ ...result });
   }

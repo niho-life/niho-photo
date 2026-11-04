@@ -13151,13 +13151,13 @@
     },
     {
       "path": "packages/photo-cloud-sync/src/binding.ts",
-      "sha256": "4504a7fc93814f45716e7cffdbdddefafd07ea297ab4b05ecc21b536a6d6ba03",
-      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 失効前captureの有限保存と、同本人の以前の下書きを明示復旧するcore契約・実装・負例を追加\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: マスクPNGの永続保存、writer保護とSTORED確認後のrecipe同期を接続\n変更理由: 未知設定のsubtree保護とmask転送再開・保存結果の照合を補強\n変更理由: PR232のMac接続を単一のdurable mask barrierへ統合し固定keys・scope・実SDK能力を検証\n変更理由: 統合reviewと実CIの指摘を修正し旧scope cache回収・明示復旧・接続寿命の回帰を追加\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。"
+      "sha256": "e4deeb1433ee24841142abcc6cf383e6941c1777f069e26f365d158519b2c398",
+      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 失効前captureの有限保存と、同本人の以前の下書きを明示復旧するcore契約・実装・負例を追加\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: マスクPNGの永続保存、writer保護とSTORED確認後のrecipe同期を接続\n変更理由: 未知設定のsubtree保護とmask転送再開・保存結果の照合を補強\n変更理由: PR232のMac接続を単一のdurable mask barrierへ統合し固定keys・scope・実SDK能力を検証\n変更理由: 統合reviewと実CIの指摘を修正し旧scope cache回収・明示復旧・接続寿命の回帰を追加\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。\n変更理由: 公開mask save/loadのcaller signalを検証・通信・IDBへ伝播し、abort後の遅延SDK結果を保存しない。"
     },
     {
       "path": "packages/photo-cloud-sync/test/binding.test.ts",
-      "sha256": "0e4d71ee390549540e6ae25f7676ca9c400b8ea6ea04643acd1b3aa8d37f2f0e",
-      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 失効前captureの有限保存と、同本人の以前の下書きを明示復旧するcore契約・実装・負例を追加\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: マスクPNGの永続保存、writer保護とSTORED確認後のrecipe同期を接続\n変更理由: 未知設定のsubtree保護とmask転送再開・保存結果の照合を補強\n変更理由: PR232のMac接続を単一のdurable mask barrierへ統合し固定keys・scope・実SDK能力を検証\n変更理由: 統合reviewと実CIの指摘を修正し旧scope cache回収・明示復旧・接続寿命の回帰を追加\n変更理由: 最後のCI型修復と日付に依存しないscope lifetime・明示復旧の回帰を反映\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。"
+      "sha256": "b174b6bc7bb9da6ca2ad799567e17a498fc284efc9ca2830560cc69b5dbecf42",
+      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 失効前captureの有限保存と、同本人の以前の下書きを明示復旧するcore契約・実装・負例を追加\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: マスクPNGの永続保存、writer保護とSTORED確認後のrecipe同期を接続\n変更理由: 未知設定のsubtree保護とmask転送再開・保存結果の照合を補強\n変更理由: PR232のMac接続を単一のdurable mask barrierへ統合し固定keys・scope・実SDK能力を検証\n変更理由: 統合reviewと実CIの指摘を修正し旧scope cache回収・明示復旧・接続寿命の回帰を追加\n変更理由: 最後のCI型修復と日付に依存しないscope lifetime・明示復旧の回帰を反映\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。\n変更理由: 公開mask save/loadのcaller signalを検証・通信・IDBへ伝播し、abort後の遅延SDK結果を保存しない。"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-settings-autosave-boundaries.test.ts",

@@ -10,7 +10,7 @@ import type {
 } from "@niho/photo-personal-cloud-contract";
 import type { DevelopSettings } from "niho-photo-editing/develop-engine/develop-settings";
 import type { PhotoLibraryPresets } from "niho-photo-editing/library/photo-library";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { PersonalPhotoResumableUploadState, PersonalPhotoResumableUploadTransport } from "@niho/photo-cloud-library/browser";
 import type { PersonalPhotoCloudMaskUploader } from "@niho/photo-cloud-library";
 
@@ -76,6 +76,62 @@ function setup(
 }
 
 describe("photo library durable binding", () => {
+  it("aborts an uncached mask metadata request even when its client ignores abort", async () => {
+    const controller = new AbortController();
+    let requested = false;
+    let finish!: (value: PhotoOperationMap["masks.get"]["response"]) => void;
+    const fixture = setup(async <K extends PhotoOperation>(operation: K): Promise<PhotoOperationMap[K]["response"]> => {
+      if (operation === "masks.get") {
+        requested = true;
+        return await new Promise<PhotoOperationMap[K]["response"]>((resolve) => { finish = (value) => resolve(value as PhotoOperationMap[K]["response"]); });
+      }
+      return defaultResponse(operation);
+    }, undefined, new Identity(), "epoch-1", { validator: { async validateMaskSurface() { throw new Error("must not decode"); } } });
+    try {
+      const pending = fixture.handle.library.loadMaskSurface!(IDS.photo, HASH.mask, { signal: controller.signal });
+      await vi.waitFor(() => expect(requested).toBe(true));
+      controller.abort(new Error("caller aborted"));
+      await expect(pending).rejects.toThrow("caller aborted");
+      finish(responses["masks.get"]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(fixture.calls).not.toContain("content.get");
+    } finally { fixture.handle.dispose(); }
+  });
+
+  it.each(["save", "load"] as const)("propagates caller abort through %sMaskSurface and ignores late SDK completion", async (operation) => {
+    const png = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]);
+    const surfaceId = Array.from(sha256(png), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const asset = { ...responses["masks.get"], id: surfaceId, sha256: surfaceId, sizeBytes: png.byteLength, width: 2, height: 2 };
+    const databaseName = `binding-caller-abort-${crypto.randomUUID()}`;
+    let decodeStarted = false;
+    let finishDecode!: (value: { id: string; width: number; height: number }) => void;
+    const validator = { validateMaskSurface() {
+      decodeStarted = true;
+      return new Promise<{ id: string; width: number; height: number }>((resolve) => { finishDecode = resolve; });
+    } };
+    const fixture = setup(async <K extends PhotoOperation>(op: K): Promise<PhotoOperationMap[K]["response"]> => {
+      if (op === "masks.get") return asset as PhotoOperationMap[K]["response"];
+      if (op === "content.get") return { body: new ReadableStream({ start(controller) { controller.enqueue(png); controller.close(); } }),
+        contentType: "image/png", sha256: surfaceId, totalBytes: png.byteLength, range: { start: 0, endInclusive: png.byteLength - 1 } } as PhotoOperationMap[K]["response"];
+      return defaultResponse(op);
+    }, databaseName, new Identity(), "epoch-1", { validator });
+    const journal = new IndexedDbRecipeSyncJournal(indexedDB, databaseName);
+    fixture.port.open({ photoId: IDS.photo, sourceSha256: HASH.original, expectedRevision: 0 });
+    const controller = new AbortController();
+    try {
+      const pending = operation === "save"
+        ? fixture.handle.library.saveMaskSurface!(IDS.photo, png, { signal: controller.signal })
+        : fixture.handle.library.loadMaskSurface!(IDS.photo, surfaceId, { signal: controller.signal });
+      await vi.waitFor(() => expect(decodeStarted).toBe(true));
+      controller.abort(new Error("caller aborted"));
+      await expect(pending).rejects.toThrow("caller aborted");
+      finishDecode({ id: surfaceId, width: 2, height: 2 });
+      await new Promise((resolve) => setTimeout(resolve, 0));
+      expect(await journal.getMaskSurface({ actorId: IDS.userA, libraryId: IDS.library,
+        sessionId: defaultActor().sessionId, sessionEpoch: "epoch-1", transport: "browser-session" }, IDS.photo, surfaceId)).toBeNull();
+    } finally { fixture.handle.dispose(); journal.dispose(); }
+  });
+
   it.each(["valid", "missing", "corrupt"] as const)("verifies uncached cloud mask bytes before PUT: %s", async (mode) => {
     const png = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]);
     const surfaceId = Array.from(sha256(png), (byte) => byte.toString(16).padStart(2, "0")).join("");
