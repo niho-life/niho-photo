@@ -53,6 +53,14 @@ pub struct Size {
     pub height: u32,
 }
 
+/// A validated mask surface PNG's content-addressed id and decoded size.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct MaskSurfaceInfo {
+    pub id: String,
+    pub width: u32,
+    pub height: u32,
+}
+
 impl Size {
     fn of(width: usize, height: usize) -> Self {
         Self {
@@ -251,6 +259,16 @@ pub fn encode_mask_surface(width: u32, height: u32, data: &[u8]) -> Result<Vec<u
     let surface = crate::mask_surface::MaskSurface::new(width, height, data.to_vec())
         .map_err(|reason| format!("{}: {reason}", crate::MASK_SURFACE_INVALID))?;
     crate::mask_surface::encode_surface_png(&surface).map_err(message)
+}
+
+/// Validates exactly the mask surface PNG accepted by `Developer::set_mask_surface`.
+pub fn validate_mask_surface(png: &[u8]) -> Result<MaskSurfaceInfo, String> {
+    let surface = crate::mask_surface::decode_surface_png(png).map_err(message)?;
+    Ok(MaskSurfaceInfo {
+        id: crate::mask_surface::surface_id(png),
+        width: surface.width(),
+        height: surface.height(),
+    })
 }
 
 /// Verifies an SDK-encoded, metadata-free sRGB preview (1280) or thumbnail (512).
@@ -794,7 +812,45 @@ impl Developer {
 
 #[cfg(test)]
 mod tests {
-    use super::{capabilities, parse_white, renderer_capabilities, white_json, Developer};
+    use super::{
+        capabilities, encode_mask_surface, parse_white, renderer_capabilities,
+        validate_mask_surface, white_json, Developer,
+    };
+
+    #[test]
+    fn mask_validation_uses_the_actual_surface_decoder() {
+        let png = encode_mask_surface(2, 2, &[0, 64, 128, 255]).unwrap();
+        let info = validate_mask_surface(&png).unwrap();
+        assert_eq!(info.id, crate::mask_surface::surface_id(&png));
+        assert_eq!((info.width, info.height), (2, 2));
+
+        let mut trailing = png.clone();
+        trailing.push(0);
+        assert!(validate_mask_surface(&trailing).is_err());
+
+        let mut bad_crc = png.clone();
+        let last_crc = bad_crc.len() - 1;
+        bad_crc[last_crc] ^= 1;
+        assert!(validate_mask_surface(&bad_crc).is_err());
+
+        let rgba = crate::encode::encode_png(&[0, 0, 0, 255], 1, 1).unwrap();
+        assert!(validate_mask_surface(&rgba).is_err());
+
+        let mut too_large = png.clone();
+        too_large.resize(crate::mask_surface::MAX_SURFACE_PNG_BYTES + 1, 0);
+        assert!(validate_mask_surface(&too_large).is_err());
+
+        let mut wide = Vec::new();
+        {
+            let mut encoder = png::Encoder::new(&mut wide, 4097, 1);
+            encoder.set_color(png::ColorType::Grayscale);
+            encoder.set_depth(png::BitDepth::Eight);
+            let mut writer = encoder.write_header().unwrap();
+            writer.write_image_data(&vec![0; 4097]).unwrap();
+            writer.finish().unwrap();
+        }
+        assert!(validate_mask_surface(&wide).is_err());
+    }
 
     #[test]
     fn renderer_capabilities_follow_the_crates_constants() {

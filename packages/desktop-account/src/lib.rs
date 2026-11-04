@@ -12,8 +12,8 @@ pub use connect::{
 };
 pub use photo_cloud::{
   photo_ephemeral_id, NativeCopyTarget, NativeProviderAck, NativeStartUpload, NativeUpload, NativeUploadState,
-  NativeUploadTicket, PhotoContentMetadata, PhotoDownloadCancel, PhotoJsonResponse, PhotoOperation, PhotoRequest,
-  PhotoScopeCapture,
+  NativeUploadTicket, PhotoContentMetadata, PhotoContentSelector, PhotoDownloadCancel, PhotoJsonResponse,
+  PhotoOperation, PhotoRequest, PhotoScopeCapture,
 };
 pub use photo_session::{PhotoIdentity, PhotoIdentityTransport};
 pub use secret::{CredentialStore, FileSecretStore, KeychainStore, Secret, SecretKind};

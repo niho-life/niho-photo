@@ -50,6 +50,7 @@ function surfaceGlue(
     capabilities?: unknown;
     developerSurfaces?: boolean;
     encode?: boolean;
+    validate?: boolean;
     /** `Developer.prototype.detectSky`（省略 = 口の無い glue） */
     detectSky?: (settingsJson: string, ev100?: number) => unknown;
     /** `setSkyModel` を持たない glue（`detectSky` だけある） */
@@ -128,6 +129,9 @@ function surfaceGlue(
           encodeMaskSurface: vi.fn((width: number, height: number, data: Uint8Array) => new Uint8Array([0x89, width, height, ...data])),
           maskSurfaceId: vi.fn(() => ID),
         }),
+    ...(options.validate === false
+      ? {}
+      : { validateMaskSurface: vi.fn(() => ({ id: ID, width: 2, height: 1 })) }),
   };
   return { module, developers, thumbnails };
 }
@@ -302,6 +306,30 @@ describe("Worker の面の受け渡し", () => {
     expect([...new Uint8Array(png)]).toEqual([0x89, 2, 1, 0, 255]);
     expect(last.transfer).toEqual([png]);
     expect(glue.module.encodeMaskSurface).toHaveBeenCalledWith(2, 1, new Uint8Array([0, 255]));
+  });
+
+  it("写真なしでも共通 decoder で面を検証し、旧 runtime と壊れた応答は閉じる", async () => {
+    const glue = surfaceGlue();
+    const { handler, posted } = setup(glue.module);
+    await handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    const caller = new Uint8Array([137, 80, 78, 71]);
+    await handler({ type: "validateMaskSurface", id: 2, png: caller.slice().buffer });
+    expect(posted.at(-1)?.message).toEqual({
+      type: "maskSurfaceValidated", id: 2, surfaceId: ID, width: 2, height: 1,
+    });
+    expect(glue.module.validateMaskSurface).toHaveBeenCalledWith(caller);
+
+    const old = setup(surfaceGlue({ validate: false }).module);
+    await old.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await old.handler({ type: "validateMaskSurface", id: 2, png: caller.slice().buffer });
+    expect(old.posted.at(-1)?.message).toMatchObject({ type: "error", id: 2, message: "develop engine cannot validate mask surfaces" });
+
+    const malformed = surfaceGlue();
+    malformed.module.validateMaskSurface.mockReturnValue({ id: ID, width: 4097, height: 1 });
+    const broken = setup(malformed.module);
+    await broken.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
+    await broken.handler({ type: "validateMaskSurface", id: 2, png: caller.slice().buffer });
+    expect(broken.posted.at(-1)?.message).toMatchObject({ type: "error", id: 2, message: "develop engine returned invalid mask surface info" });
   });
 
   it("書き出しに面が添えてあれば、一発の書き出しと同じ作業サイズの一時的な Developer に渡して描く（持っている写真は変えない）", async () => {
