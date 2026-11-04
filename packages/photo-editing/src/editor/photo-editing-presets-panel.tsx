@@ -339,6 +339,7 @@ export function PhotoEditingPresetsPanel(props: {
   // 拠点のプリセットと失敗の読み方は写真の出どころから（移行元設計）
   const library = usePhotoLibrary();
   const libraryPresets = library.presets;
+  const canManagePresets = props.canEdit && libraryPresets.readOnly !== true;
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const [collapsed, toggleCollapsed] = usePhotoEditingPresetsSectionCollapsed();
   const [importing, setImporting] = useState(false);
@@ -401,6 +402,7 @@ export function PhotoEditingPresetsPanel(props: {
   };
 
   const importOne = async (file: File): Promise<ImportOutcome> => {
+    if (!canManagePresets) return { kind: "failed", message: SPOT_PRESET_SAVE_ERROR };
     const source = await readImportXmp(file);
     if ("failure" in source) return { kind: "failed", message: source.failure };
     const xmp = source.xmp;
@@ -433,7 +435,7 @@ export function PhotoEditingPresetsPanel(props: {
   };
 
   const importFiles = async (files: File[]) => {
-    if (files.length === 0) return;
+    if (!canManagePresets || files.length === 0) return;
     setImporting(true);
     setImportFailures([]);
     setImportNotices([]);
@@ -460,7 +462,7 @@ export function PhotoEditingPresetsPanel(props: {
   };
 
   const confirmDelete = async () => {
-    if (!deleteTarget) return;
+    if (!canManagePresets || !deleteTarget) return;
     setDeleting(true);
     setDeleteError(null);
     try {
@@ -481,6 +483,7 @@ export function PhotoEditingPresetsPanel(props: {
 
   /** 今の補正を XMP にして拠点に保存し、一覧を読み直す（`source: "user"`）。 */
   const saveCurrentPreset = async (input: PhotoEditingPresetSaveInput): Promise<PhotoEditingPresetDialogResult> => {
+    if (!canManagePresets) return { ok: false, nameTaken: false, message: SPOT_PRESET_SAVE_ERROR };
     const saveCurrent = props.saveCurrent;
     let xmp: string;
     try {
@@ -504,7 +507,7 @@ export function PhotoEditingPresetsPanel(props: {
 
   /** 拠点のプリセットの名前を変え、一覧を読み直す。 */
   const renamePreset = async (name: string): Promise<PhotoEditingPresetDialogResult> => {
-    if (!renameTarget) return { ok: false, nameTaken: false, message: PHOTO_EDITING_PRESET_RENAME_ERROR };
+    if (!canManagePresets || !renameTarget) return { ok: false, nameTaken: false, message: PHOTO_EDITING_PRESET_RENAME_ERROR };
     try {
       await libraryPresets.rename(renameTarget.id, name);
     } catch (error) {
@@ -598,7 +601,7 @@ export function PhotoEditingPresetsPanel(props: {
     );
   };
 
-  const fileInput = props.canEdit ? (
+  const fileInput = canManagePresets ? (
     <input
       ref={fileInputRef}
       type="file"
@@ -618,7 +621,7 @@ export function PhotoEditingPresetsPanel(props: {
   ) : null;
 
   // ブラウザ版の見出しの右の「⋯」: 今の補正をプリセットに保存・Lightroom のプリセットを取り込む
-  const browserActions = props.canEdit ? (
+  const browserActions = canManagePresets ? (
     <div className="ml-auto flex shrink-0 items-center gap-1">
       {importing ? (
         <span role="status" className="inline-flex items-center gap-1.5 text-xs font-bold text-niho-text-sub">
@@ -724,7 +727,7 @@ export function PhotoEditingPresetsPanel(props: {
   const spotRows = spotPresets.map((preset) =>
     presetRow(
       { key: spotPhotoPresetKey(preset.id), name: preset.name, xmp: preset.xmp },
-      !props.canEdit
+      !canManagePresets
         ? {}
         : {
               // ブラウザ版は「⋯」のメニューに「名前を変更」「削除」
@@ -790,7 +793,7 @@ export function PhotoEditingPresetsPanel(props: {
   // 面いっぱいの一覧（`panel`）は折りたたまない
   const expanded = variant === "panel" || !collapsed;
     const none = props.none;
-    const browserDialogs = props.canEdit ? (
+    const browserDialogs = canManagePresets ? (
       <>
         <PhotoEditingPresetSaveDialog
           key={`save-${saveSession}`}

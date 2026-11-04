@@ -14,7 +14,7 @@ read/delete/content adapter、same-origin HTTP client/BFF、IndexedDBの送信�
 
 `createPersonalPhotoCloudLibrary` へ、検証済み本人に拘束したclient、本人snapshotと変更購読、実renderer能力、engine assets、実presets、明示的なメモリ予算を渡す。未認証時に別clientへfallbackしない。認証・libraryの切替時は古いbindingを直ちに失効させる。
 
-mask surface の保存 capability を公開するには、永続uploadを行う `maskUploader`、表示と同じSDK decoderを呼ぶ `maskValidator`、補正journalと同じbytes/upload-state journalを指す `maskJournal`、scopeをまたぐ重複uploadを直列化する `maskLocks` がすべて必要。sync library factoryは補正journalとlockを自動で接続する。adapterはネットワーク要求より前にPNG bytesとstable upload stateを永続化し、共通resumable runnerで送信し、cloud readback・SDK decode・byte identityを確認した後だけupload stateをsettleする。Browser transfer controllerにも同じ `maskValidator` を渡し、未接続時はmask参照付きコピーをpendingのままにする。ホストはbindingの破棄時にvalidator/uploaderを破棄する。
+mask surface の保存 capability は `@niho/photo-cloud-sync` のfactoryが提供する。同じIndexedDBへPNG・writerごとのpin lease・固定upload keysを保存し、recipe送信直前の共通barrierで実SDK検証とSTORED照合を行う。実SDKを呼ぶ `maskSurfaceValidator` が必要で、Browserは共通resumable runner、Macはcredentialを公開しない単一の `maskUploader` host portを使う。read adapterだけでは保存を開かない。明示コピーのBrowser transfer controllerにも実SDKを呼ぶ `maskValidator` を渡し、未接続時はmask参照付きコピーをpendingのままにする。hostはbinding破棄時にvalidator/uploaderを解放する。
 
 handleの `library` は既存PhotoLibrary、`usage` は予約・削除待ちを含む容量内訳、`rawPhoto` は完全なrecipe JSON、`readAsset` は検査付きstream、`dispose` は資源解放の口になる。metadataのwhole-asset SHA-256をrange本文のdigestと取り違えず、実transportが正本のgenerationとhash検証済みassetへ固定する。
 

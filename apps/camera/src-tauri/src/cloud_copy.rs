@@ -8,6 +8,7 @@ use niho_desktop_account::{
   AccountError, NativeCopyTarget, NativeStartUpload, NativeUpload, NativeUploadState, NativeUploadTicket,
   PhotoOperation, PhotoRequest, PhotoScopeCapture,
 };
+use niho_desktop_photo::develop::{InitialRasterCopyProof, InitialRasterSourceProvider};
 use niho_desktop_photo::mask_surfaces::{
   inspect_mask_surface_png, mask_surface_id, mask_surface_ids, MAX_MASK_SURFACE_BYTES,
 };
@@ -20,7 +21,7 @@ use std::io::{Read, Write};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
 use std::sync::{
-  atomic::{AtomicBool, AtomicU64, Ordering},
+  atomic::{AtomicBool, AtomicU64, AtomicUsize, Ordering},
   Arc, Mutex,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -33,6 +34,28 @@ const MAX_JOURNAL_BYTES: u64 = 32 * 1024 * 1024;
 const MAX_INTENT_BYTES: u64 = 2 * 1024 * 1024;
 const CHUNK_BYTES: usize = 8 * 1024 * 1024;
 const MASK_UPLOAD_HEADER: &str = "x-niho-photo-mask-upload-input";
+static ACTIVE_MASK_UPLOADS: AtomicUsize = AtomicUsize::new(0);
+
+struct MaskUploadSlot;
+impl MaskUploadSlot {
+  fn acquire() -> Result<Self, AccountError> {
+    let mut count = ACTIVE_MASK_UPLOADS.load(Ordering::SeqCst);
+    loop {
+      if count >= 2 {
+        return Err(AccountError::Rejected);
+      }
+      match ACTIVE_MASK_UPLOADS.compare_exchange(count, count + 1, Ordering::SeqCst, Ordering::SeqCst) {
+        Ok(_) => return Ok(Self),
+        Err(actual) => count = actual,
+      }
+    }
+  }
+}
+impl Drop for MaskUploadSlot {
+  fn drop(&mut self) {
+    ACTIVE_MASK_UPLOADS.fetch_sub(1, Ordering::SeqCst);
+  }
+}
 
 #[derive(Clone, Debug, Deserialize, PartialEq, Eq)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
@@ -132,6 +155,29 @@ struct RecipeBaseline {
   mask_surface_ids: Vec<String>,
 }
 
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+enum InitialRecipeSourceProvider {
+  DirectOriginal,
+  WorkingCopy,
+}
+
+/// Immutable evidence captured from the bundled SDK and the already-verified
+/// native source before the first remote recipe observation.
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+struct InitialRecipeProof {
+  initial_settings: Value,
+  initial_settings_sha256: String,
+  source_provider: InitialRecipeSourceProvider,
+  source_base_version: Option<String>,
+  source_icc_sha256: Option<String>,
+  source_identity: SourceIdentity,
+  source_sha256: String,
+  source_size_bytes: u64,
+  format: String,
+}
+
 #[derive(Clone, Debug, Deserialize, Serialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 struct CopyIntent {
@@ -158,6 +204,8 @@ struct CopyIntent {
   recipe_expected_revision: Option<u64>,
   #[serde(default)]
   recipe_baseline: Option<RecipeBaseline>,
+  #[serde(default)]
+  initial_recipe_proof: Option<InitialRecipeProof>,
   settings_sha256: String,
   #[serde(default)]
   starts: BTreeMap<String, CopyStart>,
@@ -171,6 +219,7 @@ struct RuntimeSource {
   opened_photo_id: String,
   source: CloudCopySource,
   settings: Option<Value>,
+  initial_recipe_proof: Option<InitialRasterCopyProof>,
 }
 
 pub(crate) struct CloudCopyState {
@@ -412,6 +461,9 @@ pub struct MaskUploadInput {
   photo_id: String,
   surface_id: String,
   idempotency_key: String,
+  complete_key: String,
+  cancel_key: String,
+  phase: String,
 }
 
 #[derive(Clone, Copy, Debug, Serialize)]
@@ -627,46 +679,69 @@ pub async fn camera_photo_mask_upload(
   let input: MaskUploadInput = serde_json::from_str(metadata).map_err(|_| AccountError::InvalidResponse)?;
   validate_scope(&input.scope)?;
   authorize_scope(&app, &input.scope)?;
+  let slot = MaskUploadSlot::acquire()?;
   let (width, height) = inspect_mask_surface_png(body).map_err(|_| AccountError::InvalidResponse)?;
-  if !opaque(&input.photo_id)
+  if width > 4096
+    || height > 4096
+    || !opaque(&input.photo_id)
     || !is_sha256(&input.surface_id)
     || mask_surface_id(body) != input.surface_id
     || !opaque(&input.idempotency_key)
     || input.idempotency_key.len() > 128
+    || !opaque(&input.complete_key)
+    || input.complete_key.len() > 128
+    || !opaque(&input.cancel_key)
+    || input.cancel_key.len() > 128
+    || !matches!(
+      input.phase.as_str(),
+      "start-pending" | "uploading" | "complete-pending" | "verifying" | "cancel-pending"
+    )
   {
     return Err(AccountError::InvalidResponse);
   }
   let bytes = body.to_vec();
+  let response_scope = input.scope.clone();
   let shared = app.state::<Arc<SharedAccount>>().inner().clone();
-  tauri::async_runtime::spawn_blocking(move || {
+  let outcome = tauri::async_runtime::spawn_blocking(move || {
+    let _slot = slot;
     upload_mask_surface(
       &shared,
       &input.scope,
       &input.photo_id,
       &input.surface_id,
       &input.idempotency_key,
+      &input.complete_key,
+      &input.cancel_key,
+      input.phase == "cancel-pending",
       &bytes,
-      (width, height),
+      width,
+      height,
     )
   })
   .await
-  .map_err(|_| AccountError::Internal)?
+  .map_err(|_| AccountError::Internal)??;
+  authorize_scope(&app, &response_scope)?;
+  Ok(outcome)
 }
 
+#[allow(clippy::too_many_arguments)]
 fn upload_mask_surface(
   shared: &SharedAccount,
   scope: &CopyScope,
   photo_id: &str,
   surface_id: &str,
   idempotency_key: &str,
+  complete_key: &str,
+  cancel_key: &str,
+  cancel_pending: bool,
   bytes: &[u8],
-  dimensions: (u32, u32),
+  width: u32,
+  height: u32,
 ) -> Result<MaskUploadOutcome, AccountError> {
   let capture = DurableScope::from_scope(scope).capture();
   let target = NativeCopyTarget::Mask {
     photo_id: photo_id.to_owned(),
   };
-  let complete_key = format!("{idempotency_key}-complete");
   let start = guarded(shared, || {
     shared.account.photo_copy_start(
       &capture,
@@ -686,9 +761,23 @@ fn upload_mask_surface(
       // The shared cloud adapter performs masks.get/content.get and SDK decoder readback before it reports success.
       return Ok(MaskUploadOutcome::Stored);
     }
-    NativeStartUpload::Upload { upload, ticket: value } => (*upload, value),
+    NativeStartUpload::Upload { upload, ticket } => (*upload, ticket),
   };
   assert_upload(&upload, &target, bytes.len() as u64, surface_id)?;
+  if cancel_pending {
+    upload = guarded(shared, || {
+      shared
+        .account
+        .photo_copy_cancel(&capture, &scope.library_id, &upload.id, cancel_key)
+    })?;
+    assert_upload(&upload, &target, bytes.len() as u64, surface_id)?;
+    if !matches!(
+      &upload.state,
+      NativeUploadState::StoredMask { .. } | NativeUploadState::Cancelled | NativeUploadState::Expired
+    ) {
+      return Err(AccountError::Network);
+    }
+  }
   for _ in 0..64 {
     match upload.state.clone() {
       NativeUploadState::StoredMask {
@@ -700,8 +789,8 @@ fn upload_mask_surface(
           || asset.get("sha256").and_then(Value::as_str) != Some(surface_id)
           || asset.get("sizeBytes").and_then(Value::as_u64) != Some(bytes.len() as u64)
           || asset.get("contentType").and_then(Value::as_str) != Some("image/png")
-          || asset.get("width").and_then(Value::as_u64) != Some(u64::from(dimensions.0))
-          || asset.get("height").and_then(Value::as_u64) != Some(u64::from(dimensions.1))
+          || asset.get("width").and_then(Value::as_u64) != Some(u64::from(width))
+          || asset.get("height").and_then(Value::as_u64) != Some(u64::from(height))
         {
           return Err(AccountError::InvalidResponse);
         }
@@ -723,18 +812,17 @@ fn upload_mask_surface(
           return Err(AccountError::InvalidResponse);
         }
         if uploaded_bytes == bytes.len() as u64 {
-          upload = match guarded(shared, || {
-            shared
-              .account
-              .photo_copy_complete(&capture, &scope.library_id, &upload.id, &complete_key)
-          }) {
-            Ok(value) => value,
-            Err(_) => guarded(shared, || {
-              shared.account.photo_copy_get(&capture, &scope.library_id, &upload.id)
-            })?,
-          };
+          upload = complete_native_upload(
+            shared,
+            &capture,
+            &scope.library_id,
+            &upload,
+            &target,
+            bytes.len() as u64,
+            surface_id,
+            complete_key,
+          )?;
           ticket = None;
-          assert_upload(&upload, &target, bytes.len() as u64, surface_id)?;
           continue;
         }
         if ticket
@@ -759,19 +847,18 @@ fn upload_mask_surface(
         }
         let active_ticket = ticket.take().ok_or(AccountError::Internal)?;
         let offset = usize::try_from(uploaded_bytes).map_err(|_| AccountError::InvalidResponse)?;
-        let _ = guarded(shared, || {
-          shared.account.photo_copy_put(
-            &capture,
-            &active_ticket,
-            uploaded_bytes,
-            bytes.len() as u64,
-            &bytes[offset..],
-          )
-        });
-        upload = guarded(shared, || {
-          shared.account.photo_copy_get(&capture, &scope.library_id, &upload.id)
-        })?;
-        assert_upload(&upload, &target, bytes.len() as u64, surface_id)?;
+        upload = put_native_upload_chunk(
+          shared,
+          &capture,
+          &scope.library_id,
+          &upload,
+          &target,
+          bytes.len() as u64,
+          surface_id,
+          &active_ticket,
+          uploaded_bytes,
+          &bytes[offset..],
+        )?;
       }
     }
   }
@@ -800,7 +887,13 @@ fn new_intent(
     _ => ("raw", "application/octet-stream", false),
   };
   let settings = runtime.settings.clone().unwrap_or(Value::Null);
-  if !journal_safe_value(&settings, 0) || !valid_file_name(runtime.source.file_name()) {
+  let initial_recipe_proof = runtime
+    .initial_recipe_proof
+    .as_ref()
+    .map(|proof| capture_initial_recipe_proof(runtime, format, proof))
+    .transpose()?;
+  if !safe_candidate_settings(&settings, initial_recipe_proof.as_ref()) || !valid_file_name(runtime.source.file_name())
+  {
     return Err(AccountError::Rejected);
   }
   let base_version = match settings.get("base") {
@@ -858,6 +951,7 @@ fn new_intent(
     cloud_photo_id: None,
     recipe_expected_revision: None,
     recipe_baseline: None,
+    initial_recipe_proof,
     settings_sha256,
     starts: BTreeMap::new(),
     keys: DurableKeys {
@@ -878,27 +972,28 @@ fn capture_runtime(app: &AppHandle, entry_id: &str) -> Result<RuntimeSource, Acc
   let library = library(app).map_err(|_| AccountError::Storage)?;
   let (opened_photo_id, source) =
     CloudCopySource::capture_registered(&photos, &library, entry_id).map_err(source_error)?;
+  let supported_raster = matches!(
+    source
+      .file_name()
+      .rsplit('.')
+      .next()
+      .map(str::to_ascii_lowercase)
+      .as_deref(),
+    Some("jpg" | "jpeg" | "png")
+  );
+  let develop = crate::develop::develop(app).map_err(|_| AccountError::Rejected)?;
+  let saved = photos.saved(source.sha256()).map(|record| record.settings);
+  let proof = supported_raster.then(|| develop.initial_raster_copy_proof(&*photos, &opened_photo_id));
   // Preserve saved data exactly. Only absence may request the bundled SDK's
   // full initial recipe; an unknown saved recipe never falls back to neutral.
-  let settings = match photos.saved(source.sha256()) {
-    Some(record) => Some(record.settings),
-    None
-      if matches!(
-        source
-          .file_name()
-          .rsplit('.')
-          .next()
-          .map(str::to_ascii_lowercase)
-          .as_deref(),
-        Some("jpg" | "jpeg" | "png")
-      ) =>
-    {
-      Some(
-        crate::develop::develop(app)
-          .map_err(|_| AccountError::Rejected)?
-          .initial_raster_copy_settings(&*photos, &opened_photo_id)
-          .map_err(|_| AccountError::Rejected)?,
-      )
+  let settings = match saved {
+    Some(settings) => Some(settings),
+    None if supported_raster => {
+      let proof = proof
+        .as_ref()
+        .and_then(|proof| proof.as_ref().ok())
+        .ok_or(AccountError::Rejected)?;
+      Some(proof.initialized_settings())
     }
     None => None,
   };
@@ -906,6 +1001,30 @@ fn capture_runtime(app: &AppHandle, entry_id: &str) -> Result<RuntimeSource, Acc
     opened_photo_id,
     source,
     settings,
+    // A saved recipe remains copyable for exact reconciliation when an old
+    // SDK cannot produce proof, but that absence never grants PUT authority.
+    initial_recipe_proof: proof.and_then(Result::ok),
+  })
+}
+
+fn capture_initial_recipe_proof(
+  runtime: &RuntimeSource,
+  format: &str,
+  proof: &InitialRasterCopyProof,
+) -> Result<InitialRecipeProof, AccountError> {
+  Ok(InitialRecipeProof {
+    initial_settings: proof.initial_settings.clone(),
+    initial_settings_sha256: value_digest(&proof.initial_settings)?,
+    source_provider: match proof.source_provider {
+      InitialRasterSourceProvider::DirectOriginal => InitialRecipeSourceProvider::DirectOriginal,
+      InitialRasterSourceProvider::WorkingCopy => InitialRecipeSourceProvider::WorkingCopy,
+    },
+    source_base_version: proof.source_base_version.clone(),
+    source_icc_sha256: proof.source_icc_sha256.clone(),
+    source_identity: runtime.source.identity().clone(),
+    source_sha256: runtime.source.sha256().to_owned(),
+    source_size_bytes: runtime.source.size_bytes(),
+    format: format.to_owned(),
   })
 }
 
@@ -917,6 +1036,14 @@ fn runtime_matches(intent: &CopyIntent, runtime: &RuntimeSource) -> bool {
       Some(settings) => value_digest(settings).ok().as_deref() == Some(intent.settings_sha256.as_str()),
       None => intent.settings.is_null(),
     }
+    && intent.initial_recipe_proof.as_ref().is_none_or(|expected| {
+      runtime
+        .initial_recipe_proof
+        .as_ref()
+        .and_then(|proof| capture_initial_recipe_proof(runtime, &intent.format, proof).ok())
+        .as_ref()
+        == Some(expected)
+    })
 }
 
 fn schedule(app: &AppHandle, request_id: &str) -> Result<(), AccountError> {
@@ -1301,38 +1428,16 @@ fn upload(
         persist(journal, intent)?;
         if uploaded_bytes == size {
           verify()?;
-          upload = match guarded(shared, || {
-            shared.account.photo_copy_complete(
-              &intent.scope.capture(),
-              &intent.scope.library_id,
-              &upload.id,
-              &complete_key,
-            )
-          }) {
-            Ok(value) => value,
-            Err(_) => {
-              let current = guarded(shared, || {
-                shared
-                  .account
-                  .photo_copy_get(&intent.scope.capture(), &intent.scope.library_id, &upload.id)
-              })?;
-              if matches!(&current.state, NativeUploadState::Reserved { uploaded_bytes } if *uploaded_bytes == size) {
-                guarded(shared, || {
-                  shared.account.photo_copy_complete(
-                    &intent.scope.capture(),
-                    &intent.scope.library_id,
-                    &upload.id,
-                    &complete_key,
-                  )
-                })?
-              } else {
-                current
-              }
-            }
-          };
-          if upload.id != upload_id {
-            return Err(AccountError::InvalidResponse);
-          }
+          upload = complete_native_upload(
+            shared,
+            &intent.scope.capture(),
+            &intent.scope.library_id,
+            &upload,
+            &target,
+            size,
+            &sha,
+            &complete_key,
+          )?;
           ticket = None;
           continue;
         }
@@ -1364,27 +1469,18 @@ fn upload(
           return Err(AccountError::InvalidResponse);
         }
         let active_ticket = ticket.take().ok_or(AccountError::Internal)?;
-        let _provider = guarded(shared, || {
-          shared
-            .account
-            .photo_copy_put(&intent.scope.capture(), &active_ticket, uploaded_bytes, size, &bytes)
-        })
-        .or_else(|_| {
-          guarded(shared, || {
-            shared
-              .account
-              .photo_copy_probe(&intent.scope.capture(), &active_ticket, size)
-          })
-        });
-        upload = guarded(shared, || {
-          shared
-            .account
-            .photo_copy_get(&intent.scope.capture(), &intent.scope.library_id, &upload.id)
-        })?;
-        if upload.id != upload_id {
-          return Err(AccountError::InvalidResponse);
-        }
-        assert_upload(&upload, &target, size, &sha)?;
+        upload = put_native_upload_chunk(
+          shared,
+          &intent.scope.capture(),
+          &intent.scope.library_id,
+          &upload,
+          &target,
+          size,
+          &sha,
+          &active_ticket,
+          uploaded_bytes,
+          &bytes,
+        )?;
         if let NativeUploadState::Reserved { uploaded_bytes: next } = &upload.state {
           if *next < uploaded_bytes {
             return Err(AccountError::InvalidResponse);
@@ -1402,6 +1498,84 @@ fn upload(
     }
   }
   Err(AccountError::Network)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn complete_native_upload(
+  shared: &SharedAccount,
+  capture: &PhotoScopeCapture,
+  library_id: &str,
+  upload: &NativeUpload,
+  target: &NativeCopyTarget,
+  size: u64,
+  sha: &str,
+  complete_key: &str,
+) -> Result<NativeUpload, AccountError> {
+  let next = match guarded(shared, || {
+    shared
+      .account
+      .photo_copy_complete(capture, library_id, &upload.id, complete_key)
+  }) {
+    Ok(value) => value,
+    Err(_) => {
+      let current = guarded(shared, || {
+        shared.account.photo_copy_get(capture, library_id, &upload.id)
+      })?;
+      assert_upload(&current, target, size, sha)?;
+      if current.id != upload.id {
+        return Err(AccountError::InvalidResponse);
+      }
+      if matches!(&current.state, NativeUploadState::Reserved { uploaded_bytes } if *uploaded_bytes == size) {
+        guarded(shared, || {
+          shared
+            .account
+            .photo_copy_complete(capture, library_id, &upload.id, complete_key)
+        })?
+      } else {
+        current
+      }
+    }
+  };
+  assert_upload(&next, target, size, sha)?;
+  if next.id != upload.id {
+    return Err(AccountError::InvalidResponse);
+  }
+  Ok(next)
+}
+
+#[allow(clippy::too_many_arguments)]
+fn put_native_upload_chunk(
+  shared: &SharedAccount,
+  capture: &PhotoScopeCapture,
+  library_id: &str,
+  upload: &NativeUpload,
+  target: &NativeCopyTarget,
+  size: u64,
+  sha: &str,
+  ticket: &NativeUploadTicket,
+  offset: u64,
+  bytes: &[u8],
+) -> Result<NativeUpload, AccountError> {
+  if bytes.is_empty()
+    || bytes.len() > CHUNK_BYTES
+    || offset.checked_add(bytes.len() as u64).is_none_or(|end| end > size)
+  {
+    return Err(AccountError::InvalidResponse);
+  }
+  let _provider = guarded(shared, || {
+    shared.account.photo_copy_put(capture, ticket, offset, size, bytes)
+  })
+  .or_else(|_| guarded(shared, || shared.account.photo_copy_probe(capture, ticket, size)));
+  let next = guarded(shared, || {
+    shared.account.photo_copy_get(capture, library_id, &upload.id)
+  })?;
+  assert_upload(&next, target, size, sha)?;
+  if next.id != upload.id
+    || matches!(&next.state, NativeUploadState::Reserved { uploaded_bytes } if *uploaded_bytes < offset)
+  {
+    return Err(AccountError::InvalidResponse);
+  }
+  Ok(next)
 }
 
 fn cancel_intent(state: &CloudCopyState, shared: &SharedAccount, mut intent: CopyIntent) -> Result<(), AccountError> {
@@ -1667,23 +1841,192 @@ fn capture_recipe_baseline(intent: &mut CopyIntent, photo: &Value) -> Result<(),
 fn recipe_write_body(intent: &CopyIntent, fresh: &Value) -> Result<Value, AccountError> {
   let baseline = intent.recipe_baseline.as_ref().ok_or(AccountError::Rejected)?;
   let current = read_recipe_baseline(fresh)?;
-  // Explicit copy can adopt an unedited original. A differing existing recipe
-  // remains remote; neither retry nor a later fresh GET grants overwrite consent.
-  if baseline.revision != 0
-    || intent.recipe_expected_revision != Some(0)
-    || serde_jcs::to_vec(baseline).ok() != serde_jcs::to_vec(&current).ok()
+  let proof = intent.initial_recipe_proof.as_ref().ok_or(AccountError::Rejected)?;
+  if intent.recipe_expected_revision != Some(0)
+    || !initial_recipe_proof_matches_intent(intent, proof)
+    || !safe_candidate_settings(&intent.settings, Some(proof))
   {
+    return Err(AccountError::Rejected);
+  }
+  let baseline_base = proven_initial_recipe_base(baseline, proof)?;
+  let current_base = proven_initial_recipe_base(&current, proof)?;
+  if current_base != proof.source_base_version || current_base != intent.base_version {
+    return Err(AccountError::Rejected);
+  }
+  let unchanged = serde_jcs::to_vec(baseline).ok() == serde_jcs::to_vec(&current).ok();
+  let system_base_only = baseline_base.is_none()
+    && current_base.is_some()
+    && proof.source_base_version.is_some()
+    && initial_recipe_equal_except_base(baseline, &current);
+  // A normal CAS observation stays byte-for-byte equal. The sole exception is
+  // the system's revision-0 null -> actual-source-base initialization.
+  if !unchanged && !system_base_only {
     return Err(AccountError::Rejected);
   }
   Ok(json!({"expectedRevision":0,"settings":intent.settings,"baseVersion":intent.base_version}))
 }
 
+fn proven_initial_recipe_base(
+  recipe: &RecipeBaseline,
+  proof: &InitialRecipeProof,
+) -> Result<Option<String>, AccountError> {
+  if recipe.revision != 0 || !recipe.mask_surface_ids.is_empty() {
+    return Err(AccountError::Rejected);
+  }
+  let settings_base = match recipe.settings.get("base") {
+    Some(Value::Null) => None,
+    Some(Value::String(value)) if valid_raster_base(value) => Some(value.clone()),
+    _ => return Err(AccountError::Rejected),
+  };
+  if settings_base != recipe.base_version
+    || settings_base
+      .as_ref()
+      .is_some_and(|base| Some(base) != proof.source_base_version.as_ref())
+  {
+    return Err(AccountError::Rejected);
+  }
+  let mut expected = proof.initial_settings.clone();
+  expected["base"] = settings_base.clone().map(Value::String).unwrap_or(Value::Null);
+  if recipe.settings != expected || value_digest(&recipe.settings)? != recipe.settings_sha256 {
+    return Err(AccountError::Rejected);
+  }
+  Ok(settings_base)
+}
+
+fn initial_recipe_equal_except_base(left: &RecipeBaseline, right: &RecipeBaseline) -> bool {
+  let mut left_settings = left.settings.clone();
+  let mut right_settings = right.settings.clone();
+  left_settings["base"] = Value::Null;
+  right_settings["base"] = Value::Null;
+  left.revision == right.revision && left.mask_surface_ids == right.mask_surface_ids && left_settings == right_settings
+}
+
 fn safe_baseline(baseline: &RecipeBaseline) -> bool {
   baseline.revision <= 9_007_199_254_740_991
-    && journal_safe_value(&baseline.settings, 0)
+    && proof_safe_value(&baseline.settings, 0)
+    && serde_json::to_vec(&baseline.settings).is_ok_and(|bytes| bytes.len() as u64 <= MAX_INTENT_BYTES / 2)
     && value_digest(&baseline.settings).ok().as_deref() == Some(baseline.settings_sha256.as_str())
     && baseline.base_version.as_deref().is_none_or(valid_raster_base)
     && baseline.mask_surface_ids.iter().all(|id| is_sha256(id))
+}
+
+fn initial_recipe_proof_matches_intent(intent: &CopyIntent, proof: &InitialRecipeProof) -> bool {
+  safe_initial_recipe_proof(proof)
+    && proof.source_identity == intent.source_identity
+    && proof.source_sha256 == intent.source_sha256
+    && proof.source_size_bytes == intent.source_size_bytes
+    && proof.format == intent.format
+}
+
+fn safe_initial_recipe_proof(proof: &InitialRecipeProof) -> bool {
+  let masks_are_empty = proof
+    .initial_settings
+    .get("masks")
+    .is_none_or(|masks| masks.as_array().is_some_and(Vec::is_empty));
+  let provider_is_consistent = match proof.source_provider {
+    InitialRecipeSourceProvider::DirectOriginal => {
+      proof.source_base_version.is_none() && proof.source_icc_sha256.is_none()
+    }
+    InitialRecipeSourceProvider::WorkingCopy => proof.source_base_version.as_deref().is_some_and(|base| {
+      niho_desktop_photo::develop::build_raster_base_version(proof.source_icc_sha256.as_deref())
+        .ok()
+        .as_deref()
+        == Some(base)
+    }),
+  };
+  proof.initial_settings.is_object()
+    && proof.initial_settings.get("base").is_some_and(Value::is_null)
+    && proof
+      .initial_settings
+      .get("v")
+      .and_then(Value::as_u64)
+      .is_some_and(|value| value <= 9_007_199_254_740_991)
+    && proof
+      .initial_settings
+      .get("engine")
+      .and_then(Value::as_str)
+      .is_some_and(|value| opaque(value) && value.len() <= 128)
+    && masks_are_empty
+    && proof_safe_value(&proof.initial_settings, 0)
+    && serde_json::to_vec(&proof.initial_settings).is_ok_and(|bytes| bytes.len() as u64 <= MAX_INTENT_BYTES / 2)
+    && value_digest(&proof.initial_settings).ok().as_deref() == Some(proof.initial_settings_sha256.as_str())
+    && provider_is_consistent
+    && proof.source_base_version.as_deref().is_none_or(valid_raster_base)
+    && proof.source_icc_sha256.as_deref().is_none_or(is_sha256)
+    && is_sha256(&proof.source_sha256)
+    && proof.source_size_bytes > 0
+    && proof.source_size_bytes <= 200 * 1024 * 1024
+    && proof.source_identity.size == proof.source_size_bytes
+    && matches!(proof.format.as_str(), "jpeg" | "png")
+}
+
+fn safe_candidate_settings(settings: &Value, proof: Option<&InitialRecipeProof>) -> bool {
+  let Some(proof) = proof else {
+    return journal_safe_value(settings, 0);
+  };
+  safe_initial_recipe_proof(proof)
+    && proof_safe_value(settings, 0)
+    && serde_json::to_vec(settings).is_ok_and(|bytes| bytes.len() as u64 <= MAX_INTENT_BYTES / 2)
+    && settings_preserve_sdk_unknowns(settings, proof)
+}
+
+fn settings_preserve_sdk_unknowns(settings: &Value, proof: &InitialRecipeProof) -> bool {
+  let mut initial = proof.initial_settings.clone();
+  initial["base"] = proof
+    .source_base_version
+    .clone()
+    .map(Value::String)
+    .unwrap_or(Value::Null);
+  known_recipe_changes_only(settings, &initial, &[])
+}
+
+fn known_recipe_changes_only(candidate: &Value, initial: &Value, path: &[String]) -> bool {
+  let path_refs = path.iter().map(String::as_str).collect::<Vec<_>>();
+  if candidate == initial {
+    return true;
+  }
+  if let (Value::Array(candidate), Value::Array(initial)) = (candidate, initial) {
+    if candidate.len() == initial.len() {
+      return candidate
+        .iter()
+        .zip(initial)
+        .all(|(candidate, initial)| known_recipe_changes_only(candidate, initial, path));
+    }
+  }
+  let (Value::Object(candidate), Value::Object(initial)) = (candidate, initial) else {
+    return journal_safe_recipe_field(candidate, &path_refs) && journal_safe_recipe_field(initial, &path_refs);
+  };
+  let keys = candidate
+    .keys()
+    .chain(initial.keys())
+    .cloned()
+    .collect::<std::collections::HashSet<_>>();
+  keys.into_iter().all(|key| {
+    let candidate_value = candidate.get(&key);
+    let initial_value = initial.get(&key);
+    if candidate_value == initial_value {
+      return true;
+    }
+    let mut key_probe = serde_json::Map::new();
+    key_probe.insert(key.clone(), Value::Null);
+    if !journal_safe_recipe_field(&Value::Object(key_probe), &path_refs) {
+      return false;
+    }
+    let mut next = path.to_vec();
+    next.push(key);
+    match (candidate_value, initial_value) {
+      (Some(candidate), Some(initial)) => known_recipe_changes_only(candidate, initial, &next),
+      (Some(candidate), None) => {
+        let next_refs = next.iter().map(String::as_str).collect::<Vec<_>>();
+        journal_safe_recipe_field(candidate, &next_refs)
+      }
+      (None, Some(initial)) => {
+        let next_refs = next.iter().map(String::as_str).collect::<Vec<_>>();
+        journal_safe_recipe_field(initial, &next_refs)
+      }
+      (None, None) => true,
+    }
+  })
 }
 
 fn final_verify(shared: &SharedAccount, intent: &CopyIntent) -> Result<(), AccountError> {
@@ -1948,9 +2291,13 @@ fn valid_intent(intent: &CopyIntent) -> bool {
         | ("raw", "application/octet-stream")
     )
     && intent.base_version.as_deref().is_none_or(valid_raster_base)
-    && journal_safe_value(&intent.settings, 0)
+    && safe_candidate_settings(&intent.settings, intent.initial_recipe_proof.as_ref())
     && value_digest(&intent.settings).ok().as_deref() == Some(intent.settings_sha256.as_str())
     && intent.recipe_baseline.as_ref().is_none_or(safe_baseline)
+    && intent
+      .initial_recipe_proof
+      .as_ref()
+      .is_none_or(|proof| initial_recipe_proof_matches_intent(intent, proof))
     && intent
       .starts
       .iter()
@@ -2016,6 +2363,52 @@ fn value_digest(value: &Value) -> Result<String, AccountError> {
     .map(|bytes| digest(&bytes))
     .map_err(|_| AccountError::Internal)
 }
+
+/// The SDK proof is allowed to retain future settings fields, but remains a
+/// bounded data-only JSON value and cannot become a transport/path container.
+fn proof_safe_value(value: &Value, depth: usize) -> bool {
+  if depth > 32 {
+    return false;
+  }
+  match value {
+    Value::Null | Value::Bool(_) | Value::Number(_) => true,
+    Value::String(value) => {
+      let normalized = value.to_ascii_lowercase();
+      value.len() <= 512
+        && !value.chars().any(forbidden_opaque_character)
+        && !value.contains('/')
+        && !value.contains('\\')
+        && !normalized.contains("://")
+        && !normalized.starts_with("file:")
+        && !normalized.starts_with("data:")
+    }
+    Value::Array(values) => values.len() <= 1024 && values.iter().all(|value| proof_safe_value(value, depth + 1)),
+    Value::Object(values) => {
+      values.len() <= 1024
+        && values.iter().all(|(key, value)| {
+          let normalized = key.to_ascii_lowercase();
+          key.len() <= 64
+            && !key.is_empty()
+            && key
+              .bytes()
+              .all(|byte| byte.is_ascii_alphanumeric() || matches!(byte, b'_' | b'-'))
+            && ![
+              "authorization",
+              "bearer",
+              "password",
+              "secret",
+              "sessionuri",
+              "ticket",
+              "token",
+            ]
+            .iter()
+            .any(|forbidden| normalized.contains(forbidden))
+            && !matches!(normalized.as_str(), "path" | "uri" | "url")
+            && proof_safe_value(value, depth + 1)
+        })
+    }
+  }
+}
 fn bind_body_digest(intent: &mut CopyIntent, name: &str, value: &Value) -> Result<bool, AccountError> {
   let actual = value_digest(value)?;
   match intent.keys.body_digests.get(name) {
@@ -2035,8 +2428,9 @@ fn terminal_intent(intent: &CopyIntent) -> bool {
       && intent.confirmed_recipe
       && intent.cloud_photo_id.as_deref().is_some_and(opaque)
 }
-// Data minimization, independent of rendering validation. No free text or future
-// fields are journaled: keep unsupported settings in the existing local library.
+// Candidate data minimization, independent of rendering validation. Future SDK
+// defaults are admitted only through the separately bounded immutable proof and
+// must remain identical to it; other unsupported fields stay in the local library.
 fn journal_safe_value(value: &Value, _depth: usize) -> bool {
   journal_safe_recipe_field(value, &[])
 }
@@ -2313,6 +2707,17 @@ fn private_dir(path: &Path) -> Result<(), AccountError> {
 
 #[cfg(test)]
 mod tests {
+  #[test]
+  fn mask_upload_slots_bound_binary_work_and_release_on_drop() {
+    let first = MaskUploadSlot::acquire().unwrap();
+    let second = MaskUploadSlot::acquire().unwrap();
+    assert!(MaskUploadSlot::acquire().is_err());
+    drop(second);
+    let replacement = MaskUploadSlot::acquire().unwrap();
+    drop(replacement);
+    drop(first);
+    assert_eq!(ACTIVE_MASK_UPLOADS.load(Ordering::SeqCst), 0);
+  }
   use super::*;
 
   struct Fixture(PathBuf);
@@ -2370,6 +2775,7 @@ mod tests {
       cloud_photo_id: None,
       recipe_expected_revision: None,
       recipe_baseline: None,
+      initial_recipe_proof: None,
       settings_sha256: value_digest(&json!({"v":9,"engine":"niho-14","base":null})).unwrap(),
       starts: BTreeMap::new(),
       keys: DurableKeys {
@@ -2512,8 +2918,32 @@ mod tests {
   }
 
   fn recipe_photo(revision: u64, settings: Value) -> Value {
+    recipe_photo_with_masks(revision, settings, Vec::new())
+  }
+
+  fn recipe_photo_with_masks(revision: u64, settings: Value, mask_surface_ids: Vec<String>) -> Value {
+    let base_version = settings.get("base").cloned().unwrap_or(Value::Null);
     json!({"recipe":{"revision":revision,"settingsSha256":value_digest(&settings).unwrap(),
-      "settings":settings,"baseVersion":null,"maskSurfaceIds":[]}})
+      "settings":settings,"baseVersion":base_version,"maskSurfaceIds":mask_surface_ids}})
+  }
+
+  fn install_initial_proof(value: &mut CopyIntent, initial_settings: Value, source_base_version: Option<String>) {
+    let source_provider = if source_base_version.is_some() {
+      InitialRecipeSourceProvider::WorkingCopy
+    } else {
+      InitialRecipeSourceProvider::DirectOriginal
+    };
+    value.initial_recipe_proof = Some(InitialRecipeProof {
+      initial_settings_sha256: value_digest(&initial_settings).unwrap(),
+      initial_settings,
+      source_provider,
+      source_base_version,
+      source_icc_sha256: None,
+      source_identity: value.source_identity.clone(),
+      source_sha256: value.source_sha256.clone(),
+      source_size_bytes: value.source_size_bytes,
+      format: value.format.clone(),
+    });
   }
 
   #[test]
@@ -2523,7 +2953,9 @@ mod tests {
     let mut value = intent("request-a", "owner-a");
     value.settings["exposure"] = json!(1.5);
     value.settings_sha256 = value_digest(&value.settings).unwrap();
-    let initial = recipe_photo(0, json!({"v":9,"engine":"niho-14","base":null,"exposure":0}));
+    let initial_settings = json!({"v":9,"engine":"niho-14","base":null,"exposure":0});
+    install_initial_proof(&mut value, initial_settings.clone(), None);
+    let initial = recipe_photo(0, initial_settings);
     capture_recipe_baseline(&mut value, &initial).unwrap();
     journal.create(&value).unwrap();
     let body = recipe_write_body(&value, &initial).unwrap();
@@ -2547,6 +2979,174 @@ mod tests {
     let remote = recipe_photo(5, remote_settings);
     capture_recipe_baseline(&mut existing, &remote).unwrap();
     assert_eq!(recipe_write_body(&existing, &remote), Err(AccountError::Rejected));
+  }
+
+  #[test]
+  fn system_revision_zero_base_initialization_is_the_only_fresh_recipe_change_allowed() {
+    let base = niho_desktop_photo::develop::build_raster_base_version(None).unwrap();
+    let initial = json!({
+      "v":9,"engine":"niho-14","base":null,"exposure":0,
+      "futureSdk":{"nestedDefault":17,"mode":"preserved"}
+    });
+    let mut value = intent("request-system-base", "owner-a");
+    value.settings = initial.clone();
+    value.settings["base"] = json!(base);
+    value.settings["exposure"] = json!(1.25);
+    value.base_version = Some(base.clone());
+    value.settings_sha256 = value_digest(&value.settings).unwrap();
+    install_initial_proof(&mut value, initial.clone(), Some(base.clone()));
+
+    let null_base = recipe_photo(0, initial.clone());
+    capture_recipe_baseline(&mut value, &null_base).unwrap();
+    let mut based_initial = initial.clone();
+    based_initial["base"] = json!(base);
+    let fresh = recipe_photo(0, based_initial.clone());
+    let body = recipe_write_body(&value, &fresh).unwrap();
+    assert_eq!(body["expectedRevision"], 0);
+    assert_eq!(body["baseVersion"], base);
+    assert_eq!(
+      value.initial_recipe_proof.as_ref().unwrap().initial_settings["futureSdk"],
+      initial["futureSdk"]
+    );
+
+    // The ordinary path remains a full baseline/fresh CAS at the same proven
+    // system-initial state.
+    let mut exact = value.clone();
+    exact.recipe_baseline = None;
+    exact.recipe_expected_revision = None;
+    capture_recipe_baseline(&mut exact, &fresh).unwrap();
+    assert_eq!(recipe_write_body(&exact, &fresh).unwrap()["expectedRevision"], 0);
+
+    let mut local_base_mismatch = exact;
+    local_base_mismatch.base_version = None;
+    assert_eq!(
+      recipe_write_body(&local_base_mismatch, &fresh),
+      Err(AccountError::Rejected)
+    );
+  }
+
+  #[test]
+  fn candidate_preserves_unknowns_when_known_subtrees_are_removed_or_replaced() {
+    let initial = json!({"geometry":{"rotate":0,"futureAxis":7},"toneCurves":[{"points":[],"futureCurve":true}]});
+    let mut candidate = initial.clone();
+    candidate["geometry"]["rotate"] = json!(1);
+    assert!(known_recipe_changes_only(&candidate, &initial, &[]));
+    for replacement in [Value::Null, json!(1), json!({"rotate":1})] {
+      let mut candidate = initial.clone();
+      candidate["geometry"] = replacement;
+      assert!(!known_recipe_changes_only(&candidate, &initial, &[]));
+    }
+    let mut candidate = initial.clone();
+    candidate.as_object_mut().unwrap().remove("geometry");
+    assert!(!known_recipe_changes_only(&candidate, &initial, &[]));
+    let mut candidate = initial.clone();
+    candidate["toneCurves"] = json!([]);
+    assert!(!known_recipe_changes_only(&candidate, &initial, &[]));
+  }
+
+  #[test]
+  fn recipe_write_rejects_unproven_or_noninitial_revision_zero_state() {
+    let initial = json!({"v":9,"engine":"niho-14","base":null,"exposure":0,"futureSdk":{"default":true}});
+    let mut value = intent("request-rejections", "owner-a");
+    value.settings = initial.clone();
+    value.settings["exposure"] = json!(1.0);
+    value.settings_sha256 = value_digest(&value.settings).unwrap();
+    install_initial_proof(&mut value, initial.clone(), None);
+    assert!(
+      valid_intent(&value),
+      "SDK-owned unknown defaults are retained unchanged"
+    );
+    let baseline = recipe_photo(0, initial.clone());
+    capture_recipe_baseline(&mut value, &baseline).unwrap();
+
+    assert_eq!(
+      recipe_write_body(&value, &recipe_photo(5, initial.clone())),
+      Err(AccountError::Rejected)
+    );
+    assert_eq!(
+      recipe_write_body(&value, &recipe_photo(99, initial.clone())),
+      Err(AccountError::Rejected)
+    );
+
+    let mut unknown_default = initial.clone();
+    unknown_default["futureSdk"]["default"] = json!(false);
+    assert_eq!(
+      recipe_write_body(&value, &recipe_photo(0, unknown_default)),
+      Err(AccountError::Rejected)
+    );
+    let mut changed_local_unknown = value.clone();
+    changed_local_unknown.settings["futureSdk"]["default"] = json!(false);
+    changed_local_unknown.settings_sha256 = value_digest(&changed_local_unknown.settings).unwrap();
+    assert!(!valid_intent(&changed_local_unknown));
+    let mut missing_local_unknown = value.clone();
+    missing_local_unknown
+      .settings
+      .as_object_mut()
+      .unwrap()
+      .remove("futureSdk");
+    missing_local_unknown.settings_sha256 = value_digest(&missing_local_unknown.settings).unwrap();
+    assert!(!valid_intent(&missing_local_unknown));
+    assert_eq!(
+      recipe_write_body(&missing_local_unknown, &baseline),
+      Err(AccountError::Rejected)
+    );
+    assert_eq!(
+      recipe_write_body(
+        &value,
+        &recipe_photo_with_masks(0, initial.clone(), vec!["b".repeat(64)])
+      ),
+      Err(AccountError::Rejected)
+    );
+
+    let mut wrong_base = initial.clone();
+    wrong_base["base"] = json!(niho_desktop_photo::develop::build_raster_base_version(Some(&"c".repeat(64))).unwrap());
+    assert_eq!(
+      recipe_write_body(&value, &recipe_photo(0, wrong_base)),
+      Err(AccountError::Rejected)
+    );
+
+    let mut wrong_source = value.clone();
+    wrong_source.initial_recipe_proof.as_mut().unwrap().source_sha256 = "d".repeat(64);
+    assert_eq!(recipe_write_body(&wrong_source, &baseline), Err(AccountError::Rejected));
+
+    let mut oversized = value.clone();
+    oversized.initial_recipe_proof.as_mut().unwrap().initial_settings["futureSdk"] =
+      json!("x".repeat((MAX_INTENT_BYTES / 2 + 1) as usize));
+    let oversized_digest = value_digest(&oversized.initial_recipe_proof.as_ref().unwrap().initial_settings).unwrap();
+    oversized.initial_recipe_proof.as_mut().unwrap().initial_settings_sha256 = oversized_digest;
+    assert!(!valid_intent(&oversized));
+
+    let mut unknown_fact = serde_json::to_value(&value).unwrap();
+    unknown_fact["initialRecipeProof"]["laterAuthority"] = json!(true);
+    assert!(serde_json::from_value::<CopyIntent>(unknown_fact).is_err());
+
+    let mut old = value;
+    old.initial_recipe_proof = None;
+    assert_eq!(recipe_write_body(&old, &baseline), Err(AccountError::Rejected));
+  }
+
+  #[test]
+  fn old_journal_without_proof_decodes_but_only_exact_recipe_reconciles() {
+    let fixture = Fixture::new("old-proofless");
+    let journal = fixture.journal();
+    let value = intent("request-old-journal", "owner-a");
+    let mut encoded = serde_json::to_value(&value).unwrap();
+    encoded.as_object_mut().unwrap().remove("initialRecipeProof");
+    private_dir(&fixture.0).unwrap();
+    let path = journal.path(&value.request_id);
+    std::fs::write(&path, serde_json::to_vec(&encoded).unwrap()).unwrap();
+    std::fs::set_permissions(&path, std::os::unix::fs::PermissionsExt::from_mode(0o600)).unwrap();
+    let recovered = journal.get(&value.request_id).unwrap().unwrap();
+    assert!(path.exists(), "decoding an old journal must not erase it");
+    assert!(recovered.initial_recipe_proof.is_none());
+    let photo = recipe_photo(1, recovered.settings.clone());
+    assert!(recipe_matches(&photo, &recovered));
+
+    let mut needs_write = recovered;
+    needs_write.settings["exposure"] = json!(1.0);
+    needs_write.settings_sha256 = value_digest(&needs_write.settings).unwrap();
+    capture_recipe_baseline(&mut needs_write, &photo).unwrap();
+    assert_eq!(recipe_write_body(&needs_write, &photo), Err(AccountError::Rejected));
   }
 
   #[test]

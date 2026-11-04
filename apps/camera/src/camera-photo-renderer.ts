@@ -17,9 +17,12 @@ export type CameraPhotoRendererBinding = Readonly<{
   engineAssets: PhotoLibraryEngineAssets;
 }>;
 
-export type CameraPhotoMaskValidator = PersonalPhotoCloudMaskValidator & Readonly<{ dispose(): void }>;
+export type CameraPhotoMaskValidator = PersonalPhotoCloudMaskValidator & Readonly<{
+  ready(signal: AbortSignal): Promise<boolean>;
+  dispose(): void;
+}>;
 
-type MaskValidationEngine = Pick<DevelopEngine, "ready" | "dispose" | "validateMaskSurface">;
+type MaskValidationEngine = Pick<DevelopEngine, "ready" | "dispose" | "validateMaskSurface" | "encodeMaskSurface">;
 
 /** Lazily uses the same verified SDK runtime as Camera rendering to validate durable mask bytes. */
 export function createCameraPhotoMaskValidator(options: {
@@ -49,6 +52,23 @@ export function createCameraPhotoMaskValidator(options: {
   };
 
   return {
+    async ready(signal) {
+      const linked = linkedAbortController(lifecycle.signal, signal);
+      try {
+        const active = getEngine();
+        if (!(await awaitBounded(ready!, { signal: linked.controller.signal, timeoutMs })) ||
+          typeof active.encodeMaskSurface !== "function" || typeof active.validateMaskSurface !== "function") return false;
+        const encoded = await awaitBounded(active.encodeMaskSurface(1, 1, new Uint8Array([0])), {
+          signal: linked.controller.signal, timeoutMs,
+        });
+        const decoded = await awaitBounded(active.validateMaskSurface(encoded.png.slice()), {
+          signal: linked.controller.signal, timeoutMs,
+        });
+        return !linked.controller.signal.aborted && decoded.width === 1 && decoded.height === 1 &&
+          /^[a-f0-9]{64}$/u.test(encoded.id) && decoded.id === encoded.id;
+      } catch { return false; }
+      finally { linked.dispose(); }
+    },
     async validateMaskSurface(png, signal) {
       if (signal.aborted) throw abortReason(signal);
       const linked = linkedAbortController(lifecycle.signal, signal);

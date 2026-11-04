@@ -33,19 +33,14 @@ import type {
 
 import { contentBytes, readCheckedAsset } from "./content";
 import { PersonalPhotoCloudError, isAbortError, personalPhotoCloudErrors, publicError } from "./errors";
-import { hashMaskSurface, sameMaskSurfaceBytes, validateMaskSurfaceBytes } from "./mask-surface";
 import { MaterializationBudget, conservativeBytes, type MemoryLease } from "./memory";
 import { PersonalPhotoScope } from "./scope";
 import { projectRecipeSettings, rendererIntersection } from "./recipe";
 import type {
   CreatePersonalPhotoCloudLibraryOptions,
   PersonalPhotoCloudLibraryHandle,
-  PersonalPhotoCloudMaskJournalScope,
-  PersonalPhotoCloudMaskSurfaceInput,
-  PersonalPhotoCloudPersistedMaskSurface,
   PersonalPhotoCloudUrlFactory,
 } from "./types";
-import type { PersonalPhotoResumableUploadState } from "./browser/resumable-upload";
 import {
   validateAsset,
   validateInfo,
@@ -185,13 +180,12 @@ class Adapter {
       ensureWorkingCopy: (photoId, requestOptions) => this.ensureWorkingCopy(photoId, requestOptions),
       loadWorkingCopy: (photoId, download, requestOptions) => this.loadWorkingCopy(photoId, download, requestOptions),
       retryWorkingCopy: (photoId) => this.retryWorkingCopy(photoId),
-      loadMaskSurface: (photoId, surfaceId, requestOptions) => this.loadMaskSurface(photoId, surfaceId, requestOptions),
-      ...(options.maskUploader === undefined || options.maskValidator === undefined || options.maskJournal === undefined || options.maskLocks === undefined
-        ? {}
-        : { saveMaskSurface: (photoId: string, png: Uint8Array, requestOptions?: PhotoLibraryRequestOptions) => this.saveMaskSurface(photoId, png, requestOptions) }),
       saveDevelopSettings: async () => {
         throw new PersonalPhotoCloudError("unsupported");
       },
+      ...(options.maskSurfaceValidator === undefined || options.maskSurfaceReader === undefined ? {} : {
+        loadMaskSurface: (photoId: string, surfaceId: string) => options.maskSurfaceReader!.loadMaskSurface(photoId, surfaceId),
+      }),
       downloadOriginal: (photo, requestOptions) => this.downloadOriginal(photo, requestOptions),
       delete: (photoIds) => this.deletePhotos(photoIds),
       presets: options.presets,
@@ -209,7 +203,7 @@ class Adapter {
 
   private async capabilities(options?: PhotoLibraryRequestOptions): Promise<PhotoLibraryCapabilities> {
     const cloud = await this.loadLibrary(options?.signal);
-    const renderer = rendererIntersection(cloud.capabilities.renderer, this.effectiveHostRenderer());
+    const renderer = rendererIntersection(cloud.capabilities.renderer, this.options.hostRenderer);
     const rawWorkingCopy =
       cloud.state === "active" &&
       cloud.capabilities.edits &&
@@ -217,17 +211,7 @@ class Adapter {
       cloud.capabilities.formats.some(
         (format) => format.workingCopy && ["raw", "heic", "heif", "tiff"].includes(format.format),
       );
-    const maskSurfaces = cloud.state === "active" && cloud.capabilities.edits &&
-      cloud.capabilities.maskSurfaces && renderer?.maskSurfaces === true &&
-      this.options.maskUploader !== undefined && this.options.maskValidator !== undefined &&
-      this.options.maskJournal !== undefined && this.options.maskLocks !== undefined;
-    return { ...CLOSED_CAPABILITIES, rawWorkingCopy, maskSurfaces, info: cloud.state === "active" };
-  }
-
-  private effectiveHostRenderer(): RenderCapability {
-    return this.options.maskValidator === undefined
-      ? { ...this.options.hostRenderer, maskSurfaces: false }
-      : this.options.hostRenderer;
+    return { ...CLOSED_CAPABILITIES, rawWorkingCopy, info: cloud.state === "active" };
   }
 
   private async usage(options?: PhotoLibraryRequestOptions): Promise<QuotaUsage> {
@@ -417,219 +401,13 @@ class Adapter {
     }
   }
 
-  private async loadMaskSurface(
-    photoId: string,
-    surfaceId: string,
-    options?: PhotoLibraryRequestOptions,
-  ): Promise<Uint8Array | null> {
-    if (this.options.maskValidator === undefined) throw new PersonalPhotoCloudError("unsupported");
-    assertId(photoId);
-    if (!isSha256(surfaceId)) throw new PersonalPhotoCloudError("invalid_response");
-    return await this.withPhotoOperation(photoId, options?.signal, async (operation) => {
-      const journal = this.options.maskJournal;
-      if (journal !== undefined) {
-        const record = await journal.getMaskSurface(this.maskJournalScope(), photoId, surfaceId, operation.signal);
-        if (record !== null) {
-          const bytes = record.bytes.slice();
-          const decoded = await validateMaskSurfaceBytes(bytes, surfaceId, this.options.maskValidator!, operation.signal);
-          operation.assertCurrent();
-          if (decoded === null || record.photoId !== photoId || record.id !== surfaceId ||
-            record.contentType !== "image/png" || record.width !== decoded.width || record.height !== decoded.height ||
-            !sameMaskSurfaceBytes(bytes, record.bytes)) throw new PersonalPhotoCloudError("invalid_response");
-          return bytes;
-        }
-      }
-      const bytes = await this.readMaskSurfaceBytes(photoId, surfaceId, operation.signal);
-      operation.assertCurrent();
-      return bytes;
-    });
-  }
-
-  private async saveMaskSurface(
-    photoId: string,
-    png: Uint8Array,
-    options?: PhotoLibraryRequestOptions,
-  ): Promise<{ id: string; width: number; height: number }> {
-    const uploader = this.options.maskUploader;
-    const validator = this.options.maskValidator;
-    const journal = this.options.maskJournal;
-    const locks = this.options.maskLocks;
-    if (uploader === undefined || validator === undefined || journal === undefined || locks === undefined) {
-      throw new PersonalPhotoCloudError("unsupported");
-    }
-    assertId(photoId);
-    if (!(png instanceof Uint8Array) || png.byteLength === 0 || png.byteLength > PHOTO_LIMITS.maxMaskBytes) {
-      throw new PersonalPhotoCloudError("invalid_response");
-    }
-    const bytes = png.slice();
-    const surfaceId = hashMaskSurface(bytes);
-    return await this.withPhotoOperation(photoId, options?.signal, async (operation) => {
-      const dimensions = await validateMaskSurfaceBytes(bytes, surfaceId, validator, operation.signal);
-      if (dimensions === null) throw new PersonalPhotoCloudError("invalid_response");
-      const idempotencyKey = await logicalKey(
-        "mask-surface",
-        this.scope.captured.actorId,
-        this.scope.captured.libraryId,
-        `${photoId}:${surfaceId}`,
-      );
-      operation.assertCurrent();
-      return await locks.request(`niho-photo-mask:${idempotencyKey}`, { mode: "exclusive", signal: operation.signal }, async () => {
-        operation.assertCurrent();
-        const journalScope = this.maskJournalScope();
-        let record = await journal.getMaskSurface(journalScope, photoId, surfaceId, operation.signal);
-        if (record === null) {
-          const localInput: PersonalPhotoCloudMaskSurfaceInput = {
-            id: surfaceId,
-            width: dimensions.width,
-            height: dimensions.height,
-            sha256: surfaceId,
-            bytes: bytes.slice(),
-            uploadState: null,
-          };
-          await journal.putMaskSurface(journalScope, photoId, localInput, operation.signal);
-          record = await journal.getMaskSurface(journalScope, photoId, surfaceId, operation.signal);
-        }
-        assertMaskJournalRecord(record, photoId, surfaceId, bytes, dimensions);
-        if (!record.pinned) await journal.setMaskSurfacePinned(journalScope, photoId, surfaceId, true, operation.signal);
-        let uploadState = await this.prepareMaskUploadState(journalScope, photoId, surfaceId, record, idempotencyKey, operation.signal);
-
-        // Persist the exact decoded PNG and stable operation key before the first cloud request.
-        const [photo, cloud] = await Promise.all([
-          this.requirePhoto(photoId, { signal: operation.signal }),
-          this.loadLibrary(operation.signal),
-        ]);
-        const renderer = rendererIntersection(cloud.capabilities.renderer, this.effectiveHostRenderer());
-        if (photo.id !== photoId || cloud.state !== "active" || !cloud.capabilities.edits ||
-          !cloud.capabilities.maskSurfaces || renderer?.maskSurfaces !== true) {
-          throw new PersonalPhotoCloudError("unsupported");
-        }
-        const stored = await this.readMaskSurfaceBytes(photoId, surfaceId, operation.signal);
-        operation.assertCurrent();
-        if (stored !== null) {
-          if (!sameMaskSurfaceBytes(stored, bytes)) throw new PersonalPhotoCloudError("invalid_response");
-          await this.clearMaskUploadState(journalScope, photoId, surfaceId, uploadState, operation.signal);
-          return { id: surfaceId, ...dimensions };
-        }
-
-        await uploader.upload({
-          photoId,
-          surfaceId,
-          bytes: bytes.slice(),
-          idempotencyKey: uploadState.startKey,
-          uploadState,
-          compareAndSetUploadState: async (expected, next, signal) => {
-            const changed = await journal.compareAndSetMaskUploadState(journalScope, photoId, surfaceId, expected, next, signal);
-            if (!changed) throw new PersonalPhotoCloudError("unavailable");
-            uploadState = next;
-            return true;
-          },
-          signal: operation.signal,
-        });
-        operation.assertCurrent();
-        const readback = await this.readMaskSurfaceBytes(photoId, surfaceId, operation.signal);
-        operation.assertCurrent();
-        if (readback === null || !sameMaskSurfaceBytes(readback, bytes)) throw new PersonalPhotoCloudError("invalid_response");
-        await this.clearMaskUploadState(journalScope, photoId, surfaceId, uploadState, operation.signal);
-        return { id: surfaceId, ...dimensions };
-      });
-    });
-  }
-
-  private maskJournalScope(): PersonalPhotoCloudMaskJournalScope {
-    const { actorId, libraryId, sessionId, sessionEpoch, transport } = this.scope.captured;
-    return { actorId, libraryId, sessionId, sessionEpoch, transport };
-  }
-
-  private async prepareMaskUploadState(
-    scope: PersonalPhotoCloudMaskJournalScope,
-    photoId: string,
-    surfaceId: string,
-    record: PersonalPhotoCloudPersistedMaskSurface,
-    firstStartKey: string,
-    signal: AbortSignal,
-  ): Promise<PersonalPhotoResumableUploadState> {
-    const journal = this.options.maskJournal;
-    if (journal === undefined) throw new PersonalPhotoCloudError("unsupported");
-    let state = record.uploadState;
-    if (state?.phase === "rejected") throw new PersonalPhotoCloudError("unsupported");
-    if (state?.phase === "expired" || state?.phase === "cancelled") {
-      const startKey = await logicalKey(
-        "mask-surface-retry",
-        scope.actorId,
-        scope.libraryId,
-        `${photoId}:${surfaceId}:${state.startKey}`,
-      );
-      const next = initialMaskUploadState(photoId, record.bytes.byteLength, surfaceId, startKey);
-      if (await journal.compareAndSetMaskUploadState(scope, photoId, surfaceId, state, next, signal)) return next;
-      const current = await journal.getMaskSurface(scope, photoId, surfaceId, signal);
-      if (current === null) throw new PersonalPhotoCloudError("unavailable");
-      state = current.uploadState;
-      if (state === null) throw new PersonalPhotoCloudError("unavailable");
-      if (state.phase === "rejected") throw new PersonalPhotoCloudError("unsupported");
-    }
-    if (state !== null) {
-      if (state.target.kind !== "mask" || state.target.photoId !== photoId || state.sizeBytes !== record.bytes.byteLength ||
-        state.sha256 !== surfaceId || state.contentType !== "image/png") throw new PersonalPhotoCloudError("invalid_response");
-      return state;
-    }
-    const initial = initialMaskUploadState(photoId, record.bytes.byteLength, surfaceId, firstStartKey);
-    if (await journal.compareAndSetMaskUploadState(scope, photoId, surfaceId, null, initial, signal)) return initial;
-    const current = await journal.getMaskSurface(scope, photoId, surfaceId, signal);
-    if (current === null || current.uploadState === null || current.uploadState.target.kind !== "mask" ||
-      current.uploadState.target.photoId !== photoId || current.uploadState.sizeBytes !== record.bytes.byteLength ||
-      current.uploadState.sha256 !== surfaceId || current.uploadState.contentType !== "image/png") {
-      throw new PersonalPhotoCloudError("unavailable");
-    }
-    return current.uploadState;
-  }
-
-  private async clearMaskUploadState(
-    scope: PersonalPhotoCloudMaskJournalScope,
-    photoId: string,
-    surfaceId: string,
-    state: PersonalPhotoResumableUploadState,
-    signal: AbortSignal,
-  ): Promise<void> {
-    const journal = this.options.maskJournal;
-    if (journal === undefined || !await journal.compareAndSetMaskUploadState(scope, photoId, surfaceId, state, null, signal)) {
-      throw new PersonalPhotoCloudError("unavailable");
-    }
-    await journal.setMaskSurfacePinned(scope, photoId, surfaceId, false, signal);
-    await journal.deleteMaskSurface(scope, photoId, surfaceId, signal);
-  }
-
-  private async readMaskSurfaceBytes(photoId: string, surfaceId: string, signal: AbortSignal): Promise<Uint8Array | null> {
-    const validator = this.options.maskValidator;
-    if (validator === undefined) throw new PersonalPhotoCloudError("unsupported");
-    let asset: PhotoAsset;
-    try {
-      asset = validateAsset(
-        await this.withScope(signal, (scoped) => this.options.client.request("masks.get", { photoId, surfaceId }, { signal: scoped })),
-        "mask",
-      );
-    } catch (error) {
-      if (error instanceof PersonalPhotoCloudError && error.code === "not_found") return null;
-      throw error;
-    }
-    if (asset.sha256 !== surfaceId || asset.contentType !== "image/png" || asset.sizeBytes > PHOTO_LIMITS.maxMaskBytes) {
-      throw new PersonalPhotoCloudError("invalid_response");
-    }
-    const content = await this.readAsset(photoId, asset, undefined, { signal });
-    const bytes = await contentBytes(content);
-    if (content.sha256 !== surfaceId ||
-      await validateMaskSurfaceBytes(bytes, surfaceId, validator, signal, asset) === null) {
-      throw new PersonalPhotoCloudError("invalid_response");
-    }
-    return bytes;
-  }
-
   private async openOriginal(photoId: string, options?: PhotoLibraryRequestOptions) {
     return await this.withPhotoOperation(photoId, options?.signal, async (operation) => {
       const [photo, cloud] = await Promise.all([
         this.requirePhoto(photoId, { signal: operation.signal }),
         this.loadLibrary(operation.signal),
       ]);
-      if (!projectRecipeSettings(photo, cloud, this.effectiveHostRenderer())) throw new PersonalPhotoCloudError("unsupported");
+      if (!projectRecipeSettings(photo, cloud, this.options.hostRenderer, this.bitmapMaskReader())) throw new PersonalPhotoCloudError("unsupported");
       operation.assertCurrent();
       const source = this.issueRef({
         kind: "original",
@@ -701,8 +479,8 @@ class Adapter {
         this.requirePhoto(photoId, { signal: operation.signal }),
         this.loadLibrary(operation.signal),
       ]);
-      const renderer = rendererIntersection(cloud.capabilities.renderer, this.effectiveHostRenderer());
-      if (!projectRecipeSettings(photo, cloud, this.effectiveHostRenderer())) {
+      const renderer = rendererIntersection(cloud.capabilities.renderer, this.options.hostRenderer);
+      if (!projectRecipeSettings(photo, cloud, this.options.hostRenderer, this.bitmapMaskReader())) {
         return { kind: "incompatible", message: PHOTO_EDITING_PERSONAL_CLOUD_COPY.readOnlySettings };
       }
       const format = cloud.capabilities.formats.find((candidate) => candidate.format === photo.format);
@@ -852,9 +630,8 @@ class Adapter {
   }
 
   private toPhoto(photo: Photo, cloud: PersonalPhotoLibrary): PhotoLibraryPhoto {
-    const hostRenderer = this.effectiveHostRenderer();
-    const settings = projectRecipeSettings(photo, cloud, hostRenderer);
-    const derivative = currentDerivative(photo, cloud, hostRenderer);
+    const settings = projectRecipeSettings(photo, cloud, this.options.hostRenderer, this.bitmapMaskReader());
+    const derivative = currentDerivative(photo, cloud, this.options.hostRenderer, this.bitmapMaskReader());
     return {
       id: photo.id,
       fileName: photo.fileName,
@@ -897,7 +674,7 @@ class Adapter {
     fence: PhotoFence,
     signal?: AbortSignal,
   ): Promise<PreviewProjection> {
-    const derivative = currentDerivative(photo, cloud, this.effectiveHostRenderer());
+    const derivative = currentDerivative(photo, cloud, this.options.hostRenderer, this.bitmapMaskReader());
     if (!derivative) return { editedPreview: null, leaseKey: null, claim: null };
     const asset = derivative.thumbnail;
     const key = previewKey(photo.id, asset);
@@ -1233,6 +1010,10 @@ class Adapter {
     this.releasePreviewResources();
   }
 
+  private bitmapMaskReader(): boolean {
+    return this.options.maskSurfaceValidator !== undefined && this.options.maskSurfaceReader !== undefined;
+  }
+
   private getPhotoState(photoId: string): PhotoState {
     const current = this.photoStates.get(photoId);
     if (current) {
@@ -1376,9 +1157,10 @@ function currentDerivative(
   photo: Photo,
   cloud: PersonalPhotoLibrary,
   host: RenderCapability,
+  bitmapReader = false,
 ): Extract<MediaState, { state: "ready" }> | null {
   if (
-    projectRecipeSettings(photo, cloud, host) === null ||
+    projectRecipeSettings(photo, cloud, host, bitmapReader) === null ||
     photo.media.state !== "ready" ||
     photo.media.recipeRevision !== photo.recipe.revision ||
     photo.media.rendererManifestSha256 !== cloud.capabilities.renderer.manifestSha256 ||
@@ -1457,41 +1239,6 @@ function mediaResult(media: MediaState): PhotoLibraryWorkingCopyResult {
     return { kind: "notReady", workStatus: "rendering", workQueuedAt: null, lastErrorCode: null };
   }
   return { kind: "incompatible", message: PHOTO_EDITING_PERSONAL_CLOUD_COPY.unsupported };
-}
-
-function initialMaskUploadState(
-  photoId: string,
-  sizeBytes: number,
-  surfaceId: string,
-  startKey: string,
-): PersonalPhotoResumableUploadState {
-  return {
-    target: { kind: "mask", photoId },
-    sizeBytes,
-    sha256: surfaceId,
-    contentType: "image/png",
-    startKey,
-    completeKey: `${startKey}-complete`,
-    cancelKey: `${startKey}-cancel`,
-    uploadId: null,
-    deadline: null,
-    offsetBytes: 0,
-    phase: "start-pending",
-  };
-}
-
-function assertMaskJournalRecord(
-  record: PersonalPhotoCloudPersistedMaskSurface | null,
-  photoId: string,
-  surfaceId: string,
-  bytes: Uint8Array,
-  dimensions: { readonly width: number; readonly height: number },
-): asserts record is PersonalPhotoCloudPersistedMaskSurface {
-  if (record === null || record.photoId !== photoId || record.id !== surfaceId || record.sha256 !== surfaceId ||
-    record.contentType !== "image/png" || record.width !== dimensions.width || record.height !== dimensions.height ||
-    !sameMaskSurfaceBytes(record.bytes, bytes) || hashMaskSurface(record.bytes) !== surfaceId) {
-    throw new PersonalPhotoCloudError("invalid_response");
-  }
 }
 
 async function logicalKey(namespace: string, ownerId: string, libraryId: string, photoId: string, revision?: number): Promise<string> {

@@ -46,6 +46,31 @@ describe("Camera bundled renderer proof", () => {
 });
 
 describe("Camera cloud mask validator", () => {
+  it("requires a real SDK encode/decode round trip before admitting bitmap editing", async () => {
+    const dispose = vi.fn();
+    const encodeMaskSurface = vi.fn(async () => ({ id: "a".repeat(64), png: new Uint8Array([1]) }));
+    const validateMaskSurface = vi.fn(async () => ({ id: "a".repeat(64), width: 1, height: 1 }));
+    const validator = createCameraPhotoMaskValidator({
+      engineAssets: { manifestUrl: () => "tauri://localhost/develop-engine/manifest.json" },
+      createEngine: () => ({ ready: async () => true, encodeMaskSurface, validateMaskSurface, dispose }),
+    });
+    await expect(validator.ready(new AbortController().signal)).resolves.toBe(true);
+    expect(encodeMaskSurface).toHaveBeenCalledWith(1, 1, new Uint8Array([0]));
+    expect(validateMaskSurface).toHaveBeenCalledWith(new Uint8Array([1]));
+    validator.dispose();
+    validator.dispose();
+    expect(dispose).toHaveBeenCalledOnce();
+  });
+
+  it("keeps bitmap editing closed for a legacy runtime with no encoding API", async () => {
+    const validator = createCameraPhotoMaskValidator({
+      engineAssets: { manifestUrl: () => "tauri://localhost/develop-engine/manifest.json" },
+      createEngine: () => ({ ready: async () => true, dispose() {} }),
+    });
+    await expect(validator.ready(new AbortController().signal)).resolves.toBe(false);
+    validator.dispose();
+  });
+
   it("lazily validates copied bytes through the bundled SDK and disposes its runtime", async () => {
     const validateMaskSurface = vi.fn(async (png: Uint8Array) => ({ id: "a".repeat(64), width: png[0]!, height: 1 }));
     const dispose = vi.fn();

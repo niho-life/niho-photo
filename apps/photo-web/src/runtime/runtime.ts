@@ -431,6 +431,11 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
         } catch {
           // The notification is deliberately fire-and-forget.
         }
+        try {
+          void Promise.resolve(connection?.refreshUsage?.()).catch(() => undefined);
+        } catch {
+          // A usage refresh must not make the shared editor notification fail.
+        }
       },
       async saveFile(file: Parameters<ScopedPhotoWebEditingHost["saveFile"]>[0]): Promise<"downloaded"> {
         const captured = await session.runCaptured(async () => file);

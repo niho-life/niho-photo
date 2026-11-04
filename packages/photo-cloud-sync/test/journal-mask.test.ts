@@ -46,6 +46,118 @@ function surface(bytes: Uint8Array, photoId = "photo", withUpload = true): MaskS
 }
 
 describe("IndexedDB v2 mask journal", () => {
+  it("explicitly discards old-scope saves by writer token without deleting another scope", async () => {
+    const journal = new IndexedDbRecipeSyncJournal(new IDBFactory(), "mask-old-scope-discard");
+    const oldScope = scope({ sessionId: "old-session", sessionEpoch: "old-epoch" });
+    const writer = binding(oldScope);
+    const input = surface(new Uint8Array([2, 4, 6]), "photo", false);
+    await journal.putMaskSurface(oldScope, "photo", input, undefined, { writerId: writer.token, pinToken: "old-save" });
+    await journal.putMaskSurface(scope(), "photo", input, undefined, null);
+    await journal.stage(writer, stage());
+    await journal.discard(writer);
+    await expect(journal.getMaskSurface(oldScope, "photo", input.sha256)).resolves.toBeNull();
+    await expect(journal.getMaskSurface(scope(), "photo", input.sha256)).resolves.not.toBeNull();
+    journal.dispose();
+  });
+
+  it("preserves another writer's staged PNG until both writers explicitly discard", async () => {
+    const journal = new IndexedDbRecipeSyncJournal(new IDBFactory(), "mask-shared-discard");
+    const current = scope();
+    const first = binding(current);
+    const second = { ...first, token: "other-token", writerId: "other-writer" };
+    const input = surface(new Uint8Array([3, 5, 7]), "photo", false);
+    const lease = { writerId: first.token, pinToken: "saved" };
+    await journal.putMaskSurface(current, "photo", input, undefined, lease);
+    await journal.stage(first, stage([input.sha256]), undefined, [lease]);
+    await journal.stage(second, stage([input.sha256]));
+    await journal.discard(first);
+    await expect(journal.getMaskSurface(current, "photo", input.sha256)).resolves.not.toBeNull();
+    await journal.discard(second);
+    await expect(journal.getMaskSurface(current, "photo", input.sha256)).resolves.toBeNull();
+    journal.dispose();
+  });
+
+  it("releases only the committed writer snapshot and preserves another writer plus a late save", async () => {
+    const journal = new IndexedDbRecipeSyncJournal(new IDBFactory(), "mask-writer-leases");
+    const current = scope();
+    const input = surface(new Uint8Array([6, 6, 6]), "photo", false);
+    const first = { writerId: "writer-a", pinToken: "save-a" };
+    const second = { writerId: "writer-b", pinToken: "save-b" };
+    const late = { writerId: "writer-a", pinToken: "save-late" };
+    await journal.putMaskSurface(current, "photo", input, undefined, first);
+    await journal.putMaskSurface(current, "photo", input, undefined, second);
+    await journal.setMaskSurfacePinned(current, "photo", input.sha256, false);
+    const writer = { ...binding(current), token: "writer-a", writerId: "journal-writer-a" };
+    await journal.stage(writer, stage([input.sha256]), undefined, [first]);
+    await expect(journal.compareAndSetMaskUploadState(
+      current,
+      "photo",
+      input.sha256,
+      null,
+      uploadState("photo", input.sha256, input.bytes.byteLength),
+    )).resolves.toBe(true);
+    await journal.putMaskSurface(current, "photo", input, undefined, late);
+    expect((await journal.getMaskSurface(current, "photo", input.sha256))?.pinLeases).toEqual([second, late]);
+    await journal.releaseMaskSurfaceLeases(current, "writer-b");
+    expect((await journal.getMaskSurface(current, "photo", input.sha256))?.pinLeases).toEqual([late]);
+    await expect(journal.deleteMaskSurface(current, "photo", input.sha256)).resolves.toBe(false);
+    journal.dispose();
+  });
+
+  it("uses bounded safe GC for unleased local PNGs when the combined scope budget is full", async () => {
+    const journal = new IndexedDbRecipeSyncJournal(new IDBFactory(), "mask-bounded-gc");
+    const current = scope();
+    const inputs: MaskSurfaceInput[] = [];
+    for (let index = 0; index < 5; index += 1) {
+      const bytes = new Uint8Array(7 * 1024 ** 2);
+      bytes[0] = index;
+      inputs.push(surface(bytes, "photo", false));
+    }
+    for (const input of inputs.slice(0, 4)) await journal.putMaskSurface(current, "photo", input, undefined, null);
+    await expect(journal.putMaskSurface(current, "photo", inputs[4]!, undefined, null)).resolves.toBeUndefined();
+    expect(await journal.getMaskSurface(current, "photo", inputs[4]!.sha256)).not.toBeNull();
+    expect((await Promise.all(inputs.slice(0, 4).map(async (input) => await journal.getMaskSurface(current, "photo", input.sha256))))
+      .filter((value) => value !== null).length).toBeLessThan(4);
+    journal.dispose();
+  });
+
+  it("reclaims unreferenced cached PNGs from an old scope when only the global budget is full", async () => {
+    const journal = new IndexedDbRecipeSyncJournal(new IDBFactory(), "mask-global-cache-gc");
+    const old: Array<{ scope: RecipeJournalScope; photoId: string; sha: string }> = [];
+    try {
+      for (let session = 0; session < 4; session += 1) {
+        const previous = scope({ sessionId: `old-${session}`, sessionEpoch: `epoch-${session}` });
+        for (let index = 0; index < 4; index += 1) {
+          const bytes = new Uint8Array(7 * 1024 ** 2);
+          bytes[0] = session * 4 + index;
+          const photoId = `old-photo-${session}-${index}`;
+          const input = surface(bytes, photoId, session === 0 && index === 0);
+          await journal.putMaskSurface(previous, photoId, input, undefined, null);
+          old.push({ scope: previous, photoId, sha: input.sha256 });
+        }
+      }
+      const current = scope();
+      for (let index = 0; index < 2; index += 1) {
+        const bytes = new Uint8Array(7 * 1024 ** 2);
+        bytes[0] = 32 + index;
+        // Current unsent saves must stay pinned while old, unreferenced cache entries can be reclaimed.
+        await journal.putMaskSurface(current, `current-${index}`, surface(bytes, `current-${index}`, false));
+      }
+      const incoming = new Uint8Array(7 * 1024 ** 2);
+      incoming[0] = 64;
+      const input = surface(incoming, "new-photo", false);
+      await expect(journal.putMaskSurface(current, "new-photo", input, undefined, null)).resolves.toBeUndefined();
+      await expect(journal.getMaskSurface(current, "new-photo", input.sha256)).resolves.not.toBeNull();
+      const unknown = old[0]!;
+      await expect(journal.getMaskSurface(unknown.scope, unknown.photoId, unknown.sha)).resolves.not.toBeNull();
+      let removed = 0;
+      for (const row of old.slice(1)) {
+        if (await journal.getMaskSurface(row.scope, row.photoId, row.sha) === null) removed += 1;
+      }
+      expect(removed).toBeGreaterThan(0);
+    } finally { journal.dispose(); }
+  });
+
   it("upgrades a v1 writer without changing full JSON, unknown attempt, or previous-scope metadata", async () => {
     const factory = new IDBFactory();
     const name = "journal-v1-upgrade";
@@ -112,7 +224,7 @@ describe("IndexedDB v2 mask journal", () => {
     journal.dispose();
   });
 
-  it("protects pinned and referenced surfaces, then deletes only an explicitly unpinned unreferenced record", async () => {
+  it("protects pinned and referenced surfaces, then reclaims the unpinned PNG on explicit discard", async () => {
     const journal = new IndexedDbRecipeSyncJournal(new IDBFactory(), "mask-pin-delete");
     const current = scope();
     const input = surface(new Uint8Array([8, 7, 6]), "photo", false);
@@ -122,6 +234,7 @@ describe("IndexedDB v2 mask journal", () => {
     await journal.stage(binding(current), stage([input.sha256]));
     await expect(journal.deleteMaskSurface(current, "photo", input.sha256)).resolves.toBe(false);
     await journal.discard(binding(current));
+    await expect(journal.deleteMaskSurface(current, "photo", input.sha256)).resolves.toBe(false);
     expect(await journal.getMaskSurface(current, "photo", input.sha256)).toBeNull();
     journal.dispose();
   });
@@ -180,21 +293,7 @@ describe("IndexedDB v2 mask journal", () => {
     await journal.stage(writer, { ...stage(), generation: 1 });
     expect(await journal.deleteMaskSurface(current, "photo", input.sha256)).toBe(false);
     await journal.discard(writer);
-    expect(await journal.getMaskSurface(current, "photo", input.sha256)).toBeNull();
-    journal.dispose();
-  });
-
-  it("reclaims a verified unpinned surface after the latest writer stops referencing it", async () => {
-    const journal = new IndexedDbRecipeSyncJournal(new IDBFactory(), "mask-reclaim-after-stage");
-    const current = scope();
-    const input = surface(new Uint8Array([3, 8, 4]), "photo", false);
-    const writer = binding(current);
-    await journal.putMaskSurface(current, "photo", input);
-    await journal.setMaskSurfacePinned(current, "photo", input.sha256, false);
-    await journal.stage(writer, stage([input.sha256]));
-    expect(await journal.getMaskSurface(current, "photo", input.sha256)).not.toBeNull();
-    await journal.stage(writer, { ...stage(), generation: 1 });
-    expect(await journal.getMaskSurface(current, "photo", input.sha256)).toBeNull();
+    expect(await journal.deleteMaskSurface(current, "photo", input.sha256)).toBe(true);
     journal.dispose();
   });
 });

@@ -311,7 +311,7 @@ class TransferController implements BrowserPersonalPhotoTransferController {
   private async finishPhoto(entry: TransferJournalEntry, photo: Photo, signal: AbortSignal): Promise<TransferJournalEntry> {
     if (photo.libraryId !== entry.libraryId || photo.original.sha256 !== entry.sha256 || photo.original.sizeBytes !== entry.sizeBytes) throw new PersonalPhotoCloudError("invalid_response");
     if (entry.candidate === null) {
-      const untouched = photo.recipe.revision === 0 && photo.recipe.baseVersion === null &&
+      const untouched = photo.recipe.revision === 0 &&
         photo.recipe.maskSurfaceIds.length === 0 && photo.hasEdits === false;
       return await this.update(entry, {
         phase: untouched ? "done" : "failed",

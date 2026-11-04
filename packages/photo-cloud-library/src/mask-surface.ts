@@ -25,6 +25,11 @@ export async function readVerifiedMaskSurface(
     throw new PersonalPhotoCloudError("invalid_response");
   }
   const content = await client.request("content.get", { photoId, assetId: asset.id }, { signal });
+  if (content.sha256 !== surfaceId || content.contentType !== asset.contentType ||
+    content.totalBytes !== asset.sizeBytes || content.range.start !== 0 || content.range.endInclusive !== asset.sizeBytes - 1) {
+    await content.body.cancel().catch(() => undefined);
+    throw new PersonalPhotoCloudError("invalid_response");
+  }
   const bytes = await contentBytes(content);
   if (content.sha256 !== surfaceId ||
     await validateMaskSurfaceBytes(bytes, surfaceId, validator, signal, asset) === null) {

@@ -1,6 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import { IDS } from "@niho/photo-personal-cloud-contract/fixtures";
-import { sha256 } from "@noble/hashes/sha2.js";
+import { hashMaskSurface } from "@niho/photo-cloud-library/protocol";
 import type { PersonalPhotoCloudClient, VerifiedPhotoActor } from "@niho/photo-personal-cloud-contract";
 import type { PersonalPhotoCloudIdentity } from "@niho/photo-cloud-library";
 import type { PersonalPhotoResumableUploadState } from "@niho/photo-cloud-library/browser";
@@ -13,7 +13,7 @@ const actor: VerifiedPhotoActor = {
   sessionId: "synthetic-session",
   sessionEpoch: "synthetic-epoch",
   transport: "mac-bearer",
-  expiresAt: "2026-11-05T00:00:00.000Z",
+  expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
 };
 
 function identity() {
@@ -41,7 +41,7 @@ function client(): PersonalPhotoCloudClient {
 }
 
 const bytes = new Uint8Array([1, 2, 3]);
-const surfaceId = Array.from(sha256(bytes), (byte) => byte.toString(16).padStart(2, "0")).join("");
+const surfaceId = hashMaskSurface(bytes);
 
 const input = (signal = new AbortController().signal) => ({
   photoId: IDS.photo,
@@ -89,6 +89,9 @@ describe("native cloud mask uploader", () => {
         photoId: IDS.photo,
         surfaceId,
         idempotencyKey: "mask-synthetic-key",
+        completeKey: "mask-synthetic-key-complete",
+        cancelKey: "mask-synthetic-key-cancel",
+        phase: "start-pending",
       }),
     });
     uploader.dispose();
@@ -100,11 +103,30 @@ describe("native cloud mask uploader", () => {
     const invokeBinary = vi.fn<NativePhotoBinaryInvoke>(() => new Promise((resolve) => { finish = resolve; }));
     const uploader = createNativePersonalPhotoCloudMaskUploader({ client: client(), identity: source.port, invokeBinary });
     const pending = uploader.upload(input());
+    await vi.waitFor(() => expect(invokeBinary).toHaveBeenCalledTimes(1));
     source.set({ ...actor, userId: IDS.userB, sessionId: "other-session", sessionEpoch: "other-epoch" });
 
     await expect(pending).rejects.toMatchObject({ code: "scope_changed" });
     expect(invokeBinary).toHaveBeenCalledTimes(1);
     finish("stored");
+    uploader.dispose();
+  });
+
+  it("does not cross IPC after a scope change during the durable barrier", async () => {
+    const source = identity();
+    let release!: () => void;
+    const invokeBinary = vi.fn<NativePhotoBinaryInvoke>(async () => "stored");
+    const uploader = createNativePersonalPhotoCloudMaskUploader({ client: client(), identity: source.port, invokeBinary });
+    const uploadInput = input();
+    uploadInput.compareAndSetUploadState = async () => {
+      await new Promise<void>((resolve) => { release = resolve; });
+      return true;
+    };
+    const pending = uploader.upload(uploadInput);
+    source.set(null);
+    release();
+    await expect(pending).rejects.toMatchObject({ code: "scope_changed" });
+    expect(invokeBinary).not.toHaveBeenCalled();
     uploader.dispose();
   });
 

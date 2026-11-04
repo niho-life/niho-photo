@@ -1201,6 +1201,38 @@ export const PHOTO_EDITING_PERSONAL_CLOUD_COPY = {
   quotaExceeded: "クラウドの空き容量が足りません。不要な写真を削除してから、もう一度お試しください。",
 } as const;
 
+/** 本人写真の追加・再開。WebとMacで同じ保存状況の言葉を使う。 */
+export const PHOTO_EDITING_PERSONAL_CLOUD_TRANSFER_COPY = {
+  toolbar: "写真を追加",
+  pendingTitle: "保存状況",
+  add: "写真を選ぶ",
+  resume: "再開",
+  chooseSameFile: "同じファイルを選ぶ",
+  cancel: "中止",
+  refresh: "更新",
+  next: "次へ",
+  first: "最初へ",
+  busy: "処理中…",
+  failed: "写真を保存できませんでした。保存状況を確認して、もう一度お試しください。",
+  unsupported: "この形式は現在保存できません。",
+  refreshFailed: "保存状況を読み込めませんでした。もう一度お試しください。",
+  phaseLabels: {
+    "start-pending": "受付を確認中",
+    uploading: "保存中",
+    "complete-pending": "保存を確定中",
+    verifying: "写真を確認中",
+    "pending-recipe": "補正を確認",
+    done: "保存済み",
+    "cancel-pending": "中止の結果を確認中",
+    cancelled: "中止済み",
+    expired: "受付期限切れ",
+    rejected: "保存できません",
+    purged: "削除済み",
+    failed: "保存結果を確認",
+    "needs-file": "同じファイルが必要です",
+  },
+} as const;
+
 /** 本人クラウドの未同期補正・競合・復旧。内部IDやrevisionは表示しない。 */
 export const PHOTO_EDITING_DURABLE_DRAFT_COPY = {
   previousEntry: "以前の補正を確認",

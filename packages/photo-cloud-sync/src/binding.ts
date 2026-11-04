@@ -5,18 +5,29 @@ import {
 } from "@niho/photo-cloud-library";
 import {
   PersonalPhotoCloudError,
+  abortReason,
   awaitBounded,
+  contentBytes,
   linkedAbortController,
   projectRecipeSettings,
+  readPhotoError,
+  rendererIntersection,
   validateLibrary,
 } from "@niho/photo-cloud-library/protocol";
+import {
+  runPersonalPhotoResumableUpload,
+  type PersonalPhotoResumableUploadState,
+} from "@niho/photo-cloud-library/browser";
+import { sha256 } from "@noble/hashes/sha2.js";
 import type {
   PersonalPhotoLibrary,
   Photo,
+  PhotoAsset,
   RecipeCandidate,
   RecipeDocument,
   VerifiedPhotoActor,
 } from "@niho/photo-personal-cloud-contract";
+import { PHOTO_LIMITS } from "@niho/photo-personal-cloud-contract";
 import { readDevelopMasks } from "niho-photo-editing/develop-engine/develop-masks";
 import { readDevelopSettings, type DevelopSettings } from "niho-photo-editing/develop-engine/develop-settings";
 import type {
@@ -38,12 +49,17 @@ import type { PhotoLibraryRequestOptions } from "niho-photo-editing/library/phot
 import { createPersonalPhotoRecipeSync } from "./sync";
 import type {
   CreatePersonalPhotoRecipeSyncOptions,
+  BrowserMaskSurfaceBindingOptions,
   LocalRecipeCandidate,
+  MaskSurfacePinLease,
   PersonalPhotoRecipeSync,
   PersonalPhotoRecipeWriter,
   PreviousRecipeWriterToken,
   RecipeConflictIntent,
+  RecipeJournalScope,
+  RecipeMaskSurfaceBarrier,
   RecipeStageRef,
+  RecipeWriterBinding,
   ResolveRecipeConflictResult,
   SaveRecipeResult,
 } from "./types";
@@ -51,7 +67,7 @@ import type {
 const DEFAULT_TIMEOUT_MS = 15_000;
 const LIST_LIMIT = 16;
 
-export type CreatePersonalPhotoCloudLibraryWithSyncOptions = Omit<CreatePersonalPhotoCloudLibraryOptions, "maskJournal" | "maskLocks"> & Pick<
+export type CreatePersonalPhotoCloudLibraryWithSyncOptions = CreatePersonalPhotoCloudLibraryOptions & BrowserMaskSurfaceBindingOptions & Pick<
   CreatePersonalPhotoRecipeSyncOptions,
   "journal" | "locks" | "randomId" | "timeoutMs"
 >;
@@ -79,20 +95,28 @@ type ChoiceBinding = {
 export function createPersonalPhotoCloudLibrary(
   options: CreatePersonalPhotoCloudLibraryWithSyncOptions,
 ): PersonalPhotoCloudLibraryHandle {
+  let masks: BrowserMaskSurfaceService | null = null;
+  const maskSurfaceReader = options.maskSurfaceValidator === undefined ? undefined : {
+    async loadMaskSurface(photoId: string, surfaceId: string): Promise<Uint8Array | null> {
+      if (masks === null) throw new PersonalPhotoCloudError("unavailable");
+      return await masks.load(photoId, surfaceId);
+    },
+  };
   const base = createCloudLibrary({
     ...options,
-    maskJournal: options.journal,
-    maskLocks: options.locks,
+    ...(maskSurfaceReader === undefined ? {} : { maskSurfaceReader }),
   });
+  masks = options.maskSurfaceValidator === undefined ? null : new BrowserMaskSurfaceService(options, base);
+  const maskService = masks;
   let sync: PersonalPhotoRecipeSync;
   try {
     sync = createPersonalPhotoRecipeSync({
       client: options.client,
       identity: options.identity,
       hostRenderer: options.hostRenderer,
-      ...(options.maskValidator === undefined ? {} : { maskValidator: options.maskValidator }),
       journal: options.journal,
       locks: options.locks,
+      ...(maskService === null ? {} : { maskSurfaceBarrier: maskService }),
       ...(options.clock === undefined ? {} : { now: options.clock.now }),
       ...(options.randomId === undefined ? {} : { randomId: options.randomId }),
       ...(options.timeoutMs === undefined ? {} : { timeoutMs: options.timeoutMs }),
@@ -101,11 +125,22 @@ export function createPersonalPhotoCloudLibrary(
     base.dispose();
     throw error;
   }
-  const durable = new DurableBinding(options, base, sync);
+  const durable = new DurableBinding(options, base, sync, maskService);
   let disposed = false;
   return {
     ...base,
-    library: { ...base.library, durableDevelopDrafts: durable.port },
+    library: {
+      ...base.library,
+      durableDevelopDrafts: durable.port,
+      ...(maskService === null ? {} : {
+        capabilities: async (requestOptions?: PhotoLibraryRequestOptions) => ({
+          ...await base.library.capabilities(requestOptions),
+          maskSurfaces: await maskService.capable(requestOptions?.signal),
+        }),
+        saveMaskSurface: (photoId: string, png: Uint8Array, requestOptions?: PhotoLibraryRequestOptions) => durable.saveMaskSurface(photoId, png, requestOptions?.signal),
+        loadMaskSurface: (photoId: string, surfaceId: string, requestOptions?: PhotoLibraryRequestOptions) => maskService.load(photoId, surfaceId, requestOptions?.signal),
+      }),
+    },
     dispose() {
       if (disposed) return;
       disposed = true;
@@ -127,6 +162,7 @@ class DurableBinding {
   private readonly conflicts = new WeakMap<PhotoLibraryDevelopConflictToken, ConflictBinding>();
   private readonly choices = new WeakMap<PhotoLibraryDevelopChoiceToken, ChoiceBinding>();
   private readonly listeners = new Set<() => void>();
+  private readonly activeWriters = new Map<string, Set<BoundWriter>>();
   private readonly unsubscribeIdentity: () => void;
   private disposed = false;
 
@@ -134,6 +170,7 @@ class DurableBinding {
     readonly options: CreatePersonalPhotoCloudLibraryWithSyncOptions,
     readonly handle: PersonalPhotoCloudLibraryHandle,
     readonly sync: PersonalPhotoRecipeSync,
+    readonly masks: BrowserMaskSurfaceService | null,
   ) {
     const actor = options.identity.getSnapshot();
     if (actor === null) invalidIdentity();
@@ -160,6 +197,27 @@ class DurableBinding {
     this.unsubscribeIdentity();
     this.changed();
     this.listeners.clear();
+    this.activeWriters.clear();
+  }
+
+  registerWriter(writer: BoundWriter): void {
+    if (writer.previous) return;
+    const writers = this.activeWriters.get(writer.photoId) ?? new Set<BoundWriter>();
+    writers.add(writer);
+    this.activeWriters.set(writer.photoId, writers);
+  }
+
+  unregisterWriter(writer: BoundWriter): void {
+    const writers = this.activeWriters.get(writer.photoId);
+    writers?.delete(writer);
+    if (writers?.size === 0) this.activeWriters.delete(writer.photoId);
+  }
+
+  async saveMaskSurface(photoId: string, png: Uint8Array, signal?: AbortSignal): Promise<{ id: string; width: number; height: number }> {
+    this.assertCurrent();
+    const writers = [...(this.activeWriters.get(photoId) ?? [])].filter((writer) => writer.open);
+    if (this.masks === null || writers.length !== 1) throw new PersonalPhotoCloudError("unavailable");
+    return await this.masks.save(photoId, png, writers[0]!.core.token, signal);
   }
 
   isCurrent(): boolean {
@@ -245,7 +303,7 @@ class DurableBinding {
   private open(input: { photoId: string; sourceSha256: string; expectedRevision: number }): PhotoLibraryDevelopDraftWriter {
     this.assertCurrent();
     const core = this.sync.beginEditing(input);
-    return new BoundWriter(this, core, input.photoId, input.sourceSha256, this.publicToken(core.token));
+    return new BoundWriter(this, core, input.photoId, input.sourceSha256, this.publicToken(core.token), false);
   }
 
   private async list(
@@ -279,7 +337,7 @@ class DurableBinding {
     this.assertCurrent();
     const snapshot = await reopened.writer.readDraft(options?.signal);
     this.assertCurrent();
-    return new BoundWriter(this, reopened.writer, snapshot.photoId, snapshot.sourceSha256, token);
+    return new BoundWriter(this, reopened.writer, snapshot.photoId, snapshot.sourceSha256, token, false);
   }
 
   private async listPrevious(
@@ -320,7 +378,7 @@ class DurableBinding {
     this.assertNetworkCurrent();
     const snapshot = await reopened.writer.readDraft(options?.signal);
     this.assertNetworkCurrent();
-    return new BoundWriter(this, reopened.writer, snapshot.photoId, snapshot.sourceSha256, token);
+    return new BoundWriter(this, reopened.writer, snapshot.photoId, snapshot.sourceSha256, token, true);
   }
 
   async comparison(
@@ -355,9 +413,7 @@ class DurableBinding {
       owner,
       conflict: conflictBinding,
       expectedRevision: photo.recipe.revision,
-      canAdopt: projectRecipeSettings(projected, cloud, this.options.maskValidator === undefined
-        ? { ...this.options.hostRenderer, maskSurfaces: false }
-        : this.options.hostRenderer) !== null,
+      canAdopt: projectRecipeSettings(projected, cloud, this.options.hostRenderer, this.masks !== null) !== null,
       intent: null,
     };
     this.choices.set(choice, choiceBinding);
@@ -392,6 +448,343 @@ class DurableBinding {
   }
 }
 
+class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
+  private readonly pending = new Map<string, Map<string, MaskSurfacePinLease[]>>();
+
+  constructor(
+    private readonly options: CreatePersonalPhotoCloudLibraryWithSyncOptions,
+    private readonly handle: PersonalPhotoCloudLibraryHandle,
+  ) {}
+
+  async capable(signal?: AbortSignal): Promise<boolean> {
+    try {
+      const scope = this.scope();
+      if (scope.transport === "mac-bearer" && this.options.maskSurfaceTransport === undefined && this.options.maskUploader === undefined) return false;
+      const raw = await this.options.client.request("library.get", {}, { signal: signal ?? new AbortController().signal });
+      this.assertScope(scope);
+      const library = validateLibrary(raw, scope.actorId, scope.libraryId);
+      const renderer = rendererIntersection(library.capabilities.renderer, this.options.hostRenderer);
+      return library.state === "active" && library.capabilities.edits && library.capabilities.maskSurfaces &&
+        renderer !== null && renderer.maskSurfaces && renderer.features.includes("masks");
+    } catch { return false; }
+  }
+
+  async save(
+    photoId: string,
+    input: Uint8Array,
+    writerId: string,
+    signal = new AbortController().signal,
+  ): Promise<{ id: string; width: number; height: number }> {
+    if (signal.aborted) throw abortReason(signal);
+    const scope = this.scope();
+    const bytes = checkedBytes(input);
+    const validated = await this.validate(bytes, signal);
+    this.assertScope(scope);
+    const lease = { writerId, pinToken: this.newId() } satisfies MaskSurfacePinLease;
+    await this.options.journal.putMaskSurface(scope, photoId, {
+      ...validated,
+      sha256: validated.id,
+      bytes,
+      uploadState: null,
+    }, signal, lease);
+    this.assertScope(scope);
+    const bySurface = this.pending.get(writerId) ?? new Map<string, MaskSurfacePinLease[]>();
+    bySurface.set(validated.id, [...(bySurface.get(validated.id) ?? []), lease]);
+    this.pending.set(writerId, bySurface);
+    return validated;
+  }
+
+  async load(photoId: string, surfaceId: string, signal = new AbortController().signal): Promise<Uint8Array | null> {
+    if (signal.aborted) throw abortReason(signal);
+    const scope = this.scope();
+    validateSha(surfaceId);
+    const local = await this.options.journal.getMaskSurface(scope, photoId, surfaceId, signal);
+    this.assertScope(scope);
+    if (local !== null) {
+      const bytes = checkedBytes(local.bytes);
+      const validated = await this.validate(bytes, signal);
+      this.assertScope(scope);
+      if (validated.id !== surfaceId || validated.width !== local.width || validated.height !== local.height) invalid();
+      return bytes;
+    }
+    let asset: PhotoAsset;
+    try {
+      asset = await awaitBounded(this.options.client.request("masks.get", { photoId, surfaceId }, { signal }), { signal, timeoutMs: 15_000 });
+    } catch (error) {
+      if (readPhotoError(error)?.code === "not_found") return null;
+      throw error;
+    }
+    this.assertScope(scope);
+    validateMaskAsset(asset, surfaceId);
+    const content = await this.handle.readAsset(photoId, asset, undefined, { signal });
+    const bytes = checkedBytes(await contentBytes(content));
+    this.assertScope(scope);
+    const validated = await this.validate(bytes, signal);
+    this.assertScope(scope);
+    if (validated.id !== surfaceId || validated.width !== asset.width || validated.height !== asset.height) invalid();
+    await this.options.journal.putMaskSurface(scope, photoId, {
+      ...validated,
+      sha256: validated.id,
+      bytes,
+      uploadState: null,
+    }, signal, null);
+    this.assertScope(scope);
+    return bytes;
+  }
+
+  snapshot(writerId: string): readonly MaskSurfacePinLease[] {
+    const pending = this.pending.get(writerId);
+    if (pending === undefined) return [];
+    return Object.freeze([...pending.values()].flat().map((lease) => Object.freeze({ ...lease })));
+  }
+
+  settled(writerId: string, leases: readonly MaskSurfacePinLease[]): void {
+    const pending = this.pending.get(writerId);
+    if (pending === undefined) return;
+    const settled = new Set(leases.map((lease) => lease.pinToken));
+    for (const [surfaceId, current] of pending) {
+      const remaining = current.filter((lease) => !settled.has(lease.pinToken));
+      if (remaining.length === 0) pending.delete(surfaceId);
+      else pending.set(surfaceId, remaining);
+    }
+    if (pending.size === 0) this.pending.delete(writerId);
+  }
+
+  async releaseWriter(writerId: string, signal?: AbortSignal): Promise<void> {
+    const scope = this.scope();
+    await this.options.journal.releaseMaskSurfaceLeases(scope, writerId, undefined, signal);
+    this.assertScope(scope);
+    this.pending.delete(writerId);
+  }
+
+  async ensureStored(
+    binding: RecipeWriterBinding,
+    candidate: LocalRecipeCandidate,
+    recovered: boolean,
+    signal: AbortSignal,
+    assertCurrent: () => void,
+  ): Promise<void> {
+    const currentScope = this.scope();
+    if (binding.actorId !== currentScope.actorId || binding.libraryId !== currentScope.libraryId) invalid();
+    const dimensions = surfaceDimensions(candidate);
+    const missing: Array<{ surfaceId: string; expected: { width: number; height: number } }> = [];
+    for (const surfaceId of candidate.maskSurfaceIds) {
+      assertCurrent();
+      const expected = dimensions.get(surfaceId);
+      if (expected === undefined) invalid();
+      const existing = await this.freshAsset(binding.photoId, surfaceId, signal);
+      assertCurrent();
+      if (existing !== null) {
+        assertMaskDimensions(existing, expected);
+        const checkpointScope = recovered ? scopeOfBinding(binding) : currentScope;
+        const local = await this.options.journal.getMaskSurface(checkpointScope, binding.photoId, surfaceId, signal);
+        assertCurrent();
+        if (local !== null) {
+          if (local.bytes.byteLength !== existing.sizeBytes || local.width !== existing.width || local.height !== existing.height) invalid();
+          const bytes = checkedBytes(local.bytes);
+          const validated = await this.validate(bytes, signal);
+          assertCurrent();
+          if (validated.id !== surfaceId || validated.width !== expected.width || validated.height !== expected.height) invalid();
+          if (recovered) {
+            await this.options.journal.putMaskSurface(currentScope, binding.photoId, {
+              id: surfaceId, width: expected.width, height: expected.height, sha256: surfaceId, bytes, uploadState: null,
+            }, signal, null);
+            assertCurrent();
+          }
+          // An explicit recovery grant may reconcile its old binary checkpoint
+          // from immutable storage proof. Old keys are never replayed in the new session.
+          if (local.uploadState !== null) {
+            if (!await this.options.journal.compareAndSetMaskUploadState(
+              checkpointScope, binding.photoId, surfaceId, local.uploadState, null, signal,
+            )) throw new PersonalPhotoCloudError("unavailable");
+            assertCurrent();
+          }
+        } else {
+          const bytes = await this.load(binding.photoId, surfaceId, signal);
+          assertCurrent();
+          const stored = await this.options.journal.getMaskSurface(currentScope, binding.photoId, surfaceId, signal);
+          assertCurrent();
+          if (bytes === null || stored === null || bytes.byteLength !== existing.sizeBytes ||
+            stored.width !== expected.width || stored.height !== expected.height) invalid();
+        }
+      } else missing.push({ surfaceId, expected });
+    }
+
+    for (const { surfaceId, expected } of missing) {
+      const sourceScope = recovered ? scopeOfBinding(binding) : currentScope;
+      const source = await this.options.journal.getMaskSurface(sourceScope, binding.photoId, surfaceId, signal);
+      assertCurrent();
+      if (source === null || source.id !== surfaceId || source.sha256 !== surfaceId ||
+        source.width !== expected.width || source.height !== expected.height) throw new PersonalPhotoCloudError("unsupported");
+      const bytes = checkedBytes(source.bytes);
+      const validated = await this.validate(bytes, signal);
+      assertCurrent();
+      if (validated.id !== surfaceId || validated.width !== expected.width || validated.height !== expected.height) invalid();
+
+      if (recovered) {
+        await this.options.journal.putMaskSurface(currentScope, binding.photoId, {
+          id: surfaceId,
+          width: expected.width,
+          height: expected.height,
+          sha256: surfaceId,
+          bytes,
+          uploadState: null,
+        }, signal, null);
+        assertCurrent();
+      }
+      await this.upload(currentScope, binding.photoId, surfaceId, expected, bytes, signal, assertCurrent);
+    }
+  }
+
+  private async upload(
+    scope: RecipeJournalScope,
+    photoId: string,
+    surfaceId: string,
+    expected: { readonly width: number; readonly height: number },
+    bytes: Uint8Array,
+    signal: AbortSignal,
+    assertCurrent: () => void,
+  ): Promise<void> {
+    let local = await this.options.journal.getMaskSurface(scope, photoId, surfaceId, signal);
+    assertCurrent();
+    if (local === null) throw new PersonalPhotoCloudError("unsupported");
+    if (local.uploadState === null) {
+      const initial: PersonalPhotoResumableUploadState = {
+        target: { kind: "mask", photoId },
+        sizeBytes: bytes.byteLength,
+        sha256: surfaceId,
+        contentType: "image/png",
+        startKey: this.newId(),
+        completeKey: this.newId(),
+        cancelKey: this.newId(),
+        uploadId: null,
+        deadline: null,
+        offsetBytes: 0,
+        phase: "start-pending",
+      };
+      if (!await this.options.journal.compareAndSetMaskUploadState(scope, photoId, surfaceId, null, initial, signal)) {
+        local = await this.options.journal.getMaskSurface(scope, photoId, surfaceId, signal);
+        assertCurrent();
+        if (local === null || local.uploadState === null) throw new PersonalPhotoCloudError("unavailable");
+      } else local = { ...local, uploadState: initial };
+    }
+    let durable = local.uploadState;
+    if (durable === null) throw new PersonalPhotoCloudError("unavailable");
+    if (durable.phase === "expired" || durable.phase === "cancelled") {
+      const renewed: PersonalPhotoResumableUploadState = {
+        ...durable,
+        startKey: this.newId(), completeKey: this.newId(), cancelKey: this.newId(),
+        uploadId: null, deadline: null, offsetBytes: 0, phase: "start-pending",
+      };
+      if (!await this.options.journal.compareAndSetMaskUploadState(scope, photoId, surfaceId, durable, renewed, signal)) {
+        throw new PersonalPhotoCloudError("unavailable");
+      }
+      assertCurrent();
+      durable = renewed;
+    }
+    for (let pass = 0; pass < 4; pass += 1) {
+      const store = {
+        compareAndSet: async (before: PersonalPhotoResumableUploadState, next: PersonalPhotoResumableUploadState) => {
+          if (JSON.stringify(before) !== JSON.stringify(durable)) throw new PersonalPhotoCloudError("unavailable");
+          if (!await this.options.journal.compareAndSetMaskUploadState(scope, photoId, surfaceId, before, next, signal)) {
+            throw new PersonalPhotoCloudError("unavailable");
+          }
+          durable = next;
+        },
+      };
+      if (this.options.maskUploader !== undefined) {
+        await this.options.maskUploader.upload({
+          photoId, surfaceId, bytes: bytes.slice(), idempotencyKey: durable.startKey, uploadState: durable,
+          compareAndSetUploadState: async (before, next, storeSignal) => {
+            if (storeSignal.aborted) throw storeSignal.reason;
+            await store.compareAndSet(before, next);
+            assertCurrent();
+            return true;
+          },
+          signal,
+        });
+      } else {
+        const result = await runPersonalPhotoResumableUpload({
+          ...(this.options.maskSurfaceTransport === undefined
+            ? { client: this.options.client }
+            : { transport: this.options.maskSurfaceTransport }),
+          state: durable,
+          source: new Blob([bytes.slice().buffer], { type: "image/png" }),
+          store,
+          signal,
+          ...(this.options.clock === undefined ? {} : { now: this.options.clock.now }),
+          assertCurrent,
+        });
+        assertCurrent();
+        durable = result.state;
+        if (result.error !== null) throw result.error;
+        if (result.stored?.kind === "mask") assertMaskDimensions(result.stored.asset, expected);
+      }
+      assertCurrent();
+      const confirmed = await this.freshAsset(photoId, surfaceId, signal);
+      assertCurrent();
+      if (confirmed !== null) {
+        assertMaskDimensions(confirmed, expected);
+        if (confirmed.sizeBytes !== bytes.byteLength) invalid();
+        if (!await this.options.journal.compareAndSetMaskUploadState(scope, photoId, surfaceId, durable, null, signal)) {
+          throw new PersonalPhotoCloudError("unavailable");
+        }
+        return;
+      }
+      if (!["uploading", "complete-pending", "verifying"].includes(durable.phase)) break;
+    }
+    throw new PersonalPhotoCloudError("unavailable");
+  }
+
+  private async freshAsset(photoId: string, surfaceId: string, signal: AbortSignal): Promise<PhotoAsset | null> {
+    try {
+      const asset = await this.options.client.request("masks.get", { photoId, surfaceId }, { signal });
+      validateMaskAsset(asset, surfaceId);
+      return asset;
+    } catch (error) {
+      if (readPhotoError(error)?.code === "not_found") return null;
+      throw error;
+    }
+  }
+
+  private async validate(bytes: Uint8Array, signal: AbortSignal): Promise<{ id: string; width: number; height: number }> {
+    const validator = this.options.maskSurfaceValidator;
+    if (validator === undefined) invalid();
+    if (signal.aborted) throw abortReason(signal);
+    const result = await awaitBounded(validator.validateMaskSurface(bytes.slice()), { signal, timeoutMs: 15_000 });
+    if (signal.aborted) throw abortReason(signal);
+    if (!isMaskInfo(result) || result.id !== digestBytes(bytes)) invalid();
+    return Object.freeze({ ...result });
+  }
+
+  private scope(): RecipeJournalScope {
+    const actor = this.options.identity.getSnapshot();
+    const now = this.options.clock?.now() ?? Date.now();
+    if (actor === null || Date.parse(actor.expiresAt) <= now ||
+      actor.userId !== this.options.client.scope.actorId || actor.sessionEpoch !== this.options.client.scope.sessionEpoch) {
+      throw new PersonalPhotoCloudError("scope_changed");
+    }
+    return {
+      actorId: actor.userId,
+      libraryId: this.options.client.scope.libraryId,
+      sessionId: actor.sessionId,
+      sessionEpoch: actor.sessionEpoch,
+      transport: actor.transport,
+    };
+  }
+
+  private assertScope(scope: RecipeJournalScope): void {
+    const current = this.scope();
+    if (JSON.stringify(current) !== JSON.stringify(scope)) throw new PersonalPhotoCloudError("scope_changed");
+  }
+
+  private newId(): string {
+    const value = (this.options.randomId ?? (() => crypto.randomUUID()))();
+    if (typeof value !== "string" || value.length === 0 || value.length > PHOTO_LIMITS.maxIdempotencyKeyBytes) invalid();
+    return value;
+  }
+}
+
 class BoundWriter implements PhotoLibraryDevelopDraftWriter {
   private disposed = false;
 
@@ -401,12 +794,19 @@ class BoundWriter implements PhotoLibraryDevelopDraftWriter {
     readonly photoId: string,
     readonly sourceSha256: string,
     readonly token: PhotoLibraryDevelopDraftToken,
-  ) {}
+    readonly previous: boolean,
+  ) { binding.registerWriter(this); }
+
+  get open(): boolean { return !this.disposed; }
 
   stage(settings: DevelopSettings): PhotoLibraryDevelopDraftStage {
     this.assertOpen();
     const candidate = coreCandidate(settings);
-    const core = this.core.stage(candidate);
+    const leases = this.binding.masks?.snapshot(this.core.token) ?? [];
+    const core = this.core.stage(candidate, leases);
+    void core.committed.then((result) => {
+      if (result.status === "committed") this.binding.masks?.settled(this.core.token, leases);
+    });
     const stage = this.binding.publicStage(this, core, candidate);
     void stage.committed.finally(() => this.binding.changed());
     this.binding.changed();
@@ -490,6 +890,7 @@ class BoundWriter implements PhotoLibraryDevelopDraftWriter {
   async discard(options?: PhotoLibraryRequestOptions): Promise<void> {
     this.assertOpen();
     await this.core.discard(options?.signal);
+    await this.binding.masks?.releaseWriter(this.core.token, options?.signal);
     this.binding.assertCurrent();
     this.binding.changed();
   }
@@ -497,6 +898,7 @@ class BoundWriter implements PhotoLibraryDevelopDraftWriter {
   dispose(): void {
     if (this.disposed) return;
     this.disposed = true;
+    this.binding.unregisterWriter(this);
     this.core.dispose();
   }
 
@@ -552,6 +954,61 @@ function mapResolution(result: ResolveRecipeConflictResult): PhotoLibraryDevelop
 function sameActor(left: VerifiedPhotoActor, right: VerifiedPhotoActor): boolean {
   return left.userId === right.userId && left.sessionId === right.sessionId &&
     left.sessionEpoch === right.sessionEpoch && left.transport === right.transport;
+}
+
+function scopeOfBinding(binding: RecipeWriterBinding): RecipeJournalScope {
+  return {
+    actorId: binding.actorId,
+    libraryId: binding.libraryId,
+    sessionId: binding.sessionId,
+    sessionEpoch: binding.sessionEpoch,
+    transport: binding.transport,
+  };
+}
+
+function surfaceDimensions(candidate: LocalRecipeCandidate): Map<string, { width: number; height: number }> {
+  const dimensions = new Map<string, { width: number; height: number }>();
+  for (const mask of readDevelopMasks(candidate.settings)) {
+    if (!("surface" in mask)) continue;
+    if (dimensions.has(mask.surface.id)) invalid();
+    dimensions.set(mask.surface.id, { width: mask.surface.width, height: mask.surface.height });
+  }
+  if (dimensions.size !== candidate.maskSurfaceIds.length || candidate.maskSurfaceIds.some((id) => !dimensions.has(id))) invalid();
+  return dimensions;
+}
+
+function checkedBytes(value: Uint8Array): Uint8Array<ArrayBuffer> {
+  if (!(value instanceof Uint8Array) || value.byteLength < 1 || value.byteLength > PHOTO_LIMITS.maxMaskBytes) invalid();
+  return new Uint8Array(value).slice();
+}
+
+function validateMaskAsset(asset: PhotoAsset, surfaceId: string): void {
+  if (
+    asset.kind !== "mask" || asset.sha256 !== surfaceId || asset.contentType !== "image/png" ||
+    !Number.isSafeInteger(asset.sizeBytes) || asset.sizeBytes < 1 || asset.sizeBytes > PHOTO_LIMITS.maxMaskBytes ||
+    !Number.isSafeInteger(asset.width) || asset.width < 1 || asset.width > PHOTO_LIMITS.maxMaskEdge ||
+    !Number.isSafeInteger(asset.height) || asset.height < 1 || asset.height > PHOTO_LIMITS.maxMaskEdge
+  ) invalid();
+}
+
+function assertMaskDimensions(asset: PhotoAsset, expected: { width: number; height: number }): void {
+  if (asset.width !== expected.width || asset.height !== expected.height) invalid();
+}
+
+function isMaskInfo(value: unknown): value is { id: string; width: number; height: number } {
+  if (typeof value !== "object" || value === null || Array.isArray(value)) return false;
+  const record = value as Record<string, unknown>;
+  return Object.keys(record).sort().join(",") === "height,id,width" &&
+    typeof record.id === "string" && /^[0-9a-f]{64}$/u.test(record.id) &&
+    typeof record.width === "number" && Number.isSafeInteger(record.width) && record.width >= 1 &&
+    record.width <= PHOTO_LIMITS.maxMaskEdge &&
+    typeof record.height === "number" && Number.isSafeInteger(record.height) && record.height >= 1 &&
+    record.height <= PHOTO_LIMITS.maxMaskEdge;
+}
+
+function validateSha(value: string): void { if (!/^[0-9a-f]{64}$/u.test(value)) invalid(); }
+function digestBytes(value: Uint8Array): string {
+  return Array.from(sha256(value), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
 function clone<T>(value: T): T {

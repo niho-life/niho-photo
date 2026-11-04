@@ -234,6 +234,19 @@ describe("browser original copy controller", () => {
     harness.controller.dispose();
   });
 
+  it("accepts an untouched system-base revision zero without a local recipe", async () => {
+    const harness = makeController();
+    harness.client.dispatch = async (_operation, request) => ({ value: { kind: "existing", photo: {
+      ...photoFor(request as StartUploadRequest), hasEdits: false,
+      recipe: { ...responses["photos.get"].recipe, revision: 0, baseVersion: "raster.system", maskSurfaceIds: [],
+        settings: { ...responses["photos.get"].recipe.settings, base: "raster.system" } },
+    } }, replayed: false });
+    try {
+      expect(await harness.controller.start({ intentId: "system-base", file: file(), format: "jpeg", fullRecipeCandidate: null }))
+        .toMatchObject({ phase: "done", hasPendingRecipe: false });
+    } finally { harness.controller.dispose(); }
+  });
+
   it("does not report an existing edited cloud photo as a complete copy without a local recipe", async () => {
     const harness = makeController();
     harness.client.dispatch = async (_operation, request) => ({ value: { kind: "existing", photo: {

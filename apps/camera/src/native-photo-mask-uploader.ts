@@ -39,7 +39,9 @@ export function createNativePersonalPhotoCloudMaskUploader(options: {
         input.bytes.byteLength > PHOTO_LIMITS.maxMaskBytes || !/^[\x21-\x7e]{1,128}$/u.test(input.idempotencyKey) ||
         hashMaskSurface(input.bytes) !== input.surfaceId || input.uploadState === null || input.uploadState.target?.kind !== "mask" || input.uploadState.target.photoId !== input.photoId ||
         input.uploadState.sizeBytes !== input.bytes.byteLength || input.uploadState.sha256 !== input.surfaceId ||
-        input.uploadState.contentType !== "image/png" || input.uploadState.startKey !== input.idempotencyKey) {
+        input.uploadState.contentType !== "image/png" || input.uploadState.startKey !== input.idempotencyKey ||
+        ![input.uploadState.completeKey, input.uploadState.cancelKey].every((key) => typeof key === "string" && /^[\x21-\x7e]{1,128}$/u.test(key)) ||
+        !["start-pending", "uploading", "complete-pending", "verifying", "cancel-pending"].includes(input.uploadState.phase)) {
         throw new PersonalPhotoCloudError("invalid_response");
       }
       const link = linkedAbortController(lifecycle.signal, input.signal);
@@ -49,6 +51,8 @@ export function createNativePersonalPhotoCloudMaskUploader(options: {
         if (!await input.compareAndSetUploadState(initialState, initialState, link.controller.signal)) {
           throw new PersonalPhotoCloudError("unavailable");
         }
+        assertCurrent(options.identity, options.client, captured);
+        if (link.controller.signal.aborted) throw link.controller.signal.reason;
         const outcome = await awaitBounded(options.invokeBinary(
           "camera_photo_mask_upload",
           input.bytes,
@@ -64,6 +68,9 @@ export function createNativePersonalPhotoCloudMaskUploader(options: {
               photoId: input.photoId,
               surfaceId: input.surfaceId,
               idempotencyKey: input.idempotencyKey,
+              completeKey: initialState.completeKey,
+              cancelKey: initialState.cancelKey,
+              phase: initialState.phase,
             }),
           },
         ), { signal: link.controller.signal, timeoutMs: UPLOAD_TIMEOUT_MS });
@@ -93,7 +100,7 @@ export function createNativePersonalPhotoCloudMaskUploader(options: {
 
 function currentActor(identity: PersonalPhotoCloudIdentity): VerifiedPhotoActor {
   const actor = identity.getSnapshot();
-  if (actor === null || actor.transport !== "mac-bearer") throw new PersonalPhotoCloudError("invalid_identity");
+  if (actor === null || actor.transport !== "mac-bearer" || !unexpired(actor)) throw new PersonalPhotoCloudError("invalid_identity");
   return actor;
 }
 
@@ -105,8 +112,14 @@ function assertClientScope(client: PersonalPhotoCloudClient, actor: VerifiedPhot
 
 function assertCurrent(identity: PersonalPhotoCloudIdentity, client: PersonalPhotoCloudClient, captured: VerifiedPhotoActor): void {
   const current = identity.getSnapshot();
-  if (current === null || !samePhotoIdentityScope(captured, current) || current.transport !== "mac-bearer" ||
+  if (current === null || !samePhotoIdentityScope(captured, current) || current.transport !== "mac-bearer" || !unexpired(current) ||
     client.scope.actorId !== captured.userId || client.scope.sessionEpoch !== captured.sessionEpoch) {
     throw new PersonalPhotoCloudError("scope_changed");
   }
 }
+
+function unexpired(actor: VerifiedPhotoActor): boolean {
+  const expiresAt = Date.parse(actor.expiresAt);
+  return Number.isFinite(expiresAt) && expiresAt > Date.now();
+}
+

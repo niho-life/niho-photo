@@ -72,6 +72,30 @@ describe("same-origin HTTP client and BFF", () => {
     client.dispose();
   });
 
+  it("renews a mask through browser and BFF only with a PNG-bound provider ticket", async () => {
+    const upload = {
+      id: IDS.upload, target: { kind: "mask" as const, photoId: IDS.photo }, sizeBytes: 3,
+      sha256: HASH.mask, expiresAt: "2030-01-01T00:00:00.000Z", state: "reserved" as const, uploadedBytes: 0,
+    };
+    let contentType = "image/png";
+    const harness = setup((request) => request.url.endsWith("/library") ? json(responses["library.get"]) : json({
+      upload, ticket: {
+        url: "https://storage.googleapis.com/synthetic", method: "PUT", headers: { "Content-Type": contentType },
+        expiresAt: "2030-01-01T00:00:00.000Z", resumeOffsetBytes: 0,
+      },
+    }));
+    const client = await clientFor(harness);
+    try {
+      await expect(client.request("uploads.renew", { uploadId: IDS.upload }, {
+        signal: new AbortController().signal,
+      })).resolves.toMatchObject({ upload, ticket: { headers: { "Content-Type": "image/png" } } });
+      contentType = "image/jpeg";
+      await expect(client.request("uploads.renew", { uploadId: IDS.upload }, {
+        signal: new AbortController().signal,
+      })).rejects.toBeTruthy();
+    } finally { client.dispose(); }
+  });
+
   it("routes recipe PUT, direct conflict GET, and conflict resolve through the closed BFF wire", async () => {
     const candidateSettings = { ...responses["photos.get"].recipe.settings, future: { retained: true } };
     const putResponse = {

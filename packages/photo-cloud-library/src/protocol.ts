@@ -1,6 +1,6 @@
 export { awaitBounded, linkedAbortController, abortReason } from "./await";
+export { contentBytes } from "./content";
 export { PersonalPhotoCloudError, publicError, readPhotoError } from "./errors";
-export { hashMaskSurface, readVerifiedMaskSurface, sameMaskSurfaceBytes, validateMaskSurfaceBytes } from "./mask-surface";
 export { PersonalPhotoScope, type ScopedRequest } from "./scope";
 export {
   deepEqual,
@@ -30,3 +30,4 @@ export {
   TRANSPORT_TIMEOUT_MS,
   type WireOperation,
 } from "./wire";
+export { hashMaskSurface, readVerifiedMaskSurface, validateMaskSurfaceBytes } from "./mask-surface";

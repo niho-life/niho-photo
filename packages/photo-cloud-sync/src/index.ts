@@ -2,8 +2,10 @@ export { createPersonalPhotoRecipeSync } from "./sync";
 export { createPersonalPhotoCloudLibrary } from "./binding";
 export type {
   CreatePersonalPhotoRecipeSyncOptions,
+  BrowserMaskSurfaceBindingOptions,
   LocalRecipeCandidate,
   MaskSurfaceInput,
+  MaskSurfacePinLease,
   MaskSurfaceUploadState,
   PendingWriterPage,
   PendingWriterToken,
@@ -15,6 +17,7 @@ export type {
   PersonalPhotoRecipeWriter,
   PersistedMaskSurface,
   RecipeJournalScope,
+  RecipeMaskSurfaceBarrier,
   RecipeConflictIntent,
   RecipeStageRef,
   RecipeSyncJournal,

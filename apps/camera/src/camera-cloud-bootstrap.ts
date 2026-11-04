@@ -46,6 +46,7 @@ export type CameraCloudBootstrapOptions = Readonly<{
   readIdentity?: IdentityReader;
   watchIdentity?: IdentityWatch;
   probeRenderer?: typeof probeCameraPhotoRenderer;
+  createMaskValidator?: typeof createCameraPhotoMaskValidator;
   indexedDB?: IDBFactory;
   locks?: LockManager | null;
   invoke?: (command: string, args: { input: unknown }) => Promise<unknown>;
@@ -210,7 +211,11 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
     client = await createNativePersonalPhotoCloudClient({ identity: options.identity, invoke, now: options.now });
     if (options.signal.aborted) return null;
     maskUploader = createNativePersonalPhotoCloudMaskUploader({ client, identity: options.identity, invokeBinary });
-    if (renderer.capability.maskSurfaces) maskValidator = createCameraPhotoMaskValidator({ engineAssets: renderer.engineAssets });
+    if (renderer.capability.maskSurfaces) {
+      maskValidator = (options.createMaskValidator ?? createCameraPhotoMaskValidator)({ engineAssets: renderer.engineAssets });
+      if (!await maskValidator.ready(options.signal)) { maskValidator.dispose(); maskValidator = null; }
+      if (options.signal.aborted) return null;
+    }
     libraryHandle = createPersonalPhotoCloudLibrary({
       client,
       identity: options.identity,
@@ -219,7 +224,9 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
       presets: cameraPresets(options.commands),
       memoryBudgets: { originalBytes: 96 * 1024 ** 2, workingCopyBytes: 96 * 1024 ** 2, previewBytes: 32 * 1024 ** 2 },
       maskUploader,
-      ...(maskValidator === null ? {} : { maskValidator }),
+      ...(maskValidator === null ? {} : { maskSurfaceValidator: {
+        validateMaskSurface: (png: Uint8Array) => maskValidator!.validateMaskSurface(png, scopeAbort.signal),
+      } }),
       journal: new IndexedDbRecipeSyncJournal(factory, "niho-camera-personal-photo-recipes-v1"),
       locks,
       ...(options.now === undefined ? {} : { clock: { now: options.now } }),

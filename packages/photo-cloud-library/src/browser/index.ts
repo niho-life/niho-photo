@@ -1,10 +1,5 @@
 export { createBrowserPersonalPhotoCloudClient, type CreateBrowserPersonalPhotoCloudClientOptions } from "./client";
 export {
-  createBrowserPersonalPhotoCloudMaskUploader,
-  type BrowserPersonalPhotoCloudMaskUploader,
-  type CreateBrowserPersonalPhotoCloudMaskUploaderOptions,
-} from "./mask-uploader";
-export {
   createBrowserPersonalPhotoTransferController,
   type BrowserPersonalPhotoTransferController,
   type CreateBrowserPersonalPhotoTransferControllerOptions,
@@ -23,4 +18,7 @@ export {
   type PersonalPhotoResumableUploadResult,
   type PersonalPhotoResumableUploadState,
   type PersonalPhotoResumableUploadStorePort,
+  type PersonalPhotoResumableUploadTransport,
+  type PersonalPhotoUploadLease,
+  type PersonalPhotoUploadStartResult,
 } from "./resumable-upload";
