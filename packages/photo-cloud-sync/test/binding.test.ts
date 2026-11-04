@@ -11,7 +11,7 @@ import type {
 import type { DevelopSettings } from "niho-photo-editing/develop-engine/develop-settings";
 import type { PhotoLibraryPresets } from "niho-photo-editing/library/photo-library";
 import { describe, expect, it } from "vitest";
-import type { PersonalPhotoResumableUploadTransport } from "@niho/photo-cloud-library/browser";
+import type { PersonalPhotoResumableUploadState, PersonalPhotoResumableUploadTransport } from "@niho/photo-cloud-library/browser";
 
 import { createPersonalPhotoCloudLibrary } from "../src/binding";
 import { IndexedDbRecipeSyncJournal } from "../src/browser";
@@ -73,6 +73,69 @@ function setup(
 }
 
 describe("photo library durable binding", () => {
+  it.each(["start-pending", "expired", "cancelled"] as const)("reconciles a persisted %s mask checkpoint before saving the recipe", async (phase) => {
+    const databaseName = `binding-mask-reconcile-${crypto.randomUUID()}`;
+    const png = new Uint8Array([5, 8, 13]);
+    const surfaceId = Array.from(sha256(png), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const asset = { ...responses["masks.get"], id: surfaceId, sha256: surfaceId, sizeBytes: png.byteLength, width: 2, height: 2 };
+    let stored = phase === "start-pending";
+    const starts: PersonalPhotoResumableUploadState[] = [];
+    const unused = async (): Promise<never> => { throw new Error("unexpected upload operation"); };
+    const transport: PersonalPhotoResumableUploadTransport = {
+      async start(state) {
+        starts.push(structuredClone(state));
+        stored = true;
+        return { kind: "upload", upload: {
+          id: "new-upload", target: state.target, sizeBytes: state.sizeBytes, sha256: state.sha256,
+          expiresAt: "2030-01-01T00:00:00.000Z", state: "stored", result: { kind: "mask", photoId: IDS.photo, asset },
+        }, lease: null };
+      },
+      read: unused, renew: unused, uploadChunk: unused, complete: unused, cancel: unused,
+    };
+    const fixture = setup(async (operation, request) => {
+      if (operation === "masks.get") {
+        if (!stored) throw { error: { code: "not_found", requestId: "mask", retryable: false } };
+        return asset as PhotoOperationMap[typeof operation]["response"];
+      }
+      if (operation === "recipes.put") {
+        const put = request as PhotoOperationMap["recipes.put"]["request"];
+        return { ...responses["recipes.put"], value: { ...responses["recipes.put"].value, recipe: {
+          ...maskedPhoto.recipe, revision: put.expectedRevision + 1, settings: put.settings,
+          baseVersion: put.baseVersion, maskSurfaceIds: [surfaceId],
+        } } } as PhotoOperationMap[typeof operation]["response"];
+      }
+      return defaultResponse(operation);
+    }, databaseName, new Identity(), "epoch-1", {
+      transport, validator: { async validateMaskSurface() { return { id: surfaceId, width: 2, height: 2 }; } },
+    });
+    const journal = new IndexedDbRecipeSyncJournal(indexedDB, databaseName);
+    const actor = defaultActor();
+    const scope = { actorId: actor.userId, libraryId: IDS.library, sessionId: actor.sessionId, sessionEpoch: actor.sessionEpoch, transport: actor.transport };
+    try {
+      const writer = fixture.port.open({ photoId: IDS.photo, sourceSha256: HASH.original, expectedRevision: 0 });
+      await fixture.handle.library.saveMaskSurface!(IDS.photo, png);
+      const staged = writer.stage({
+        ...structuredClone(maskedPhoto.recipe.settings),
+        masks: [{ id: "synthetic-sky", kind: "sky", surface: { id: surfaceId, width: 2, height: 2 }, adjust: { exposure: -0.5 } }],
+      } as DevelopSettings);
+      await staged.committed;
+      const previous: PersonalPhotoResumableUploadState = {
+        target: { kind: "mask", photoId: IDS.photo }, sizeBytes: png.byteLength, sha256: surfaceId, contentType: "image/png",
+        startKey: "old-start", completeKey: "old-complete", cancelKey: "old-cancel", uploadId: null,
+        deadline: null, offsetBytes: 0, phase,
+      };
+      expect(await journal.compareAndSetMaskUploadState(scope, IDS.photo, surfaceId, null, previous)).toBe(true);
+      await expect(writer.save(staged)).resolves.toMatchObject({ kind: "saved" });
+      expect((await journal.getMaskSurface(scope, IDS.photo, surfaceId))?.uploadState).toBeNull();
+      if (phase === "start-pending") expect(starts).toEqual([]);
+      else {
+        expect(starts).toHaveLength(1);
+        expect(starts[0]).toMatchObject({ phase: "start-pending", uploadId: null, offsetBytes: 0 });
+        for (const key of ["startKey", "completeKey", "cancelKey"] as const) expect(starts[0]![key]).not.toBe(previous[key]);
+      }
+    } finally { fixture.handle.dispose(); journal.dispose(); }
+  });
+
   it("persists validated mask bytes across reconstruction and waits for fresh STORED proof before recipe PUT", async () => {
     const databaseName = `binding-mask-${crypto.randomUUID()}`;
     const png = new Uint8Array([137, 80, 78, 71, 1, 2, 3]);

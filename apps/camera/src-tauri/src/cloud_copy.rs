@@ -1686,8 +1686,16 @@ fn known_recipe_changes_only(candidate: &Value, initial: &Value, path: &[String]
   if candidate == initial {
     return true;
   }
+  if let (Value::Array(candidate), Value::Array(initial)) = (candidate, initial) {
+    if candidate.len() == initial.len() {
+      return candidate
+        .iter()
+        .zip(initial)
+        .all(|(candidate, initial)| known_recipe_changes_only(candidate, initial, path));
+    }
+  }
   let (Value::Object(candidate), Value::Object(initial)) = (candidate, initial) else {
-    return journal_safe_recipe_field(candidate, &path_refs);
+    return journal_safe_recipe_field(candidate, &path_refs) && journal_safe_recipe_field(initial, &path_refs);
   };
   let keys = candidate
     .keys()
@@ -1713,7 +1721,10 @@ fn known_recipe_changes_only(candidate: &Value, initial: &Value, path: &[String]
         let next_refs = next.iter().map(String::as_str).collect::<Vec<_>>();
         journal_safe_recipe_field(candidate, &next_refs)
       }
-      (None, Some(_)) => true,
+      (None, Some(initial)) => {
+        let next_refs = next.iter().map(String::as_str).collect::<Vec<_>>();
+        journal_safe_recipe_field(initial, &next_refs)
+      }
       (None, None) => true,
     }
   })
@@ -2678,6 +2689,25 @@ mod tests {
       recipe_write_body(&local_base_mismatch, &fresh),
       Err(AccountError::Rejected)
     );
+  }
+
+  #[test]
+  fn candidate_preserves_unknowns_when_known_subtrees_are_removed_or_replaced() {
+    let initial = json!({"geometry":{"rotate":0,"futureAxis":7},"toneCurves":[{"points":[],"futureCurve":true}]});
+    let mut candidate = initial.clone();
+    candidate["geometry"]["rotate"] = json!(1);
+    assert!(known_recipe_changes_only(&candidate, &initial, &[]));
+    for replacement in [Value::Null, json!(1), json!({"rotate":1})] {
+      let mut candidate = initial.clone();
+      candidate["geometry"] = replacement;
+      assert!(!known_recipe_changes_only(&candidate, &initial, &[]));
+    }
+    let mut candidate = initial.clone();
+    candidate.as_object_mut().unwrap().remove("geometry");
+    assert!(!known_recipe_changes_only(&candidate, &initial, &[]));
+    let mut candidate = initial.clone();
+    candidate["toneCurves"] = json!([]);
+    assert!(!known_recipe_changes_only(&candidate, &initial, &[]));
   }
 
   #[test]

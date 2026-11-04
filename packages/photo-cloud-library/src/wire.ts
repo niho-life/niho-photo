@@ -348,6 +348,8 @@ export function validateResponseTickets(
   if (operation === "uploads.start" && context?.kind === "start") expectedContentType = context.contentType;
   else if (operation === "uploads.renew" && upload.target.kind === "original" && isFormat(upload.target.format)) {
     expectedContentType = canonicalContentType(upload.target.format);
+  } else if (operation === "uploads.renew" && upload.target.kind === "mask") {
+    expectedContentType = "image/png";
   }
   if (expectedContentType === null) invalidResponse();
   validateTicket(ticket, { trustedOrigin, expectedContentType, expectedSize: upload.sizeBytes, now });

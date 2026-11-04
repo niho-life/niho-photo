@@ -572,6 +572,15 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
       assertCurrent();
       if (existing !== null) {
         assertMaskDimensions(existing, expected);
+        const local = await this.options.journal.getMaskSurface(currentScope, binding.photoId, surfaceId, signal);
+        assertCurrent();
+        if (local !== null && local.uploadState !== null) {
+          if (local.bytes.byteLength !== existing.sizeBytes || local.width !== existing.width || local.height !== existing.height) invalid();
+          if (!await this.options.journal.compareAndSetMaskUploadState(
+            currentScope, binding.photoId, surfaceId, local.uploadState, null, signal,
+          )) throw new PersonalPhotoCloudError("unavailable");
+          assertCurrent();
+        }
       } else missing.push({ surfaceId, expected });
     }
 
@@ -635,6 +644,18 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
     }
     let durable = local.uploadState;
     if (durable === null) throw new PersonalPhotoCloudError("unavailable");
+    if (durable.phase === "expired" || durable.phase === "cancelled") {
+      const renewed: PersonalPhotoResumableUploadState = {
+        ...durable,
+        startKey: this.newId(), completeKey: this.newId(), cancelKey: this.newId(),
+        uploadId: null, deadline: null, offsetBytes: 0, phase: "start-pending",
+      };
+      if (!await this.options.journal.compareAndSetMaskUploadState(scope, photoId, surfaceId, durable, renewed, signal)) {
+        throw new PersonalPhotoCloudError("unavailable");
+      }
+      assertCurrent();
+      durable = renewed;
+    }
     for (let pass = 0; pass < 4; pass += 1) {
       const store = {
         compareAndSet: async (before: PersonalPhotoResumableUploadState, next: PersonalPhotoResumableUploadState) => {
