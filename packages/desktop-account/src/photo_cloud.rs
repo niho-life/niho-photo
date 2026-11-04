@@ -2494,9 +2494,8 @@ mod tests {
     ] {
       let mut fresh = photo.clone();
       fresh[changed.0] = changed.1;
-      match current_metadata(&fresh, "photo", "preview") {
-        Ok(metadata) => assert_ne!(metadata, expected),
-        Err(_) => {}
+      if let Ok(metadata) = current_metadata(&fresh, "photo", "preview") {
+        assert_ne!(metadata, expected);
       }
     }
   }

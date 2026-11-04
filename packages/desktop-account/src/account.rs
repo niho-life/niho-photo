@@ -1,9 +1,8 @@
 use crate::connect::{equal, secret_43, Pending};
 use crate::photo_cloud::{
-  content_request, current_metadata, mask_metadata, native_copy_request, native_request, original_metadata,
-  original_metadata_for_photo, parse_renew_upload, parse_start_upload, parse_upload, parse_upload_receipt,
-  provider_ack, read_json_response, read_native_upload_response, stream_verified_content, CapturedPhotoAuthority,
-  HttpPhotoCloud, PhotoHttpTransport,
+  content_request, current_metadata, mask_metadata, native_copy_request, native_request, original_metadata_for_photo,
+  parse_renew_upload, parse_start_upload, parse_upload, parse_upload_receipt, provider_ack, read_json_response,
+  read_native_upload_response, stream_verified_content, CapturedPhotoAuthority, HttpPhotoCloud, PhotoHttpTransport,
 };
 use crate::photo_session::{parse_response, parse_strict_iso, HttpPhotoSession, PhotoSessionTransport};
 use crate::{

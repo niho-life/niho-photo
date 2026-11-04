@@ -325,7 +325,9 @@ describe("Worker の面の受け渡し", () => {
     expect(old.posted.at(-1)?.message).toMatchObject({ type: "error", id: 2, message: "develop engine cannot validate mask surfaces" });
 
     const malformed = surfaceGlue();
-    malformed.module.validateMaskSurface.mockReturnValue({ id: ID, width: 4097, height: 1 });
+    const malformedValidator = malformed.module.validateMaskSurface;
+    if (!malformedValidator) throw new Error("fixture mask validator is missing");
+    malformedValidator.mockReturnValue({ id: ID, width: 4097, height: 1 });
     const broken = setup(malformed.module);
     await broken.handler({ type: "init", id: 1, manifestUrl: MANIFEST_URL });
     await broken.handler({ type: "validateMaskSurface", id: 2, png: caller.slice().buffer });
