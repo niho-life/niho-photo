@@ -221,16 +221,16 @@ export function verifyNativeBinary(binary, target, { env = process.env, forbidde
   return { path: BINARY_PATH, sha256: sha256(readFileSync(binary)), bytes: statSync(binary).size };
 }
 
-function smokeRenderer(binary, scratch, env) {
+export function smokeNativeRenderer(binary, scratch, env, expectedVersion) {
   const capabilities = JSON.parse(run(binary, ["capabilities"], { env }));
-  if (!capabilities.initialRasterSettings || capabilities.tool !== "niho-develop-render") fail("renderer capabilitiesが不正です");
+  if (capabilities.tool !== "niho-develop-render" || capabilities.version !== expectedVersion || !capabilities.settingsVersions?.includes(9) || !capabilities.engines?.includes("niho-1")) fail("renderer capabilitiesがsourceのversion/recipe契約と一致しません");
   const smoke = path.join(scratch, "smoke");
   mkdirSync(smoke, { recursive: true, mode: 0o700 });
   const input = path.join(smoke, "synthetic.png");
   const settings = path.join(smoke, "settings.json");
   const output = path.join(smoke, "output.png");
   writeFileSync(input, syntheticPng());
-  writeFileSync(settings, jsonBytes(capabilities.initialRasterSettings));
+  writeFileSync(settings, jsonBytes({ v: 9, engine: "niho-1", look: "niho-interim-1", base: null }));
   const summary = JSON.parse(run(binary, ["render", "--settings", settings, "--raster", input, "--out", output], { env }));
   if (summary.source !== "raster" || summary.width !== 2 || summary.height !== 2 || !ordinaryFile(output, "synthetic smoke output")) fail("renderer synthetic CLI smokeが不正です");
 }
@@ -517,7 +517,7 @@ export function buildNativeRenderer({ repoRoot, outputDirectory, expectedCommit,
       env,
       forbiddenPrefixes: [repoRoot, engineRoot, scratch, inputEnv.HOME, inputEnv.CARGO_HOME, inputEnv.RUSTUP_HOME, inputEnv.RUNNER_TEMP, inputEnv.GITHUB_WORKSPACE],
     });
-    smokeRenderer(binaryPath, scratch, env);
+    smokeNativeRenderer(binaryPath, scratch, env, source.engineVersion);
     return packageNativeRenderer({ repoRoot, binaryPath, outputDirectory, source, target });
   } finally {
     rmSync(scratch, { recursive: true, force: true });

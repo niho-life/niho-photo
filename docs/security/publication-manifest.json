@@ -12111,13 +12111,13 @@
     },
     {
       "path": "scripts/sdk/native-renderer.mjs",
-      "sha256": "cba1d29ae6dc1b0b8c41e2e6004c624218429e249b4bfa14eebd7ac69e39fa34",
-      "origin": "公開 Issue #236 のため新規作成。公開Rust rendererの隔離build、binary検査、決定的tar生成、DATA-only release manifest検証を行うhelper。標準ライブラリと公開sourceだけを使い、実写真・非公開情報を含まない。\n変更理由: native cfg flagsの暗黙上書きを拒否しRUSTFLAGSをCargo互換で保持\n変更理由: publisherのbuild digest検証とrenderer metadata検証を正しい層へ分離"
+      "sha256": "148dbd00526b43c8a3d6f63898f0cc0e890424a722daac9865858e92e32ec7d3",
+      "origin": "公開 Issue #236 のため新規作成。公開Rust rendererの隔離build、binary検査、決定的tar生成、DATA-only release manifest検証を行うhelper。標準ライブラリと公開sourceだけを使い、実写真・非公開情報を含まない。\n変更理由: native cfg flagsの暗黙上書きを拒否しRUSTFLAGSをCargo互換で保持\n変更理由: publisherのbuild digest検証とrenderer metadata検証を正しい層へ分離\n変更理由: 採用済み公開sourceのCLI capability契約でneutral recipeの合成smokeを実施"
     },
     {
       "path": "scripts/sdk/native-renderer.test.mjs",
-      "sha256": "e924ac739fe81102728c36823f97930ae01749fd1c801a9d5cdb3fec312a59c7",
-      "origin": "公開 Issue #236 のため新規作成。source、toolchain、tar、binary identity、manifest、artifactの取り違えと改竄を合成データで拒否するnegative test。実写真・非公開情報を含まない。\n変更理由: native cfg flags拒否とRUSTFLAGS保持の回帰検証を追加\n変更理由: publish CLI実引数による成功とarchive/binary digest改竄拒否を回帰検証"
+      "sha256": "c6790a3b5790ee2b4c928828a92be00557b16e0af27a44d4a9dd33c11605633c",
+      "origin": "公開 Issue #236 のため新規作成。source、toolchain、tar、binary identity、manifest、artifactの取り違えと改竄を合成データで拒否するnegative test。実写真・非公開情報を含まない。\n変更理由: native cfg flags拒否とRUSTFLAGS保持の回帰検証を追加\n変更理由: publish CLI実引数による成功とarchive/binary digest改竄拒否を回帰検証\n変更理由: 初期settingsを返さない既存CLI契約とsource version不一致の回帰検証"
     },
     {
       "path": "scripts/sdk/native_renderer_artifact.py",

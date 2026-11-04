@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { execFileSync } from "node:child_process";
-import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { after, test } from "node:test";
@@ -18,6 +18,7 @@ import {
   readStrictTarball,
   sha256,
   syntheticPng,
+  smokeNativeRenderer,
   verifyBuildArtifact,
   verifyNativeBinary,
   verifyRendererTarball,
@@ -263,4 +264,26 @@ test("publish CLIは完全なbuild digest期待値で成功しdigest改竄は拒
     changed[changed.indexOf(field) + 1] = "0".repeat(64);
     assert.throws(() => execFileSync(process.execPath, changed, { stdio: "pipe" }), /一致しません/u);
   }
+});
+
+
+test("native smokeは既存CLIのcapabilities契約とneutral recipeで合成PNGを描く", () => {
+  const root = temp("native-legacy-cli-smoke-");
+  const binary = path.join(root, "mock-renderer");
+  writeFileSync(binary, `#!/usr/bin/env node
+const fs = require("node:fs");
+const args = process.argv.slice(2);
+if (args[0] === "capabilities") {
+  console.log(JSON.stringify({tool:"niho-develop-render",version:process.env.MOCK_VERSION || "0.27.0",settingsVersions:[1,2,3,4,5,6,7,8,9],engines:["niho-1","niho-14"]}));
+} else if (args[0] === "render") {
+  const value = (key) => args[args.indexOf(key)+1];
+  const settings = JSON.parse(fs.readFileSync(value("--settings"),"utf8"));
+  if (JSON.stringify(settings) !== JSON.stringify({v:9,engine:"niho-1",look:"niho-interim-1",base:null})) process.exit(2);
+  fs.copyFileSync(value("--raster"),value("--out"));
+  console.log(JSON.stringify({source:"raster",width:2,height:2}));
+} else process.exit(2);
+`);
+  chmodSync(binary, 0o755);
+  smokeNativeRenderer(binary, root, { PATH: process.env.PATH }, "0.27.0");
+  assert.throws(() => smokeNativeRenderer(binary, root, { PATH: process.env.PATH, MOCK_VERSION: "0.28.0" }, "0.27.0"), /capabilities/u);
 });
