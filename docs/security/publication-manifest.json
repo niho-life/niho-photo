@@ -4877,7 +4877,7 @@
         "path": "packages/desktop-photo/src/develop.rs",
         "sha256": "7f13c1e41e82bf4bc91bef5e4a8b61f092ab0b986a6a95c5559c2246bb74d864"
       },
-      "outputSha256": "2ba8d12084cb4ccce82fce49ca1c8a5766b09a77bb803942705998d82763b04c",
+      "outputSha256": "d6ddfea4632c16db09d408e05384625dac933597af7b379ff8565b7898c172fb",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #5の共有入力能力レジストリ、段階別検証、公開回帰契約に合わせて更新。",
@@ -4899,7 +4899,8 @@
         "SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正",
         "元画像の実寸法とSDKのbrowser pixel budgetからcanonical working copyを選択",
         "既存のRust最低対応版1.77.2を保ってSDK pixel budgetを照合",
-        "実SDK初期状態の証明と未知設定の保持を補強"
+        "実SDK初期状態の証明と未知設定の保持を補強",
+        "実CIで検出したatomic非推奨とworking-copy artifact metadataの読取を根本修正し実ICCを確認"
       ]
     },
     {
@@ -4910,7 +4911,7 @@
         "path": "packages/desktop-photo/src/develop_local_raster_tests.rs",
         "sha256": "b45869e304ecb1bfa8cc4c3aea903fd7771f60c1b140f6f3c7be2f9f2b929bc2"
       },
-      "outputSha256": "2425046feaf6fe9a67aada59270b9e55392b5916570d3885b3b120e68b1572dd",
+      "outputSha256": "abd8f458956081788c73c65f1f5ac5654e97ffd0cdc7b829a724c9f0b82f8208",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #5の共有入力能力レジストリ、段階別検証、公開回帰契約に合わせて更新。",
@@ -4929,7 +4930,8 @@
         "SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正",
         "元画像の実寸法とSDKのbrowser pixel budgetからcanonical working copyを選択",
         "実SDK初期状態の証明と未知設定の保持を補強",
-        "統合reviewと実CIの指摘を修正し旧scope cache回収・明示復旧・接続寿命の回帰を追加"
+        "統合reviewと実CIの指摘を修正し旧scope cache回収・明示復旧・接続寿命の回帰を追加",
+        "実CIで検出したatomic非推奨とworking-copy artifact metadataの読取を根本修正し実ICCを確認"
       ]
     },
     {
@@ -13323,8 +13325,8 @@
     },
     {
       "path": "apps/camera/src-tauri/src/cloud_copy.rs",
-      "sha256": "a88a072ca7fab784f5e23dc423f2dc3367fb433fe7c22e443cc402ebb0632ef0",
-      "origin": "NIHO Photo公開クライアントで新規作成。明示コピーのnative journal・安全なIPC・合成データによる回帰検証。内部ソース・秘密・実写真を含まない。\n変更理由: 合成fixtureを公開可能なパスに統一しnativeコピーのscope検証を追加\n変更理由: 取消の未確定start再照合と既存原本の保護を回帰で固定\n変更理由: 未編集ラスタのコピーを同梱SDKの完全初期補正と実canonical baseへ接続\n変更理由: SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正\n変更理由: journal書込み用fileの可変性を維持し読取側だけ不要なmutを除去\n変更理由: 実SDK初期状態の証明と未知設定の保持を補強\n変更理由: 未知設定のsubtree保護とmask転送再開・保存結果の照合を補強\n変更理由: PR232のMac接続を単一のdurable mask barrierへ統合し固定keys・scope・実SDK能力を検証"
+      "sha256": "9cd8a6f7acfc53fdc29b737a769ed91e80dd15d9cbf1441af8ba9226b7bd89d2",
+      "origin": "NIHO Photo公開クライアントで新規作成。明示コピーのnative journal・安全なIPC・合成データによる回帰検証。内部ソース・秘密・実写真を含まない。\n変更理由: 合成fixtureを公開可能なパスに統一しnativeコピーのscope検証を追加\n変更理由: 取消の未確定start再照合と既存原本の保護を回帰で固定\n変更理由: 未編集ラスタのコピーを同梱SDKの完全初期補正と実canonical baseへ接続\n変更理由: SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正\n変更理由: journal書込み用fileの可変性を維持し読取側だけ不要なmutを除去\n変更理由: 実SDK初期状態の証明と未知設定の保持を補強\n変更理由: 未知設定のsubtree保護とmask転送再開・保存結果の照合を補強\n変更理由: PR232のMac接続を単一のdurable mask barrierへ統合し固定keys・scope・実SDK能力を検証\n変更理由: 実CIで検出したatomic非推奨とworking-copy artifact metadataの読取を根本修正し実ICCを確認"
     },
     {
       "path": "apps/camera/src/native-photo-copy.ts",

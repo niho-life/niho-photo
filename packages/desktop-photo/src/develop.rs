@@ -2870,9 +2870,20 @@ impl PhotoDevelop {
         let meta = source
           .get("meta")
           .ok_or_else(|| unavailable("working copy metadata is missing"))?;
-        let raster = parse_raster_meta(meta).map_err(|_| unavailable("working copy metadata is invalid"))?;
-        let base = build_raster_base_version(raster.icc_sha256.as_deref())
-          .map_err(|_| unavailable("working copy base is invalid"))?;
+        // source() exposes the validated seven-field artifact projection, not
+        // the sidecar's raw metadata with width/height and private tool fields.
+        if meta.get("kind").and_then(Value::as_str) != Some("raster")
+          || meta.get("encoding").and_then(Value::as_str) != Some("jpeg8")
+        {
+          return Err(unavailable("working copy metadata is invalid"));
+        }
+        let icc_sha256 = match meta.get("iccSha256") {
+          Some(Value::Null) => None,
+          Some(Value::String(value)) => Some(value.clone()),
+          _ => return Err(unavailable("working copy profile is missing")),
+        };
+        let base =
+          build_raster_base_version(icc_sha256.as_deref()).map_err(|_| unavailable("working copy base is invalid"))?;
         if source.get("baseVersion").and_then(Value::as_str) != Some(base.as_str()) {
           return Err(unavailable("working copy base does not match its metadata"));
         }
@@ -2880,7 +2891,7 @@ impl PhotoDevelop {
           initial_settings,
           source_provider: InitialRasterSourceProvider::WorkingCopy,
           source_base_version: Some(base),
-          source_icc_sha256: raster.icc_sha256,
+          source_icc_sha256: icc_sha256,
         })
       }
       _ => Err(unavailable("the source is not a supported raster")),

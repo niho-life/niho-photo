@@ -39,12 +39,16 @@ static ACTIVE_MASK_UPLOADS: AtomicUsize = AtomicUsize::new(0);
 struct MaskUploadSlot;
 impl MaskUploadSlot {
   fn acquire() -> Result<Self, AccountError> {
-    ACTIVE_MASK_UPLOADS
-      .fetch_update(Ordering::SeqCst, Ordering::SeqCst, |count| {
-        (count < 2).then_some(count + 1)
-      })
-      .map(|_| Self)
-      .map_err(|_| AccountError::Rejected)
+    let mut count = ACTIVE_MASK_UPLOADS.load(Ordering::SeqCst);
+    loop {
+      if count >= 2 {
+        return Err(AccountError::Rejected);
+      }
+      match ACTIVE_MASK_UPLOADS.compare_exchange(count, count + 1, Ordering::SeqCst, Ordering::SeqCst) {
+        Ok(_) => return Ok(Self),
+        Err(actual) => count = actual,
+      }
+    }
   }
 }
 impl Drop for MaskUploadSlot {

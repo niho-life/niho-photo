@@ -771,6 +771,10 @@ fn explicit_copy_uses_the_bundled_full_initial_recipe_and_actual_raster_base() {
     );
     assert!(saved.has_saved_settings("photo"));
     assert_eq!(proof.source_base_version.is_some(), working);
+    assert_eq!(
+      proof.source_icc_sha256.as_deref(),
+      if working { Some(FAKE_RASTER_ICC_SHA256) } else { None }
+    );
     assert!(develop.initial_raster_copy_settings(&saved, "photo").is_err());
   }
   let harness = SidecarHarness::new("copy-initial-old-sdk");
