@@ -8,10 +8,16 @@ import { PHOTO_CAPTURE_HEADERS, PHOTO_CONTENT_HEADERS } from "../../../packages/
 import type { PhotoWebTransferBinding } from "../src/view/types.ts";
 import { describe, expect, it, vi } from "vitest";
 
+const maskValidatorFixture = vi.hoisted(() => ({
+  validateMaskSurface: vi.fn(async () => ({ id: "a".repeat(64), width: 2, height: 2 })),
+  dispose: vi.fn(),
+}));
+
 vi.mock("../src/browser/renderer.ts", async () => {
   const actual = await vi.importActual<typeof import("../src/browser/renderer.ts")>("../src/browser/renderer.ts");
   return {
     ...actual,
+    createPhotoWebMaskSurfaceValidator: vi.fn(async () => maskValidatorFixture),
     probePhotoWebRenderer: vi.fn(async ({ proof, signal }: { proof: { manifestUrl: string }; signal: AbortSignal }) => signal.aborted
       ? null
       : ({
@@ -22,6 +28,7 @@ vi.mock("../src/browser/renderer.ts", async () => {
 });
 
 import { createPhotoWebConnectionFactory } from "../src/browser/connection.ts";
+import { createPhotoWebMaskSurfaceValidator } from "../src/browser/renderer.ts";
 
 const NOW = Date.parse("2026-11-03T00:00:00.000Z");
 const ORIGIN = "https://photo.example.test";
@@ -263,6 +270,11 @@ describe("Photo Web product composition", () => {
         session,
         onAuthenticationRejected: vi.fn(),
       });
+      expect(createPhotoWebMaskSurfaceValidator).toHaveBeenCalledOnce();
+      expect(createPhotoWebMaskSurfaceValidator).toHaveBeenCalledWith({
+        engineAssets: expect.objectContaining({ preferNative: false }),
+        signal: scope.signal,
+      });
       refreshUsage = connection.refreshUsage ?? null;
       const binding = connection.getSnapshot();
       expect(binding.actorId).toBe(actor.userId);
@@ -334,6 +346,7 @@ describe("Photo Web product composition", () => {
       expect(cloudRequests).toContain(`DELETE /photos/${IDS.photo}`);
       scope.abort();
       connection.dispose();
+      expect(maskValidatorFixture.dispose).toHaveBeenCalledOnce();
       connection = null;
       await composition.guards.onScopeRevoked(actor, "revoked");
       expect(purged).toEqual([actor]);

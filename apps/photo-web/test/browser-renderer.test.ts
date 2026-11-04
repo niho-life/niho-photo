@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from "vitest";
-import { probePhotoWebRenderer } from "../src/browser/renderer.ts";
+import { createPhotoWebMaskSurfaceValidator, probePhotoWebRenderer } from "../src/browser/renderer.ts";
 const sha = "a".repeat(64);
 const proof = {sdkVersion:"fixture",crateVersion:"0.27.0",manifestSha256:sha,manifestUrl:`/develop-engine/${sha}/manifest-0.27.0.json`};
 const caps = {schemaVersion:1 as const,crateVersion:"0.27.0",settingsVersions:[9],engines:["niho-14"],features:["geometry" as const],maskKinds:["linear" as const],maskSurfaces:false};
@@ -33,5 +33,26 @@ describe("probePhotoWebRenderer",()=>{
  });
  it("disposes and drops a capability that arrives after scope invalidation",async()=>{
   const e=fixture();const wait=deferred<typeof caps>();e.renderCapabilities=vi.fn(()=>wait.promise);const c=new AbortController();const pending=probePhotoWebRenderer({proof,signal:c.signal,createEngine:()=>e});await Promise.resolve();c.abort();expect(e.dispose).toHaveBeenCalledOnce();wait.resolve(caps);expect(await pending).toBeNull();
+ });
+});
+
+describe("createPhotoWebMaskSurfaceValidator",()=>{
+ it("uses the pinned shared SDK decoder and ties release/cancellation to the Photo scope",async()=>{
+  const dispose=vi.fn();const validate=vi.fn(async()=>({id:"a".repeat(64),width:8,height:4}));
+  const engine={ready:vi.fn(async()=>true),dispose,validateMaskSurface:validate};
+  const signal=new AbortController();const manifestUrl=proof.manifestUrl;
+  const validator=await createPhotoWebMaskSurfaceValidator({engineAssets:{manifestUrl:()=>manifestUrl,preferNative:false},signal:signal.signal,createEngine:url=>{expect(url).toBe(manifestUrl);return engine;}});
+  expect(validator).not.toBeNull();await expect(validator!.validateMaskSurface(new Uint8Array([1]))).resolves.toEqual({id:"a".repeat(64),width:8,height:4});
+  signal.abort(new Error("scope revoked"));expect(dispose).toHaveBeenCalledOnce();await expect(validator!.validateMaskSurface(new Uint8Array([1]))).rejects.toThrow("scope revoked");
+  validator!.dispose();expect(dispose).toHaveBeenCalledOnce();
+ });
+ it("does not publish a validator when the pinned runtime has no decoder or cannot start",async()=>{
+  for(const engine of [
+   {ready:vi.fn(async()=>true),dispose:vi.fn()},
+   {ready:vi.fn(async()=>false),dispose:vi.fn(),validateMaskSurface:vi.fn(async()=>({id:"a".repeat(64),width:1,height:1}))},
+  ]){
+   expect(await createPhotoWebMaskSurfaceValidator({engineAssets:{manifestUrl:()=>proof.manifestUrl,preferNative:false},signal:new AbortController().signal,createEngine:()=>engine})).toBeNull();
+   expect(engine.dispose).toHaveBeenCalledOnce();
+  }
  });
 });

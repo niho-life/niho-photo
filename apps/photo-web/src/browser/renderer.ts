@@ -18,6 +18,18 @@ export interface PhotoWebRendererBinding {
   readonly engineAssets: PhotoLibraryEngineAssets;
 }
 
+export interface PhotoWebMaskSurfaceValidator {
+  validateMaskSurface(
+    png: Uint8Array,
+    signal?: AbortSignal,
+  ): Promise<{ readonly id: string; readonly width: number; readonly height: number }>;
+  dispose(): void;
+}
+
+type MaskSurfaceEngine = Pick<DevelopEngine, "ready" | "dispose"> & {
+  readonly validateMaskSurface?: DevelopEngine["validateMaskSurface"];
+};
+
 /** Trusted proof is pinned to this bundle; it must not be fetched from the mutable current build endpoint. */
 export async function probePhotoWebRenderer(options: {
   readonly proof: PhotoWebRendererProof;
@@ -73,6 +85,66 @@ export async function probePhotoWebRenderer(options: {
   return signal.aborted || disposalFailed || !disposed ? null : result;
 }
 
+/** Creates a scope-owned validator from the same pinned SDK/WASM used by the renderer proof. */
+export async function createPhotoWebMaskSurfaceValidator(options: {
+  readonly engineAssets: PhotoLibraryEngineAssets;
+  readonly signal: AbortSignal;
+  readonly createEngine?: (manifestUrl: string) => MaskSurfaceEngine;
+}): Promise<PhotoWebMaskSurfaceValidator | null> {
+  const { signal, engineAssets } = options;
+  if (signal.aborted) return null;
+
+  let manifestUrl: string;
+  let engine: MaskSurfaceEngine;
+  try {
+    const pinnedManifestUrl = engineAssets.manifestUrl();
+    if (pinnedManifestUrl === null || pinnedManifestUrl.length === 0) return null;
+    manifestUrl = pinnedManifestUrl;
+    engine = (options.createEngine ?? createMaskSurfaceEngine)(manifestUrl);
+  } catch {
+    return null;
+  }
+
+  const validate = engine.validateMaskSurface;
+  let disposed = false;
+  const dispose = (): void => {
+    if (disposed) return;
+    disposed = true;
+    signal.removeEventListener("abort", onAbort);
+    try { engine.dispose(); } catch { /* Keep the capability closed when release fails. */ }
+  };
+  const onAbort = (): void => dispose();
+  signal.addEventListener("abort", onAbort, { once: true });
+
+  try {
+    if (typeof validate !== "function" || !(await engine.ready()) || signal.aborted) {
+      dispose();
+      return null;
+    }
+  } catch {
+    dispose();
+    return null;
+  }
+
+  return Object.freeze({
+    async validateMaskSurface(png: Uint8Array, operationSignal = signal) {
+      if (disposed || signal.aborted || operationSignal.aborted) {
+        throw operationSignal.reason ?? signal.reason ?? new Error("Photo Web scope changed");
+      }
+      const result = await validate.call(engine, png);
+      if (disposed || signal.aborted || operationSignal.aborted) {
+        throw operationSignal.reason ?? signal.reason ?? new Error("Photo Web scope changed");
+      }
+      return result;
+    },
+    dispose,
+  });
+}
+
 function createProbeEngine(manifestUrl: string): ProbeEngine {
+  return createDevelopEngine({ manifestUrl, preferNative: false });
+}
+
+function createMaskSurfaceEngine(manifestUrl: string): MaskSurfaceEngine {
   return createDevelopEngine({ manifestUrl, preferNative: false });
 }
