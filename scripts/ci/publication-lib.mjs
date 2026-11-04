@@ -5,6 +5,7 @@ import { lstat, readFile } from "node:fs/promises";
 import path from "node:path";
 import { workflowFailures } from "./workflow-lib.mjs";
 import { photoSdkWorkflowFailures } from "./photo-sdk-workflow-lib.mjs";
+import { photoRendererWorkflowFailures } from "./photo-renderer-workflow-lib.mjs";
 import { photoCandidateWorkflowFailures } from "./photo-candidate-workflow-lib.mjs";
 import { imageMetadataFailures } from "./image-metadata.mjs";
 
@@ -207,7 +208,7 @@ export async function verifyPublication(root) {
     if (text !== undefined && containsPrivateReference(text)) fail("非公開参照検出（値は非表示）", name);
     if (/^\.github\/workflows\/[^/]+\.ya?ml$/.test(name)) {
       try {
-        const validator = name === ".github/workflows/public-ci.yml" ? workflowFailures : name === ".github/workflows/photo-sdk-release.yml" ? photoSdkWorkflowFailures : name === ".github/workflows/photo-candidate-release.yml" ? photoCandidateWorkflowFailures : null;
+        const validator = name === ".github/workflows/public-ci.yml" ? workflowFailures : name === ".github/workflows/photo-sdk-release.yml" ? photoSdkWorkflowFailures : name === ".github/workflows/photo-renderer-release.yml" ? photoRendererWorkflowFailures : name === ".github/workflows/photo-candidate-release.yml" ? photoCandidateWorkflowFailures : null;
         if (!validator) throw new Error();
         for (const violation of validator(JSON.parse(text))) fail(violation, name);
       }
