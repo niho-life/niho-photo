@@ -491,10 +491,10 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
     return validated;
   }
 
-  async load(photoId: string, surfaceId: string): Promise<Uint8Array | null> {
+  async load(photoId: string, surfaceId: string, signal = new AbortController().signal): Promise<Uint8Array | null> {
     const scope = this.scope();
     validateSha(surfaceId);
-    const local = await this.options.journal.getMaskSurface(scope, photoId, surfaceId);
+    const local = await this.options.journal.getMaskSurface(scope, photoId, surfaceId, signal);
     this.assertScope(scope);
     if (local !== null) {
       const bytes = checkedBytes(local.bytes);
@@ -505,14 +505,14 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
     }
     let asset: PhotoAsset;
     try {
-      asset = await this.options.client.request("masks.get", { photoId, surfaceId }, { signal: new AbortController().signal });
+      asset = await this.options.client.request("masks.get", { photoId, surfaceId }, { signal });
     } catch (error) {
       if (readPhotoError(error)?.code === "not_found") return null;
       throw error;
     }
     this.assertScope(scope);
     validateMaskAsset(asset, surfaceId);
-    const content = await this.handle.readAsset(photoId, asset);
+    const content = await this.handle.readAsset(photoId, asset, undefined, { signal });
     const bytes = checkedBytes(await contentBytes(content));
     this.assertScope(scope);
     const validated = await this.validate(bytes);
@@ -577,11 +577,11 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
         assertCurrent();
         if (local !== null) {
           if (local.bytes.byteLength !== existing.sizeBytes || local.width !== existing.width || local.height !== existing.height) invalid();
+          const bytes = checkedBytes(local.bytes);
+          const validated = await this.validate(bytes);
+          assertCurrent();
+          if (validated.id !== surfaceId || validated.width !== expected.width || validated.height !== expected.height) invalid();
           if (recovered) {
-            const bytes = checkedBytes(local.bytes);
-            const validated = await this.validate(bytes);
-            assertCurrent();
-            if (validated.id !== surfaceId || validated.width !== expected.width || validated.height !== expected.height) invalid();
             await this.options.journal.putMaskSurface(currentScope, binding.photoId, {
               id: surfaceId, width: expected.width, height: expected.height, sha256: surfaceId, bytes, uploadState: null,
             }, signal, null);
@@ -595,6 +595,13 @@ class BrowserMaskSurfaceService implements RecipeMaskSurfaceBarrier {
             )) throw new PersonalPhotoCloudError("unavailable");
             assertCurrent();
           }
+        } else {
+          const bytes = await this.load(binding.photoId, surfaceId, signal);
+          assertCurrent();
+          const stored = await this.options.journal.getMaskSurface(currentScope, binding.photoId, surfaceId, signal);
+          assertCurrent();
+          if (bytes === null || stored === null || bytes.byteLength !== existing.sizeBytes ||
+            stored.width !== expected.width || stored.height !== expected.height) invalid();
         }
       } else missing.push({ surfaceId, expected });
     }

@@ -32,6 +32,11 @@ export function projectRecipeSettings(
     hasPhotoEditingColorGradingNativeExportUnsupportedLuminance(settings) &&
     !renderer.features.includes("colorGradingLuminance")
   ) return null;
+  const settingsBase = typeof settings.base === "string" ? settings.base : null;
+  if (photo.recipe.baseVersion !== settingsBase) return null;
+  if (photo.format === "raw" && photo.recipe.revision > 0 && settingsBase === null) return null;
+  if (settingsBase !== null && photo.media.state === "ready" &&
+    (photo.media.workingCopy === null || photo.media.workingCopy.baseVersion !== settingsBase)) return null;
   const masks = readDevelopMasks(settings);
   if (masks.length > 0 || photo.recipe.maskSurfaceIds.length > 0) {
     if (!renderer.features.includes("masks")) return null;

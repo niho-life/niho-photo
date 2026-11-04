@@ -5,7 +5,6 @@ import {
   type PersonalPhotoCloudClient,
   type PersonalPhotoLibrary,
   type Photo,
-  type PhotoAsset,
   type PhotoFormat,
   type RecipeCandidate,
   type RecipeDocument,
@@ -16,9 +15,9 @@ import {
 import { PersonalPhotoCloudError } from "../errors";
 import { abortReason, awaitBounded, linkedAbortController } from "../await";
 import { recipeCandidateMatches } from "../recipe";
-import type { PersonalPhotoCloudIdentity } from "../types";
+import { readVerifiedMaskSurface } from "../mask-surface";
+import type { PersonalPhotoCloudIdentity, PersonalPhotoCloudMaskValidator } from "../types";
 import { TRANSPORT_TIMEOUT_MS, TRUSTED_GCS_UPLOAD_ORIGIN, canonicalContentType } from "../wire";
-import { validateAsset } from "../validation";
 import {
   IndexedDbTransferJournal,
   makeEntryId,
@@ -80,6 +79,8 @@ export interface PersonalPhotoTransferPage { readonly items: readonly PersonalPh
 export interface CreateBrowserPersonalPhotoTransferControllerOptions {
   readonly client: PersonalPhotoCloudClient;
   readonly identity: PersonalPhotoCloudIdentity;
+  /** SDK decoder for masks; a recipe with mask references cannot complete without it. */
+  readonly maskValidator?: PersonalPhotoCloudMaskValidator;
   readonly indexedDB?: IDBFactory;
   readonly locks?: LockManager | null;
   readonly fetch?: typeof fetch;
@@ -309,7 +310,17 @@ class TransferController implements BrowserPersonalPhotoTransferController {
 
   private async finishPhoto(entry: TransferJournalEntry, photo: Photo, signal: AbortSignal): Promise<TransferJournalEntry> {
     if (photo.libraryId !== entry.libraryId || photo.original.sha256 !== entry.sha256 || photo.original.sizeBytes !== entry.sizeBytes) throw new PersonalPhotoCloudError("invalid_response");
-    if (entry.candidate === null) return await this.update(entry, { phase: "done", photoId: photo.id, cloudRecipe: null, uploadedBytes: entry.sizeBytes });
+    if (entry.candidate === null) {
+      const untouched = photo.recipe.revision === 0 &&
+        photo.recipe.maskSurfaceIds.length === 0 && photo.hasEdits === false;
+      return await this.update(entry, {
+        phase: untouched ? "done" : "failed",
+        photoId: photo.id,
+        cloudRecipe: untouched ? null : structuredClone(photo.recipe),
+        uploadedBytes: entry.sizeBytes,
+        failure: untouched ? null : "stored",
+      });
+    }
     if (recipeMatches(entry.candidate, photo.recipe) && await this.verifyMasks(photo.id, entry.candidate.maskSurfaceIds, signal)) {
       return await this.update(entry, { phase: "done", photoId: photo.id, cloudRecipe: null, uploadedBytes: entry.sizeBytes });
     }
@@ -317,18 +328,18 @@ class TransferController implements BrowserPersonalPhotoTransferController {
   }
 
   private async verifyMasks(photoId: string, surfaceIds: readonly string[], signal: AbortSignal): Promise<boolean> {
+    if (surfaceIds.length > 0 && this.options.maskValidator === undefined) return false;
     for (const surfaceId of surfaceIds) {
-      let asset: PhotoAsset;
       try {
-        asset = await this.options.client.request("masks.get", { photoId, surfaceId }, { signal });
-        validateAsset(asset, "mask");
+        const stored = await readVerifiedMaskSurface(this.options.client, photoId, surfaceId, signal, this.options.maskValidator!);
+        if (stored === null || stored.asset.sizeBytes > PHOTO_LIMITS.maxMaskBytes ||
+          stored.asset.width > PHOTO_LIMITS.maxMaskEdge || stored.asset.height > PHOTO_LIMITS.maxMaskEdge) return false;
       } catch (error) {
         if (signal.aborted) throw abortReason(signal);
         if (error instanceof PersonalPhotoCloudError && ["scope_changed", "invalid_identity", "disposed"].includes(error.code)) throw error;
         if (photoErrorCode(error) === "unauthenticated") throw new PersonalPhotoCloudError("scope_changed");
         return false;
       }
-      if (asset.sha256 !== surfaceId || asset.sizeBytes > PHOTO_LIMITS.maxMaskBytes || asset.width > PHOTO_LIMITS.maxMaskEdge || asset.height > PHOTO_LIMITS.maxMaskEdge) return false;
     }
     return true;
   }

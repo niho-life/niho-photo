@@ -874,7 +874,7 @@ class Writer implements PersonalPhotoRecipeWriter {
     verifyPutAttempt(attempt);
     if (this.recovered) {
       try {
-        if (await this.sync.verifyManualTarget(this.binding, attempt.conflictId === null ? attempt.candidate : null, signal, assertCurrent) === null) {
+        if (await this.sync.verifyManualTarget(this.binding, null, signal, assertCurrent) === null) {
           return { status: "unsupported", generation: attempt.generation };
         }
       } catch (error) {

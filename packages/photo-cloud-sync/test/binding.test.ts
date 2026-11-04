@@ -76,6 +76,52 @@ function setup(
 }
 
 describe("photo library durable binding", () => {
+  it.each(["valid", "missing", "corrupt"] as const)("verifies uncached cloud mask bytes before PUT: %s", async (mode) => {
+    const png = new Uint8Array([137, 80, 78, 71, 1, 2, 3, 4]);
+    const surfaceId = Array.from(sha256(png), (byte) => byte.toString(16).padStart(2, "0")).join("");
+    const asset = { ...responses["masks.get"], id: surfaceId, sha256: surfaceId, sizeBytes: png.byteLength, width: 2, height: 2 };
+    const order: string[] = [];
+    const validator = { async validateMaskSurface(bytes: Uint8Array) {
+      order.push("decode");
+      return { id: Array.from(sha256(bytes), (byte) => byte.toString(16).padStart(2, "0")).join(""), width: 2, height: 2 };
+    } };
+    const fixture = setup(async <K extends PhotoOperation>(operation: K, request: PhotoOperationMap[K]["request"]): Promise<PhotoOperationMap[K]["response"]> => {
+      if (operation === "masks.get") return asset as PhotoOperationMap[K]["response"];
+      if (operation === "content.get") {
+        order.push("content");
+        if (mode === "missing") throw { error: { code: "not_found", requestId: "mask", retryable: false } };
+        const bytes = mode === "corrupt" ? new Uint8Array(png.byteLength) : png;
+        return { body: new ReadableStream({ start(controller) { controller.enqueue(bytes); controller.close(); } }),
+          contentType: "image/png", sha256: surfaceId, totalBytes: png.byteLength, range: { start: 0, endInclusive: png.byteLength - 1 } } as PhotoOperationMap[K]["response"];
+      }
+      if (operation === "recipes.put") {
+        order.push("put");
+        const put = request as PhotoOperationMap["recipes.put"]["request"];
+        return { ...responses["recipes.put"], value: { ...responses["recipes.put"].value, recipe: {
+          ...maskedPhoto.recipe, revision: put.expectedRevision + 1, settings: put.settings,
+          baseVersion: put.baseVersion, maskSurfaceIds: [surfaceId],
+        } } } as PhotoOperationMap[K]["response"];
+      }
+      return defaultResponse(operation);
+    }, undefined, new Identity(), "epoch-1", { validator });
+    const writer = fixture.port.open({ photoId: IDS.photo, sourceSha256: HASH.original, expectedRevision: 0 });
+    try {
+      const staged = writer.stage({ ...structuredClone(maskedPhoto.recipe.settings),
+        masks: [{ id: "sky", kind: "sky", surface: { id: surfaceId, width: 2, height: 2 }, adjust: { exposure: -0.5 } }],
+      } as DevelopSettings);
+      await staged.committed;
+      const result = await writer.save(staged);
+      if (mode === "valid") {
+        expect(result).toMatchObject({ kind: "saved" });
+        expect(order).toEqual(["content", "decode", "put"]);
+      } else {
+        expect(result.kind).not.toBe("saved");
+        expect(order).toContain("content");
+        expect(order).not.toContain("put");
+      }
+    } finally { fixture.handle.dispose(); }
+  });
+
   it.each(["start-pending", "expired", "cancelled"] as const)("reconciles a persisted %s mask checkpoint before saving the recipe", async (phase) => {
     const databaseName = `binding-mask-reconcile-${crypto.randomUUID()}`;
     const png = new Uint8Array([5, 8, 13]);
