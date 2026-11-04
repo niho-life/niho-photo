@@ -2815,7 +2815,7 @@ impl PhotoDevelop {
     let (width, height) = self
       .full_size_dimensions(&sidecars, &photo.path, ExportInput::Raster)
       .ok_or_else(|| unavailable("source dimensions are unavailable"))?;
-    let force_working = width.checked_mul(height).is_none_or(|pixels| pixels > pixel_limit);
+    let force_working = width.checked_mul(height).map_or(true, |pixels| pixels > pixel_limit);
     let source = self.source_with_options(photos, photo_id, Some((false, false)), force_working)?;
     if let Some(token) = source.get("token").and_then(Value::as_str) {
       lock(&self.tokens).remove(token);

@@ -4870,7 +4870,7 @@
         "path": "packages/desktop-photo/src/develop.rs",
         "sha256": "7f13c1e41e82bf4bc91bef5e4a8b61f092ab0b986a6a95c5559c2246bb74d864"
       },
-      "outputSha256": "f5bf5ca00a718212c6fa4affdf5714420dbe386bdb08a2fc5c2b2f8389fbe9ef",
+      "outputSha256": "9f946a819cb109d7c192a392538244426490d2f40627290b864b4fe57083af7c",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #5の共有入力能力レジストリ、段階別検証、公開回帰契約に合わせて更新。",
@@ -4890,7 +4890,8 @@
         "#171 正規切替の停止箇所を同じ試行IDで記録する診断",
         "未編集ラスタのコピーを同梱SDKの完全初期補正と実canonical baseへ接続",
         "SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正",
-        "元画像の実寸法とSDKのbrowser pixel budgetからcanonical working copyを選択"
+        "元画像の実寸法とSDKのbrowser pixel budgetからcanonical working copyを選択",
+        "既存のRust最低対応版1.77.2を保ってSDK pixel budgetを照合"
       ]
     },
     {
