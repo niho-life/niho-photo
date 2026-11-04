@@ -58,6 +58,7 @@ function fakeServe(overrides: Partial<Record<string, (sent: Sent) => Reply>> = {
     capabilities: () =>
       ok(JSON.stringify({ masks: { kinds: ["linear", "radial", "brush", "subject", "sky"], max: 8, maskPlane: true, surfaces: true } })),
     maskSurfaceId: () => ok("surface-id"),
+    validateDerivedPng: () => ok({ width: 2, height: 1 }),
     encodeMaskSurface: () => ok({ blob: 0 }, [new Uint8Array([137, 80, 78, 71])]),
     validateSettings: () => ok("[]"),
     render: () => frame(4, 2),
@@ -168,6 +169,9 @@ describe("createNativeDevelopGlue", () => {
     expect([...glue.encodeMaskSurface(2, 1, new Uint8Array([0, 255]))]).toEqual([137, 80, 78, 71]);
     expect(serve.sent.at(-1)).toMatchObject({ method: "encodeMaskSurface", header: { args: [2, 1, { blob: 0 }] } });
     expect([...serve.sent.at(-1)!.blobs[0]]).toEqual([0, 255]);
+    expect(glue.validateDerivedPng(new Uint8Array([137, 80]), 512)).toEqual({ width: 2, height: 1 });
+    expect(serve.sent.at(-1)).toMatchObject({ method: "validateDerivedPng", header: { args: [{ blob: 0 }, 512] } });
+    expect([...serve.sent.at(-1)!.blobs[0]]).toEqual([137, 80]);
   });
 
   it("Developer の解析・マスク面・export を wasm と同じ型へ変換する", () => {

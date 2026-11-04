@@ -717,6 +717,55 @@ fn render_capabilities_decide_which_settings_reach_the_full_size_render() {
   }
 }
 
+#[test]
+fn explicit_copy_uses_the_bundled_full_initial_recipe_and_actual_raster_base() {
+  for working in [false, true] {
+    let harness = SidecarHarness::new(if working {
+      "copy-initial-working"
+    } else {
+      "copy-initial-original"
+    });
+    let mut capabilities: Value = serde_json::from_str(&render_capabilities_line(&[1], &[])).unwrap();
+    let initial = json!({"v":1,"engine":"niho-14","look":"niho-standard-1","base":null,
+      "exposure":0,"whiteBalance":{"mode":"asShot","temperature":6500,"tint":0}});
+    capabilities["initialRasterSettings"] = initial.clone();
+    harness.mark("render-capabilities", &capabilities.to_string());
+    let photo = photo_file(&harness, "synthetic.png", b"synthetic pixels");
+    if working {
+      fs::OpenOptions::new()
+        .write(true)
+        .open(&photo)
+        .unwrap()
+        .set_len(DIRECT_RASTER_MAX_BYTES + 1)
+        .unwrap();
+    }
+    let photos = FakePhotos::new(&[("photo", &photo)]);
+    let develop = camera_develop(&harness);
+    let settings = develop.initial_raster_copy_settings(&photos, "photo").unwrap();
+    let mut expected = initial;
+    if working {
+      let source = develop.source(&photos, "photo").unwrap();
+      expected["base"] = source["baseVersion"].clone();
+      assert!(harness
+        .work_calls()
+        .iter()
+        .any(|call| call.starts_with("apple-raw-linear raster ")));
+    }
+    assert_eq!(settings, expected);
+    assert!(!photos.has_saved_settings("photo"));
+    assert!(develop
+      .initial_raster_copy_settings(&photos.with_saved_settings(), "photo")
+      .is_err());
+  }
+  let harness = SidecarHarness::new("copy-initial-old-sdk");
+  harness.mark("render-capabilities", &render_capabilities_line(&[1], &[]));
+  let photo = photo_file(&harness, "synthetic.jpg", b"synthetic pixels");
+  let photos = FakePhotos::new(&[("photo", &photo)]);
+  assert!(camera_develop(&harness)
+    .initial_raster_copy_settings(&photos, "photo")
+    .is_err());
+}
+
 /// 補正を全部使う設定（原寸の大きさの見積もりは、補正の有無と数だけを見る）。
 fn every_correction() -> Value {
   json!({

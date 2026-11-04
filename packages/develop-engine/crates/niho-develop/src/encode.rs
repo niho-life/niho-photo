@@ -76,26 +76,34 @@ pub fn validate_derived_png(bytes: &[u8], max_edge: u32) -> Result<(u32, u32), S
     decoder.set_transformations(png::Transformations::IDENTITY);
     let header = decoder.read_header_info().map_err(|_| invalid())?;
     let (width, height) = (header.width, header.height);
+    // The wasm encoder writes RGBA8; the native SDK CLI writes RGB8. Both
+    // use this pinned image::PngEncoder and carry no private metadata.
+    let (channels, color) = match header.color_type {
+        png::ColorType::Rgb => (3, ExtendedColorType::Rgb8),
+        png::ColorType::Rgba => (4, ExtendedColorType::Rgba8),
+        _ => return Err(invalid()),
+    };
     if width == 0
         || height == 0
         || width > max_edge
         || height > max_edge
-        || header.color_type != png::ColorType::Rgba
         || header.bit_depth != png::BitDepth::Eight
     {
         return Err(invalid());
     }
     let mut reader = decoder.read_info().map_err(|_| invalid())?;
-    let mut rgba = vec![0; width as usize * height as usize * 4];
-    if reader.output_buffer_size() != Some(rgba.len()) {
+    let mut pixels = vec![0; width as usize * height as usize * channels];
+    if reader.output_buffer_size() != Some(pixels.len()) {
         return Err(invalid());
     }
-    reader.next_frame(&mut rgba).map_err(|_| invalid())?;
+    reader.next_frame(&mut pixels).map_err(|_| invalid())?;
     reader.finish().map_err(|_| invalid())?;
     drop(reader);
-    if cursor.position() != bytes.len() as u64
-        || encode_png(&rgba, width as usize, height as usize)? != bytes
-    {
+    let mut canonical = Vec::new();
+    PngEncoder::new(&mut canonical)
+        .write_image(&pixels, width, height, color)
+        .map_err(|_| invalid())?;
+    if cursor.position() != bytes.len() as u64 || canonical != bytes {
         return Err(invalid());
     }
     Ok((width, height))
@@ -112,6 +120,11 @@ mod derived_png_tests {
         assert_eq!(validate_derived_png(&png, 512).unwrap(), (2, 1));
         assert_eq!(validate_derived_png(&png, 1280).unwrap(), (2, 1));
         assert_eq!(encode_png(&rgba, 2, 1).unwrap(), png);
+        let mut native_rgb = Vec::new();
+        PngEncoder::new(&mut native_rgb)
+            .write_image(&[10, 20, 30, 40, 50, 60], 2, 1, ExtendedColorType::Rgb8)
+            .unwrap();
+        assert_eq!(validate_derived_png(&native_rgb, 1280).unwrap(), (2, 1));
         let wide = encode_png(&vec![255; 513 * 4], 513, 1).unwrap();
         assert!(validate_derived_png(&wide, 512).is_err());
         assert_eq!(validate_derived_png(&wide, 1280).unwrap(), (513, 1));

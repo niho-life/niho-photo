@@ -13,7 +13,7 @@ use serde::{Deserialize, Serialize};
 use serde_json::{json, Value};
 use sha2::{Digest, Sha256};
 use std::collections::{BTreeMap, HashMap};
-use std::fs::{File, OpenOptions};
+use std::fs::OpenOptions;
 use std::io::{Read, Write};
 use std::os::unix::fs::{OpenOptionsExt, PermissionsExt};
 use std::path::{Path, PathBuf};
@@ -22,7 +22,7 @@ use std::sync::{
   Arc, Mutex,
 };
 use std::time::{SystemTime, UNIX_EPOCH};
-use tauri::{AppHandle, Manager, State};
+use tauri::{AppHandle, Manager};
 
 const JOURNAL_DIR: &str = "photo-copy-journal-v1";
 const JOURNAL_VERSION: u32 = 1;
@@ -224,7 +224,7 @@ impl CopyJournal {
       if total > MAX_JOURNAL_BYTES {
         return Err(AccountError::Storage);
       }
-      let mut file = OpenOptions::new()
+      let file = OpenOptions::new()
         .read(true)
         .custom_flags(libc::O_NOFOLLOW)
         .open(&path)
@@ -404,7 +404,7 @@ pub struct StatusInput {
 
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct Recovery {
+pub struct Recovery {
   request_id: String,
   photo_id: String,
 }
@@ -418,7 +418,7 @@ struct Completed {
 }
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
-struct CopyStatus {
+pub struct CopyStatus {
   request_id: String,
   photo_id: String,
   phase: &'static str,
@@ -617,9 +617,9 @@ fn new_intent(
     _ => None,
   };
   let recipe_supported = runtime.settings.is_some()
-    // Named cloud bases are deliberately outside this copy contract. A local
-    // base candidate is retained but never uploaded until a canonical provider exists.
-    && settings.get("base").is_some_and(Value::is_null)
+    && settings
+      .get("base")
+      .is_none_or(|base| base.is_null() || base.as_str().is_some_and(valid_raster_base))
     && settings
       .get("v")
       .and_then(Value::as_u64)
@@ -686,9 +686,30 @@ fn capture_runtime(app: &AppHandle, entry_id: &str) -> Result<RuntimeSource, Acc
   let library = library(app).map_err(|_| AccountError::Storage)?;
   let (opened_photo_id, source) =
     CloudCopySource::capture_registered(&photos, &library, entry_id).map_err(source_error)?;
-  // The leave/flush guard must have committed the exact local recipe before copy starts.
-  // Absence/unknown data stays closed; native never invents a neutral recipe.
-  let settings = photos.saved(source.sha256()).map(|record| record.settings);
+  // Preserve saved data exactly. Only absence may request the bundled SDK's
+  // full initial recipe; an unknown saved recipe never falls back to neutral.
+  let settings = match photos.saved(source.sha256()) {
+    Some(record) => Some(record.settings),
+    None
+      if matches!(
+        source
+          .file_name()
+          .rsplit('.')
+          .next()
+          .map(str::to_ascii_lowercase)
+          .as_deref(),
+        Some("jpg" | "jpeg" | "png")
+      ) =>
+    {
+      Some(
+        crate::develop::develop(app)
+          .map_err(|_| AccountError::Rejected)?
+          .initial_raster_copy_settings(&*photos, &opened_photo_id)
+          .map_err(|_| AccountError::Rejected)?,
+      )
+    }
+    None => None,
+  };
   Ok(RuntimeSource {
     opened_photo_id,
     source,
@@ -1040,7 +1061,7 @@ fn upload(
       }
       NativeStartUpload::Upload { upload, ticket: first } => {
         ticket = first;
-        upload
+        *upload
       }
     }
   };
@@ -1469,7 +1490,7 @@ fn safe_baseline(baseline: &RecipeBaseline) -> bool {
   baseline.revision <= 9_007_199_254_740_991
     && journal_safe_value(&baseline.settings, 0)
     && value_digest(&baseline.settings).ok().as_deref() == Some(baseline.settings_sha256.as_str())
-    && baseline.base_version.is_none()
+    && baseline.base_version.as_deref().is_none_or(valid_raster_base)
     && baseline.mask_surface_ids.iter().all(|id| is_sha256(id))
 }
 
@@ -1703,7 +1724,7 @@ fn is_sha256(value: &str) -> bool {
 }
 fn valid_file_name(value: &str) -> bool {
   !value.is_empty()
-    && value.as_bytes().len() <= 255
+    && value.len() <= 255
     && !value.contains('/')
     && !value.contains('\\')
     && !value.chars().any(forbidden_opaque_character)
@@ -1729,7 +1750,7 @@ fn valid_intent(intent: &CopyIntent) -> bool {
         | ("tiff", "image/tiff")
         | ("raw", "application/octet-stream")
     )
-    && intent.base_version.as_deref().is_none_or(opaque)
+    && intent.base_version.as_deref().is_none_or(valid_raster_base)
     && journal_safe_value(&intent.settings, 0)
     && value_digest(&intent.settings).ok().as_deref() == Some(intent.settings_sha256.as_str())
     && intent.recipe_baseline.as_ref().is_none_or(safe_baseline)
@@ -1961,6 +1982,7 @@ fn journal_safe_recipe_field(value: &Value, path: &[&str]) -> bool {
   match value {
     Value::Null | Value::Bool(_) | Value::Number(_) => true,
     Value::String(value) => match path {
+      ["base"] => valid_raster_base(value),
       ["engine"] => value
         .strip_prefix("niho-")
         .and_then(|n| n.parse::<u8>().ok())
@@ -2022,6 +2044,15 @@ fn journal_safe_recipe_field(value: &Value, path: &[&str]) -> bool {
       })
     }
   }
+}
+fn valid_raster_base(value: &str) -> bool {
+  let Some((_, icc)) = value.rsplit_once(".icc-") else {
+    return false;
+  };
+  niho_desktop_photo::develop::build_raster_base_version(if icc == "srgb" { None } else { Some(icc) })
+    .ok()
+    .as_deref()
+    == Some(value)
 }
 fn valid_start(intent: &CopyIntent, name: &str, start: &CopyStart) -> bool {
   let body = json!({"target":start.target,"sizeBytes":start.size,"sha256":start.sha,"contentType":start.content_type});
@@ -2256,6 +2287,12 @@ mod tests {
       &json!({"v":9,"engine":"niho-14","hsl":{"secret-token":0}}),
       0
     ));
+    let base = niho_desktop_photo::develop::build_raster_base_version(None).unwrap();
+    assert!(journal_safe_value(&json!({"v":1,"engine":"niho-14","base":base}), 0));
+    assert!(!journal_safe_value(
+      &json!({"v":1,"engine":"niho-14","base":"raster.secret-token"}),
+      0
+    ));
   }
 
   fn recipe_photo(revision: u64, settings: Value) -> Value {
@@ -2355,14 +2392,14 @@ mod tests {
       assert_eq!(replayed.key, start.key);
       assert_eq!(replayed.sha, start.sha);
       Ok(NativeStartUpload::Upload {
-        upload: NativeUpload {
+        upload: Box::new(NativeUpload {
           id: "reserved-upload".into(),
           target: start.target.clone(),
           size_bytes: 3,
           sha256: start.sha.clone(),
           expires_at: "2099-01-01T00:00:00Z".into(),
           state: NativeUploadState::Reserved { uploaded_bytes: 0 },
-        },
+        }),
         ticket: None,
       })
     })

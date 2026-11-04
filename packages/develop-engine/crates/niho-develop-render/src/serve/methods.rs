@@ -18,9 +18,10 @@ use super::{panic_text, MAX_DEVELOPERS, PROTOCOL};
 /// by their JS names (a `Developer` method as `Developer.<name>`, its
 /// constructor as `Developer.new`, without the `width` / `height` getters,
 /// which the opening reply carries), then `hello` and `releaseClient`.
-pub const METHODS: [&str; 44] = [
+pub const METHODS: [&str; 45] = [
     "version",
     "capabilities",
+    "validateDerivedPng",
     "maskSurfaceId",
     "encodeMaskSurface",
     "setSkyModel",
@@ -252,6 +253,12 @@ fn call(state: &State, method: &str, request: &Request<'_>) -> Result<Reply, Fai
         "capabilities" => {
             args.expect(0, 0)?;
             Reply::text(api::capabilities())
+        }
+        "validateDerivedPng" => {
+            args.expect(2, 2)?;
+            let size =
+                api::validate_derived_png(args.blob(0)?, args.u32(1)?).map_err(Fail::call)?;
+            Reply::size(size.width, size.height)
         }
         "maskSurfaceId" => {
             args.expect(1, 1)?;

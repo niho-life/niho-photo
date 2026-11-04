@@ -748,6 +748,7 @@ impl Account {
   }
 
   /// Native-only upload bootstrap. Ticket-bearing replies stay in Rust memory.
+  #[allow(clippy::too_many_arguments)]
   pub fn photo_copy_start(
     &self,
     capture: &PhotoScopeCapture,
@@ -767,7 +768,7 @@ impl Account {
       || match target {
         NativeCopyTarget::Original { file_name, format } => {
           file_name.is_empty()
-            || file_name.as_bytes().len() > 255
+            || file_name.len() > 255
             || file_name.contains('/')
             || file_name.contains('\\')
             || !matches!(

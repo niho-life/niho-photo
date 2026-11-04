@@ -464,7 +464,7 @@ pub enum NativeStartUpload {
     photo: Value,
   },
   Upload {
-    upload: NativeUpload,
+    upload: Box<NativeUpload>,
     ticket: Option<NativeUploadTicket>,
   },
 }
@@ -743,7 +743,7 @@ pub(crate) fn native_copy_request(
 }
 
 pub(crate) fn read_native_upload_response(
-  mut response: PhotoHttpResponse,
+  response: PhotoHttpResponse,
   expected_library: &str,
 ) -> Result<Value, AccountError> {
   if response.content_length.is_some_and(|value| value > JSON_SUCCESS_MAX)
@@ -823,7 +823,10 @@ pub(crate) fn parse_start_upload(
           return Err(AccountError::InvalidResponse);
         }
       }
-      Ok(NativeStartUpload::Upload { upload, ticket })
+      Ok(NativeStartUpload::Upload {
+        upload: Box::new(upload),
+        ticket,
+      })
     }
     _ => Err(AccountError::InvalidResponse),
   }
@@ -846,7 +849,7 @@ pub(crate) fn parse_upload(value: &Value, expected_library: &str) -> Result<Nati
       exact(target_value, &["kind", "fileName", "format"])?;
       let file_name = string(target_object, "fileName")?.to_owned();
       let format = string(target_object, "format")?.to_owned();
-      if file_name.is_empty() || file_name.as_bytes().len() > 255 || !matches!(format.as_str(), "jpeg" | "png") {
+      if file_name.is_empty() || file_name.len() > 255 || !matches!(format.as_str(), "jpeg" | "png") {
         return Err(AccountError::InvalidResponse);
       }
       NativeCopyTarget::Original { file_name, format }
@@ -2416,7 +2419,7 @@ mod tests {
   #[test]
   fn upload_ticket_accepts_only_the_exact_trusted_provider_and_content_type() {
     let ticket = |url: &str, content_type: &str| {
-      json!({
+      serde_json::json!({
         "url": url,
         "method": "PUT",
         "headers": { "Content-Type": content_type },

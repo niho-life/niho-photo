@@ -143,8 +143,17 @@ pub fn capabilities() -> String {
             "skyDetection": true,
         },
         "renderer": renderer_capabilities(),
+        "initialRasterSettings": initial_raster_settings(),
     })
     .to_string()
+}
+
+/// The complete initial recipe for a new raster edit. Existing recipes retain
+/// their own engine, look and base; this is never a migration or a fallback.
+pub fn initial_raster_settings() -> serde_json::Value {
+    let mut settings = crate::DevelopSettings::new_edit();
+    settings.engine = crate::settings::ENGINE_NIHO_14.to_owned();
+    settings.to_value()
 }
 
 /// The sky model of [`Developer::detect_sky`], one for the process (every
