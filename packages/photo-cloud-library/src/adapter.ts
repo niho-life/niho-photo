@@ -183,6 +183,9 @@ class Adapter {
       saveDevelopSettings: async () => {
         throw new PersonalPhotoCloudError("unsupported");
       },
+      ...(options.maskSurfaceValidator === undefined || options.maskSurfaceReader === undefined ? {} : {
+        loadMaskSurface: (photoId: string, surfaceId: string) => options.maskSurfaceReader!.loadMaskSurface(photoId, surfaceId),
+      }),
       downloadOriginal: (photo, requestOptions) => this.downloadOriginal(photo, requestOptions),
       delete: (photoIds) => this.deletePhotos(photoIds),
       presets: options.presets,
@@ -404,7 +407,7 @@ class Adapter {
         this.requirePhoto(photoId, { signal: operation.signal }),
         this.loadLibrary(operation.signal),
       ]);
-      if (!projectRecipeSettings(photo, cloud, this.options.hostRenderer)) throw new PersonalPhotoCloudError("unsupported");
+      if (!projectRecipeSettings(photo, cloud, this.options.hostRenderer, this.bitmapMaskReader())) throw new PersonalPhotoCloudError("unsupported");
       operation.assertCurrent();
       const source = this.issueRef({
         kind: "original",
@@ -477,7 +480,7 @@ class Adapter {
         this.loadLibrary(operation.signal),
       ]);
       const renderer = rendererIntersection(cloud.capabilities.renderer, this.options.hostRenderer);
-      if (!projectRecipeSettings(photo, cloud, this.options.hostRenderer)) {
+      if (!projectRecipeSettings(photo, cloud, this.options.hostRenderer, this.bitmapMaskReader())) {
         return { kind: "incompatible", message: PHOTO_EDITING_PERSONAL_CLOUD_COPY.readOnlySettings };
       }
       const format = cloud.capabilities.formats.find((candidate) => candidate.format === photo.format);
@@ -627,8 +630,8 @@ class Adapter {
   }
 
   private toPhoto(photo: Photo, cloud: PersonalPhotoLibrary): PhotoLibraryPhoto {
-    const settings = projectRecipeSettings(photo, cloud, this.options.hostRenderer);
-    const derivative = currentDerivative(photo, cloud, this.options.hostRenderer);
+    const settings = projectRecipeSettings(photo, cloud, this.options.hostRenderer, this.bitmapMaskReader());
+    const derivative = currentDerivative(photo, cloud, this.options.hostRenderer, this.bitmapMaskReader());
     return {
       id: photo.id,
       fileName: photo.fileName,
@@ -671,7 +674,7 @@ class Adapter {
     fence: PhotoFence,
     signal?: AbortSignal,
   ): Promise<PreviewProjection> {
-    const derivative = currentDerivative(photo, cloud, this.options.hostRenderer);
+    const derivative = currentDerivative(photo, cloud, this.options.hostRenderer, this.bitmapMaskReader());
     if (!derivative) return { editedPreview: null, leaseKey: null, claim: null };
     const asset = derivative.thumbnail;
     const key = previewKey(photo.id, asset);
@@ -1007,6 +1010,10 @@ class Adapter {
     this.releasePreviewResources();
   }
 
+  private bitmapMaskReader(): boolean {
+    return this.options.maskSurfaceValidator !== undefined && this.options.maskSurfaceReader !== undefined;
+  }
+
   private getPhotoState(photoId: string): PhotoState {
     const current = this.photoStates.get(photoId);
     if (current) {
@@ -1150,9 +1157,10 @@ function currentDerivative(
   photo: Photo,
   cloud: PersonalPhotoLibrary,
   host: RenderCapability,
+  bitmapReader = false,
 ): Extract<MediaState, { state: "ready" }> | null {
   if (
-    projectRecipeSettings(photo, cloud, host) === null ||
+    projectRecipeSettings(photo, cloud, host, bitmapReader) === null ||
     photo.media.state !== "ready" ||
     photo.media.recipeRevision !== photo.recipe.revision ||
     photo.media.rendererManifestSha256 !== cloud.capabilities.renderer.manifestSha256 ||

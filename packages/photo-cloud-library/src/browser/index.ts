@@ -18,4 +18,7 @@ export {
   type PersonalPhotoResumableUploadResult,
   type PersonalPhotoResumableUploadState,
   type PersonalPhotoResumableUploadStorePort,
+  type PersonalPhotoResumableUploadTransport,
+  type PersonalPhotoUploadLease,
+  type PersonalPhotoUploadStartResult,
 } from "./resumable-upload";

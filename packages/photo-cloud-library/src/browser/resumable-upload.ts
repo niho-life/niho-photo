@@ -53,7 +53,9 @@ export interface PersonalPhotoResumableUploadStorePort {
 }
 
 export interface PersonalPhotoResumableUploadOptions {
-  readonly client: PersonalPhotoCloudClient;
+  /** Browser default uses client/fetch. Native hosts inject an opaque transport. */
+  readonly client?: PersonalPhotoCloudClient;
+  readonly transport?: PersonalPhotoResumableUploadTransport;
   readonly state: PersonalPhotoResumableUploadState;
   readonly source?: Blob;
   readonly store: PersonalPhotoResumableUploadStorePort;
@@ -63,6 +65,31 @@ export interface PersonalPhotoResumableUploadOptions {
   readonly trustedUploadOrigin?: string;
   /** Re-check the caller's captured identity/scope after every asynchronous boundary. */
   readonly assertCurrent?: () => void;
+}
+
+/**
+ * Ephemeral provider authority. Implementations keep credentials/tickets behind
+ * this object; the runner never serializes or inspects it.
+ */
+export type PersonalPhotoUploadLease = Readonly<object>;
+
+export type PersonalPhotoUploadStartResult =
+  | { readonly kind: "existing"; readonly photo: Photo }
+  | { readonly kind: "upload"; readonly upload: Upload; readonly lease: PersonalPhotoUploadLease | null };
+
+export interface PersonalPhotoResumableUploadTransport {
+  start(state: PersonalPhotoResumableUploadState, signal: AbortSignal): Promise<PersonalPhotoUploadStartResult>;
+  read(state: PersonalPhotoResumableUploadState, signal: AbortSignal): Promise<Upload>;
+  renew(state: PersonalPhotoResumableUploadState, signal: AbortSignal): Promise<{ readonly upload: Upload; readonly lease: PersonalPhotoUploadLease }>;
+  uploadChunk(input: {
+    readonly state: PersonalPhotoResumableUploadState;
+    readonly lease: PersonalPhotoUploadLease;
+    readonly source: Blob | undefined;
+    readonly start: number;
+    readonly endExclusive: number;
+  }, signal: AbortSignal): Promise<{ readonly offsetBytes: number | null }>;
+  complete(state: PersonalPhotoResumableUploadState, signal: AbortSignal): Promise<Upload>;
+  cancel(state: PersonalPhotoResumableUploadState, signal: AbortSignal): Promise<Upload>;
 }
 
 export interface PersonalPhotoResumableUploadResult {
@@ -85,31 +112,149 @@ export async function cancelPersonalPhotoResumableUpload(
   return await new Runner(options).cancel();
 }
 
+class BrowserUploadTransport implements PersonalPhotoResumableUploadTransport {
+  private readonly tickets = new WeakMap<object, UploadTicket>();
+
+  constructor(private readonly options: {
+    readonly client: PersonalPhotoCloudClient;
+    readonly fetch: typeof fetch;
+    readonly now: () => number;
+    readonly trustedUploadOrigin: string;
+  }) {}
+
+  async start(state: PersonalPhotoResumableUploadState, signal: AbortSignal): Promise<PersonalPhotoUploadStartResult> {
+    const receipt = await this.options.client.request("uploads.start", payload(state), {
+      signal,
+      idempotencyKey: state.startKey,
+    });
+    if (receipt.value.kind === "existing") return { kind: "existing", photo: receipt.value.photo };
+    return {
+      kind: "upload",
+      upload: receipt.value.upload,
+      lease: receipt.value.ticket === null || state.phase === "cancel-pending" ||
+        receipt.value.upload.state !== "reserved" || receipt.value.upload.uploadedBytes === receipt.value.upload.sizeBytes
+        ? null
+        : this.lease(receipt.value.ticket, state),
+    };
+  }
+
+  async read(state: PersonalPhotoResumableUploadState, signal: AbortSignal): Promise<Upload> {
+    return await this.options.client.request("uploads.get", { uploadId: requiredUploadId(state) }, { signal });
+  }
+
+  async renew(
+    state: PersonalPhotoResumableUploadState,
+    signal: AbortSignal,
+  ): Promise<{ readonly upload: Upload; readonly lease: PersonalPhotoUploadLease }> {
+    const response = await this.options.client.request("uploads.renew", { uploadId: requiredUploadId(state) }, { signal });
+    return { upload: response.upload, lease: this.lease(response.ticket, state) };
+  }
+
+  async uploadChunk(
+    input: {
+      readonly state: PersonalPhotoResumableUploadState;
+      readonly lease: PersonalPhotoUploadLease;
+      readonly source: Blob | undefined;
+      readonly start: number;
+      readonly endExclusive: number;
+    },
+    signal: AbortSignal,
+  ): Promise<{ readonly offsetBytes: number | null }> {
+    const ticket = this.tickets.get(input.lease);
+    if (
+      ticket === undefined || input.source === undefined || ticket.resumeOffsetBytes !== input.start ||
+      Date.parse(ticket.expiresAt) <= this.options.now()
+    ) invalid();
+    const endInclusive = input.endExclusive - 1;
+    const providerLink = linkedAbortController(signal);
+    let response: Response;
+    try {
+      response = await awaitBounded(Promise.resolve().then(async () => await this.options.fetch(ticket.url, {
+        method: "PUT",
+        headers: {
+          "Content-Type": input.state.contentType,
+          "Content-Range": `bytes ${input.start}-${endInclusive}/${input.state.sizeBytes}`,
+        },
+        body: input.source.slice(input.start, input.endExclusive),
+        signal: providerLink.controller.signal,
+        credentials: "omit",
+        referrerPolicy: "no-referrer",
+        cache: "no-store",
+        redirect: "manual",
+      })), {
+        signal,
+        timeoutMs: PROVIDER_ATTEMPT_TIMEOUT_MS,
+        onTimeout: () => providerLink.controller.abort(new PersonalPhotoCloudError("unavailable")),
+        onLateResolve: cancelResponse,
+      });
+    } finally { providerLink.dispose(); }
+    void response.body?.cancel().catch(() => undefined);
+    return {
+      offsetBytes: response.status === 308 && response.type !== "opaqueredirect"
+        ? parseProviderRange(response.headers.get("Range"), input.start, endInclusive, input.state.sizeBytes)
+        : null,
+    };
+  }
+
+  async complete(state: PersonalPhotoResumableUploadState, signal: AbortSignal): Promise<Upload> {
+    const receipt = await this.options.client.request("uploads.complete", { uploadId: requiredUploadId(state) }, {
+      signal,
+      idempotencyKey: state.completeKey,
+    });
+    return receipt.value;
+  }
+
+  async cancel(state: PersonalPhotoResumableUploadState, signal: AbortSignal): Promise<Upload> {
+    const receipt = await this.options.client.request("uploads.cancel", { uploadId: requiredUploadId(state) }, {
+      signal,
+      idempotencyKey: state.cancelKey,
+    });
+    return receipt.value;
+  }
+
+  private lease(raw: UploadTicket, state: PersonalPhotoResumableUploadState): PersonalPhotoUploadLease {
+    const ticket = validateTicket(raw, {
+      trustedOrigin: this.options.trustedUploadOrigin,
+      expectedContentType: state.contentType,
+      expectedSize: state.sizeBytes,
+      now: this.options.now(),
+    });
+    const lease = Object.freeze({});
+    this.tickets.set(lease, ticket);
+    return lease;
+  }
+}
+
 class Runner {
-  private readonly fetchFn: typeof fetch;
   private readonly now: () => number;
-  private readonly trustedUploadOrigin: string;
+  private readonly transport: PersonalPhotoResumableUploadTransport;
 
   constructor(private readonly options: PersonalPhotoResumableUploadOptions) {
     validateState(options.state);
     if (options.source !== undefined && options.source.size !== options.state.sizeBytes) invalid();
-    this.fetchFn = options.fetch ?? ((...parameters: Parameters<typeof fetch>) => globalThis.fetch(...parameters));
     this.now = options.now ?? Date.now;
-    this.trustedUploadOrigin = options.trustedUploadOrigin ?? TRUSTED_GCS_UPLOAD_ORIGIN;
+    if (options.transport !== undefined && options.client !== undefined) invalid();
+    if (options.transport === undefined && options.client === undefined) invalid();
+    this.transport = options.transport ?? new BrowserUploadTransport({
+      client: options.client!,
+      fetch: options.fetch ?? ((...parameters: Parameters<typeof fetch>) => globalThis.fetch(...parameters)),
+      now: this.now,
+      trustedUploadOrigin: options.trustedUploadOrigin ?? TRUSTED_GCS_UPLOAD_ORIGIN,
+    });
     this.current();
   }
 
   async run(): Promise<PersonalPhotoResumableUploadResult> {
     let state = this.options.state;
     await this.wait(this.options.store.compareAndSet(state, state, this.options.signal));
-    let ticket: UploadTicket | null = null;
+    let lease: PersonalPhotoUploadLease | null = null;
     if (state.phase === "start-pending") {
       const started = await this.start(state);
       if (started.result !== null) return started.result;
       state = started.state;
-      ticket = started.ticket;
+      lease = started.lease;
     }
-    if (state.phase === "uploading") return await this.upload(state, ticket);
+    if (state.phase === "uploading") return await this.upload(state, lease);
     if (state.phase === "complete-pending") return await this.complete(state, true);
     if (state.phase === "verifying") return await this.read(state, true);
     if (state.phase === "cancel-pending") return await this.cancelFrom(state);
@@ -132,19 +277,15 @@ class Runner {
 
   private async start(state: PersonalPhotoResumableUploadState): Promise<{
     readonly state: PersonalPhotoResumableUploadState;
-    readonly ticket: UploadTicket | null;
+    readonly lease: PersonalPhotoUploadLease | null;
     readonly result: PersonalPhotoResumableUploadResult | null;
   }> {
     try {
-      const receipt = await this.wait(this.options.client.request("uploads.start", payload(state), {
-        signal: this.options.signal,
-        idempotencyKey: state.startKey,
-      }));
-      const response = receipt.value;
+      const response = await this.wait(this.transport.start(state, this.options.signal));
       if (response.kind === "existing") {
         if (state.target.kind !== "original") invalid();
         assertOriginalPhoto(state, response.photo);
-        return { state, ticket: null, result: result(state, null, response.photo) };
+        return { state, lease: null, result: result(state, null, response.photo) };
       }
       assertUploadBinding(state, response.upload);
       state = await this.persist(state, {
@@ -153,28 +294,23 @@ class Runner {
       });
       const accepted = await this.accept(state, response.upload, false, state.phase === "cancel-pending");
       if (accepted.stored !== null || accepted.state.phase !== "uploading" && accepted.state.phase !== "cancel-pending") {
-        return { state: accepted.state, ticket: null, result: accepted };
+        return { state: accepted.state, lease: null, result: accepted };
       }
-      const uploadTicket = accepted.state.phase === "cancel-pending" || response.ticket === null || accepted.state.offsetBytes === accepted.state.sizeBytes
+      const lease = accepted.state.phase === "cancel-pending" || accepted.state.offsetBytes === accepted.state.sizeBytes
         ? null
-        : validateTicket(response.ticket, {
-          trustedOrigin: this.trustedUploadOrigin,
-          expectedContentType: accepted.state.contentType,
-          expectedSize: accepted.state.sizeBytes,
-          now: this.now(),
-        });
-      return { state: accepted.state, ticket: uploadTicket, result: null };
+        : response.lease;
+      return { state: accepted.state, lease, result: null };
     } catch (error) {
-      return { state, ticket: null, result: result(state, null, null, error) };
+      return { state, lease: null, result: result(state, null, null, error) };
     }
   }
 
   private async upload(
     initial: PersonalPhotoResumableUploadState,
-    initialTicket: UploadTicket | null,
+    initialLease: PersonalPhotoUploadLease | null,
   ): Promise<PersonalPhotoResumableUploadResult> {
     let state = initial;
-    let ticket = initialTicket;
+    let lease = initialLease;
     let noProgress = 0;
     for (let step = 0; step < MAX_UPLOAD_STEPS && state.phase === "uploading"; step += 1) {
       if (state.offsetBytes === state.sizeBytes) return await this.complete(await this.persist(state, { phase: "complete-pending" }), false);
@@ -186,77 +322,50 @@ class Runner {
         if (state.offsetBytes === state.sizeBytes) continue;
         return result(await this.persist(state, { phase: "expired" }));
       }
-      if (ticket === null || ticket.resumeOffsetBytes !== state.offsetBytes || Date.parse(ticket.expiresAt) <= this.now()) {
+      if (lease === null) {
         const current = await this.read(state, false);
         state = current.state;
         if (current.stored !== null || state.phase !== "uploading") return current;
         if (current.error !== null && fatalReconcileError(current.error)) return current;
         if (state.offsetBytes === state.sizeBytes) continue;
         try {
-          const renewed = await this.wait(this.options.client.request("uploads.renew", { uploadId: requiredUploadId(state) }, { signal: this.options.signal }));
+          const renewed = await this.wait(this.transport.renew(state, this.options.signal));
           assertUploadBinding(state, renewed.upload);
           if (renewed.upload.expiresAt !== state.deadline || renewed.upload.state !== "reserved" || renewed.upload.uploadedBytes !== state.offsetBytes) invalid();
-          ticket = validateTicket(renewed.ticket, {
-            trustedOrigin: this.trustedUploadOrigin,
-            expectedContentType: state.contentType,
-            expectedSize: state.sizeBytes,
-            now: this.now(),
-          });
-          if (ticket.resumeOffsetBytes !== state.offsetBytes) invalid();
+          lease = renewed.lease;
         } catch (error) { return result(state, null, null, error); }
       }
-      if (this.options.source === undefined) invalid();
       const endExclusive = Math.min(state.offsetBytes + GCS_CHUNK_BYTES, state.sizeBytes);
-      const endInclusive = endExclusive - 1;
-      const uploadUrl = ticket.url;
-      const uploadBody = this.options.source.slice(state.offsetBytes, endExclusive);
-      let response: Response;
+      let chunk: { readonly offsetBytes: number | null };
       try {
-        const providerLink = linkedAbortController(this.options.signal);
-        try {
-          response = await this.wait(awaitBounded(Promise.resolve().then(async () => await this.fetchFn(uploadUrl, {
-            method: "PUT",
-            headers: { "Content-Type": state.contentType, "Content-Range": `bytes ${state.offsetBytes}-${endInclusive}/${state.sizeBytes}` },
-            body: uploadBody,
-            signal: providerLink.controller.signal,
-            credentials: "omit",
-            referrerPolicy: "no-referrer",
-            cache: "no-store",
-            redirect: "manual",
-          })), {
-            signal: this.options.signal,
-            timeoutMs: PROVIDER_ATTEMPT_TIMEOUT_MS,
-            onTimeout: () => providerLink.controller.abort(new PersonalPhotoCloudError("unavailable")),
-            onLateResolve: cancelResponse,
-          }));
-        } finally { providerLink.dispose(); }
+        chunk = await this.wait(this.transport.uploadChunk({
+          state,
+          lease,
+          source: this.options.source,
+          start: state.offsetBytes,
+          endExclusive,
+        }, this.options.signal));
       } catch {
         if (this.options.signal.aborted) throw abortReason(this.options.signal);
         const current = await this.read(state, false);
         state = current.state;
         if (current.stored !== null || state.phase !== "uploading") return current;
         if (current.error !== null && fatalReconcileError(current.error)) return current;
-        ticket = null;
+        lease = null;
         noProgress += 1;
         if (noProgress >= MAX_PROVIDER_ATTEMPTS_WITHOUT_PROGRESS) return result(state);
         continue;
       }
-      void response.body?.cancel().catch(() => undefined);
       const previous = state.offsetBytes;
-      if (response.status === 308 && response.type !== "opaqueredirect") {
-        const next = parseProviderRange(response.headers.get("Range"), state.offsetBytes, endInclusive, state.sizeBytes);
-        if (next !== null) state = await this.persist(state, { offsetBytes: next });
-        else {
-          const current = await this.read(state, false);
-          if (current.stored !== null || current.state.phase !== "uploading" || current.error !== null && fatalReconcileError(current.error)) return current;
-          state = current.state;
-        }
+      if (chunk.offsetBytes !== null) {
+        if (!Number.isSafeInteger(chunk.offsetBytes) || chunk.offsetBytes <= state.offsetBytes || chunk.offsetBytes > endExclusive) invalid();
+        state = await this.persist(state, { offsetBytes: chunk.offsetBytes });
       } else {
         const current = await this.read(state, false);
         if (current.stored !== null || current.state.phase !== "uploading" || current.error !== null && fatalReconcileError(current.error)) return current;
         state = current.state;
       }
-      ticket = null;
+      lease = null;
       if (state.phase !== "uploading") return result(state);
       if (state.offsetBytes < previous) invalid();
       noProgress = state.offsetBytes === previous ? noProgress + 1 : 0;
@@ -267,7 +376,7 @@ class Runner {
 
   private async read(state: PersonalPhotoResumableUploadState, allowComplete: boolean): Promise<PersonalPhotoResumableUploadResult> {
     try {
-      const upload = await this.wait(this.options.client.request("uploads.get", { uploadId: requiredUploadId(state) }, { signal: this.options.signal }));
+      const upload = await this.wait(this.transport.read(state, this.options.signal));
       return await this.accept(state, upload, allowComplete);
     } catch (error) { return result(state, null, null, error); }
   }
@@ -307,21 +416,15 @@ class Runner {
         if (this.now() >= completionDeadline(state.deadline)) return result(await this.persist(current.state, { phase: "expired" }));
         state = await this.persist(current.state, { phase: "complete-pending" });
       }
-      const receipt = await this.wait(this.options.client.request("uploads.complete", { uploadId: requiredUploadId(state) }, {
-        signal: this.options.signal,
-        idempotencyKey: state.completeKey,
-      }));
-      return await this.accept(state, receipt.value, false);
+      const upload = await this.wait(this.transport.complete(state, this.options.signal));
+      return await this.accept(state, upload, false);
     } catch (error) { return result(state, null, null, error); }
   }
 
   private async cancelFrom(state: PersonalPhotoResumableUploadState): Promise<PersonalPhotoResumableUploadResult> {
     try {
-      const receipt = await this.wait(this.options.client.request("uploads.cancel", { uploadId: requiredUploadId(state) }, {
-        signal: this.options.signal,
-        idempotencyKey: state.cancelKey,
-      }));
-      return await this.accept(state, receipt.value, false);
+      const upload = await this.wait(this.transport.cancel(state, this.options.signal));
+      return await this.accept(state, upload, false);
     } catch (error) { return result(state, null, null, error); }
   }
 

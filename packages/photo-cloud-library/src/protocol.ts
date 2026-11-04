@@ -1,4 +1,5 @@
 export { awaitBounded, linkedAbortController, abortReason } from "./await";
+export { contentBytes } from "./content";
 export { PersonalPhotoCloudError, publicError, readPhotoError } from "./errors";
 export { PersonalPhotoScope, type ScopedRequest } from "./scope";
 export {

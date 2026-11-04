@@ -43,6 +43,14 @@ export type CreatePersonalPhotoCloudLibraryOptions = {
   memoryBudgets: PersonalPhotoCloudMemoryBudgets;
   clock?: { now(): number };
   urls?: PersonalPhotoCloudUrlFactory;
+  /** Actual host SDK decoder; declarations alone never enable bitmap recipes. */
+  maskSurfaceValidator?: {
+    validateMaskSurface(png: Uint8Array): Promise<{ id: string; width: number; height: number }>;
+  };
+  /** Verified bitmap reader paired with the validator. */
+  maskSurfaceReader?: {
+    loadMaskSurface(photoId: string, surfaceId: string): Promise<Uint8Array | null>;
+  };
 };
 
 export type PersonalPhotoCloudLibraryHandle = {

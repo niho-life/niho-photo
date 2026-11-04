@@ -110,6 +110,44 @@ pub struct RenderCapabilities {
   pub direct_original_max_pixels: Option<u64>,
 }
 
+/// The native source fact used to prove which base belongs to the bundled
+/// SDK's complete initial raster recipe. This is evidence only; it never
+/// changes a saved or draft recipe.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum InitialRasterSourceProvider {
+  /// The verified JPEG/PNG itself is the source and therefore has null base.
+  DirectOriginal,
+  /// A native raster working copy supplies a canonical raster base.
+  WorkingCopy,
+}
+
+/// Complete SDK initial settings paired with the actual native source fact.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct InitialRasterCopyProof {
+  /// Kept at the JSON value level, including SDK fields this desktop build
+  /// does not interpret. Its base is always null.
+  pub initial_settings: Value,
+  /// Whether the original or a generated working copy is the actual source.
+  pub source_provider: InitialRasterSourceProvider,
+  /// Canonical base of that actual source, or null for the direct original.
+  pub source_base_version: Option<String>,
+  /// ICC receipt used to derive a working-copy base.
+  pub source_icc_sha256: Option<String>,
+}
+
+impl InitialRasterCopyProof {
+  /// Return a new initial recipe with only the proven source base applied.
+  pub fn initialized_settings(&self) -> Value {
+    let mut settings = self.initial_settings.clone();
+    settings["base"] = self
+      .source_base_version
+      .clone()
+      .map(Value::String)
+      .unwrap_or(Value::Null);
+    settings
+  }
+}
+
 thread_local! {
   /// このスレッドで作っている現像の入力の試行 ID（{@link with_log_trial} の間だけ）
   static LOG_TRIAL: std::cell::RefCell<Option<String>> = const { std::cell::RefCell::new(None) };
@@ -2784,24 +2822,22 @@ impl PhotoDevelop {
       .and_then(|sidecars| sidecars.develop_render_capabilities.clone())
   }
 
-  /// Explicit copy of an unedited raster. The SDK supplies the full recipe;
-  /// the actual native source provider supplies its canonical working base.
-  /// Missing support is closed, never replaced with a locally invented recipe.
-  pub fn initial_raster_copy_settings(
+  /// Evidence for an explicit raster copy. The bundled SDK supplies its full
+  /// initial recipe and the actual native provider supplies the canonical
+  /// source base. Saved settings do not affect and are not changed by this
+  /// proof-only operation.
+  pub fn initial_raster_copy_proof(
     &self,
     photos: &dyn DevelopPhotos,
     photo_id: &str,
-  ) -> Result<Value, DevelopError> {
-    if photos.has_saved_settings(photo_id) {
-      return Err(unavailable("use the existing saved recipe instead of initializing it"));
-    }
+  ) -> Result<InitialRasterCopyProof, DevelopError> {
     let sidecars = self.sidecars()?;
-    let mut settings = sidecars
+    let initial_settings = sidecars
       .develop_render_capabilities
       .as_ref()
       .and_then(|caps| caps.initial_raster_settings.clone())
       .ok_or_else(|| unavailable("the bundled SDK has no initial raster recipe"))?;
-    if !settings.get("base").is_some_and(Value::is_null) {
+    if !initial_settings.get("base").is_some_and(Value::is_null) {
       return Err(unavailable("the SDK initial recipe has an unexpected base"));
     }
     let pixel_limit = sidecars
@@ -2812,6 +2848,9 @@ impl PhotoDevelop {
     let photo = photos
       .open_photo(photo_id)
       .ok_or_else(|| unavailable("the source photo is not open"))?;
+    if !is_direct_raster_extension(&extension_of(&photo.file_name)) {
+      return Err(unavailable("the source is not a supported raster"));
+    }
     let (width, height) = self
       .full_size_dimensions(&sidecars, &photo.path, ExportInput::Raster)
       .ok_or_else(|| unavailable("source dimensions are unavailable"))?;
@@ -2821,25 +2860,44 @@ impl PhotoDevelop {
       lock(&self.tokens).remove(token);
     }
     match source.get("kind").and_then(Value::as_str) {
-      Some("raster") => {}
+      Some("raster") => Ok(InitialRasterCopyProof {
+        initial_settings,
+        source_provider: InitialRasterSourceProvider::DirectOriginal,
+        source_base_version: None,
+        source_icc_sha256: None,
+      }),
       Some("workingCopy") => {
         let meta = source
           .get("meta")
           .ok_or_else(|| unavailable("working copy metadata is missing"))?;
-        let icc = match meta.get("iccSha256") {
-          Some(Value::Null) => None,
-          Some(Value::String(sha)) => Some(sha.as_str()),
-          _ => return Err(unavailable("working copy ICC receipt is invalid")),
-        };
-        let base = build_raster_base_version(icc).map_err(|_| unavailable("working copy base is invalid"))?;
+        let raster = parse_raster_meta(meta).map_err(|_| unavailable("working copy metadata is invalid"))?;
+        let base = build_raster_base_version(raster.icc_sha256.as_deref())
+          .map_err(|_| unavailable("working copy base is invalid"))?;
         if source.get("baseVersion").and_then(Value::as_str) != Some(base.as_str()) {
           return Err(unavailable("working copy base does not match its metadata"));
         }
-        settings["base"] = Value::String(base);
+        Ok(InitialRasterCopyProof {
+          initial_settings,
+          source_provider: InitialRasterSourceProvider::WorkingCopy,
+          source_base_version: Some(base),
+          source_icc_sha256: raster.icc_sha256,
+        })
       }
-      _ => return Err(unavailable("the source is not a supported raster")),
+      _ => Err(unavailable("the source is not a supported raster")),
     }
-    Ok(settings)
+  }
+
+  /// Initialize only an unedited raster. The proof operation above remains
+  /// available for explicit-copy validation even when a saved recipe exists.
+  pub fn initial_raster_copy_settings(
+    &self,
+    photos: &dyn DevelopPhotos,
+    photo_id: &str,
+  ) -> Result<Value, DevelopError> {
+    if photos.has_saved_settings(photo_id) {
+      return Err(unavailable("use the existing saved recipe instead of initializing it"));
+    }
+    Ok(self.initial_raster_copy_proof(photos, photo_id)?.initialized_settings())
   }
 
   /// 原寸ラスタ書き出しで必要な `raster --long-edge full` を持つ sidecar が使えるときだけ true（待たない）。

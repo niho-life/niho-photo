@@ -5,6 +5,7 @@ import {
   cancelPersonalPhotoResumableUpload,
   runPersonalPhotoResumableUpload,
   type PersonalPhotoResumableUploadState,
+  type PersonalPhotoResumableUploadTransport,
 } from "../src/browser";
 import { FakeClient } from "./support";
 
@@ -77,6 +78,36 @@ function harness(initial: PersonalPhotoResumableUploadState, client = new FakeCl
 }
 
 describe("target-independent resumable upload", () => {
+  it("runs through an opaque transport without exposing or persisting a provider ticket", async () => {
+    const initial = state();
+    let durable = structuredClone(initial);
+    let durableWrites = 0;
+    const transport: PersonalPhotoResumableUploadTransport = {
+      async start(current) {
+        expect(durableWrites).toBeGreaterThan(0);
+        return { kind: "upload", upload: stored(current), lease: null };
+      },
+      async read() { throw new Error("unexpected read"); },
+      async renew() { throw new Error("unexpected renew"); },
+      async uploadChunk() { throw new Error("unexpected chunk"); },
+      async complete() { throw new Error("unexpected complete"); },
+      async cancel() { throw new Error("unexpected cancel"); },
+    };
+    const result = await runPersonalPhotoResumableUpload({
+      transport,
+      state: initial,
+      source: new Blob([new Uint8Array([1, 2, 3])]),
+      signal: new AbortController().signal,
+      store: { async compareAndSet(expected, next) {
+        expect(expected).toEqual(durable);
+        durable = structuredClone(next);
+        durableWrites += 1;
+      } },
+    });
+    expect(result.stored).toMatchObject({ kind: "mask", photoId: PHOTO_ID });
+    expect(JSON.stringify(durable)).not.toMatch(/ticket|url|credential/i);
+  });
+
   it.each(["run", "cancel"] as const)("requires a durable state before %s can send a mutation", async (operation) => {
     const run = harness(state({ phase: operation === "cancel" ? "cancel-pending" : "start-pending" }));
     const options = { ...run.options, store: { async compareAndSet() { throw new Error("not durable"); } } };

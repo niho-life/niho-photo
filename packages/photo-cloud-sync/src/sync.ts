@@ -25,7 +25,6 @@ import {
   type RecipeConflict,
   type VerifiedPhotoActor,
 } from "@niho/photo-personal-cloud-contract";
-import { readDevelopMasks } from "niho-photo-editing/develop-engine/develop-masks";
 
 import type {
   CreatePersonalPhotoRecipeSyncOptions,
@@ -34,6 +33,7 @@ import type {
   JournalResolutionProof,
   JournalStage,
   LocalRecipeCandidate,
+  MaskSurfacePinLease,
   PendingWriterPage,
   PendingWriterToken,
   PersonalPhotoRecipeSync,
@@ -64,6 +64,7 @@ interface RefState {
   readonly committed: Promise<StageCommitResult>;
   result: StageCommitResult | null;
   attempt: JournalPutAttempt | null;
+  readonly releaseMaskLeases: readonly MaskSurfacePinLease[];
 }
 
 export function createPersonalPhotoRecipeSync(options: CreatePersonalPhotoRecipeSyncOptions): PersonalPhotoRecipeSync {
@@ -160,7 +161,12 @@ class Sync implements PersonalPhotoRecipeSync {
     void this.disposeJournalWhenSettled();
   }
 
-  createRef(writer: Writer, stage: JournalStage, alreadyCommitted = false): RecipeStageRef {
+  createRef(
+    writer: Writer,
+    stage: JournalStage,
+    alreadyCommitted = false,
+    releaseMaskLeases: readonly MaskSurfacePinLease[] = [],
+  ): RecipeStageRef {
     let settlePromise!: (result: StageCommitResult) => void;
     const committed = new Promise<StageCommitResult>((resolve) => { settlePromise = resolve; });
     const state: RefState = {
@@ -175,6 +181,7 @@ class Sync implements PersonalPhotoRecipeSync {
       },
       result: null,
       attempt: null,
+      releaseMaskLeases: clone(releaseMaskLeases),
     };
     const ref = Object.freeze({ committed });
     this.refs.set(ref, state);
@@ -299,7 +306,12 @@ class Sync implements PersonalPhotoRecipeSync {
     assertCurrent: () => void,
   ): Promise<{ readonly library: PersonalPhotoLibrary; readonly photo: Photo } | null> {
     const verified = await this.verifyManualTarget(binding, candidate, signal, assertCurrent);
-    return verified !== null && projectRecipeSettings(verified.photo, verified.library, this.options.hostRenderer) !== null
+    return verified !== null && projectRecipeSettings(
+      verified.photo,
+      verified.library,
+      this.options.hostRenderer,
+      this.options.maskSurfaceBarrier !== undefined,
+    ) !== null
       ? verified
       : null;
   }
@@ -317,7 +329,13 @@ class Sync implements PersonalPhotoRecipeSync {
     assertCurrent();
     const photo = validatePhoto(photoRaw, this.scope.libraryId);
     if (photo.id !== binding.photoId || photo.original.sha256 !== binding.sourceSha256) return null;
-    if (candidate !== null && (!library.capabilities.edits || !candidateUsable(candidate, photo, library, this.options.hostRenderer))) return null;
+    if (candidate !== null && (!library.capabilities.edits || !candidateUsable(
+      candidate,
+      photo,
+      library,
+      this.options.hostRenderer,
+      this.options.maskSurfaceBarrier !== undefined,
+    ))) return null;
     return { library, photo };
   }
 
@@ -473,14 +491,14 @@ class Writer implements PersonalPhotoRecipeWriter {
     this.nextGeneration = nextGeneration;
   }
 
-  stage(input: LocalRecipeCandidate): RecipeStageRef {
+  stage(input: LocalRecipeCandidate, releaseMaskLeases: readonly MaskSurfacePinLease[] = []): RecipeStageRef {
     this.assertOpen();
     if (this.recovered) throw new PersonalPhotoCloudError("unsupported");
     this.sync.assertLocal();
     const candidate = validateCandidate(input);
     const stage = { generation: this.nextGeneration, candidate };
     this.nextGeneration += 1;
-    const ref = this.sync.createRef(this, stage);
+    const ref = this.sync.createRef(this, stage, false, releaseMaskLeases);
     const state = this.sync.refState(ref, this);
     if (!this.activeStage) this.startStage(state);
     else {
@@ -668,7 +686,7 @@ class Writer implements PersonalPhotoRecipeWriter {
             baseVersion: conflict.conflictingRecipe.baseVersion,
             maskSurfaceIds: clone(conflict.conflictingRecipe.maskSurfaceIds),
           };
-          if (!candidateUsable(candidate, photo, library, this.sync.options.hostRenderer)) return { status: "unsupported" };
+          if (!candidateUsable(candidate, photo, library, this.sync.options.hostRenderer, this.sync.options.maskSurfaceBarrier !== undefined)) return { status: "unsupported" };
           proof = {
             decision: "adopt",
             conflictSnapshotSha256,
@@ -751,7 +769,7 @@ class Writer implements PersonalPhotoRecipeWriter {
       await this.sync.capturedJournal((journalSignal) => this.sync.options.journal.stage(this.binding, {
         generation: state.generation,
         candidate: state.candidate,
-      }, journalSignal));
+      }, journalSignal, state.releaseMaskLeases));
       state.settle({ status: "committed", generation: state.generation });
     } catch (error) {
       state.settle({ status: "unsaved", reason: isQuota(error) ? "quota" : "unavailable" });
@@ -880,6 +898,12 @@ class Writer implements PersonalPhotoRecipeWriter {
     if (attempt.conflictId !== null) return await this.finishConflict(attempt, attempt.conflictId, signal, assertCurrent);
     const body = parseRecord(attempt.requestBody);
     try {
+      if (attempt.candidate.maskSurfaceIds.length > 0) {
+        const barrier = this.sync.options.maskSurfaceBarrier;
+        if (barrier === undefined) return { status: "unsupported", generation: attempt.generation };
+        await barrier.ensureStored(this.binding, attempt.candidate, this.recovered, signal, assertCurrent);
+        assertCurrent();
+      }
       const receipt = await this.sync.request("recipes.put", {
         photoId: this.binding.photoId,
         expectedRevision: body.expectedRevision as number,
@@ -1058,6 +1082,16 @@ class Writer implements PersonalPhotoRecipeWriter {
     }
     const body = parseRecord(attempt.requestBody);
     try {
+      if (attempt.proof.decision === "adopt" && attempt.proof.selectedCandidate.maskSurfaceIds.length > 0) {
+        const barrier = this.sync.options.maskSurfaceBarrier;
+        if (barrier === undefined) return { status: "unsupported" };
+        await barrier.ensureStored(this.binding, {
+          settings: clone(attempt.proof.selectedCandidate.settings),
+          baseVersion: attempt.proof.selectedCandidate.baseVersion,
+          maskSurfaceIds: clone(attempt.proof.selectedCandidate.maskSurfaceIds),
+        }, this.recovered, signal, assertCurrent);
+        assertCurrent();
+      }
       const receipt = await this.sync.request("recipe-conflicts.resolve", {
         photoId: this.binding.photoId,
         conflictId: attempt.conflictId,
@@ -1120,10 +1154,17 @@ function candidateUsable(
   photo: Photo,
   library: PersonalPhotoLibrary,
   hostRenderer: CreatePersonalPhotoRecipeSyncOptions["hostRenderer"],
+  bitmapReader: boolean,
 ): boolean {
-  if (photo.format === "raw" || candidate.baseVersion !== null || candidate.maskSurfaceIds.length > 0) return false;
-  if (candidate.settings.base !== undefined && candidate.settings.base !== null) return false;
-  if (readDevelopMasks(candidate.settings).length > 0) return false;
+  const settingsBase = candidate.settings.base;
+  if (photo.format === "raw" && candidate.baseVersion === null) return false;
+  if (settingsBase !== undefined && settingsBase !== null && typeof settingsBase !== "string") return false;
+  if (candidate.baseVersion === null) {
+    if (settingsBase !== undefined && settingsBase !== null) return false;
+  } else {
+    if (settingsBase !== candidate.baseVersion || photo.media.state !== "ready" || photo.media.workingCopy?.baseVersion !== candidate.baseVersion) return false;
+  }
+  if (candidate.maskSurfaceIds.length > 0 && !bitmapReader) return false;
   const projected: Photo = {
     ...photo,
     recipe: {
@@ -1133,7 +1174,7 @@ function candidateUsable(
       maskSurfaceIds: candidate.maskSurfaceIds,
     },
   };
-  return projectRecipeSettings(projected, library, hostRenderer) !== null;
+  return projectRecipeSettings(projected, library, hostRenderer, bitmapReader) !== null;
 }
 
 function validateCandidate(input: LocalRecipeCandidate): LocalRecipeCandidate {

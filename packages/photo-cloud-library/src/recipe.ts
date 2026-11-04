@@ -21,6 +21,7 @@ export function projectRecipeSettings(
   photo: Photo,
   cloud: PersonalPhotoLibrary,
   host: RenderCapability,
+  bitmapReader = false,
 ): DevelopSettings | null {
   const settings = readDevelopSettings(photo.recipe.settings);
   if (!settings || !supportsDevelopSettingsWrite(settings)) return null;
@@ -44,8 +45,7 @@ export function projectRecipeSettings(
     const needsSurfaces = photo.recipe.maskSurfaceIds.length > 0 ||
       masks.some((mask) => mask.kind === "brush" || mask.kind === "subject" || mask.kind === "sky");
     if (needsSurfaces && (!renderer.maskSurfaces || !cloud.capabilities.maskSurfaces)) return null;
-    // The public adapter still has no bitmap mask reader. Preserve these recipes as read-only.
-    if (needsSurfaces) return null;
+    if (needsSurfaces && !bitmapReader) return null;
   }
   return settings;
 }

@@ -724,7 +724,8 @@ fn explicit_copy_uses_the_bundled_full_initial_recipe_and_actual_raster_base() {
     let harness = SidecarHarness::new(&format!("copy-initial-{mode}"));
     let mut capabilities: Value = serde_json::from_str(&render_capabilities_line(&[1], &[])).unwrap();
     let initial = json!({"v":1,"engine":"niho-14","look":"niho-standard-1","base":null,
-      "exposure":0,"whiteBalance":{"mode":"asShot","temperature":6500,"tint":0}});
+      "exposure":0,"whiteBalance":{"mode":"asShot","temperature":6500,"tint":0,
+        "futureSdk":{"nestedDefault":17,"mode":"preserved"}}});
     capabilities["initialRasterSettings"] = initial.clone();
     capabilities["directOriginalMaxPixels"] = json!(40_000_000);
     harness.mark("render-capabilities", &capabilities.to_string());
@@ -756,9 +757,21 @@ fn explicit_copy_uses_the_bundled_full_initial_recipe_and_actual_raster_base() {
     }
     assert_eq!(settings, expected);
     assert!(!photos.has_saved_settings("photo"));
-    assert!(develop
-      .initial_raster_copy_settings(&photos.with_saved_settings(), "photo")
-      .is_err());
+    let saved = photos.with_saved_settings();
+    let candidate = json!({"v":1,"engine":"niho-14","base":null,"exposure":1.5});
+    let unchanged = candidate.clone();
+    let proof = develop.initial_raster_copy_proof(&saved, "photo").unwrap();
+    assert_eq!(
+      proof.initial_settings["whiteBalance"]["futureSdk"],
+      initial["whiteBalance"]["futureSdk"]
+    );
+    assert_eq!(
+      candidate, unchanged,
+      "proof-only capture cannot rewrite a saved candidate"
+    );
+    assert!(saved.has_saved_settings("photo"));
+    assert_eq!(proof.source_base_version.is_some(), working);
+    assert!(develop.initial_raster_copy_settings(&saved, "photo").is_err());
   }
   let harness = SidecarHarness::new("copy-initial-old-sdk");
   harness.mark("render-capabilities", &render_capabilities_line(&[1], &[]));

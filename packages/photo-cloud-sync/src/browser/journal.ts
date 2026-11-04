@@ -12,6 +12,7 @@ import type {
   JournalPreviousPendingWriter,
   JournalPreviousPendingWriterPage,
   MaskSurfaceInput,
+  MaskSurfacePinLease,
   MaskSurfaceUploadState,
   PendingWriterPage,
   PendingWriterToken,
@@ -38,6 +39,7 @@ const MAX_SCOPE_MASKS = 128;
 const MAX_GLOBAL_MASKS = 512;
 const MAX_LIST_COUNT = 16;
 const MAX_LIST_BYTES = 4 * 1024 ** 2;
+const MAX_MASK_GC_SCAN = 64;
 const SHA256 = /^[0-9a-f]{64}$/u;
 const NEVER_ABORTS = new AbortController().signal;
 
@@ -64,7 +66,7 @@ interface BudgetRecord {
 }
 
 interface MaskRecord extends RecipeJournalScope {
-  readonly schemaVersion: 1;
+  readonly schemaVersion: 1 | 2;
   readonly key: string;
   readonly photoId: string;
   readonly id: string;
@@ -75,6 +77,7 @@ interface MaskRecord extends RecipeJournalScope {
   readonly bytes: Uint8Array;
   readonly uploadState: MaskSurfaceUploadState | null;
   readonly pinned: boolean;
+  readonly pinLeases?: readonly MaskSurfacePinLease[];
 }
 
 export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
@@ -86,18 +89,47 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     private readonly databaseName = "niho-personal-photo-recipe-sync-v1",
   ) {}
 
-  async stage(binding: RecipeWriterBinding, stage: JournalStage, signal?: AbortSignal): Promise<void> {
+  async stage(
+    binding: RecipeWriterBinding,
+    stage: JournalStage,
+    signal?: AbortSignal,
+    releaseMaskLeases: readonly MaskSurfacePinLease[] = [],
+  ): Promise<void> {
     validateBinding(binding);
     validateStage(stage);
-    await this.mutate(binding, signal, (current) => {
-      if (stage.generation < current.nextGeneration) unavailable();
-      return {
-        ...current,
-        revision: current.revision + 1,
-        nextGeneration: stage.generation + 1,
-        latest: clone(stage),
-      };
-    }, stage.generation);
+    validateLeaseList(releaseMaskLeases, binding.token);
+    if (releaseMaskLeases.length === 0) {
+      await this.mutate(binding, signal, (current) => {
+        if (stage.generation < current.nextGeneration) unavailable();
+        return {
+          ...current,
+          revision: current.revision + 1,
+          nextGeneration: stage.generation + 1,
+          latest: clone(stage),
+        };
+      }, stage.generation);
+      return;
+    }
+    const database = await this.database(signal);
+    const transaction = strictTransaction(database, [WRITERS, MASKS, META], "readwrite");
+    const barrier = transactionBarrier(transaction);
+    void barrier.catch(() => undefined);
+    const writers = transaction.objectStore(WRITERS);
+    const raw = await transactionWait(requestResult(writers.get(recordId(binding))), transaction, signal);
+    const current = raw === undefined ? initialRecord(binding, stage.generation) : validateRecord(raw);
+    if (!sameBinding(current, binding) || stage.generation < current.nextGeneration) { abort(transaction); unavailable(); }
+    const next = {
+      ...current,
+      revision: current.revision + 1,
+      nextGeneration: stage.generation + 1,
+      latest: clone(stage),
+    };
+    validateRecord(next);
+    await updateCombinedBudgets(transaction.objectStore(META), binding, raw === undefined ? 1 : 0, 0,
+      jsonBytes(next) - (raw === undefined ? 0 : jsonBytes(current)), signal, transaction);
+    writers.put(next);
+    await releaseLeasesInTransaction(transaction, binding, releaseMaskLeases, signal);
+    await transactionWait(barrier, transaction, signal);
   }
 
   async createAttempt(
@@ -497,17 +529,37 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
   async discard(binding: RecipeWriterBinding, signal?: AbortSignal): Promise<void> {
     validateBinding(binding);
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [WRITERS, META], "readwrite");
+    const transaction = strictTransaction(database, [WRITERS, MASKS, META], "readwrite");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
     const store = transaction.objectStore(WRITERS);
     const currentRaw = await transactionWait(requestResult(store.get(recordId(binding))), transaction, signal);
+    const maskKeys = new Set<string>();
     if (currentRaw !== undefined) {
       const current = validateRecord(currentRaw);
       if (!sameBinding(current, binding)) { abort(transaction); unavailable(); }
       if (current.attempt !== null || current.resolution !== null) { abort(transaction); unavailable(); }
+      for (const sha of current.latest?.candidate.maskSurfaceIds ?? []) maskKeys.add(maskKey(binding, binding.photoId, sha));
       await updateCombinedBudgets(transaction.objectStore(META), binding, -1, 0, -jsonBytes(current), signal, transaction);
       store.delete(current.id);
+    }
+    const releasedKeys = await releaseLeasesInTransaction(transaction, binding, [], signal, binding.token);
+    for (const key of releasedKeys) maskKeys.add(key);
+    const masks = transaction.objectStore(MASKS);
+    let removedCount = 0;
+    let removedBytes = 0;
+    for (const key of maskKeys) {
+      const raw = await transactionWait(requestResult(masks.get(key)), transaction, signal);
+      if (raw === undefined) continue;
+      const current = validateMaskRecord(raw);
+      if (current.pinned || maskLeases(current).length > 0 || current.uploadState !== null ||
+        await anyWriterReferences(store, current.photoId, current.sha256, signal, transaction)) continue;
+      masks.delete(key);
+      removedCount += 1;
+      removedBytes += maskBytes(current);
+    }
+    if (removedCount > 0) {
+      await updateCombinedBudgets(transaction.objectStore(META), binding, 0, -removedCount, -removedBytes, signal, transaction);
     }
     await transactionWait(barrier, transaction, signal);
   }
@@ -539,15 +591,17 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     photoId: string,
     surface: MaskSurfaceInput,
     signal?: AbortSignal,
+    lease?: MaskSurfacePinLease | null,
   ): Promise<void> {
     validateScope(scope);
     validateOpaque(photoId);
     const bytes = new Uint8Array(surface.bytes);
     validateMaskInput(photoId, surface, bytes);
+    if (lease !== undefined && lease !== null) validateLease(lease);
     if (digestBytes(bytes) !== surface.sha256) unavailable();
     const record: MaskRecord = {
       ...clone(scope),
-      schemaVersion: 1,
+      schemaVersion: 2,
       key: maskKey(scope, photoId, surface.sha256),
       photoId,
       id: surface.id,
@@ -557,11 +611,12 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
       contentType: "image/png",
       bytes,
       uploadState: clone(surface.uploadState),
-      pinned: true,
+      pinned: lease === undefined,
+      pinLeases: lease === undefined || lease === null ? [] : [clone(lease)],
     };
     validateMaskRecord(record);
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [MASKS, META], "readwrite");
+    const transaction = strictTransaction(database, [MASKS, WRITERS, META], "readwrite");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
     const store = transaction.objectStore(MASKS);
@@ -571,14 +626,21 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
       if (!sameMaskScope(current, scope) || current.photoId !== photoId || current.sha256 !== surface.sha256) { abort(transaction); unavailable(); }
       if (
         current.id !== record.id || current.width !== record.width || current.height !== record.height ||
-        !equalBytes(current.bytes, record.bytes) || !deepEqual(current.uploadState, record.uploadState)
+        !equalBytes(current.bytes, record.bytes) ||
+        surface.uploadState !== null && !deepEqual(current.uploadState, surface.uploadState)
       ) { abort(transaction); unavailable(); }
-      if (!current.pinned) {
-        const next = { ...current, pinned: true };
+      const currentLeases = maskLeases(current);
+      const pinLeases = lease === undefined || lease === null || currentLeases.some((item) => sameLease(item, lease))
+        ? currentLeases
+        : [...currentLeases, clone(lease)];
+      const pinned = current.pinned || lease === undefined;
+      if (current.pinned !== pinned || pinLeases !== currentLeases || current.schemaVersion !== 2) {
+        const next = { ...current, schemaVersion: 2 as const, pinned, pinLeases };
         await updateCombinedBudgets(transaction.objectStore(META), scope, 0, 0, maskBytes(next) - maskBytes(current), signal, transaction);
         store.put(next);
       }
     } else {
+      await collectMaskGarbage(transaction, scope, maskBytes(record), signal);
       await updateCombinedBudgets(transaction.objectStore(META), scope, 0, 1, maskBytes(record), signal, transaction);
       store.add(record);
     }
@@ -666,6 +728,23 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     await transactionWait(barrier, transaction, signal);
   }
 
+  async releaseMaskSurfaceLeases(
+    scope: RecipeJournalScope,
+    writerId: string,
+    leases: readonly MaskSurfacePinLease[] | undefined = undefined,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    validateScope(scope);
+    validateOpaque(writerId);
+    if (leases !== undefined) validateLeaseList(leases, writerId);
+    const database = await this.database(signal);
+    const transaction = strictTransaction(database, [MASKS, META], "readwrite");
+    const barrier = transactionBarrier(transaction);
+    void barrier.catch(() => undefined);
+    await releaseLeasesInTransaction(transaction, scope, leases ?? [{ writerId, pinToken: "*" }], signal, leases === undefined ? writerId : undefined);
+    await transactionWait(barrier, transaction, signal);
+  }
+
   async deleteMaskSurface(
     scope: RecipeJournalScope,
     photoId: string,
@@ -684,7 +763,7 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     if (raw === undefined) { await transactionWait(barrier, transaction, signal); return false; }
     const current = validateMaskRecord(raw);
     if (!sameMaskScope(current, scope) || current.photoId !== photoId || current.sha256 !== sha) { abort(transaction); unavailable(); }
-    if (current.pinned || current.uploadState !== null || await anyWriterReferences(transaction.objectStore(WRITERS), photoId, sha, signal, transaction)) {
+    if (current.pinned || maskLeases(current).length > 0 || current.uploadState !== null || await anyWriterReferences(transaction.objectStore(WRITERS), photoId, sha, signal, transaction)) {
       await transactionWait(barrier, transaction, signal);
       return false;
     }
@@ -971,13 +1050,17 @@ function validateMaskRecord(value: unknown): MaskRecord {
   if (!isRecord(value)) unavailable();
   const record = value as unknown as MaskRecord;
   validateScope(record);
+  const legacyKeys = [
+    "actorId", "libraryId", "sessionId", "sessionEpoch", "transport", "schemaVersion", "key", "photoId",
+    "id", "width", "height", "sha256", "contentType", "bytes", "uploadState", "pinned",
+  ];
+  const leasedKeys = [...legacyKeys, "pinLeases"];
   if (
-    !exactKeys(value, [
-      "actorId", "libraryId", "sessionId", "sessionEpoch", "transport", "schemaVersion", "key", "photoId",
-      "id", "width", "height", "sha256", "contentType", "bytes", "uploadState", "pinned",
-    ]) || record.schemaVersion !== 1 || record.key !== maskKey(record, record.photoId, record.sha256) ||
+    !(record.schemaVersion === 1 ? exactKeys(value, legacyKeys) : record.schemaVersion === 2 && exactKeys(value, leasedKeys)) ||
+    record.key !== maskKey(record, record.photoId, record.sha256) ||
     record.contentType !== "image/png" || typeof record.pinned !== "boolean"
   ) unavailable();
+  if (record.schemaVersion === 2) validateLeaseList(record.pinLeases ?? []);
   validateOpaque(record.photoId);
   validateMaskInput(record.photoId, {
     id: record.id,
@@ -1019,12 +1102,129 @@ function maskValue(record: MaskRecord): PersistedMaskSurface {
     bytes: new Uint8Array(record.bytes),
     uploadState: clone(record.uploadState),
     pinned: record.pinned,
+    pinLeases: clone(maskLeases(record)),
   };
 }
 
 function maskBytes(record: MaskRecord): number {
   const { bytes, ...metadata } = record;
   return bytes.byteLength + jsonBytes(metadata);
+}
+
+async function releaseLeasesInTransaction(
+  transaction: IDBTransaction,
+  scope: RecipeJournalScope,
+  leases: readonly MaskSurfacePinLease[],
+  signal: AbortSignal | undefined,
+  writerOnly?: string,
+): Promise<readonly string[]> {
+  const selected = new Set(leases.map((lease) => `${lease.writerId}\u0000${lease.pinToken}`));
+  const releasedKeys: string[] = [];
+  let byteDelta = 0;
+  await visitScopeMasks(transaction, scope, MAX_SCOPE_MASKS, signal, (raw) => {
+    const current = validateMaskRecord(raw);
+    const currentLeases = maskLeases(current);
+    const pinLeases = currentLeases.filter((lease) => writerOnly === undefined
+      ? !selected.has(`${lease.writerId}\u0000${lease.pinToken}`)
+      : lease.writerId !== writerOnly);
+    if (pinLeases.length === currentLeases.length) return true;
+    const next = { ...current, schemaVersion: 2 as const, pinLeases };
+    validateMaskRecord(next);
+    byteDelta += maskBytes(next) - maskBytes(current);
+    transaction.objectStore(MASKS).put(next);
+    releasedKeys.push(current.key);
+    return true;
+  });
+  if (byteDelta !== 0) {
+    await updateCombinedBudgets(transaction.objectStore(META), scope, 0, 0, byteDelta, signal, transaction);
+  }
+  return releasedKeys;
+}
+
+async function collectMaskGarbage(
+  transaction: IDBTransaction,
+  scope: RecipeJournalScope,
+  incomingBytes: number,
+  signal: AbortSignal | undefined,
+): Promise<void> {
+  const scopeBudgetKey = `scope:${JSON.stringify(scopeKey(scope))}`;
+  const [globalRaw, scopeRaw] = await Promise.all([
+    transactionWait(requestResult(transaction.objectStore(META).get("global")), transaction, signal),
+    transactionWait(requestResult(transaction.objectStore(META).get(scopeBudgetKey)), transaction, signal),
+  ]);
+  const global = budget(globalRaw, "global");
+  const scoped = budget(scopeRaw, scopeBudgetKey);
+  const needsRoom = scoped.masks + 1 > MAX_SCOPE_MASKS || global.masks + 1 > MAX_GLOBAL_MASKS ||
+    scoped.bytes + incomingBytes > MAX_SCOPE_BYTES || global.bytes + incomingBytes > MAX_GLOBAL_BYTES;
+  if (!needsRoom) return;
+
+  let removedCount = 0;
+  let removedBytes = 0;
+  await visitScopeMasks(transaction, scope, MAX_MASK_GC_SCAN, signal, async (raw) => {
+    const current = validateMaskRecord(raw);
+    if (
+      current.pinned || maskLeases(current).length > 0 || current.uploadState !== null ||
+      await anyWriterReferences(transaction.objectStore(WRITERS), current.photoId, current.sha256, signal, transaction)
+    ) return true;
+    transaction.objectStore(MASKS).delete(current.key);
+    removedCount += 1;
+    removedBytes += maskBytes(current);
+    return !(
+      scoped.masks - removedCount + 1 <= MAX_SCOPE_MASKS && global.masks - removedCount + 1 <= MAX_GLOBAL_MASKS &&
+      scoped.bytes - removedBytes + incomingBytes <= MAX_SCOPE_BYTES && global.bytes - removedBytes + incomingBytes <= MAX_GLOBAL_BYTES
+    );
+  });
+  if (removedCount > 0) {
+    await updateCombinedBudgets(transaction.objectStore(META), scope, 0, -removedCount, -removedBytes, signal, transaction);
+  }
+}
+
+async function visitScopeMasks(
+  transaction: IDBTransaction,
+  scope: RecipeJournalScope,
+  limit: number,
+  signal: AbortSignal | undefined,
+  visit: (record: unknown) => boolean | Promise<boolean>,
+): Promise<void> {
+  await transactionWait(new Promise<void>((resolve, reject) => {
+    let count = 0;
+    const prefix = scopeKey(scope);
+    const request = transaction.objectStore(MASKS).index(MASK_SCOPE).openCursor(IDBKeyRange.bound(prefix, [...prefix, []]));
+    request.onerror = () => reject(idbError(request.error));
+    request.onsuccess = () => {
+      const cursor = request.result;
+      if (cursor === null || count >= limit) { resolve(); return; }
+      count += 1;
+      // Visit one PNG at a time; never materialize the combined mask byte budget.
+      void Promise.resolve().then(async () => {
+        if (await visit(cursor.value)) cursor.continue();
+        else resolve();
+      }).catch((error: unknown) => { abort(transaction); reject(error); });
+    };
+  }), transaction, signal);
+}
+
+function maskLeases(record: MaskRecord): readonly MaskSurfacePinLease[] {
+  return record.schemaVersion === 1 ? [] : record.pinLeases ?? [];
+}
+
+function validateLease(value: MaskSurfacePinLease): void {
+  if (!isRecord(value) || !exactKeys(value, ["writerId", "pinToken"])) unavailable();
+  validateOpaque(value.writerId);
+  validateOpaque(value.pinToken);
+}
+
+function validateLeaseList(values: readonly MaskSurfacePinLease[], writerId?: string): void {
+  if (!Array.isArray(values) || values.length > MAX_SCOPE_MASKS) unavailable();
+  values.forEach((value) => {
+    validateLease(value);
+    if (writerId !== undefined && value.writerId !== writerId) unavailable();
+  });
+  if (new Set(values.map((value) => `${value.writerId}\u0000${value.pinToken}`)).size !== values.length) unavailable();
+}
+
+function sameLease(left: MaskSurfacePinLease, right: MaskSurfacePinLease): boolean {
+  return left.writerId === right.writerId && left.pinToken === right.pinToken;
 }
 
 async function anyWriterReferences(

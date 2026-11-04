@@ -9,7 +9,10 @@ import type {
   VerifiedPhotoActor,
 } from "@niho/photo-personal-cloud-contract";
 import type { PersonalPhotoCloudIdentity } from "@niho/photo-cloud-library";
-import type { PersonalPhotoResumableUploadState } from "@niho/photo-cloud-library/browser";
+import type {
+  PersonalPhotoResumableUploadState,
+  PersonalPhotoResumableUploadTransport,
+} from "@niho/photo-cloud-library/browser";
 
 export interface LocalRecipeCandidate {
   readonly settings: JsonObject & { readonly v: number; readonly engine: string };
@@ -77,7 +80,7 @@ export interface RecipeDraftSnapshot {
 
 export interface PersonalPhotoRecipeWriter {
   readonly token: string;
-  stage(candidate: LocalRecipeCandidate): RecipeStageRef;
+  stage(candidate: LocalRecipeCandidate, releaseMaskLeases?: readonly MaskSurfacePinLease[]): RecipeStageRef;
   readDraft(signal?: AbortSignal): Promise<RecipeDraftSnapshot>;
   save(ref: RecipeStageRef, signal?: AbortSignal): Promise<SaveRecipeResult>;
   retry(signal?: AbortSignal): Promise<SaveRecipeResult>;
@@ -138,6 +141,22 @@ export interface CreatePersonalPhotoRecipeSyncOptions {
   readonly now?: () => number;
   readonly randomId?: () => string;
   readonly timeoutMs?: number;
+  /** Trusted composition only. Absence keeps bitmap candidates closed. */
+  readonly maskSurfaceBarrier?: RecipeMaskSurfaceBarrier;
+}
+
+export interface RecipeMaskSurfaceBarrier {
+  ensureStored(
+    binding: RecipeWriterBinding,
+    candidate: LocalRecipeCandidate,
+    recovered: boolean,
+    signal: AbortSignal,
+    assertCurrent: () => void,
+  ): Promise<void>;
+}
+
+export interface BrowserMaskSurfaceBindingOptions {
+  readonly maskSurfaceTransport?: PersonalPhotoResumableUploadTransport;
 }
 
 export interface RecipeJournalScope {
@@ -168,10 +187,17 @@ export interface MaskSurfaceInput {
   readonly uploadState: MaskSurfaceUploadState | null;
 }
 
+export interface MaskSurfacePinLease {
+  readonly writerId: string;
+  readonly pinToken: string;
+}
+
 export interface PersistedMaskSurface extends MaskSurfaceInput {
   readonly photoId: string;
   readonly contentType: "image/png";
   readonly pinned: boolean;
+  /** Writer-scoped pins. Legacy callers continue to use `pinned`. */
+  readonly pinLeases: readonly MaskSurfacePinLease[];
 }
 
 export interface JournalStage {
@@ -255,7 +281,7 @@ export interface JournalPreviousPendingWriterPage {
 export interface RecipeSyncJournal {
   /** 同canonical user/libraryの旧tupleを最大16件/4MiBで返す。通常listのscope条件は変えない。 */
   listPrevious?(scope: RecipeJournalScope, options?: { readonly cursor?: string; readonly limit?: number }, signal?: AbortSignal): Promise<JournalPreviousPendingWriterPage>;
-  stage(binding: RecipeWriterBinding, stage: JournalStage, signal?: AbortSignal): Promise<void>;
+  stage(binding: RecipeWriterBinding, stage: JournalStage, signal?: AbortSignal, releaseMaskLeases?: readonly MaskSurfacePinLease[]): Promise<void>;
   createAttempt(binding: RecipeWriterBinding, stage: JournalStage, attemptId: string, idempotencyKey: string, signal?: AbortSignal): Promise<JournalPutAttempt>;
   acknowledgeAttempt(binding: RecipeWriterBinding, attemptId: string, generation: number, revision: number, signal?: AbortSignal): Promise<boolean>;
   conflictAttempt(binding: RecipeWriterBinding, attemptId: string, generation: number, conflictId: string, snapshotSha256: string | null, signal?: AbortSignal): Promise<boolean>;
@@ -268,10 +294,11 @@ export interface RecipeSyncJournal {
   reopen(scope: RecipeJournalScope, token: string, signal?: AbortSignal): Promise<ReopenedJournalWriter | null>;
   discard(binding: RecipeWriterBinding, signal?: AbortSignal): Promise<void>;
   releaseCompleted(binding: RecipeWriterBinding, signal?: AbortSignal): Promise<boolean>;
-  putMaskSurface(scope: RecipeJournalScope, photoId: string, surface: MaskSurfaceInput, signal?: AbortSignal): Promise<void>;
+  putMaskSurface(scope: RecipeJournalScope, photoId: string, surface: MaskSurfaceInput, signal?: AbortSignal, lease?: MaskSurfacePinLease | null): Promise<void>;
   getMaskSurface(scope: RecipeJournalScope, photoId: string, sha256: string, signal?: AbortSignal): Promise<PersistedMaskSurface | null>;
   compareAndSetMaskUploadState(scope: RecipeJournalScope, photoId: string, sha256: string, expected: MaskSurfaceUploadState | null, next: MaskSurfaceUploadState | null, signal?: AbortSignal): Promise<boolean>;
   setMaskSurfacePinned(scope: RecipeJournalScope, photoId: string, sha256: string, pinned: boolean, signal?: AbortSignal): Promise<void>;
+  releaseMaskSurfaceLeases(scope: RecipeJournalScope, writerId: string, leases?: readonly MaskSurfacePinLease[], signal?: AbortSignal): Promise<void>;
   deleteMaskSurface(scope: RecipeJournalScope, photoId: string, sha256: string, signal?: AbortSignal): Promise<boolean>;
   dispose(): void;
 }
