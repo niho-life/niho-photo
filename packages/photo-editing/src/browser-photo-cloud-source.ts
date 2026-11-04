@@ -10,6 +10,7 @@ import type {
   PhotoLibrary,
   PhotoLibraryArticleImage,
   PhotoLibraryFlagFilter,
+  PhotoLibraryEditedPreview,
   PhotoLibraryItem,
   PhotoLibraryKindFilter,
   PhotoLibraryPhoto,
@@ -335,8 +336,8 @@ function readArticleImage(
  * する。4,000 万画素を超える JPEG は、段 2 の wasm を使えるなら画面が作業コピーで開き直す。K5-a 移行元設計）。
  * ほか（記事の画像・RAW・TIFF / HEIC など）は補正せず、記事用の画像（無ければプレビュー）を見せて、直せない理由を 1 行返す
  * （作業コピーで直す RAW などは、段 2 の wasm を使えるなら画面が作業コピーを開く。移行元設計）。狭い幅（`allowEditing: false`）は
- * プレビューだけを見せ、オリジナルも記事用の画像も読まない（作業コピーで直す写真も、直せる JPEG / PNG と同じく理由を出さない。
- * 補正は PC で）。
+ * プレビューだけを見せる。選択済み cloud photo の現行行を読む場合も、オリジナルや記事用画像のバイト列は読まない（作業コピーで直す写真も、
+ * 直せる JPEG / PNG と同じく理由を出さない。補正は PC で）。
  *
  * 補正は写真に 1 つで、置き場は `developSettings` の 1 つ（K1c 移行元設計）。段 2 の wasm を使える（`canDevelop`）なら補正を描けるので、
  * オリジナルと最新の写真（`photo.developSettings`）を返す。使えない（S1 の canvas）なら補正が neutral（か、保存したことが無い）の
@@ -347,13 +348,13 @@ export async function loadBrowserCloudPhotoSource(
   library: Pick<PhotoLibrary, "openOriginal" | "loadOriginal" | "readArticleImage">,
   photo: PhotoLibraryItem,
   signal: AbortSignal,
-  options: { allowEditing?: boolean; canDevelop?: boolean } = {},
+  options: { allowEditing?: boolean; canDevelop?: boolean; selectedEditedPreview?: PhotoLibraryEditedPreview | null } = {},
 ): Promise<BrowserCloudPhotoSource> {
   const previewUrl = photo.previewUrl ?? null;
   const knownLock = browserCloudLockedReason(photo);
   if (options.allowEditing === false) {
     const lockedReason = isDevelopWorkTarget(photo) ? null : knownLock;
-    return { file: null, viewUrl: previewUrl, lockedReason, photo: null };
+    return { file: null, viewUrl: options.selectedEditedPreview?.url ?? previewUrl, lockedReason, photo: null };
   }
   if (knownLock) {
     const image = await readArticleImage(library, photo, signal);

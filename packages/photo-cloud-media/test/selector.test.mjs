@@ -70,6 +70,19 @@ test("current preview requires exact manifest/revision and bounded valid assets"
   assert.equal(isCurrentCloudPreview(current, hash("e")), true);
   assert.equal(isCurrentCloudPreview({ ...current, media: { ...current.media, preview: { ...preview, width: 1281 } } }, hash("e")), false);
   assert.equal(isCurrentCloudPreview(current, hash("f")), false);
+
+  const baseVersion = "raw.synthetic.v1";
+  const working = { asset: { id: "preview-work", kind: "working-copy", sha256: hash("f"), sizeBytes: 200,
+    contentType: "image/png", width: 4, height: 3 }, baseVersion, encoding: "png16", meta: { kind: "raw" } };
+  const based = {
+    ...current,
+    format: "raw",
+    recipe: { ...recipe, baseVersion, settings: { ...recipe.settings, base: baseVersion } },
+    media: { ...current.media, workingCopy: working },
+  };
+  assert.equal(isCurrentCloudPreview(based, hash("e")), true);
+  assert.equal(isCurrentCloudPreview({ ...based, media: { ...based.media, workingCopy: null } }, hash("e")), false);
+  assert.equal(isCurrentCloudPreview({ ...based, media: { ...based.media, workingCopy: { ...working, baseVersion: "other" } } }, hash("e")), false);
 });
 
 test("opaque IDs are bounded without assuming UUID syntax", () => {

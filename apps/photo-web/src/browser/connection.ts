@@ -1,8 +1,17 @@
-import type { PersonalPhotoLibrary } from "@niho/photo-personal-cloud-contract";
+import type {
+  PersonalPhotoCloudClient,
+  PersonalPhotoLibrary,
+  Photo,
+  PhotoOperation,
+  PhotoOperationMap,
+  PhotoRequestOptions,
+} from "@niho/photo-personal-cloud-contract";
+import { isCurrentCloudPreview } from "@niho/photo-cloud-media";
+import { readVerifiedMediaAsset } from "@niho/photo-cloud-media/browser";
 import type { PhotoIdentity, PhotoSessionController } from "@niho/photo-cloud-session";
 import type { FormatCapability, QuotaUsage } from "@niho/photo-personal-cloud-contract";
 import { samePhotoIdentityScope } from "@niho/photo-cloud-session";
-import type { PhotoLibraryPresets } from "niho-photo-editing/library/photo-library";
+import type { PhotoLibrary, PhotoLibraryPresets } from "niho-photo-editing/library/photo-library";
 import type { PhotoWebTransferCopy, PhotoWebTransferBinding, PhotoWebViewBinding } from "../view/types.ts";
 import type { ScopedPhotoWebEditingHost, PhotoWebConnection, PhotoWebRuntimeGuards } from "../runtime/types.ts";
 import {
@@ -114,6 +123,180 @@ function isPersonalPhotoLibrary(value: unknown): value is PersonalPhotoLibrary {
 }
 
 /**
+ * The current browser wire has no `media.ensure` operation, so a server declaration alone cannot
+ * enable generated Web working copies. Keep direct rendering available and close that capability
+ * until the existing job port is connected.
+ */
+function closeUnconnectedMediaJobCapabilities(client: PersonalPhotoCloudClient): PersonalPhotoCloudClient {
+  return {
+    scope: client.scope,
+    async request<K extends PhotoOperation>(
+      operation: K,
+      request: PhotoOperationMap[K]["request"],
+      options: PhotoRequestOptions<K>,
+    ): Promise<PhotoOperationMap[K]["response"]> {
+      const response = await client.request(operation, request, options);
+      if (operation !== "library.get") return response;
+      const library = response as PersonalPhotoLibrary;
+      return Object.freeze({
+        ...library,
+        capabilities: Object.freeze({
+          ...library.capabilities,
+          formats: Object.freeze(library.capabilities.formats.map((format) => Object.freeze({
+            ...format,
+            workingCopy: false,
+          }))),
+        }),
+      }) as PhotoOperationMap[K]["response"];
+    },
+    dispose: () => client.dispose(),
+  };
+}
+
+function linkAbortSignals(signals: readonly AbortSignal[]): { controller: AbortController; dispose: () => void } {
+  const controller = new AbortController();
+  const listeners: Array<{ signal: AbortSignal; abort: () => void }> = [];
+  for (const signal of signals) {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+      break;
+    }
+    const abort = (): void => controller.abort(signal.reason);
+    signal.addEventListener("abort", abort, { once: true });
+    listeners.push({ signal, abort });
+  }
+  return {
+    controller,
+    dispose: () => {
+      for (const listener of listeners) listener.signal.removeEventListener("abort", listener.abort);
+    },
+  };
+}
+
+function createPhotoWebPreviewLibrary(options: {
+  readonly library: PhotoLibrary;
+  readonly client: PersonalPhotoCloudClient;
+  readonly scopeSignal: AbortSignal;
+  readonly rendererManifestSha256: string;
+  readonly previewMemoryBytes: number;
+  readonly isCurrent: () => boolean;
+}): { readonly library: PhotoLibrary; dispose(): void } {
+  const openOriginal = options.library.openOriginal.bind(options.library);
+  const deletePhotos = options.library.delete.bind(options.library);
+  let generation = 0;
+  let activeSelection: AbortController | null = null;
+  let activeSelectionPhotoId: string | null = null;
+  let activePreview: { readonly photoId: string; readonly revision: number; readonly url: string } | null = null;
+  let disposed = false;
+  const revokeActive = (): void => {
+    const previous = activePreview;
+    activePreview = null;
+    if (previous !== null) {
+      try { URL.revokeObjectURL(previous.url); } catch { /* The scope is still cleared even if URL release fails. */ }
+    }
+  };
+  const loadSelectedEditedPreview: NonNullable<PhotoLibrary["loadSelectedEditedPreview"]> = async (photoId, requestOptions) => {
+    const requestGeneration = ++generation;
+    activeSelection?.abort(new Error("Photo Web preview selection changed"));
+    activeSelection = null;
+    activeSelectionPhotoId = photoId;
+    revokeActive();
+    if (photoId === null) {
+      activeSelectionPhotoId = null;
+      return null;
+    }
+    const linked = linkAbortSignals([options.scopeSignal, ...(requestOptions?.signal ? [requestOptions.signal] : [])]);
+    activeSelection = linked.controller;
+    try {
+      const currentPhoto = await options.client.request("photos.get", { photoId }, { signal: linked.controller.signal });
+      if (requestGeneration !== generation || disposed || !options.isCurrent() || currentPhoto.id !== photoId
+        || !isCurrentCloudPreview(currentPhoto, options.rendererManifestSha256) || currentPhoto.media.state !== "ready") {
+        return null;
+      }
+      const asset = currentPhoto.media.preview;
+      const preview = {
+        revision: currentPhoto.recipe.revision,
+        width: asset.width,
+        height: asset.height,
+        url: null,
+        thumbUrl: null,
+      };
+      const maxBytes = Math.floor(options.previewMemoryBytes / 3);
+      if (!Number.isSafeInteger(maxBytes) || maxBytes < 1 || asset.sizeBytes > maxBytes) return null;
+      const verified = await readVerifiedMediaAsset(options.client, photoId, asset, {
+        maxBytes,
+        timeoutMs: 30_000,
+        signal: linked.controller.signal,
+      });
+      try {
+        if (requestGeneration !== generation || disposed || !options.isCurrent() || linked.controller.signal.aborted) return null;
+        const blob = new Blob([verified.bytes], { type: asset.contentType });
+        if (blob.size !== asset.sizeBytes) return null;
+        const url = URL.createObjectURL(blob);
+        if (requestGeneration !== generation || disposed || !options.isCurrent() || linked.controller.signal.aborted) {
+          URL.revokeObjectURL(url);
+          return null;
+        }
+        activePreview = { photoId, revision: preview.revision, url };
+        return { ...preview, url };
+      } finally {
+        verified.release();
+      }
+    } catch (error) {
+      if (linked.controller.signal.aborted || options.scopeSignal.aborted) throw error;
+      return null;
+    } finally {
+      linked.dispose();
+      if (activeSelection === linked.controller) {
+        activeSelection = null;
+        activeSelectionPhotoId = null;
+      }
+    }
+  };
+  const openWithSelectedPreview: PhotoLibrary["openOriginal"] = async (photoId, requestOptions) => {
+    const original = await openOriginal(photoId, requestOptions);
+    const preview = activePreview;
+    const photoPreview = original.photo.editedPreview;
+    if (preview === null || preview.photoId !== photoId || photoPreview?.revision !== preview.revision) return original;
+    return { ...original, photo: { ...original.photo, editedPreview: { ...photoPreview, url: preview.url } } };
+  };
+  const deletePhoto: PhotoLibrary["delete"] = async (photoIds) => {
+    const result = await deletePhotos(photoIds);
+    if (activeSelectionPhotoId !== null && result.deleted.includes(activeSelectionPhotoId)) {
+      generation += 1;
+      activeSelection?.abort(new Error("Photo Web preview photo was deleted"));
+      activeSelection = null;
+      activeSelectionPhotoId = null;
+    }
+    if (activePreview !== null && result.deleted.includes(activePreview.photoId)) {
+      generation += 1;
+      revokeActive();
+    }
+    return result;
+  };
+  const library = new Proxy(options.library, {
+    get(target, property, receiver) {
+      if (property === "loadSelectedEditedPreview") return loadSelectedEditedPreview;
+      if (property === "openOriginal") return openWithSelectedPreview;
+      if (property === "delete") return deletePhoto;
+      return Reflect.get(target, property, receiver);
+    },
+  });
+  return {
+    library,
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      generation += 1;
+      activeSelection?.abort(new Error("Photo Web scope changed"));
+      activeSelection = null;
+      activeSelectionPhotoId = null;
+      revokeActive();
+    },
+  };
+}
+
+/**
  * Production composition of the existing C01 session, C02 HTTP/media ports, C03 durable library,
  * shared editor host, and optional transfer controller. It owns no alternate cache or journal.
  */
@@ -178,15 +361,17 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
         fetch: bffFetch,
         ...(factoryOptions.now === undefined ? {} : { now: factoryOptions.now }),
       });
-      const client = createCapturedPhotoWebCloudClient({
+      const capturedClient = createCapturedPhotoWebCloudClient({
         client: rawClient,
         session: input.session,
         identity,
         scopeSignal: input.signal,
       });
+      const client = closeUnconnectedMediaJobCapabilities(capturedClient);
       let handle: PersonalPhotoCloudLibraryHandle | null = null;
       let transferController: BrowserPersonalPhotoTransferController | null = null;
       let maskSurfaceValidator: PhotoWebMaskSurfaceValidator | null = null;
+      let previewLibrary: { readonly library: PhotoLibrary; dispose(): void } | null = null;
       let disposed = false;
       let transferOperations = 0;
       let pendingDrafts: boolean | null = null;
@@ -255,7 +440,15 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
           ...(maskSurfaceValidator === null ? {} : { maskSurfaceValidator }),
           ...(factoryOptions.now === undefined ? {} : { clock: { now: factoryOptions.now } }),
         });
-        const library = handle.library;
+        previewLibrary = createPhotoWebPreviewLibrary({
+          library: handle.library,
+          client,
+          scopeSignal: input.signal,
+          rendererManifestSha256: renderer.capability.manifestSha256,
+          previewMemoryBytes: factoryOptions.memoryBudgets.previewBytes,
+          isCurrent: () => !disposed && !input.signal.aborted && input.host.isScopeCurrent(),
+        });
+        const library = previewLibrary.library;
         await library.capabilities({ signal: input.signal });
         const rollout = await library.rollout({ signal: input.signal });
         usage = snapshotUsage(await handle.usage({ signal: input.signal }));
@@ -395,6 +588,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
             if (active === connection) active = null;
             listeners.clear();
             try { transferController?.dispose(); } catch { /* The identity fence already rejects late results. */ }
+            try { previewLibrary?.dispose(); } catch { /* Continue releasing the shared library resources. */ }
             try { maskSurfaceValidator?.dispose(); } catch { /* Continue provider disposal. */ }
             try { handle?.releasePreviewResources(); } catch { /* Continue provider disposal. */ }
             try { handle?.dispose(); } catch { /* Continue client disposal. */ }
@@ -409,6 +603,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
         return connection;
       } catch (error) {
         try { transferController?.dispose(); } catch { /* Best effort for partial construction. */ }
+        try { previewLibrary?.dispose(); } catch { /* Best effort for partial construction. */ }
         try { maskSurfaceValidator?.dispose(); } catch { /* Best effort for partial construction. */ }
         try { handle?.releasePreviewResources(); } catch { /* Best effort for partial construction. */ }
         try { handle?.dispose(); } catch { /* Best effort for partial construction. */ }

@@ -201,10 +201,19 @@ export function selectCloudRenderInput(
 /** True only for current, bounded preview metadata; working-copy usability is intentionally independent. */
 export function isCurrentCloudPreview(photo: Photo, rendererManifestSha256: Sha256): boolean {
   try {
-    if (!SHA256.test(rendererManifestSha256) || photo.storageState !== "stored" || photo.lifecycle !== "active"
+    const limits = { maxBytes: PHOTO_LIMITS.maxFileBytes, maxPixels: PHOTO_LIMITS.maxPixels };
+    if (invalidPhotoMetadata(photo, limits)
+      || !SHA256.test(rendererManifestSha256) || photo.storageState !== "stored" || photo.lifecycle !== "active"
       || !photo.media || photo.media.state !== "ready"
       || photo.media.recipeRevision !== photo.recipe.revision
       || photo.media.rendererManifestSha256 !== rendererManifestSha256) return false;
+    if (photo.recipe.baseVersion === null) {
+      if (photo.recipe.settings.base !== null && photo.recipe.settings.base !== undefined) return false;
+    } else if (photo.recipe.settings.base !== photo.recipe.baseVersion
+      || !photo.media.workingCopy
+      || workingCopyInput(photo, photo.media.workingCopy, limits).state !== "ready") {
+      return false;
+    }
     return validAsset(photo.media.thumbnail, "thumbnail", ["image/png", "image/jpeg"], 2 * 1024 ** 2, PHOTO_LIMITS.thumbnailMaxEdge)
       && validAsset(photo.media.preview, "preview", ["image/png", "image/jpeg"], 8 * 1024 ** 2, PHOTO_LIMITS.previewMaxEdge);
   } catch {

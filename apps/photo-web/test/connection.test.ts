@@ -5,6 +5,7 @@ import type { Photo, PersonalPhotoLibrary } from "@niho/photo-personal-cloud-con
 import type { PhotoLibraryPresets } from "niho-photo-editing/library/photo-library";
 import { PhotoSessionController, type PhotoIdentity, type PhotoSessionHostBridge } from "@niho/photo-cloud-session";
 import { PHOTO_CAPTURE_HEADERS, PHOTO_CONTENT_HEADERS } from "../../../packages/photo-cloud-library/src/wire.ts";
+import { syntheticPng } from "../../../packages/photo-cloud-media/test/synthetic-png.mjs";
 import type { PhotoWebTransferBinding } from "../src/view/types.ts";
 import { describe, expect, it, vi } from "vitest";
 
@@ -34,6 +35,37 @@ const NOW = Date.parse("2026-11-03T00:00:00.000Z");
 const ORIGIN = "https://photo.example.test";
 const bytes = new Uint8Array([0xff, 0xd8, 0xff, 0xd9]);
 const digest = createHash("sha256").update(bytes).digest("hex");
+const thumbnailBytes = syntheticPng(3, 2);
+const previewBytes = syntheticPng(6, 4);
+const thumbnailAsset = {
+  id: "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+  kind: "thumbnail",
+  sha256: createHash("sha256").update(thumbnailBytes).digest("hex"),
+  sizeBytes: thumbnailBytes.byteLength,
+  contentType: "image/png",
+  width: 3,
+  height: 2,
+} as const;
+const previewAsset = {
+  id: "dddddddd-dddd-4ddd-8ddd-dddddddddddd",
+  kind: "preview",
+  sha256: createHash("sha256").update(previewBytes).digest("hex"),
+  sizeBytes: previewBytes.byteLength,
+  contentType: "image/png",
+  width: 6,
+  height: 4,
+} as const;
+
+function readyMedia(revision: number): Extract<Photo["media"], { state: "ready" }> {
+  return {
+    state: "ready",
+    thumbnail: thumbnailAsset,
+    preview: previewAsset,
+    workingCopy: null,
+    recipeRevision: revision,
+    rendererManifestSha256: fixtureLibrary.capabilities.renderer.manifestSha256,
+  };
+}
 
 function identity(overrides: Partial<PhotoIdentity> = {}): PhotoIdentity {
   return {
@@ -76,6 +108,7 @@ function locks(): LockManager {
 describe("Photo Web product composition", () => {
   it("connects the same-origin client, C02 library/media, C03 saved drafts, transfer, export and delete in one scope", async () => {
     const actor = identity();
+    const revokeObjectURL = vi.spyOn(URL, "revokeObjectURL");
     const sessionHost: PhotoSessionHostBridge = {
       read: async () => actor,
       refresh: async () => actor,
@@ -157,14 +190,28 @@ describe("Photo Web product composition", () => {
           : json(photo);
       }
       const contentPath = /^\/photos\/([^/]+)\/assets\/([^/]+)\/content$/u.exec(path);
-      if (contentPath !== null && (contentPath[1] === IDS.photo && contentPath[2] === currentPhoto.original.id
-        || addedPhoto !== null && contentPath[1] === addedPhoto.id && contentPath[2] === addedPhoto.original.id)) {
-        return new Response(bytes, { status: 200, headers: {
-          "Content-Type": "image/jpeg",
-          "Content-Length": String(bytes.byteLength),
-          [PHOTO_CONTENT_HEADERS.sha256]: digest,
-          [PHOTO_CONTENT_HEADERS.totalBytes]: String(bytes.byteLength),
-        } });
+      if (contentPath !== null) {
+        const photoId = contentPath[1]!;
+        const photo = photoId === IDS.photo ? currentPhoto : addedPhoto?.id === photoId ? addedPhoto : null;
+        const assetId = contentPath[2]!;
+        const asset = photo === null ? null : assetId === photo.original.id ? photo.original
+          : photo.media.state === "ready" ? [photo.media.thumbnail, photo.media.preview, photo.media.workingCopy?.asset]
+            .find((candidate) => candidate?.id === assetId) ?? null
+            : null;
+        const body = asset === null ? null : assetId === thumbnailAsset.id ? thumbnailBytes
+          : assetId === previewAsset.id ? previewBytes
+            : assetId === photo?.original.id ? bytes : null;
+        if (asset !== null && body !== null) {
+          const range = request.headers.get("Range");
+          const headers = new Headers({
+            "Content-Type": asset.contentType,
+            "Content-Length": String(body.byteLength),
+            [PHOTO_CONTENT_HEADERS.sha256]: asset.sha256,
+            [PHOTO_CONTENT_HEADERS.totalBytes]: String(asset.sizeBytes),
+          });
+          if (range !== null) headers.set("Content-Range", `bytes 0-${asset.sizeBytes - 1}/${asset.sizeBytes}`);
+          return new Response(body, { status: range === null ? 200 : 206, headers });
+        }
       }
       if (path === "/uploads" && request.method === "POST") {
         const start = await request.json() as { target: { fileName: string; format: string }; sizeBytes: number; sha256: string; contentType: string };
@@ -281,6 +328,12 @@ describe("Photo Web product composition", () => {
       expect(binding.canEdit).toBe(true);
       expect(binding.disableCloudDelete).toBe(false);
       expect(binding.transfer).toBeDefined();
+      const libraryCapabilities = await binding.library.capabilities({ signal: scope.signal });
+      expect(libraryCapabilities.rawWorkingCopy).toBe(false);
+      expect(binding.transfer!.formats.find((format) => format.format === "raw")?.workingCopy).toBe(false);
+      expect(binding.transfer!.formats.find((format) => format.format === "jpeg")?.ingest).toBe(true);
+      await expect(binding.library.ensureWorkingCopy(IDS.photo, { signal: scope.signal }))
+        .resolves.toMatchObject({ kind: "notApplicable" });
       await expect(binding.transfer!.controller.checkCapability("jpeg")).resolves.toBe(true);
 
       const adding = binding.transfer!.controller.start({
@@ -315,6 +368,7 @@ describe("Photo Web product composition", () => {
       await expect(composition.guards.canLeave(actor, { release: false, signal: scope.signal })).resolves.toBe(false);
       await expect(writer.save(staged, { signal: scope.signal })).resolves.toMatchObject({ kind: "saved", revision: 1 });
       writer.dispose();
+      currentPhoto = { ...currentPhoto, media: readyMedia(currentPhoto.recipe.revision) };
       let reloaded;
       try {
         reloaded = await binding.library.get(IDS.photo);
@@ -323,6 +377,27 @@ describe("Photo Web product composition", () => {
         reloaded = await binding.library.get(IDS.photo);
       }
       expect(reloaded).toMatchObject({ developRevision: 1, hasDevelopSettings: true });
+      expect(reloaded?.editedPreview).toMatchObject({
+        revision: 1,
+        thumbUrl: expect.stringMatching(/^blob:/u),
+        url: null,
+      });
+
+      // Explicit selection owns preview loading. openOriginal can consume that lease, while
+      // metadata-only get() calls do not cancel or revoke it.
+      const selectedPreview = await binding.library.loadSelectedEditedPreview!(IDS.photo, { signal: scope.signal });
+      expect(selectedPreview).toMatchObject({ revision: 1, url: expect.stringMatching(/^blob:/u) });
+      const selected = await binding.library.openOriginal(IDS.photo, { signal: scope.signal });
+      expect(selected.photo.editedPreview).toMatchObject({
+        revision: 1,
+        url: expect.stringMatching(/^blob:/u),
+      });
+      const fullPreviewUrl = selected.photo.editedPreview?.url;
+      await binding.library.get(IDS.photo, { signal: scope.signal });
+      expect(revokeObjectURL).not.toHaveBeenCalledWith(fullPreviewUrl);
+      await expect(binding.library.loadSelectedEditedPreview!(addedPhotoId, { signal: scope.signal })).resolves.toBeNull();
+      expect(revokeObjectURL).toHaveBeenCalledWith(fullPreviewUrl);
+      expect(cloudRequests).toContain(`GET /photos/${IDS.photo}/assets/${previewAsset.id}/content`);
       await expect(composition.guards.canLeave(actor, { release: false, signal: scope.signal })).resolves.toBe(true);
 
       const exported = await binding.library.downloadOriginal({
@@ -334,6 +409,7 @@ describe("Photo Web product composition", () => {
       expect(new Uint8Array(await exported.blob.arrayBuffer())).toEqual(bytes);
 
       await expect(binding.library.delete([IDS.photo, addedPhotoId])).resolves.toMatchObject({ deleted: [IDS.photo, addedPhotoId], errors: [] });
+      expect(revokeObjectURL).toHaveBeenCalledWith(fullPreviewUrl);
       expect((await binding.library.list({})).items).toHaveLength(0);
       host.notifyPhotosChanged();
       await connection.refreshUsage?.();
@@ -355,6 +431,7 @@ describe("Photo Web product composition", () => {
       connection?.dispose();
       scope.abort();
       session.dispose();
+      revokeObjectURL.mockRestore();
     }
   });
 });
