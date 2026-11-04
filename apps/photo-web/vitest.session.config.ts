@@ -3,7 +3,7 @@ import { defineConfig } from "vitest/config";
 export default defineConfig({
   test: {
     environment: "node",
-    include: ["test/session-client.test.ts", "test/auth-fetch.test.ts", "test/connection.test.ts"],
+    include: ["test/session-client.test.ts", "test/auth-fetch.test.ts", "test/connection.test.ts", "test/application.test.ts"],
   },
   resolve: {
     dedupe: ["react", "react-dom"],

@@ -27,7 +27,10 @@ export interface StartPhotoWebApplicationOptions {
   /** Transfer controls stay hidden until the complete shared C00 copy is supplied. */
   readonly transferCopy?: PhotoWebTransferCopy;
   readonly sessionHost?: PhotoSessionHostBridge;
+  /** Same-origin authentication and BFF requests only. */
   readonly fetch?: typeof fetch;
+  /** Public object-storage upload transport; kept separate from the authenticated BFF fetch. */
+  readonly providerFetch?: typeof fetch;
 }
 
 /** Official Web/PWA entry point. Deployment code supplies only accepted build and owner ports. */
@@ -48,6 +51,7 @@ export function startPhotoWebApplication(options: StartPhotoWebApplicationOption
     clearRevokedScope: options.clearRevokedScope,
     ...(options.transferCopy === undefined ? {} : { transferCopy: options.transferCopy }),
     ...(options.fetch === undefined ? {} : { cloudFetch: options.fetch }),
+    ...(options.providerFetch === undefined ? {} : { providerFetch: options.providerFetch }),
   });
   const sessionHost = options.sessionHost ?? createBrowserPhotoSessionHost(
     options.fetch === undefined ? {} : { fetch: options.fetch },

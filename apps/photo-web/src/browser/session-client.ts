@@ -48,6 +48,13 @@ export function createPhotoWebCloudIdentity(options: {
         scopeSignal.removeEventListener("abort", notify);
       };
     },
+    subscribeScopeRevoked(listener) {
+      return session.onEvent((event) => {
+        if (event.type !== "scope-invalidated" || event.reason === "disposed"
+          || !samePhotoIdentityScope(expected, event.previous)) return;
+        listener();
+      });
+    },
   };
 }
 
