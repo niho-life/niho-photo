@@ -83,10 +83,14 @@ describe("Photo Web product composition", () => {
     await session.read();
     const scope = new AbortController();
     const notifyPhotosChanged = vi.fn();
+    let refreshUsage: (() => Promise<void>) | null = null;
     const host = {
       scopeSignal: scope.signal,
       isScopeCurrent: () => !scope.signal.aborted,
-      notifyPhotosChanged,
+      notifyPhotosChanged: () => {
+        notifyPhotosChanged();
+        if (refreshUsage !== null) void refreshUsage();
+      },
       nativeFileSaveAvailable: () => false,
       isDesktopApp: () => false,
       isNativeViewport: () => false,
@@ -259,6 +263,7 @@ describe("Photo Web product composition", () => {
         session,
         onAuthenticationRejected: vi.fn(),
       });
+      refreshUsage = connection.refreshUsage ?? null;
       const binding = connection.getSnapshot();
       expect(binding.actorId).toBe(actor.userId);
       expect(binding.canEdit).toBe(true);
@@ -318,6 +323,10 @@ describe("Photo Web product composition", () => {
 
       await expect(binding.library.delete([IDS.photo, addedPhotoId])).resolves.toMatchObject({ deleted: [IDS.photo, addedPhotoId], errors: [] });
       expect((await binding.library.list({})).items).toHaveLength(0);
+      host.notifyPhotosChanged();
+      await connection.refreshUsage?.();
+      expect(connection.getSnapshot().usage?.usedBytes).toBe(0);
+      expect(notifyPhotosChanged).toHaveBeenCalledTimes(2);
       expect(cloudRequests).toContain("POST /uploads");
       expect(cloudRequests).toContain("POST /uploads/44444444-4444-4444-8444-444444444444/complete");
       expect(cloudRequests).toContain(`GET /photos/${IDS.photo}/assets/${currentPhoto.original.id}/content`);

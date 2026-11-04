@@ -17,6 +17,8 @@ export type ScopedPhotoWebEditingHost = PhotoEditingHost & {
 export interface PhotoWebConnection {
   getSnapshot(): Omit<PhotoWebViewBinding, "host">;
   subscribe(listener: (snapshot: Omit<PhotoWebViewBinding, "host">) => void): () => void;
+  /** Refresh the cloud usage snapshot after the shared editor reports a photo mutation. */
+  refreshUsage?(): void | Promise<void>;
   dispose(): void;
 }
 

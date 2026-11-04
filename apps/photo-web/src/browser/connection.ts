@@ -186,7 +186,10 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
       let pendingDrafts: boolean | null = null;
       let draftReadGeneration = 0;
       let snapshot: ConnectionSnapshot | null = null;
+      let usage: QuotaUsage;
       const listeners = new Set<(next: ConnectionSnapshot) => void>();
+      let usageRefreshRequested = false;
+      let usageRefreshTask: Promise<void> | null = null;
       const assertCurrent = (): void => {
         if (disposed || input.signal.aborted || !input.host.isScopeCurrent()) throw new Error("Photo Web scope changed");
       };
@@ -236,7 +239,35 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
         const library = handle.library;
         await library.capabilities({ signal: input.signal });
         const rollout = await library.rollout({ signal: input.signal });
-        let usage = snapshotUsage(await handle.usage({ signal: input.signal }));
+        usage = snapshotUsage(await handle.usage({ signal: input.signal }));
+        const refreshUsage = (): Promise<void> => {
+          usageRefreshRequested = true;
+          if (usageRefreshTask !== null) return usageRefreshTask;
+          let task!: Promise<void>;
+          task = (async () => {
+            while (usageRefreshRequested && !disposed && input.host.isScopeCurrent()) {
+              usageRefreshRequested = false;
+              const currentHandle = handle;
+              if (currentHandle === null) return;
+              try {
+                const nextUsage = snapshotUsage(await currentHandle.usage({ signal: input.signal }));
+                if (disposed || currentHandle !== handle || !input.host.isScopeCurrent()) return;
+                usage = nextUsage;
+                if (snapshot !== null) {
+                  snapshot = Object.freeze({ ...snapshot, usage });
+                  publish();
+                }
+              } catch {
+                // Keep the last accepted quota snapshot when a refresh temporarily fails.
+              }
+            }
+          })();
+          usageRefreshTask = task;
+          void task.finally(() => {
+            if (usageRefreshTask === task) usageRefreshTask = null;
+          }).catch(() => undefined);
+          return task;
+        };
         const canEdit = initialCloud.capabilities.edits
           && rendererIntersection(initialCloud.capabilities.renderer, renderer.capability) !== null;
         const scopeKey = JSON.stringify([identity.userId, identity.sessionId, identity.sessionEpoch, client.scope.libraryId]);
@@ -249,14 +280,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
         const notifySettled = async (_status: PersonalPhotoTransferStatus): Promise<void> => {
           if (disposed || !input.host.isScopeCurrent()) return;
           input.host.notifyPhotosChanged();
-          try {
-            usage = snapshotUsage(await handle!.usage({ signal: input.signal }));
-            if (!input.host.isScopeCurrent()) return;
-            snapshot = Object.freeze({ ...snapshot!, usage });
-            publish();
-          } catch {
-            // The C02 transfer outcome remains authoritative; list and quota can be refreshed independently.
-          }
+          await refreshUsage();
         };
 
         let transfer: PhotoWebTransferBinding | undefined;
@@ -337,6 +361,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
             }
           },
           getSnapshot: () => snapshot!,
+          refreshUsage,
           subscribe(listener) {
             if (disposed || typeof listener !== "function") return () => undefined;
             listeners.add(listener);
