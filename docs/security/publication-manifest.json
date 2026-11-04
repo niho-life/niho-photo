@@ -12214,8 +12214,8 @@
     },
     {
       "path": "apps/camera/src-tauri/src/cloud_copy_source.rs",
-      "sha256": "9d056dd12be8093eedb03e1fff788a6aa3c7a1e6d9027ef17eecbc2edae3dd55",
-      "origin": "NIHO所有の新規実装。個人クラウド接続の未接続境界・原本同一性と取消/再照合を合成fixtureで検証。実写真・認証情報・第三者資産を含まない。\n変更理由: 原本保持・取消後retry・scope世代切替と不明結果照合を負例テストで固定。\n変更理由: 本人PhotoのMac起動接続・検証済み原本保存とPNG終端検証を追加。\n変更理由: 本人Photoの実bootstrap・検証済み原本保存・失効と確定の排他・PNGのEOF検証を追加。"
+      "sha256": "697eb2985192e9b29a117b890d35402a1977c171229e66bf4559f3f06b932048",
+      "origin": "NIHO所有の新規実装。個人クラウド接続の未接続境界・原本同一性と取消/再照合を合成fixtureで検証。実写真・認証情報・第三者資産を含まない。\n変更理由: 原本保持・取消後retry・scope世代切替と不明結果照合を負例テストで固定。\n変更理由: 本人PhotoのMac起動接続・検証済み原本保存とPNG終端検証を追加。\n変更理由: 本人Photoの実bootstrap・検証済み原本保存・失効と確定の排他・PNGのEOF検証を追加。\n変更理由: library entry解決テストのsynthetic photoをJPEG拡張子とmagic bytesに揃える\n変更理由: library entry解決テストのsynthetic photoをJPEG拡張子とmagic bytesに揃える"
     },
     {
       "path": "apps/camera/src/personal-cloud-binding.ts",

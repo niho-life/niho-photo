@@ -165,11 +165,15 @@ mod tests {
       Self(dir)
     }
     fn photo(&self) -> OpenedPhoto {
-      let path = self.0.join("synthetic.png");
-      std::fs::write(&path, b"synthetic original, never a real photo").unwrap();
+      let path = self.0.join("synthetic.jpg");
+      std::fs::write(
+        &path,
+        [b"\xff\xd8\xff".as_slice(), b"synthetic original, never a real photo"].concat(),
+      )
+      .unwrap();
       OpenedPhoto {
         entry_id: "entry".into(),
-        file_name: "synthetic.png".into(),
+        file_name: "synthetic.jpg".into(),
         digest: content_digest(&path).unwrap(),
         path,
         modified_at_ms: None,
@@ -283,6 +287,6 @@ mod tests {
     let (opened_id, _) = photos.open("library-entry", &photo.path).unwrap();
     assert!(CloudCopySource::capture_entry(&photos, "library-entry").is_ok());
     assert!(CloudCopySource::capture_entry(&photos, &opened_id).is_err());
-    assert!(CloudCopySource::capture_entry(&photos, "../synthetic.png").is_err());
+    assert!(CloudCopySource::capture_entry(&photos, "../synthetic.jpg").is_err());
   }
 }
