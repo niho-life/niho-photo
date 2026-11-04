@@ -13001,13 +13001,13 @@
     },
     {
       "path": "apps/photo-web/src/browser/renderer.ts",
-      "sha256": "31ee500808afa13f656c2d1b5756629e70d6c9f12bebaf6a2c1ca3909c97bdd0",
-      "origin": "NIHO所有の独立Photo Web renderer probeと合成対象試験。C00構造と既存共通engine getterを利用し、能力の静的推測・第二のWASM loader・C02交差計算・private sourceを含まない。C06/Bがownerの自作PR修復許可でleaf公開整合を担当（Issue201 comment6596048972）。"
+      "sha256": "6eadcf26c0b435caf576acf8b6984d59d3e5e900b7d5232d0adb7f84a6b6936c",
+      "origin": "NIHO所有の独立Photo Web renderer probeと合成対象試験。C00構造と既存共通engine getterを利用し、能力の静的推測・第二のWASM loader・C02交差計算・private sourceを含まない。C06/Bがownerの自作PR修復許可でleaf公開整合を担当（Issue201 comment6596048972）。\n変更理由: Webの固定renderer SDK mask validator接続と対象回帰の追加"
     },
     {
       "path": "apps/photo-web/test/browser-renderer.test.ts",
-      "sha256": "7165ec854d0a9cde4e5e50b5b904cf0336d947eb0fdee2a573f377ea664b7fa9",
-      "origin": "NIHO所有の独立Photo Web renderer probeと合成対象試験。C00構造と既存共通engine getterを利用し、能力の静的推測・第二のWASM loader・C02交差計算・private sourceを含まない。C06/Bがownerの自作PR修復許可でleaf公開整合を担当（Issue201 comment6596048972）。"
+      "sha256": "d997cc227d143e8493d568995e3bc49d37d038a1ccaf0314a6d99d163a4f8a3e",
+      "origin": "NIHO所有の独立Photo Web renderer probeと合成対象試験。C00構造と既存共通engine getterを利用し、能力の静的推測・第二のWASM loader・C02交差計算・private sourceを含まない。C06/Bがownerの自作PR修復許可でleaf公開整合を担当（Issue201 comment6596048972）。\n変更理由: Webの固定renderer SDK mask validator接続と対象回帰の追加"
     },
     {
       "path": "packages/photo-editing/src/develop-engine/develop-renderer-capabilities.ts",
@@ -13381,13 +13381,13 @@
     },
     {
       "path": "apps/photo-web/src/browser/connection.ts",
-      "sha256": "5743861f2a25515892ccb069410e743487b587424c74684b0ac62325affbd4f2",
-      "origin": "NIHO所有のPhoto Web本人media/provider composition。既存C01/C02/C03 portsとrenderer proofを接続し、別journal・decoder・editorや実credential・写真・内部URLを含まない。\n変更理由: 写真変更後の本人cloud usage再取得を接続する\n変更理由: 写真変更後の本人cloud usage再取得を接続する\n変更理由: 写真変更後の本人cloud usage再取得を接続する\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。"
+      "sha256": "3c2b94586c70653dd734034d1985ab58917004204ddb546f1cc1a9d93449e0bf",
+      "origin": "NIHO所有のPhoto Web本人media/provider composition。既存C01/C02/C03 portsとrenderer proofを接続し、別journal・decoder・editorや実credential・写真・内部URLを含まない。\n変更理由: 写真変更後の本人cloud usage再取得を接続する\n変更理由: 写真変更後の本人cloud usage再取得を接続する\n変更理由: 写真変更後の本人cloud usage再取得を接続する\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: Webの固定renderer SDK mask validator接続と対象回帰の追加"
     },
     {
       "path": "apps/photo-web/test/connection.test.ts",
-      "sha256": "cbb3701837b2d972a3f2d51087e5bee98be3b345ba13dde84e322fc66664ffb9",
-      "origin": "NIHO所有のPhoto Web composition回帰試験。合成HTTP・合成JPEG bytesとfake browser persistenceだけを使い、実credential・写真・個人情報を含まない。\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。"
+      "sha256": "d2e601d5c676a56522f4c13a090d86f0aba7ceb86231795a83dc610cf3d56bf7",
+      "origin": "NIHO所有のPhoto Web composition回帰試験。合成HTTP・合成JPEG bytesとfake browser persistenceだけを使い、実credential・写真・個人情報を含まない。\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 削除後の本人cloud usage更新を確認する回帰を追加\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: Webの固定renderer SDK mask validator接続と対象回帰の追加"
     }
   ],
   "excludedSources": [

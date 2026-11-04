@@ -18,7 +18,12 @@ import { IndexedDbRecipeSyncJournal } from "@niho/photo-cloud-sync/browser";
 import type { RecipeSyncLocks } from "@niho/photo-cloud-sync";
 import { createPhotoWebCloudFetch } from "./auth-fetch.ts";
 import { createCapturedPhotoWebCloudClient, createPhotoWebCloudIdentity } from "./session-client.ts";
-import { probePhotoWebRenderer, type PhotoWebRendererProof } from "./renderer.ts";
+import {
+  createPhotoWebMaskSurfaceValidator,
+  probePhotoWebRenderer,
+  type PhotoWebMaskSurfaceValidator,
+  type PhotoWebRendererProof,
+} from "./renderer.ts";
 
 export type PhotoWebRevocationReason = "identity-changed" | "revoked" | "logout-complete" | "expired";
 
@@ -181,6 +186,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
       });
       let handle: PersonalPhotoCloudLibraryHandle | null = null;
       let transferController: BrowserPersonalPhotoTransferController | null = null;
+      let maskSurfaceValidator: PhotoWebMaskSurfaceValidator | null = null;
       let disposed = false;
       let transferOperations = 0;
       let pendingDrafts: boolean | null = null;
@@ -225,6 +231,18 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
           || initialCloud.id !== client.scope.libraryId || initialCloud.state !== "active") {
           throw new Error("Photo Web library is unavailable");
         }
+        const rendererCapabilities = rendererIntersection(initialCloud.capabilities.renderer, renderer.capability);
+        const maskSurfaceSupported = initialCloud.capabilities.maskSurfaces
+          && rendererCapabilities !== null
+          && rendererCapabilities.maskSurfaces
+          && rendererCapabilities.features.includes("masks");
+        if (maskSurfaceSupported) {
+          maskSurfaceValidator = await createPhotoWebMaskSurfaceValidator({
+            engineAssets: renderer.engineAssets,
+            signal: input.signal,
+          });
+          assertCurrent();
+        }
         handle = createSynchronizedPhotoLibrary({
           client,
           identity: cloudIdentity,
@@ -234,6 +252,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
           memoryBudgets: factoryOptions.memoryBudgets,
           journal: new IndexedDbRecipeSyncJournal(indexedDB),
           locks: recipeLocks,
+          ...(maskSurfaceValidator === null ? {} : { maskSurfaceValidator }),
           ...(factoryOptions.now === undefined ? {} : { clock: { now: factoryOptions.now } }),
         });
         const library = handle.library;
@@ -291,6 +310,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
               identity: cloudIdentity,
               ...(factoryOptions.transferIndexedDB === undefined ? {} : { indexedDB: factoryOptions.transferIndexedDB }),
               ...(factoryOptions.transferLocks === undefined ? {} : { locks: factoryOptions.transferLocks }),
+              ...(maskSurfaceValidator === null ? {} : { maskValidator: maskSurfaceValidator }),
               ...(factoryOptions.providerFetch === undefined ? {} : { fetch: factoryOptions.providerFetch }),
               ...(factoryOptions.now === undefined ? {} : { now: factoryOptions.now }),
             });
@@ -375,6 +395,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
             if (active === connection) active = null;
             listeners.clear();
             try { transferController?.dispose(); } catch { /* The identity fence already rejects late results. */ }
+            try { maskSurfaceValidator?.dispose(); } catch { /* Continue provider disposal. */ }
             try { handle?.releasePreviewResources(); } catch { /* Continue provider disposal. */ }
             try { handle?.dispose(); } catch { /* Continue client disposal. */ }
             if (handle === null) client.dispose();
@@ -388,6 +409,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
         return connection;
       } catch (error) {
         try { transferController?.dispose(); } catch { /* Best effort for partial construction. */ }
+        try { maskSurfaceValidator?.dispose(); } catch { /* Best effort for partial construction. */ }
         try { handle?.releasePreviewResources(); } catch { /* Best effort for partial construction. */ }
         try { handle?.dispose(); } catch { /* Best effort for partial construction. */ }
         if (handle === null) client.dispose();
