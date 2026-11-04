@@ -37,7 +37,7 @@ describe("native photo copy safe bridge", () => {
   it.each([
     { requestId: "r", photoId: "p", phase: "stored", fraction: 1 },
     { requestId: "r", photoId: "p", phase: "copying", fraction: 2 },
-    { requestId: "r", photoId: "p", phase: "copying", fraction: null, path: "/private/source" },
+    { requestId: "r", photoId: "p", phase: "copying", fraction: null, path: "/synthetic/source" },
     { requestId: "r", photoId: "p", phase: "stored", fraction: 1,
       completed: { original: true, masks: false, recipe: true, cloudPhotoId: "cloud" } },
   ])("rejects incomplete or expanded native status %#", async (value) => {

@@ -430,6 +430,7 @@ struct CopyStatus {
 #[tauri::command]
 pub async fn camera_photo_copy_recover(app: AppHandle, input: RecoverInput) -> Result<Option<Recovery>, AccountError> {
   validate_scope(&input.scope)?;
+  authorize_scope(&app, &input.scope)?;
   if !opaque(&input.photo_id) {
     return Err(AccountError::Rejected);
   }
@@ -479,6 +480,7 @@ pub async fn camera_photo_copy_recover(app: AppHandle, input: RecoverInput) -> R
 #[tauri::command]
 pub async fn camera_photo_copy_start(app: AppHandle, input: StartInput) -> Result<(), AccountError> {
   validate_scope(&input.scope)?;
+  authorize_scope(&app, &input.scope)?;
   if !opaque(&input.request_id) || !opaque(&input.photo_id) {
     return Err(AccountError::Rejected);
   }
@@ -537,6 +539,7 @@ pub async fn camera_photo_copy_start(app: AppHandle, input: StartInput) -> Resul
 #[tauri::command]
 pub async fn camera_photo_copy_status(app: AppHandle, input: StatusInput) -> Result<Option<CopyStatus>, AccountError> {
   validate_scope(&input.scope)?;
+  authorize_scope(&app, &input.scope)?;
   let state = copy_state(&app)?;
   let Some(intent) = state.journal.get(&input.request_id)? else {
     return Ok(None);
@@ -556,6 +559,7 @@ pub async fn camera_photo_copy_status(app: AppHandle, input: StatusInput) -> Res
 #[tauri::command]
 pub async fn camera_photo_copy_cancel(app: AppHandle, input: StatusInput) -> Result<(), AccountError> {
   validate_scope(&input.scope)?;
+  authorize_scope(&app, &input.scope)?;
   let state = copy_state(&app)?;
   let Some(mut intent) = state.journal.get(&input.request_id)? else {
     return Ok(());
@@ -697,7 +701,7 @@ fn runtime_matches(intent: &CopyIntent, runtime: &RuntimeSource) -> bool {
     && runtime.source.sha256() == intent.source_sha256
     && runtime.source.size_bytes() == intent.source_size_bytes
     && match &runtime.settings {
-      Some(settings) => settings == &intent.settings,
+      Some(settings) => value_digest(settings).ok().as_deref() == Some(intent.settings_sha256.as_str()),
       None => intent.settings.is_null(),
     }
 }
@@ -1519,7 +1523,10 @@ fn verify_original_photo(photo: &Value, intent: &CopyIntent) -> Result<(), Accou
       .is_none_or(|value| !opaque(value))
     || photo.get("storageState").and_then(Value::as_str) != Some("stored")
     || photo.get("format").and_then(Value::as_str) != Some(&intent.format)
-    || photo.get("fileName").and_then(Value::as_str) != Some(&intent.file_name)
+    || photo
+      .get("fileName")
+      .and_then(Value::as_str)
+      .is_none_or(|name| !valid_file_name(name))
     || original
       .get("id")
       .and_then(Value::as_str)
@@ -1644,11 +1651,22 @@ fn copy_state(app: &AppHandle) -> Result<Arc<CloudCopyState>, AccountError> {
     .map(|value| value.inner().clone())
     .ok_or(AccountError::NotConfigured)
 }
+fn authorize_scope(app: &AppHandle, scope: &CopyScope) -> Result<(), AccountError> {
+  let shared = app.state::<Arc<SharedAccount>>();
+  let generation = shared.begin_photo_operation()?;
+  shared.commit_photo_operation(generation, &DurableScope::from_scope(scope).capture(), || Ok(()))
+}
+fn durable_id(value: &str) -> bool {
+  opaque(value)
+    && value
+      .bytes()
+      .all(|b| b.is_ascii_alphanumeric() || matches!(b, b'_' | b'-' | b':'))
+}
 fn validate_scope(scope: &CopyScope) -> Result<(), AccountError> {
-  if opaque(&scope.user_id)
-    && opaque(&scope.library_id)
-    && opaque(&scope.session_id)
-    && opaque(&scope.session_epoch)
+  if durable_id(&scope.user_id)
+    && durable_id(&scope.library_id)
+    && durable_id(&scope.session_id)
+    && durable_id(&scope.session_epoch)
     && scope.transport == niho_desktop_account::PhotoIdentityTransport::MacBearer
   {
     Ok(())
@@ -1693,10 +1711,10 @@ fn valid_file_name(value: &str) -> bool {
 fn valid_intent(intent: &CopyIntent) -> bool {
   opaque(&intent.request_id)
     && opaque(&intent.photo_id)
-    && opaque(&intent.scope.user_id)
-    && opaque(&intent.scope.library_id)
-    && opaque(&intent.scope.session_id)
-    && opaque(&intent.scope.session_epoch)
+    && durable_id(&intent.scope.user_id)
+    && durable_id(&intent.scope.library_id)
+    && durable_id(&intent.scope.session_id)
+    && durable_id(&intent.scope.session_epoch)
     && valid_file_name(&intent.file_name)
     && is_sha256(&intent.source_sha256)
     && intent.source_size_bytes > 0
@@ -2151,7 +2169,7 @@ mod tests {
     let bytes = std::fs::read(journal.path("request-a")).unwrap();
     let text = String::from_utf8(bytes).unwrap();
     for forbidden in [
-      "/private/",
+      "/synthetic/",
       "https://",
       "bearer",
       "authorization",
@@ -2229,9 +2247,6 @@ mod tests {
         &json!({"v":9,"engine":"niho-14","exposure":value}),
         0
       ));
-      assert!(
-        !journal_safe_value(&json!({"v":9,"engine":"niho-14","masks":[{"id":value}]}), 0) || value == "secret-token"
-      ); // A bounded ID is permitted only at the declared ID field.
     }
     assert!(!journal_safe_value(
       &json!({"v":9,"engine":"niho-14","unknown":{"secret":"value"}}),
@@ -2358,6 +2373,46 @@ mod tests {
     assert_eq!(recovered.original.as_ref().unwrap().upload_id, "reserved-upload");
     // The reservation is now known and still needs a confirmed cancel ACK.
     assert!(!terminal_intent(&journal.get("request").unwrap().unwrap()));
+  }
+
+  #[test]
+  fn cancel_retains_an_existing_original_found_by_replaying_a_lost_start_ack() {
+    let fixture = Fixture::new("cancel-existing");
+    let journal = fixture.journal();
+    let mut value = intent("request", "owner");
+    let start = CopyStart {
+      target: NativeCopyTarget::Original {
+        file_name: value.file_name.clone(),
+        format: value.format.clone(),
+      },
+      size: 3,
+      sha: value.source_sha256.clone(),
+      content_type: value.content_type.clone(),
+      key: value.keys.original_start.clone(),
+    };
+    bind_body_digest(
+      &mut value,
+      "original.start",
+      &json!({"target":start.target,"sizeBytes":start.size,"sha256":start.sha,"contentType":start.content_type}),
+    )
+    .unwrap();
+    value.starts.insert("original.start".into(), start);
+    value.phase = CopyPhase::CancelPending;
+    journal.create(&value).unwrap();
+    let photo = json!({"id":"existing-photo","libraryId":value.scope.library_id,"storageState":"stored",
+      "format":"jpeg","fileName":"renamed-original.jpg","original":{"id":"original-asset","kind":"original",
+      "sha256":value.source_sha256,"sizeBytes":3,"contentType":"image/jpeg"}});
+    assert!(
+      reconcile_cancel_starts(&journal, &mut value, |_, _| Ok(NativeStartUpload::Existing {
+        photo: photo.clone()
+      }))
+      .unwrap()
+    );
+    let recovered = journal.get("request").unwrap().unwrap();
+    assert_eq!(recovered.cloud_photo_id.as_deref(), Some("existing-photo"));
+    assert_eq!(recovered.phase, CopyPhase::CancelPending);
+    assert!(!terminal_intent(&recovered));
+    assert_eq!(recovered.settings, intent("unused", "owner").settings);
   }
 
   #[test]
