@@ -6087,7 +6087,7 @@
         "path": "packages/develop-engine/crates/niho-develop-render/src/lib.rs",
         "sha256": "a9ac3a784a2eb9250747dc2eaabc10c958c1a10d71c7ca16ffdd0d96b40456bc"
       },
-      "outputSha256": "96a69ca7907639b9abb7c457e6f9b951a08f5892f1de1f4da5061d4f41172189",
+      "outputSha256": "da88d60b6d6bca32d2da4d496bc2343fd494b5b0401ed0ce0ef7defa002b91e9",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "Issue #28の色相安定engine追加と互換回帰を反映。",
@@ -6112,7 +6112,9 @@
         "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。",
         "未編集ラスタのコピーを同梱SDKの完全初期補正と実canonical baseへ接続",
         "SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正",
-        "元画像の実寸法とSDKのbrowser pixel budgetからcanonical working copyを選択"
+        "元画像の実寸法とSDKのbrowser pixel budgetからcanonical working copyを選択",
+        "署名SDKのmedia互換producer契約を実native sourceの版に束縛して公開",
+        "署名SDKのmedia互換producer契約と実sourceの版照合を記録"
       ]
     },
     {
@@ -6134,7 +6136,7 @@
         "path": "packages/develop-engine/crates/niho-develop-render/tests/cli.rs",
         "sha256": "8ddf42804ccd8202fb8834bc499d2d03a331eb0ff96e020421a776f2286ef9bd"
       },
-      "outputSha256": "9680a366ce7511f81634c48634567f8afaf1e2377e40302fbfb608e4234b4e1e",
+      "outputSha256": "2c6a42f0cd3f1736071b908047881c0584faf0216d3df5317f046f7975d1d8d0",
       "modifications": [
         "公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。",
         "新engine受入と未知版拒否の境界を更新し、既存wasm CIで候補のFinal/Interactive固定画素を検証する。",
@@ -6163,7 +6165,9 @@
         "niho-photo#132: 原寸では大きすぎる写真を、書き出しの前に画素数とメモリの見積もりで断る。",
         "実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。",
         "未編集ラスタのコピーを同梱SDKの完全初期補正と実canonical baseへ接続",
-        "SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正"
+        "SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正",
+        "署名SDKのmedia互換producer契約を実native sourceの版に束縛して公開",
+        "署名SDKのmedia互換producer契約と実sourceの版照合を記録"
       ]
     },
     {
@@ -10136,8 +10140,8 @@
     },
     {
       "path": "packages/develop-engine/README.md",
-      "sha256": "c5aabb3eec0ba9397a3c99bea6a5dfccea4aad88f77739d73cc7f6279b4ffc5a",
-      "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。\n変更理由: 公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。\n変更理由: Issue #29: niho-12を新規既定として案内し、忠実度に階調の段差と教師比較の数値を追記\n変更理由: PR #74: #80 統合後に float-cube の変更を重ね、最終ハッシュを反映。\n変更理由: PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。\n変更理由: Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ\n変更理由: #148: 並列化の画素一致の規則と確認コマンドを追加。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
+      "sha256": "6bd23d6413980a69831a03056aa7290d1d53b3698c722e90b5d197c2f58974c5",
+      "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。\n変更理由: 公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。\n変更理由: Issue #29: niho-12を新規既定として案内し、忠実度に階調の段差と教師比較の数値を追記\n変更理由: PR #74: #80 統合後に float-cube の変更を重ね、最終ハッシュを反映。\n変更理由: PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。\n変更理由: Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ\n変更理由: #148: 並列化の画素一致の規則と確認コマンドを追加。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: 署名SDKのmedia互換producer契約と実sourceの版照合を記録"
     },
     {
       "path": "packages/develop-engine/crates/niho-base-raw/README.md",
@@ -11976,8 +11980,8 @@
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/src/api.rs",
-      "sha256": "23dd09a5b0b103774b50bfec37a77955bc2591e99fe43ce9a2c37dee64735eda",
-      "origin": "公開Issue #152 のため新規作成。wasm と native が共有する現像 API。既存の公開実装を移動。\n変更理由: #141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正"
+      "sha256": "c8294e15f69b6ff629eca7c7bf346b7a9997dc1761afb24071adf4c9afa07681",
+      "origin": "公開Issue #152 のため新規作成。wasm と native が共有する現像 API。既存の公開実装を移動。\n変更理由: #141 空のマスク: #158 の U-Net の推論の口（setSkyModel・Developer.detectSky）と合成の重みの試験\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正\n変更理由: 署名SDKのmedia互換producer契約を実native sourceの版に束縛して公開\n変更理由: 署名SDKのmedia互換producer契約と実sourceの版照合を記録"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/api_cross_target.rs",
@@ -13318,6 +13322,11 @@
       "path": "apps/camera/src/native-photo-copy.test.ts",
       "sha256": "cae5d90911df43016a7e6cde0aefa2dcd02e527d5d01fb6da2cf3c5825e93e93",
       "origin": "NIHO Photo公開クライアントで新規作成。明示コピーのnative journal・安全なIPC・合成データによる回帰検証。内部ソース・秘密・実写真を含まない。\n変更理由: IPC拒否のfixtureに合成パスを使い公開境界を維持"
+    },
+    {
+      "path": "scripts/sdk/runtime-references.test.mjs",
+      "sha256": "e1c39572b7b8113b8634a926e4142026dcaaee5c24c8134826dc266a879df7b5",
+      "origin": "既存のNIHO作成の公開SDK runtime参照テスト。互換media producerの版を実native sourceへ照合する検証を追加。外部コード転載・秘密・実写真を含まない。\n変更理由: 署名SDKのmedia互換producer契約と実sourceの版照合を記録"
     }
   ],
   "excludedSources": [

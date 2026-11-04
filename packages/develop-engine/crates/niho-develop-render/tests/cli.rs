@@ -1192,6 +1192,19 @@ fn capabilities_name_what_this_build_renders() {
     assert_eq!(initial.look, niho_develop::settings::LOOK_NIHO_STANDARD_1);
     assert!(initial.base.is_none());
     assert!(initial.is_neutral());
+    let media = &capabilities["personalMedia"];
+    assert_eq!(media["formats"], serde_json::json!(["jpeg", "png"]));
+    assert_eq!(
+        media["providerVersion"],
+        niho_develop::api::PERSONAL_MEDIA_PROVIDER_VERSION
+    );
+    assert_eq!(
+        media["decoderVersion"],
+        niho_develop::api::PERSONAL_MEDIA_DECODER_VERSION
+    );
+    assert_eq!(media["rendererVersion"], niho_develop::CRATE_VERSION);
+    assert_eq!(media["engines"], capabilities["engines"]);
+    assert_eq!(media["settingsVersions"], capabilities["settingsVersions"]);
     assert_eq!(
         capabilities["renderer"],
         niho_develop::api::renderer_capabilities()

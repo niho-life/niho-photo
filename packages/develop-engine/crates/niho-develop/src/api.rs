@@ -126,6 +126,21 @@ pub fn renderer_capabilities() -> serde_json::Value {
     })
 }
 
+// Compatible native producer in this SDK source closure. CI checks these
+// against the Swift tool and desktop raster contract. These are requirements,
+// not evidence that a worker is installed; callers must verify actual probes.
+pub const PERSONAL_MEDIA_PROVIDER_VERSION: &str = "0.5.2";
+pub const PERSONAL_MEDIA_DECODER_VERSION: &str = "ci2";
+
+pub fn personal_media_capabilities() -> serde_json::Value {
+    let mut value = renderer_capabilities();
+    value["formats"] = serde_json::json!(["jpeg", "png"]);
+    value["providerVersion"] = serde_json::json!(PERSONAL_MEDIA_PROVIDER_VERSION);
+    value["decoderVersion"] = serde_json::json!(PERSONAL_MEDIA_DECODER_VERSION);
+    value["rendererVersion"] = serde_json::json!(crate::CRATE_VERSION);
+    value
+}
+
 /// What this build draws beyond what [`validate_settings`] reads, as JSON:
 /// `{"masks":{"kinds":["linear","radial","brush","subject","sky"],
 /// "max":8,"maskPlane":true,"surfaces":true,"skyDetection":true}}` — local
@@ -144,6 +159,7 @@ pub fn capabilities() -> String {
         },
         "renderer": renderer_capabilities(),
         "initialRasterSettings": initial_raster_settings(),
+        "personalMedia": personal_media_capabilities(),
     })
     .to_string()
 }
