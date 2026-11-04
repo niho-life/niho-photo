@@ -258,5 +258,10 @@ export interface RecipeSyncJournal extends PersonalPhotoCloudMaskJournal {
   reopen(scope: RecipeJournalScope, token: string, signal?: AbortSignal): Promise<ReopenedJournalWriter | null>;
   discard(binding: RecipeWriterBinding, signal?: AbortSignal): Promise<void>;
   releaseCompleted(binding: RecipeWriterBinding, signal?: AbortSignal): Promise<boolean>;
+  putMaskSurface(scope: RecipeJournalScope, photoId: string, surface: MaskSurfaceInput, signal?: AbortSignal): Promise<void>;
+  getMaskSurface(scope: RecipeJournalScope, photoId: string, sha256: string, signal?: AbortSignal): Promise<PersistedMaskSurface | null>;
+  compareAndSetMaskUploadState(scope: RecipeJournalScope, photoId: string, sha256: string, expected: MaskSurfaceUploadState | null, next: MaskSurfaceUploadState | null, signal?: AbortSignal): Promise<boolean>;
+  setMaskSurfacePinned(scope: RecipeJournalScope, photoId: string, sha256: string, pinned: boolean, signal?: AbortSignal): Promise<void>;
+  deleteMaskSurface(scope: RecipeJournalScope, photoId: string, sha256: string, signal?: AbortSignal): Promise<boolean>;
   dispose(): void;
 }

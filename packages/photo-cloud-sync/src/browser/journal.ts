@@ -1132,7 +1132,6 @@ function maskReferences(record: WriterRecord): Set<string> | null {
   }
   return references;
 }
-
 function maskKey(scope: RecipeJournalScope, photoId: string, sha: string): string { return JSON.stringify([...scopeKey(scope), photoId, sha]); }
 function sameMaskScope(record: MaskRecord, scope: RecipeJournalScope): boolean { return record.actorId === scope.actorId && record.libraryId === scope.libraryId && record.sessionId === scope.sessionId && record.sessionEpoch === scope.sessionEpoch && record.transport === scope.transport; }
 function equalBytes(left: Uint8Array, right: Uint8Array): boolean { return left.byteLength === right.byteLength && left.every((byte, index) => byte === right[index]); }
