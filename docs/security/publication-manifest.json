@@ -13335,8 +13335,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/browser/resumable-upload.ts",
-      "sha256": "6d140653d470ab59a502ccc9f17a02be25cb20cf543335bf992b53d1f487c009",
-      "origin": "NIHO所有のC02/C03本人写真cloudにおける共通resumable runner、同一IDBのmask PNG永続化、および合成fixtureによる回帰試験。既存公開契約とMIT hash依存を再利用し、資格情報・内部URL・実写真・非公開履歴を含まない。\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する"
+      "sha256": "db4bb8f7e5bc8cfa6b14271d180758a992708d9e6be1988490c28fc83f2e8d5d",
+      "origin": "NIHO所有のC02/C03本人写真cloudにおける共通resumable runner、同一IDBのmask PNG永続化、および合成fixtureによる回帰試験。既存公開契約とMIT hash依存を再利用し、資格情報・内部URL・実写真・非公開履歴を含まない。\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する\n変更理由: 非同期provider callbackへ渡すURLとBlobをnonnull snapshotとして固定し公開CIの厳格型を満たす"
     },
     {
       "path": "packages/photo-cloud-library/test/resumable-upload.test.ts",

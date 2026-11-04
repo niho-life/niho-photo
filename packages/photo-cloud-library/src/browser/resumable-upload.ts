@@ -208,14 +208,16 @@ class Runner {
       if (this.options.source === undefined) invalid();
       const endExclusive = Math.min(state.offsetBytes + GCS_CHUNK_BYTES, state.sizeBytes);
       const endInclusive = endExclusive - 1;
+      const uploadUrl = ticket.url;
+      const uploadBody = this.options.source.slice(state.offsetBytes, endExclusive);
       let response: Response;
       try {
         const providerLink = linkedAbortController(this.options.signal);
         try {
-          response = await this.wait(awaitBounded(Promise.resolve().then(async () => await this.fetchFn(ticket.url, {
+          response = await this.wait(awaitBounded(Promise.resolve().then(async () => await this.fetchFn(uploadUrl, {
             method: "PUT",
             headers: { "Content-Type": state.contentType, "Content-Range": `bytes ${state.offsetBytes}-${endInclusive}/${state.sizeBytes}` },
-            body: this.options.source.slice(state.offsetBytes, endExclusive),
+            body: uploadBody,
             signal: providerLink.controller.signal,
             credentials: "omit",
             referrerPolicy: "no-referrer",
