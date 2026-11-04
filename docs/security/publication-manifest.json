@@ -2408,9 +2408,10 @@
         "#171 正規切替の停止箇所を同じ試行IDで記録する診断",
         "C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録",
         "本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する",
-        "公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。"
+        "公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。",
+        "PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
       ],
-      "outputSha256": "3e4d9279f2e130a948bc8ea4d593ac304a6f9d28fd3974bd33e8412a0f48319a"
+      "outputSha256": "a2f9cfe6c0f1f256817b886d02ad67816194ec585aac54c9d064ad61b797c0e0"
     },
     {
       "path": "packages/photo-editing/src/photo-cloud-add-queue.ts",
@@ -4044,7 +4045,7 @@
         "path": "apps/camera/src-tauri/permissions/camera.toml",
         "sha256": "3dabde32b43f01f12b93d48f2000a51a55abf48cc5866df2daa6dda9f31edae0"
       },
-      "outputSha256": "a8030c205095cc87f7241646ee42ded6e21a0b15af24ddc6e19285ad7972d3dc",
+      "outputSha256": "11357fe4c001acbdad6e31a6ee910f047b862d06448397e82109ed6336dca8f9",
       "modifications": [
         "共有形式フィルターを使う複数写真pickerと参照削除コマンドを同梱UIの権限内に追加 / 選択写真専用commandのbundle permissionを追加。",
         "Issue #3のpublic OAuth/PKCE、ローカル専用UI、安全契約と公開依存を新規接続。実issuer・署名検証器が未契約のため本番接続は無効。",
@@ -4064,7 +4065,8 @@
         "正式Mac bootstrapの依存を通常mergeし、mainの共有編集面と固定native transportを保持",
         "本人PhotoのMac起動接続・検証済み原本保存とPNG終端検証を追加。",
         "本人Photoの実bootstrap・検証済み原本保存・失効と確定の排他・PNGのEOF検証を追加。",
-        "本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映"
+        "本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映",
+        "PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
       ]
     },
     {
@@ -4258,7 +4260,7 @@
         "path": "apps/camera/src-tauri/src/lib.rs",
         "sha256": "e6415b3d0633bb4753761b89f8860fffcfa9b67f95832ab971bd9b13eebaaffc"
       },
-      "outputSha256": "4213d71ffa3ff3a578cf6134839990651334f19ebbeb3924df82b2c8138151fc",
+      "outputSha256": "90eb71a087b4f77f9d92af1bf66565f61dd4b4764482f2dfeebc8f875d1932ca",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "共有形式フィルターを使う複数写真pickerと参照削除コマンドを同梱UIの権限内に追加 / 選択写真専用commandをinvoke handlerへ登録。",
@@ -4285,7 +4287,8 @@
         "正式Mac bootstrapの依存を通常mergeし、mainの共有編集面と固定native transportを保持",
         "本人PhotoのMac起動接続・検証済み原本保存とPNG終端検証を追加。",
         "本人Photoの実bootstrap・検証済み原本保存・失効と確定の排他・PNGのEOF検証を追加。",
-        "本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映"
+        "本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映",
+        "PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
       ]
     },
     {
@@ -12630,8 +12633,8 @@
     },
     {
       "path": "packages/photo-cloud-library/README.md",
-      "sha256": "8409433c6cbfc2c844e0a7db5f9f01b417d6e0a5f850f09351f76ba9aed0b382",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: C03実HTTPと狭いprotocol共有口および編集未有効の境界を記述\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記"
+      "sha256": "fad279ed90b3714191144e565de9e662195e1acb61eaf5f77321ecae9325dfb9",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: C03実HTTPと狭いprotocol共有口および編集未有効の境界を記述\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-library/eslint.config.mjs",
@@ -12645,8 +12648,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/adapter.ts",
-      "sha256": "3d9f84ec8c2ff01e78b17587689a8d89f21b8bb4e29016328dd439c27cdf190e",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: C02の共有preview取得と各要求の取消し・未公開URL所有を分離する\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証"
+      "sha256": "950cec8d052af9996e47999954c743b3593518eae75fbe166c7a0669f991b0d1",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: C02の共有preview取得と各要求の取消し・未公開URL所有を分離する\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-library/src/content.ts",
@@ -12660,8 +12663,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/index.ts",
-      "sha256": "2e4adb8075934c2fccab813fb38c9fdc1b6fc23aa9a0acba8d01a6fa01ac7804",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。"
+      "sha256": "ff6f7cc44bed6e234a0b96ceb655271d1fafbd7070545c0a0729f265a9552407",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-library/src/memory.ts",
@@ -12675,8 +12678,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/types.ts",
-      "sha256": "e1a6ffa40ad3a6fe18a8ed889d0cfde538f9f988e5527ab5787ef4ba191943c8",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。"
+      "sha256": "32af884b2665347ae1f7d4d88cfa3bb7ad41a0f3483c91afca2374cd2620c6f4",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-library/src/validation.ts",
@@ -12695,13 +12698,13 @@
     },
     {
       "path": "packages/photo-cloud-library/test/correction.test.ts",
-      "sha256": "26a99e9fe4a3d377493ecdcf98dc4b5b9371b11edc676cbb8816d2c94639c795",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する"
+      "sha256": "8da0ff820f354d79cc28b487bbd303d21ad35c1486b9f4dc620638b02efe2019",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-library/test/support.ts",
-      "sha256": "d7b2cbd6019a98eac29774abc23fc17567aa302a1dc9deb7077ac19b087c91f1",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証"
+      "sha256": "10f269cdbf23d1a7e0a954197ba9787820f601e435dd9e2dc1fa113372b5a3c5",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-library/tsconfig.json",
@@ -13025,8 +13028,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/browser/index.ts",
-      "sha256": "bad85a65fe79ba5d7b2383c5f11436bb83194a0094027323a8cf8582587200a5",
-      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 原本とmaskのresumable転送を共用し、既存writerを保護するIDB v2 mask永続化と合成回帰試験を追加する"
+      "sha256": "2bf19b57d4be3be452479baf324fe1d14549a672ce321864c21d8f87cf1d0b24",
+      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 原本とmaskのresumable転送を共用し、既存writerを保護するIDB v2 mask永続化と合成回帰試験を追加する\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-library/src/browser/journal.ts",
@@ -13035,8 +13038,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/browser/transfer.ts",
-      "sha256": "796ca5256d81ff3a80607624c53f4cb329b84ce6404522d8ffa194ee6715b127",
-      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 公開CIの厳格型に合わせ、所有ArrayBufferと非同期callbackの非null snapshotを明示する\n変更理由: 結果不明の完了と取消を同じjournalで回復し全応答のupload bindingを統一\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: 取消時の保存済み原本から完全補正候補を保持し結果不明は同じ取消intentで照合\n変更理由: 取消復旧の親修正とC03完全補正比較の共通化を両側保持して統合\n変更理由: 原本とmaskのresumable転送を共用し、既存writerを保護するIDB v2 mask永続化と合成回帰試験を追加する"
+      "sha256": "cf8803701f55482cc81635c15571b879b7c00051791a276209a54899a80d9a75",
+      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 公開CIの厳格型に合わせ、所有ArrayBufferと非同期callbackの非null snapshotを明示する\n変更理由: 結果不明の完了と取消を同じjournalで回復し全応答のupload bindingを統一\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: 取消時の保存済み原本から完全補正候補を保持し結果不明は同じ取消intentで照合\n変更理由: 取消復旧の親修正とC03完全補正比較の共通化を両側保持して統合\n変更理由: 原本とmaskのresumable転送を共用し、既存writerを保護するIDB v2 mask永続化と合成回帰試験を追加する\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-library/src/server/index.ts",
@@ -13050,18 +13053,18 @@
     },
     {
       "path": "packages/photo-cloud-library/src/wire.ts",
-      "sha256": "2d3e03494e8b3ebec3e7b5d710feba6ac3b68362fb4b96f9c0f35eeae14e54b8",
-      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 公開CIの厳格型に合わせ、所有ArrayBufferと非同期callbackの非null snapshotを明示する\n変更理由: 既知HTTP envelopeの5段と完全recipe文書のdepth32を分けて境界を維持\n変更理由: stored start再送の最大六段envelopeをrecipe上限から分離\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: C03完全補正のrecipe/conflict wire操作をPhoto Web consumerへ統合する\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映"
+      "sha256": "1a4d9ec696e615dfd0bb2c6324e6b11ba0936fd29308448c13a544853b226a86",
+      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 公開CIの厳格型に合わせ、所有ArrayBufferと非同期callbackの非null snapshotを明示する\n変更理由: 既知HTTP envelopeの5段と完全recipe文書のdepth32を分けて境界を維持\n変更理由: stored start再送の最大六段envelopeをrecipe上限から分離\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: C03完全補正のrecipe/conflict wire操作をPhoto Web consumerへ統合する\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-library/test/http.test.ts",
-      "sha256": "b67eb609a622c66d959b5307c06f0f4409ebd710de10fb0161510485a742f2bc",
-      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: depth32完全JSONとstored receiptの実HTTP往復およびdepth33拒否を検証\n変更理由: stored start再送depth31と32成功33拒否のBFF回帰\n変更理由: start回帰のtarget kindを契約のliteral型へ固定\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: depth境界の合成値を実際のJSON型で宣言し自然CIの厳格型へ整合\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映"
+      "sha256": "648616996c8c82900121a2f5beeda7f033cfbece729dfe4ebee428237c3d492c",
+      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: depth32完全JSONとstored receiptの実HTTP往復およびdepth33拒否を検証\n変更理由: stored start再送depth31と32成功33拒否のBFF回帰\n変更理由: start回帰のtarget kindを契約のliteral型へ固定\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: depth境界の合成値を実際のJSON型で宣言し自然CIの厳格型へ整合\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-library/test/transfer.test.ts",
-      "sha256": "5271b9a861dc589262f9e8e983e0539ff16fcaa840e40f6055863fe9f50c8907",
-      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 公開CIの厳格型に合わせ、所有ArrayBufferと非同期callbackの非null snapshotを明示する\n変更理由: 期限後照合と取消復旧とID期限差替えを拒否する9件の回帰を追加\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: 開始欠落と保存済み取消六経路の両補正保持と再起動復旧の合成回帰を追加\n変更理由: 親の保存済み取消六経路とC03の補正境界回帰を両側保持して統合\n変更理由: depth境界の合成値を実際のJSON型で宣言し自然CIの厳格型へ整合\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する"
+      "sha256": "414761e7dc0e2fbb2c1f1a0f5fb14f30cd61bcd72bc8a41bd07f13f5e373ee2e",
+      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 公開CIの厳格型に合わせ、所有ArrayBufferと非同期callbackの非null snapshotを明示する\n変更理由: 期限後照合と取消復旧とID期限差替えを拒否する9件の回帰を追加\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: 開始欠落と保存済み取消六経路の両補正保持と再起動復旧の合成回帰を追加\n変更理由: 親の保存済み取消六経路とC03の補正境界回帰を両側保持して統合\n変更理由: depth境界の合成値を実際のJSON型で宣言し自然CIの厳格型へ整合\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-library/src/await.ts",
@@ -13080,13 +13083,13 @@
     },
     {
       "path": "packages/photo-cloud-library/src/protocol.ts",
-      "sha256": "871d27f717dcee719f0cdf11a457fe789664941acc28698080ec5c851f21bc0f",
-      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する\n変更理由: 親mainとのmergeで実ファイルを統合"
+      "sha256": "e1be419f0a7a38dc9fb64d60079b02a171eed4bab44f8a4b59ae0fc64f1d7add",
+      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-library/src/recipe.ts",
-      "sha256": "ec66e79f6d12ab32b9526e1d0ada86d1e3b57af014e8e224414c6babaf94e689",
-      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。"
+      "sha256": "223843bfdc681780ff167be2349e80a0e9a3a44899c997f74fc7552fbc60661f",
+      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-sync/README.md",
@@ -13110,8 +13113,8 @@
     },
     {
       "path": "packages/photo-cloud-sync/src/browser/journal.ts",
-      "sha256": "927d8c372d7585fda7ef360c5d8df27ba98bde39dff94cfe9c6d65dd46ca2ee2",
-      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: Restore retained conflicts and discover terminal draft fences\n変更理由: 失効前captureの有限保存と、同本人の以前の下書きを明示復旧するcore契約・実装・負例を追加\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: 原本とmaskのresumable転送を共用し、既存writerを保護するIDB v2 mask永続化と合成回帰試験を追加する\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する"
+      "sha256": "82a1cc55f498b9e5b96d0d79c0e7b5b52e63eb4bb068ef4eea1a2f7be3129f56",
+      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: Restore retained conflicts and discover terminal draft fences\n変更理由: 失効前captureの有限保存と、同本人の以前の下書きを明示復旧するcore契約・実装・負例を追加\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: 原本とmaskのresumable転送を共用し、既存writerを保護するIDB v2 mask永続化と合成回帰試験を追加する\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-sync/src/index.ts",
@@ -13120,18 +13123,18 @@
     },
     {
       "path": "packages/photo-cloud-sync/src/sync.ts",
-      "sha256": "0a268661e887fb6853f2e476172bad4490ebffab67ae470032ca9f5d957980a1",
-      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: 非同期journal callbackで競合IDの検証済み非null snapshotを使い厳格型を保持\n変更理由: 本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する\n変更理由: Restore retained conflicts and discover terminal draft fences\n変更理由: 失効前captureの有限保存と、同本人の以前の下書きを明示復旧するcore契約・実装・負例を追加\n変更理由: 親mainとのmergeで実ファイルを統合"
+      "sha256": "423aede55568ec25fb3098d6278933e43ab3b1a3ba50edac29700fef462cd1d5",
+      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: 非同期journal callbackで競合IDの検証済み非null snapshotを使い厳格型を保持\n変更理由: 本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する\n変更理由: Restore retained conflicts and discover terminal draft fences\n変更理由: 失効前captureの有限保存と、同本人の以前の下書きを明示復旧するcore契約・実装・負例を追加\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-sync/src/types.ts",
-      "sha256": "c28f7861e22d8b520edd0fe0804e4c87980aa4e361d64f0079a786b1b5f37644",
-      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: 本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する\n変更理由: Restore retained conflicts and discover terminal draft fences\n変更理由: 失効前captureの有限保存と、同本人の以前の下書きを明示復旧するcore契約・実装・負例を追加\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: 原本とmaskのresumable転送を共用し、既存writerを保護するIDB v2 mask永続化と合成回帰試験を追加する"
+      "sha256": "4cd55b651e9975af4392d1316264df5f52dfedd758812ba906a30a41ec8e974f",
+      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: 本人補正の永続下書きと競合比較を共通編集面へ接続し、後発入力と既存ローカル描画を保持する\n変更理由: Restore retained conflicts and discover terminal draft fences\n変更理由: 失効前captureの有限保存と、同本人の以前の下書きを明示復旧するcore契約・実装・負例を追加\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: 原本とmaskのresumable転送を共用し、既存writerを保護するIDB v2 mask永続化と合成回帰試験を追加する\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-sync/test/sync.test.ts",
-      "sha256": "429b66d3a143bfe4082e7b8d27f101da23ffb3a1dcd34c89db0742af8a48d295",
-      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: 遅延保存応答の合成Promiseを実receipt型で宣言し厳格型へ整合\n変更理由: Restore retained conflicts and discover terminal draft fences\n変更理由: 失効前captureの有限保存と、同本人の以前の下書きを明示復旧するcore契約・実装・負例を追加\n変更理由: 親mainとのmergeで実ファイルを統合"
+      "sha256": "4832accac0ccec2ba24f34b5984405d57bc3cf48f347b95c9137eac9ab64a450",
+      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: 遅延保存応答の合成Promiseを実receipt型で宣言し厳格型へ整合\n変更理由: Restore retained conflicts and discover terminal draft fences\n変更理由: 失効前captureの有限保存と、同本人の以前の下書きを明示復旧するcore契約・実装・負例を追加\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-sync/tsconfig.json",
@@ -13140,8 +13143,8 @@
     },
     {
       "path": "packages/photo-cloud-sync/src/binding.ts",
-      "sha256": "eeb13d9bfadd9217e583b03eac50d1da21d96338e3cca0ce7947ec771ced1d6c",
-      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 失効前captureの有限保存と、同本人の以前の下書きを明示復旧するcore契約・実装・負例を追加\n変更理由: 親mainとのmergeで実ファイルを統合"
+      "sha256": "19d31c64ffead6dfea336472bba5c9be7270a18a73bf246399da8759cf73f721",
+      "origin": "NIHO所有の公開sourceとして新規作成。本人補正の永続下書き・明示復旧・競合比較の共有接続と合成JSONによる回帰試験。秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 失効前captureの有限保存と、同本人の以前の下書きを明示復旧するcore契約・実装・負例を追加\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-sync/test/binding.test.ts",
@@ -13285,18 +13288,18 @@
     },
     {
       "path": "apps/camera/src/camera-cloud-bootstrap.ts",
-      "sha256": "71d7bee3afa210da4a72940cb8e92d03bed1827dcf77409bc2d767e8d5356ca5",
-      "origin": "NIHO所有の本人Photo Mac bootstrap、実renderer照合、native原本保存の独立実装と合成回帰試験。実写真・秘密・非公開履歴は含まない。\n変更理由: 本人Photo起動接続と原本保存の合成回帰を確定し、fixtureの私有path表記を除外。\n変更理由: 期限切れ後の同一session refreshで失効済みnative scopeを再利用せずbindingを再構築する\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映"
+      "sha256": "50cb71e889f40e2845ddc61c09ae3b1f9dc05b0dfc1aac73c1e56348d22f3347",
+      "origin": "NIHO所有の本人Photo Mac bootstrap、実renderer照合、native原本保存の独立実装と合成回帰試験。実写真・秘密・非公開履歴は含まない。\n変更理由: 本人Photo起動接続と原本保存の合成回帰を確定し、fixtureの私有path表記を除外。\n変更理由: 期限切れ後の同一session refreshで失効済みnative scopeを再利用せずbindingを再構築する\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "apps/camera/src/camera-photo-renderer.test.ts",
-      "sha256": "879e3c1ff507a07ed10c2af1bea7c3b2b3742f472e856f2b844fc08b0fadd64b",
-      "origin": "NIHO所有の本人Photo Mac bootstrap、実renderer照合、native原本保存の独立実装と合成回帰試験。実写真・秘密・非公開履歴は含まない。\n変更理由: 本人Photo起動接続と原本保存の合成回帰を確定し、fixtureの私有path表記を除外。"
+      "sha256": "910724899f7e7f50b7810f965e78c2f23419d9d3d3662d95588d71eb89c1142f",
+      "origin": "NIHO所有の本人Photo Mac bootstrap、実renderer照合、native原本保存の独立実装と合成回帰試験。実写真・秘密・非公開履歴は含まない。\n変更理由: 本人Photo起動接続と原本保存の合成回帰を確定し、fixtureの私有path表記を除外。\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "apps/camera/src/camera-photo-renderer.ts",
-      "sha256": "dc44f067d5d6f4c304c34c67c85c77d63ea5b5cbd0a69eb15b3e21774f1c6de3",
-      "origin": "NIHO所有の本人Photo Mac bootstrap、実renderer照合、native原本保存の独立実装と合成回帰試験。実写真・秘密・非公開履歴は含まない。\n変更理由: 本人Photo起動接続と原本保存の合成回帰を確定し、fixtureの私有path表記を除外。"
+      "sha256": "217efc696f9ff006224a3a4da193721301777363776fa321823beca8aaa855dc",
+      "origin": "NIHO所有の本人Photo Mac bootstrap、実renderer照合、native原本保存の独立実装と合成回帰試験。実写真・秘密・非公開履歴は含まない。\n変更理由: 本人Photo起動接続と原本保存の合成回帰を確定し、fixtureの私有path表記を除外。\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "apps/camera/src/native-original-save.test.ts",
@@ -13315,8 +13318,8 @@
     },
     {
       "path": "apps/camera/src-tauri/src/cloud_copy.rs",
-      "sha256": "3a8e7756d09cc135351be7302eea974d53d2e92973213d397788fb7673d93ffa",
-      "origin": "NIHO Photo公開クライアントで新規作成。明示コピーのnative journal・安全なIPC・合成データによる回帰検証。内部ソース・秘密・実写真を含まない。\n変更理由: 合成fixtureを公開可能なパスに統一しnativeコピーのscope検証を追加\n変更理由: 取消の未確定start再照合と既存原本の保護を回帰で固定\n変更理由: 未編集ラスタのコピーを同梱SDKの完全初期補正と実canonical baseへ接続\n変更理由: SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正\n変更理由: journal書込み用fileの可変性を維持し読取側だけ不要なmutを除去"
+      "sha256": "5b305d31c903690528fc965508d1e9ba5b4b2316181ea2721a48cefa6ea984a0",
+      "origin": "NIHO Photo公開クライアントで新規作成。明示コピーのnative journal・安全なIPC・合成データによる回帰検証。内部ソース・秘密・実写真を含まない。\n変更理由: 合成fixtureを公開可能なパスに統一しnativeコピーのscope検証を追加\n変更理由: 取消の未確定start再照合と既存原本の保護を回帰で固定\n変更理由: 未編集ラスタのコピーを同梱SDKの完全初期補正と実canonical baseへ接続\n変更理由: SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正\n変更理由: journal書込み用fileの可変性を維持し読取側だけ不要なmutを除去\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "apps/camera/src/native-photo-copy.ts",
@@ -13335,8 +13338,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/browser/resumable-upload.ts",
-      "sha256": "db4bb8f7e5bc8cfa6b14271d180758a992708d9e6be1988490c28fc83f2e8d5d",
-      "origin": "NIHO所有のC02/C03本人写真cloudにおける共通resumable runner、同一IDBのmask PNG永続化、および合成fixtureによる回帰試験。既存公開契約とMIT hash依存を再利用し、資格情報・内部URL・実写真・非公開履歴を含まない。\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する\n変更理由: 非同期provider callbackへ渡すURLとBlobをnonnull snapshotとして固定し公開CIの厳格型を満たす"
+      "sha256": "f3b8bd007e9fb361d8859c43413cc267010f57284ce8c4671e2eafe7fd343ded",
+      "origin": "NIHO所有のC02/C03本人写真cloudにおける共通resumable runner、同一IDBのmask PNG永続化、および合成fixtureによる回帰試験。既存公開契約とMIT hash依存を再利用し、資格情報・内部URL・実写真・非公開履歴を含まない。\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する\n変更理由: 非同期provider callbackへ渡すURLとBlobをnonnull snapshotとして固定し公開CIの厳格型を満たす\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
     },
     {
       "path": "packages/photo-cloud-library/test/resumable-upload.test.ts",
@@ -13345,8 +13348,33 @@
     },
     {
       "path": "packages/photo-cloud-sync/test/journal-mask.test.ts",
-      "sha256": "6e4d2cb0714d22cacb5a687ef5e57af94ab4e5b8e301454c9b2fb7091b5a7c5a",
-      "origin": "NIHO所有のC02/C03本人写真cloudにおける共通resumable runner、同一IDBのmask PNG永続化、および合成fixtureによる回帰試験。既存公開契約とMIT hash依存を再利用し、資格情報・内部URL・実写真・非公開履歴を含まない。\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する"
+      "sha256": "4d06e1c7930580c1ad13552656531b01ec93c699646f662adc769b23e0c96e1d",
+      "origin": "NIHO所有のC02/C03本人写真cloudにおける共通resumable runner、同一IDBのmask PNG永続化、および合成fixtureによる回帰試験。既存公開契約とMIT hash依存を再利用し、資格情報・内部URL・実写真・非公開履歴を含まない。\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する\n変更理由: PR #232の共通mask同期・Mac再開・容量回収修正を公開ソース登録へ反映"
+    },
+    {
+      "path": "apps/camera/src/native-photo-mask-uploader.test.ts",
+      "sha256": "6a1cbc2ff9d01299f3060c784967f53463342126b2c2746a7ee0cd027de15aac",
+      "origin": "PR #232新規作成。合成fixtureを使ってnative mask upload状態の保存・期限切れ再開を検証し、実写真や個人情報を含まない。"
+    },
+    {
+      "path": "apps/camera/src/native-photo-mask-uploader.ts",
+      "sha256": "9b66a2fec46f9b1f59c446aa2847ba0d8639f4777fca58a283e962381f986cf5",
+      "origin": "PR #232新規作成。Mac native portへopaque scopeとmask PNGを渡す共通adapter。provider ticket・URL・実写真は含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/browser/mask-uploader.ts",
+      "sha256": "6f347f0e8401f8ce7a96edeb96ead907ea1ceb4130cc474f25a6202c39539ca4",
+      "origin": "PR #232新規作成。既存resumable upload runnerへmask PNGを接続する公開cloud library実装。実写真や認証秘密を含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/mask-surface.ts",
+      "sha256": "509263c65eabd58239541e709e933424503e13e16981950651b6709c753ec475",
+      "origin": "PR #232新規作成。mask PNGのhash・asset・SDK decode結果を照合する共通検証処理。実写真や認証秘密を含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/mask-uploader.test.ts",
+      "sha256": "2c4ee2f8322c142d836dd54879049e8568525e081eac46db9e590d9f4361f041",
+      "origin": "PR #232新規作成。synthetic PNGとmock cloud transportでmask upload/reconcileを検証し、実写真や個人情報を含まない。"
     }
   ],
   "excludedSources": [

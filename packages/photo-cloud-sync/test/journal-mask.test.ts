@@ -122,7 +122,6 @@ describe("IndexedDB v2 mask journal", () => {
     await journal.stage(binding(current), stage([input.sha256]));
     await expect(journal.deleteMaskSurface(current, "photo", input.sha256)).resolves.toBe(false);
     await journal.discard(binding(current));
-    await expect(journal.deleteMaskSurface(current, "photo", input.sha256)).resolves.toBe(true);
     expect(await journal.getMaskSurface(current, "photo", input.sha256)).toBeNull();
     journal.dispose();
   });
@@ -181,7 +180,21 @@ describe("IndexedDB v2 mask journal", () => {
     await journal.stage(writer, { ...stage(), generation: 1 });
     expect(await journal.deleteMaskSurface(current, "photo", input.sha256)).toBe(false);
     await journal.discard(writer);
-    expect(await journal.deleteMaskSurface(current, "photo", input.sha256)).toBe(true);
+    expect(await journal.getMaskSurface(current, "photo", input.sha256)).toBeNull();
+    journal.dispose();
+  });
+
+  it("reclaims a verified unpinned surface after the latest writer stops referencing it", async () => {
+    const journal = new IndexedDbRecipeSyncJournal(new IDBFactory(), "mask-reclaim-after-stage");
+    const current = scope();
+    const input = surface(new Uint8Array([3, 8, 4]), "photo", false);
+    const writer = binding(current);
+    await journal.putMaskSurface(current, "photo", input);
+    await journal.setMaskSurfacePinned(current, "photo", input.sha256, false);
+    await journal.stage(writer, stage([input.sha256]));
+    expect(await journal.getMaskSurface(current, "photo", input.sha256)).not.toBeNull();
+    await journal.stage(writer, { ...stage(), generation: 1 });
+    expect(await journal.getMaskSurface(current, "photo", input.sha256)).toBeNull();
     journal.dispose();
   });
 });

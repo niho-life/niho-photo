@@ -510,6 +510,7 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
       store.delete(current.id);
     }
     await transactionWait(barrier, transaction, signal);
+    await this.reclaimUnreferencedMaskSurfaces(binding, signal);
   }
 
   async releaseCompleted(binding: RecipeWriterBinding, signal?: AbortSignal): Promise<boolean> {
@@ -531,6 +532,7 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
       }
     }
     await transactionWait(barrier, transaction, signal);
+    await this.reclaimUnreferencedMaskSurfaces(binding, signal);
     return released;
   }
 
@@ -716,6 +718,7 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     const next = change(clone(current));
     validateRecord(next);
     if (next.id !== current.id || next.revision < current.revision || !sameBinding(next, binding)) { abort(transaction); unavailable(); }
+    const releasesMaskReferences = dropsMaskReferences(current, next);
     if (!deepEqual(next, current)) {
       await updateCombinedBudgets(
         transaction.objectStore(META),
@@ -727,6 +730,59 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
         transaction,
       );
       store.put(next);
+    }
+    await transactionWait(barrier, transaction, signal);
+    if (releasesMaskReferences) await this.reclaimUnreferencedMaskSurfaces(binding, signal);
+  }
+
+  private async reclaimUnreferencedMaskSurfaces(
+    scope: RecipeJournalScope,
+    signal?: AbortSignal,
+  ): Promise<void> {
+    const database = await this.database(signal);
+    const transaction = strictTransaction(database, [MASKS, WRITERS, META], "readwrite");
+    const barrier = transactionBarrier(transaction);
+    void barrier.catch(() => undefined);
+    const masks = transaction.objectStore(MASKS);
+    const writers = transaction.objectStore(WRITERS);
+    const writerRows = await transactionWait(requestResult(writers.getAll()), transaction, signal);
+    const writerRecords = writerRows.map((value) => validateRecord(value));
+    const candidateKeys: string[] = [];
+    let releasedBytes = 0;
+    const scan = new Promise<void>((resolve, reject) => {
+      const request = masks.openCursor();
+      request.onerror = () => reject(idbError(request.error));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor === null) { resolve(); return; }
+        try {
+          const value: unknown = cursor.value;
+          if (isRecord(value) && value.actorId === scope.actorId && value.libraryId === scope.libraryId &&
+            value.sessionId === scope.sessionId && value.sessionEpoch === scope.sessionEpoch && value.transport === scope.transport &&
+            value.pinned === false && value.uploadState === null) {
+            const record = validateMaskRecord(value);
+            const referenced = writerRecords.some((writer) => writer.photoId === record.photoId && writerReferences(writer, record.sha256));
+            if (!referenced) {
+              candidateKeys.push(record.key);
+              releasedBytes += maskBytes(record);
+            }
+          }
+          cursor.continue();
+        } catch (error) { reject(error); }
+      };
+    });
+    await transactionWait(scan, transaction, signal);
+    if (candidateKeys.length > 0) {
+      await updateCombinedBudgets(
+        transaction.objectStore(META),
+        scope,
+        0,
+        -candidateKeys.length,
+        -releasedBytes,
+        signal,
+        transaction,
+      );
+      for (const key of candidateKeys) masks.delete(key);
     }
     await transactionWait(barrier, transaction, signal);
   }
@@ -1055,6 +1111,26 @@ function writerReferences(record: WriterRecord, sha: string): boolean {
   if (record.conflicts.length > 0) return true;
   if (record.latest?.candidate.maskSurfaceIds.includes(sha) || record.attempt?.candidate.maskSurfaceIds.includes(sha)) return true;
   return record.resolution?.proof.decision === "adopt" && record.resolution.proof.selectedCandidate.maskSurfaceIds.includes(sha);
+}
+
+function dropsMaskReferences(previous: WriterRecord, next: WriterRecord): boolean {
+  const before = maskReferences(previous);
+  const after = maskReferences(next);
+  if (before === null) return after !== null;
+  if (after === null) return false;
+  return [...before].some((sha) => !after.has(sha));
+}
+
+function maskReferences(record: WriterRecord): Set<string> | null {
+  if (record.conflicts.length > 0) return null;
+  const references = new Set<string>();
+  for (const candidate of [record.latest?.candidate, record.attempt?.candidate]) {
+    for (const sha of candidate?.maskSurfaceIds ?? []) references.add(sha);
+  }
+  if (record.resolution?.proof.decision === "adopt") {
+    for (const sha of record.resolution.proof.selectedCandidate.maskSurfaceIds) references.add(sha);
+  }
+  return references;
 }
 
 function maskKey(scope: RecipeJournalScope, photoId: string, sha: string): string { return JSON.stringify([...scopeKey(scope), photoId, sha]); }

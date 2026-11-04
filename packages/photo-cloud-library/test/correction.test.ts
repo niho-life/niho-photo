@@ -413,14 +413,14 @@ describe("recipe-specific renderer and media intersection", () => {
         sessionEpoch: "epoch-1",
         transport: "browser-session",
       }, IDS.photo, surfaceId);
-      expect(persisted?.bytes).toEqual(bytes);
-      expect(persisted?.pinned).toBe(true);
-      expect(persisted?.uploadState).toBeNull();
+      expect(persisted).toBeNull();
       await expect(handle.library.loadMaskSurface?.(IDS.photo, surfaceId)).resolves.toEqual(bytes);
 
       storedBytes = storedBytes.slice();
       storedBytes[storedBytes.byteLength - 1] ^= 1;
-      await expect(handle.library.loadMaskSurface?.(IDS.photo, surfaceId)).resolves.toEqual(bytes);
+      await expect(handle.library.loadMaskSurface?.(IDS.photo, surfaceId)).rejects.toEqual(
+        new PersonalPhotoCloudError("invalid_response"),
+      );
       const cloudOnly = makeHandle(client, new FakeIdentity(), {
         maskValidator: testMaskValidator,
         omitMaskJournal: true,
@@ -486,8 +486,7 @@ describe("recipe-specific renderer and media intersection", () => {
       await expect(save(IDS.photo, bytes)).resolves.toEqual({ id: surfaceId, width: 1, height: 1 });
       expect(upload).toHaveBeenCalledTimes(2);
       const settled = await journal.getMaskSurface(journalScope, IDS.photo, surfaceId);
-      expect(settled?.bytes).toEqual(bytes);
-      expect(settled?.uploadState).toBeNull();
+      expect(settled).toBeNull();
     } finally { handle.dispose(); }
   });
 });

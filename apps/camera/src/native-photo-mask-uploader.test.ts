@@ -70,7 +70,7 @@ const input = (signal = new AbortController().signal) => ({
 describe("native cloud mask uploader", () => {
   it("passes only the captured Mac scope, photo, content address and bytes to the native port", async () => {
     const source = identity();
-    const invokeBinary = vi.fn<NativePhotoBinaryInvoke>(async () => undefined);
+    const invokeBinary = vi.fn<NativePhotoBinaryInvoke>(async () => "stored");
     const uploader = createNativePersonalPhotoCloudMaskUploader({ client: client(), identity: source.port, invokeBinary });
     const uploadInput = input(new AbortController().signal);
     const compareAndSet = vi.spyOn(uploadInput, "compareAndSetUploadState");
@@ -104,7 +104,23 @@ describe("native cloud mask uploader", () => {
 
     await expect(pending).rejects.toMatchObject({ code: "scope_changed" });
     expect(invokeBinary).toHaveBeenCalledTimes(1);
-    finish(undefined);
+    finish("stored");
+    uploader.dispose();
+  });
+
+  it.each([
+    ["expired", "unavailable", "expired"],
+    ["cancelled", "unavailable", "cancelled"],
+  ] as const)("persists native %s before returning a retryable result", async (outcome, errorCode, phase) => {
+    const source = identity();
+    const invokeBinary = vi.fn<NativePhotoBinaryInvoke>(async () => outcome);
+    const uploader = createNativePersonalPhotoCloudMaskUploader({ client: client(), identity: source.port, invokeBinary });
+    const uploadInput = input(new AbortController().signal);
+    const compareAndSet = vi.spyOn(uploadInput, "compareAndSetUploadState");
+
+    await expect(uploader.upload(uploadInput)).rejects.toMatchObject({ code: errorCode });
+    expect(compareAndSet).toHaveBeenCalledTimes(2);
+    expect(compareAndSet.mock.calls[1]?.[1]).toMatchObject({ phase });
     uploader.dispose();
   });
 });

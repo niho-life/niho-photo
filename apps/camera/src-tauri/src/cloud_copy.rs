@@ -414,6 +414,14 @@ pub struct MaskUploadInput {
   idempotency_key: String,
 }
 
+#[derive(Clone, Copy, Debug, Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum MaskUploadOutcome {
+  Stored,
+  Expired,
+  Cancelled,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct Recovery {
@@ -600,7 +608,10 @@ pub async fn camera_photo_copy_cancel(app: AppHandle, input: StatusInput) -> Res
 
 /// Native-only mask upload. The page submits PNG bytes and a stable idempotency key; bearer URLs stay in Account.
 #[tauri::command]
-pub async fn camera_photo_mask_upload(app: AppHandle, request: tauri::ipc::Request<'_>) -> Result<(), AccountError> {
+pub async fn camera_photo_mask_upload(
+  app: AppHandle,
+  request: tauri::ipc::Request<'_>,
+) -> Result<MaskUploadOutcome, AccountError> {
   let tauri::ipc::InvokeBody::Raw(body) = request.body() else {
     return Err(AccountError::InvalidResponse);
   };
@@ -652,7 +663,7 @@ fn upload_mask_surface(
   bytes: &[u8],
   width: u32,
   height: u32,
-) -> Result<(), AccountError> {
+) -> Result<MaskUploadOutcome, AccountError> {
   let capture = DurableScope::from_scope(scope).capture();
   let target = NativeCopyTarget::Mask {
     photo_id: photo_id.to_owned(),
@@ -676,7 +687,7 @@ fn upload_mask_surface(
         return Err(AccountError::InvalidResponse);
       }
       // The shared cloud adapter performs masks.get/content.get and SDK decoder readback before it reports success.
-      return Ok(());
+      return Ok(MaskUploadOutcome::Stored);
     }
     NativeStartUpload::Upload { upload, ticket: value } => {
       ticket = value;
@@ -700,7 +711,7 @@ fn upload_mask_surface(
         {
           return Err(AccountError::InvalidResponse);
         }
-        return Ok(());
+        return Ok(MaskUploadOutcome::Stored);
       }
       NativeUploadState::StoredOriginal { .. } => return Err(AccountError::InvalidResponse),
       NativeUploadState::Verifying => {
@@ -710,9 +721,9 @@ fn upload_mask_surface(
         })?;
         assert_upload(&upload, &target, bytes.len() as u64, surface_id)?;
       }
-      NativeUploadState::Cancelled | NativeUploadState::Expired | NativeUploadState::Rejected => {
-        return Err(AccountError::Rejected);
-      }
+      NativeUploadState::Cancelled => return Ok(MaskUploadOutcome::Cancelled),
+      NativeUploadState::Expired => return Ok(MaskUploadOutcome::Expired),
+      NativeUploadState::Rejected => return Err(AccountError::Rejected),
       NativeUploadState::Reserved { uploaded_bytes } => {
         if uploaded_bytes > bytes.len() as u64 {
           return Err(AccountError::InvalidResponse);

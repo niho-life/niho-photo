@@ -594,6 +594,8 @@ class Adapter {
     if (journal === undefined || !await journal.compareAndSetMaskUploadState(scope, photoId, surfaceId, state, null, signal)) {
       throw new PersonalPhotoCloudError("unavailable");
     }
+    await journal.setMaskSurfacePinned(scope, photoId, surfaceId, false, signal);
+    await journal.deleteMaskSurface(scope, photoId, surfaceId, signal);
   }
 
   private async readMaskSurfaceBytes(photoId: string, surfaceId: string, signal: AbortSignal): Promise<Uint8Array | null> {

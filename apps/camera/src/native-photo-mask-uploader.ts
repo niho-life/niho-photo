@@ -1,6 +1,7 @@
 import { samePhotoIdentityScope } from "@niho/photo-cloud-session";
 import { PHOTO_LIMITS, type PersonalPhotoCloudClient, type VerifiedPhotoActor } from "@niho/photo-personal-cloud-contract";
 import type { PersonalPhotoCloudMaskUploader, PersonalPhotoCloudIdentity } from "@niho/photo-cloud-library";
+import type { PersonalPhotoResumableUploadState } from "@niho/photo-cloud-library/browser";
 import { PersonalPhotoCloudError, awaitBounded, hashMaskSurface, linkedAbortController } from "@niho/photo-cloud-library/protocol";
 
 const UPLOAD_TIMEOUT_MS = 10 * 60 * 1000;
@@ -48,7 +49,7 @@ export function createNativePersonalPhotoCloudMaskUploader(options: {
         if (!await input.compareAndSetUploadState(initialState, initialState, link.controller.signal)) {
           throw new PersonalPhotoCloudError("unavailable");
         }
-        await awaitBounded(options.invokeBinary(
+        const outcome = await awaitBounded(options.invokeBinary(
           "camera_photo_mask_upload",
           input.bytes,
           {
@@ -67,6 +68,14 @@ export function createNativePersonalPhotoCloudMaskUploader(options: {
           },
         ), { signal: link.controller.signal, timeoutMs: UPLOAD_TIMEOUT_MS });
         assertCurrent(options.identity, options.client, captured);
+        if (outcome === "expired" || outcome === "cancelled") {
+          const terminalState: PersonalPhotoResumableUploadState = { ...initialState, phase: outcome };
+          if (!await input.compareAndSetUploadState(initialState, terminalState, link.controller.signal)) {
+            throw new PersonalPhotoCloudError("unavailable");
+          }
+          throw new PersonalPhotoCloudError("unavailable");
+        }
+        if (outcome !== "stored") throw new PersonalPhotoCloudError("invalid_response");
         const verifyingState = { ...initialState, phase: "verifying" as const, offsetBytes: initialState.sizeBytes };
         if (!await input.compareAndSetUploadState(initialState, verifyingState, link.controller.signal)) {
           throw new PersonalPhotoCloudError("unavailable");
