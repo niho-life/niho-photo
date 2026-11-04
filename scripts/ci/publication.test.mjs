@@ -198,7 +198,7 @@ test("CSV内の引用カンマを解釈し、不正な列数と引用符は拒�
 
 test("理由付きmanifest更新は出典とschemaを保持し、未登録ファイルを追加しない", async (t) => {
   const f = await fixture(t);
-  for (const script of ["scripts/update-publication-manifest.mjs", "scripts/ci/publication-lib.mjs", "scripts/ci/workflow-lib.mjs", "scripts/ci/photo-sdk-workflow-lib.mjs", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/ci/image-metadata.mjs"]) await f.put(script, await readFile(path.join(realRoot, script)));
+  for (const script of ["scripts/update-publication-manifest.mjs", "scripts/ci/publication-lib.mjs", "scripts/ci/workflow-lib.mjs", "scripts/ci/photo-sdk-workflow-lib.mjs", "scripts/sdk/native-workflow-lib.mjs", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/ci/image-metadata.mjs"]) await f.put(script, await readFile(path.join(realRoot, script)));
   const before = structuredClone(f.manifest);
   const changed = "export const exposure = 2;\n";
   await f.put(before.importedFiles[0].path, changed);

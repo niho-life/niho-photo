@@ -18,11 +18,11 @@ const photoCandidatePrefixes = ["apps/camera/", "packages/photo-editing/", "pack
 const photoCandidateFiles = new Set(["package.json", "package-lock.json", "LICENSE.md", "ASSET_LICENSE.md", "TRADEMARKS.md", "THIRD_PARTY_NOTICES.md"]);
 
 export function selectPhotoSdk(changed) {
-  return changed.some((name) => photoSdkFiles.has(name) || photoSdkPrefixes.some((prefix) => name.startsWith(prefix)) || /^\.github\/workflows\/(?:public-ci|photo-sdk-release)\.yml$/u.test(name) || /^scripts\/ci\/(?:aggregate|scopes|workflow|photo-sdk-workflow)(?:-lib)?(?:\.test)?\.mjs$/u.test(name));
+  return changed.some((name) => photoSdkFiles.has(name) || photoSdkPrefixes.some((prefix) => name.startsWith(prefix)) || /^\.github\/workflows\/(?:public-ci|photo-sdk-release|photo-renderer-release)\.yml$/u.test(name) || /^scripts\/ci\/(?:aggregate|scopes|workflow|photo-sdk-workflow|photo-renderer-workflow)(?:-lib)?(?:\.test)?\.mjs$/u.test(name));
 }
 
 export function selectPhotoCandidate(changed) {
-  return changed.some((name) => photoCandidateFiles.has(name) || photoCandidatePrefixes.some((prefix) => name.startsWith(prefix)) || /^\.github\/workflows\/(?:public-ci|photo-sdk-release|photo-candidate-release)\.yml$/u.test(name) || /^scripts\/ci\/(?:aggregate|scopes|workflow|photo-candidate-workflow|publication|release-evidence)(?:-lib)?(?:\.test)?\.mjs$/u.test(name));
+  return changed.some((name) => photoCandidateFiles.has(name) || photoCandidatePrefixes.some((prefix) => name.startsWith(prefix)) || /^\.github\/workflows\/(?:public-ci|photo-sdk-release|photo-renderer-release|photo-candidate-release)\.yml$/u.test(name) || /^scripts\/ci\/(?:aggregate|scopes|workflow|photo-candidate-workflow|photo-renderer-workflow|publication|release-evidence)(?:-lib)?(?:\.test)?\.mjs$/u.test(name));
 }
 
 export function selectScopes(changed, present, mainPush = false) {

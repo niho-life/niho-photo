@@ -22,7 +22,7 @@ test("公開guardはmanifest外も含めてrepository全体の禁止pathを検�
   const hash = digest(source);
   const commit = "a".repeat(40);
   await put("scripts/verify-publication.mjs", await readFile(path.join(realRoot, "scripts/verify-publication.mjs")));
-  for (const name of ["scripts/ci/publication-lib.mjs", "scripts/ci/workflow-lib.mjs", "scripts/ci/photo-sdk-workflow-lib.mjs", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/ci/image-metadata.mjs"]) {
+  for (const name of ["scripts/ci/publication-lib.mjs", "scripts/ci/workflow-lib.mjs", "scripts/ci/photo-sdk-workflow-lib.mjs", "scripts/sdk/native-workflow-lib.mjs", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/ci/image-metadata.mjs"]) {
     try { await put(name, await readFile(path.join(realRoot, name))); } catch (error) { if (error.code !== "ENOENT") throw error; }
   }
   const policy = JSON.parse(await readFile(path.join(realRoot, "docs/security/publication-policy.json"), "utf8"));

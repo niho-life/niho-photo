@@ -1,0 +1,341 @@
+{
+  "name": "Photo native renderer release",
+  "on": {
+    "workflow_dispatch": {
+      "inputs": {
+        "source_sha": {
+          "description": "既存SDK releaseと同じ公開sourceのfull commit SHA",
+          "required": true,
+          "type": "string"
+        }
+      }
+    }
+  },
+  "permissions": {
+    "contents": "read"
+  },
+  "defaults": {
+    "run": {
+      "shell": "bash"
+    }
+  },
+  "concurrency": {
+    "group": "photo-renderer-${{ github.workflow }}-${{ github.run_id }}",
+    "cancel-in-progress": false
+  },
+  "jobs": {
+    "build_linux": {
+      "name": "Build Linux native renderer",
+      "runs-on": "ubuntu-24.04",
+      "container": {
+        "image": "rust@sha256:c49256cbe5ea0188bc658a689500d70c41eb51f009a7a7be209caf60a944f3ec",
+        "options": "--platform linux/amd64"
+      },
+      "timeout-minutes": 60,
+      "outputs": {
+        "artifact-id": "${{ steps.upload.outputs.artifact-id }}",
+        "artifact-digest": "${{ steps.upload.outputs.artifact-digest }}",
+        "artifact-name": "${{ steps.names.outputs.artifact-name }}",
+        "source-sha": "${{ steps.build.outputs.source-sha }}",
+        "engine-tree": "${{ steps.build.outputs.engine-tree }}",
+        "engine-version": "${{ steps.build.outputs.engine-version }}",
+        "target": "${{ steps.build.outputs.target }}",
+        "archive-sha256": "${{ steps.build.outputs.archive-sha256 }}",
+        "binary-sha256": "${{ steps.build.outputs.binary-sha256 }}"
+      },
+      "steps": [
+        {
+          "name": "dispatch mainのtrusted toolingを取得",
+          "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "with": {
+            "persist-credentials": false,
+            "fetch-depth": 0,
+            "ref": "${{ github.sha }}",
+            "path": "tooling"
+          }
+        },
+        {
+          "id": "trust",
+          "name": "manual dispatchとsourceをmainへ固定",
+          "env": {
+            "RENDERER_ACTOR": "${{ github.actor }}",
+            "RENDERER_REPOSITORY": "${{ github.repository }}",
+            "RENDERER_RUN_ATTEMPT": "${{ github.run_attempt }}",
+            "RENDERER_SOURCE_SHA": "${{ inputs.source_sha }}",
+            "RENDERER_TRIGGERING_ACTOR": "${{ github.triggering_actor }}",
+            "RENDERER_WORKFLOW_REF": "${{ github.ref }}",
+            "RENDERER_WORKFLOW_SHA": "${{ github.sha }}"
+          },
+          "run": "set -euo pipefail\nif [[ \"$RENDERER_WORKFLOW_REF\" != \"refs/heads/main\" || \"$RENDERER_REPOSITORY\" != \"niho-life/niho-photo\" || \"$RENDERER_RUN_ATTEMPT\" != \"1\" || \"$RENDERER_ACTOR\" != \"$RENDERER_TRIGGERING_ACTOR\" || \"$(git -C tooling rev-parse HEAD)\" != \"$RENDERER_WORKFLOW_SHA\" ]]; then exit 1; fi\nif ! [[ \"$RENDERER_SOURCE_SHA\" =~ ^[a-f0-9]{40}$ ]]; then exit 1; fi\ngit -C tooling fetch --no-tags origin main:refs/remotes/origin/main \"$RENDERER_SOURCE_SHA\"\ngit -C tooling merge-base --is-ancestor \"$RENDERER_SOURCE_SHA\" refs/remotes/origin/main\nprintf 'source-sha=%s\\n' \"$RENDERER_SOURCE_SHA\" >> \"$GITHUB_OUTPUT\""
+        },
+        {
+          "name": "build対象sourceを別checkoutへ固定",
+          "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "with": {
+            "persist-credentials": false,
+            "fetch-depth": 1,
+            "ref": "${{ steps.trust.outputs.source-sha }}",
+            "path": "source"
+          }
+        },
+        {
+          "name": "固定Nodeを準備",
+          "uses": "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+          "with": {
+            "node-version": "24.15.0"
+          }
+        },
+        {
+          "id": "build",
+          "name": "trusted helperでLinux rendererだけをbuild・smoke・pack",
+          "env": {
+            "RENDERER_SOURCE_SHA": "${{ steps.trust.outputs.source-sha }}"
+          },
+          "run": "node tooling/scripts/sdk/native-renderer.mjs build --source \"$GITHUB_WORKSPACE/source\" --expected-source \"$RENDERER_SOURCE_SHA\" --target x86_64-unknown-linux-gnu --output \"$RUNNER_TEMP/renderer-linux\" --github-output \"$GITHUB_OUTPUT\""
+        },
+        {
+          "id": "names",
+          "name": "artifact identityを固定",
+          "env": {
+            "RENDERER_RUN_ATTEMPT": "${{ github.run_attempt }}",
+            "RENDERER_RUN_ID": "${{ github.run_id }}",
+            "RENDERER_SOURCE_SHA": "${{ steps.build.outputs.source-sha }}",
+            "RENDERER_TARGET": "${{ steps.build.outputs.target }}"
+          },
+          "run": "set -euo pipefail\nif ! [[ \"$RENDERER_SOURCE_SHA\" =~ ^[a-f0-9]{40}$ && \"$RENDERER_RUN_ID\" =~ ^[1-9][0-9]*$ && \"$RENDERER_RUN_ATTEMPT\" == \"1\" && \"$RENDERER_TARGET\" == \"x86_64-unknown-linux-gnu\" ]]; then exit 1; fi\nprintf 'artifact-name=niho-renderer-%s-run-%s-attempt-%s-%s\\n' \"$RENDERER_SOURCE_SHA\" \"$RENDERER_RUN_ID\" \"$RENDERER_RUN_ATTEMPT\" \"$RENDERER_TARGET\" >> \"$GITHUB_OUTPUT\""
+        },
+        {
+          "id": "upload",
+          "name": "Linux renderer artifactを保存",
+          "if": "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'niho-life/niho-photo' && github.run_attempt == 1 && github.actor == github.triggering_actor",
+          "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+          "with": {
+            "name": "${{ steps.names.outputs.artifact-name }}",
+            "path": "${{ runner.temp }}/renderer-linux/",
+            "if-no-files-found": "error",
+            "retention-days": 30,
+            "compression-level": 0,
+            "include-hidden-files": false
+          }
+        }
+      ]
+    },
+    "build_macos": {
+      "name": "Build macOS native renderer",
+      "runs-on": "macos-26",
+      "timeout-minutes": 60,
+      "outputs": {
+        "artifact-id": "${{ steps.upload.outputs.artifact-id }}",
+        "artifact-digest": "${{ steps.upload.outputs.artifact-digest }}",
+        "artifact-name": "${{ steps.names.outputs.artifact-name }}",
+        "source-sha": "${{ steps.build.outputs.source-sha }}",
+        "engine-tree": "${{ steps.build.outputs.engine-tree }}",
+        "engine-version": "${{ steps.build.outputs.engine-version }}",
+        "target": "${{ steps.build.outputs.target }}",
+        "archive-sha256": "${{ steps.build.outputs.archive-sha256 }}",
+        "binary-sha256": "${{ steps.build.outputs.binary-sha256 }}"
+      },
+      "steps": [
+        {
+          "name": "dispatch mainのtrusted toolingを取得",
+          "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "with": {
+            "persist-credentials": false,
+            "fetch-depth": 0,
+            "ref": "${{ github.sha }}",
+            "path": "tooling"
+          }
+        },
+        {
+          "id": "trust",
+          "name": "manual dispatchとsourceをmainへ固定",
+          "env": {
+            "RENDERER_ACTOR": "${{ github.actor }}",
+            "RENDERER_REPOSITORY": "${{ github.repository }}",
+            "RENDERER_RUN_ATTEMPT": "${{ github.run_attempt }}",
+            "RENDERER_SOURCE_SHA": "${{ inputs.source_sha }}",
+            "RENDERER_TRIGGERING_ACTOR": "${{ github.triggering_actor }}",
+            "RENDERER_WORKFLOW_REF": "${{ github.ref }}",
+            "RENDERER_WORKFLOW_SHA": "${{ github.sha }}"
+          },
+          "run": "set -euo pipefail\nif [[ \"$RENDERER_WORKFLOW_REF\" != \"refs/heads/main\" || \"$RENDERER_REPOSITORY\" != \"niho-life/niho-photo\" || \"$RENDERER_RUN_ATTEMPT\" != \"1\" || \"$RENDERER_ACTOR\" != \"$RENDERER_TRIGGERING_ACTOR\" || \"$(git -C tooling rev-parse HEAD)\" != \"$RENDERER_WORKFLOW_SHA\" ]]; then exit 1; fi\nif ! [[ \"$RENDERER_SOURCE_SHA\" =~ ^[a-f0-9]{40}$ ]]; then exit 1; fi\ngit -C tooling fetch --no-tags origin main:refs/remotes/origin/main \"$RENDERER_SOURCE_SHA\"\ngit -C tooling merge-base --is-ancestor \"$RENDERER_SOURCE_SHA\" refs/remotes/origin/main\nprintf 'source-sha=%s\\n' \"$RENDERER_SOURCE_SHA\" >> \"$GITHUB_OUTPUT\""
+        },
+        {
+          "name": "build対象sourceを別checkoutへ固定",
+          "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "with": {
+            "persist-credentials": false,
+            "fetch-depth": 1,
+            "ref": "${{ steps.trust.outputs.source-sha }}",
+            "path": "source"
+          }
+        },
+        {
+          "name": "固定Nodeを準備",
+          "uses": "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+          "with": {
+            "node-version": "24.15.0"
+          }
+        },
+        {
+          "name": "固定Rust toolchainを準備",
+          "run": "rustup toolchain install 1.98.1 --profile minimal"
+        },
+        {
+          "id": "build",
+          "name": "trusted helperでmacOS rendererだけをbuild・smoke・pack",
+          "env": {
+            "RENDERER_SOURCE_SHA": "${{ steps.trust.outputs.source-sha }}"
+          },
+          "run": "node tooling/scripts/sdk/native-renderer.mjs build --source \"$GITHUB_WORKSPACE/source\" --expected-source \"$RENDERER_SOURCE_SHA\" --target aarch64-apple-darwin --output \"$RUNNER_TEMP/renderer-macos\" --github-output \"$GITHUB_OUTPUT\""
+        },
+        {
+          "id": "names",
+          "name": "artifact identityを固定",
+          "env": {
+            "RENDERER_RUN_ATTEMPT": "${{ github.run_attempt }}",
+            "RENDERER_RUN_ID": "${{ github.run_id }}",
+            "RENDERER_SOURCE_SHA": "${{ steps.build.outputs.source-sha }}",
+            "RENDERER_TARGET": "${{ steps.build.outputs.target }}"
+          },
+          "run": "set -euo pipefail\nif ! [[ \"$RENDERER_SOURCE_SHA\" =~ ^[a-f0-9]{40}$ && \"$RENDERER_RUN_ID\" =~ ^[1-9][0-9]*$ && \"$RENDERER_RUN_ATTEMPT\" == \"1\" && \"$RENDERER_TARGET\" == \"aarch64-apple-darwin\" ]]; then exit 1; fi\nprintf 'artifact-name=niho-renderer-%s-run-%s-attempt-%s-%s\\n' \"$RENDERER_SOURCE_SHA\" \"$RENDERER_RUN_ID\" \"$RENDERER_RUN_ATTEMPT\" \"$RENDERER_TARGET\" >> \"$GITHUB_OUTPUT\""
+        },
+        {
+          "id": "upload",
+          "name": "macOS renderer artifactを保存",
+          "if": "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'niho-life/niho-photo' && github.run_attempt == 1 && github.actor == github.triggering_actor",
+          "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+          "with": {
+            "name": "${{ steps.names.outputs.artifact-name }}",
+            "path": "${{ runner.temp }}/renderer-macos/",
+            "if-no-files-found": "error",
+            "retention-days": 30,
+            "compression-level": 0,
+            "include-hidden-files": false
+          }
+        }
+      ]
+    },
+    "publish": {
+      "name": "Publish immutable native renderer release",
+      "needs": [
+        "build_linux",
+        "build_macos"
+      ],
+      "if": "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'niho-life/niho-photo' && github.run_attempt == 1 && github.actor == github.triggering_actor",
+      "runs-on": "ubuntu-24.04",
+      "timeout-minutes": 10,
+      "permissions": {
+        "actions": "read",
+        "contents": "write",
+        "id-token": "write",
+        "attestations": "write"
+      },
+      "steps": [
+        {
+          "name": "dispatch mainのtrusted publisherを取得",
+          "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "with": {
+            "persist-credentials": false,
+            "fetch-depth": 1,
+            "ref": "${{ github.sha }}"
+          }
+        },
+        {
+          "name": "固定Nodeを準備",
+          "uses": "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+          "with": {
+            "node-version": "24.15.0"
+          }
+        },
+        {
+          "id": "trust",
+          "name": "publisher rootと両builder identityを固定",
+          "env": {
+            "LINUX_ENGINE_TREE": "${{ needs.build_linux.outputs.engine-tree }}",
+            "LINUX_SOURCE_SHA": "${{ needs.build_linux.outputs.source-sha }}",
+            "MACOS_ENGINE_TREE": "${{ needs.build_macos.outputs.engine-tree }}",
+            "MACOS_SOURCE_SHA": "${{ needs.build_macos.outputs.source-sha }}",
+            "RENDERER_SOURCE_SHA": "${{ inputs.source_sha }}",
+            "RENDERER_WORKFLOW_SHA": "${{ github.sha }}"
+          },
+          "run": "set -euo pipefail\nif ! [[ \"$RENDERER_SOURCE_SHA\" =~ ^[a-f0-9]{40}$ && \"$LINUX_ENGINE_TREE\" =~ ^[a-f0-9]{40}$ && \"$(git rev-parse HEAD)\" == \"$RENDERER_WORKFLOW_SHA\" && \"$LINUX_SOURCE_SHA\" == \"$RENDERER_SOURCE_SHA\" && \"$MACOS_SOURCE_SHA\" == \"$RENDERER_SOURCE_SHA\" && \"$MACOS_ENGINE_TREE\" == \"$LINUX_ENGINE_TREE\" ]]; then exit 1; fi\nprintf 'source-sha=%s\\nbuilder-source-sha=%s\\nengine-tree=%s\\n' \"$RENDERER_SOURCE_SHA\" \"$RENDERER_WORKFLOW_SHA\" \"$LINUX_ENGINE_TREE\" >> \"$GITHUB_OUTPUT\""
+        },
+        {
+          "name": "Linux artifactをexact ID/digestでDATA取得",
+          "env": {
+            "GH_TOKEN": "${{ github.token }}",
+            "RENDERER_ARTIFACT_DIGEST": "${{ needs.build_linux.outputs.artifact-digest }}",
+            "RENDERER_ARTIFACT_ID": "${{ needs.build_linux.outputs.artifact-id }}",
+            "RENDERER_ARTIFACT_NAME": "${{ needs.build_linux.outputs.artifact-name }}",
+            "RENDERER_BUILDER_SOURCE": "${{ steps.trust.outputs.builder-source-sha }}",
+            "RENDERER_RUN_ATTEMPT": "${{ github.run_attempt }}",
+            "RENDERER_RUN_ID": "${{ github.run_id }}",
+            "RENDERER_SOURCE_SHA": "${{ steps.trust.outputs.source-sha }}",
+            "RENDERER_TARGET": "x86_64-unknown-linux-gnu"
+          },
+          "run": "python3 scripts/sdk/native_renderer_artifact.py --artifact-id \"$RENDERER_ARTIFACT_ID\" --artifact-name \"$RENDERER_ARTIFACT_NAME\" --artifact-digest \"$RENDERER_ARTIFACT_DIGEST\" --run-id \"$RENDERER_RUN_ID\" --run-attempt \"$RENDERER_RUN_ATTEMPT\" --builder-source \"$RENDERER_BUILDER_SOURCE\" --source \"$RENDERER_SOURCE_SHA\" --target \"$RENDERER_TARGET\" --output \"$RUNNER_TEMP/renderer-download-linux\""
+        },
+        {
+          "name": "macOS artifactをexact ID/digestでDATA取得",
+          "env": {
+            "GH_TOKEN": "${{ github.token }}",
+            "RENDERER_ARTIFACT_DIGEST": "${{ needs.build_macos.outputs.artifact-digest }}",
+            "RENDERER_ARTIFACT_ID": "${{ needs.build_macos.outputs.artifact-id }}",
+            "RENDERER_ARTIFACT_NAME": "${{ needs.build_macos.outputs.artifact-name }}",
+            "RENDERER_BUILDER_SOURCE": "${{ steps.trust.outputs.builder-source-sha }}",
+            "RENDERER_RUN_ATTEMPT": "${{ github.run_attempt }}",
+            "RENDERER_RUN_ID": "${{ github.run_id }}",
+            "RENDERER_SOURCE_SHA": "${{ steps.trust.outputs.source-sha }}",
+            "RENDERER_TARGET": "aarch64-apple-darwin"
+          },
+          "run": "python3 scripts/sdk/native_renderer_artifact.py --artifact-id \"$RENDERER_ARTIFACT_ID\" --artifact-name \"$RENDERER_ARTIFACT_NAME\" --artifact-digest \"$RENDERER_ARTIFACT_DIGEST\" --run-id \"$RENDERER_RUN_ID\" --run-attempt \"$RENDERER_RUN_ATTEMPT\" --builder-source \"$RENDERER_BUILDER_SOURCE\" --source \"$RENDERER_SOURCE_SHA\" --target \"$RENDERER_TARGET\" --output \"$RUNNER_TEMP/renderer-download-macos\""
+        },
+        {
+          "id": "manifest",
+          "name": "trusted main verifierでDATAだけを再照合しmanifestを作る",
+          "env": {
+            "BUILDER_SOURCE_SHA": "${{ steps.trust.outputs.builder-source-sha }}",
+            "LINUX_ARTIFACT_DIGEST": "${{ needs.build_linux.outputs.artifact-digest }}",
+            "LINUX_ARTIFACT_ID": "${{ needs.build_linux.outputs.artifact-id }}",
+            "LINUX_ARTIFACT_NAME": "${{ needs.build_linux.outputs.artifact-name }}",
+            "LINUX_ARCHIVE_SHA256": "${{ needs.build_linux.outputs.archive-sha256 }}",
+            "LINUX_BINARY_SHA256": "${{ needs.build_linux.outputs.binary-sha256 }}",
+            "LINUX_ENGINE_TREE": "${{ needs.build_linux.outputs.engine-tree }}",
+            "LINUX_ENGINE_VERSION": "${{ needs.build_linux.outputs.engine-version }}",
+            "LINUX_TARGET": "${{ needs.build_linux.outputs.target }}",
+            "MACOS_ARTIFACT_DIGEST": "${{ needs.build_macos.outputs.artifact-digest }}",
+            "MACOS_ARTIFACT_ID": "${{ needs.build_macos.outputs.artifact-id }}",
+            "MACOS_ARTIFACT_NAME": "${{ needs.build_macos.outputs.artifact-name }}",
+            "MACOS_ARCHIVE_SHA256": "${{ needs.build_macos.outputs.archive-sha256 }}",
+            "MACOS_BINARY_SHA256": "${{ needs.build_macos.outputs.binary-sha256 }}",
+            "MACOS_ENGINE_TREE": "${{ needs.build_macos.outputs.engine-tree }}",
+            "MACOS_ENGINE_VERSION": "${{ needs.build_macos.outputs.engine-version }}",
+            "MACOS_TARGET": "${{ needs.build_macos.outputs.target }}",
+            "RENDERER_RUN_ATTEMPT": "${{ github.run_attempt }}",
+            "RENDERER_RUN_ID": "${{ github.run_id }}",
+            "RENDERER_SOURCE_SHA": "${{ steps.trust.outputs.source-sha }}"
+          },
+          "run": "node scripts/sdk/native-renderer.mjs publish --linux-directory \"$RUNNER_TEMP/renderer-download-linux\" --macos-directory \"$RUNNER_TEMP/renderer-download-macos\" --output \"$RUNNER_TEMP/renderer-release\" --source \"$RENDERER_SOURCE_SHA\" --builder-source \"$BUILDER_SOURCE_SHA\" --run-id \"$RENDERER_RUN_ID\" --run-attempt \"$RENDERER_RUN_ATTEMPT\" --linux-artifact-id \"$LINUX_ARTIFACT_ID\" --linux-artifact-digest \"$LINUX_ARTIFACT_DIGEST\" --linux-artifact-name \"$LINUX_ARTIFACT_NAME\" --linux-engine-tree \"$LINUX_ENGINE_TREE\" --linux-engine-version \"$LINUX_ENGINE_VERSION\" --linux-target \"$LINUX_TARGET\" --linux-archive-sha256 \"$LINUX_ARCHIVE_SHA256\" --linux-binary-sha256 \"$LINUX_BINARY_SHA256\" --macos-artifact-id \"$MACOS_ARTIFACT_ID\" --macos-artifact-digest \"$MACOS_ARTIFACT_DIGEST\" --macos-artifact-name \"$MACOS_ARTIFACT_NAME\" --macos-engine-tree \"$MACOS_ENGINE_TREE\" --macos-engine-version \"$MACOS_ENGINE_VERSION\" --macos-target \"$MACOS_TARGET\" --macos-archive-sha256 \"$MACOS_ARCHIVE_SHA256\" --macos-binary-sha256 \"$MACOS_BINARY_SHA256\" --github-output \"$GITHUB_OUTPUT\""
+        },
+        {
+          "name": "native manifestを公式workflow identityへattest",
+          "id": "attest",
+          "uses": "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
+          "with": {
+            "subject-path": "${{ runner.temp }}/renderer-release/${{ steps.manifest.outputs.manifest-file }}",
+            "create-storage-record": true
+          }
+        },
+        {
+          "name": "新規source tagとnative専用releaseを作成",
+          "env": {
+            "GH_TOKEN": "${{ github.token }}",
+            "RENDERER_SOURCE_SHA": "${{ steps.trust.outputs.source-sha }}"
+          },
+          "run": "set -euo pipefail\nif ! [[ \"$RENDERER_SOURCE_SHA\" =~ ^[a-f0-9]{40}$ ]]; then exit 1; fi\ntag=\"photo-renderer-$RENDERER_SOURCE_SHA\"\nif gh api \"repos/niho-life/niho-photo/git/ref/tags/$tag\" >/dev/null 2>&1; then exit 1; fi\nif gh release view \"$tag\" --repo niho-life/niho-photo >/dev/null 2>&1; then exit 1; fi\ngh api --method POST repos/niho-life/niho-photo/git/refs -f ref=\"refs/tags/$tag\" -f sha=\"$RENDERER_SOURCE_SHA\" >/dev/null\ngh release create \"$tag\" --repo niho-life/niho-photo --verify-tag --target \"$RENDERER_SOURCE_SHA\" --latest=false --title \"NIHO photo native renderer $RENDERER_SOURCE_SHA\" --notes \"公開source $RENDERER_SOURCE_SHA に固定したRust renderer専用releaseです。既存SDK releaseとは独立しています。\" \"$RUNNER_TEMP/renderer-release/niho-photo-renderer-$RENDERER_SOURCE_SHA.json\" \"$RUNNER_TEMP/renderer-release/niho-develop-render-$RENDERER_SOURCE_SHA-x86_64-unknown-linux-gnu.tgz\" \"$RUNNER_TEMP/renderer-release/niho-develop-render-$RENDERER_SOURCE_SHA-aarch64-apple-darwin.tgz\""
+        }
+      ]
+    }
+  }
+}
