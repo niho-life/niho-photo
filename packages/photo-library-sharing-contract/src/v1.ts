@@ -13,6 +13,7 @@ import type {
   JsonObject,
   LibraryId,
   MutationReceipt,
+  PhotoAsset,
   PhotoByteRange,
   PhotoContent,
   PhotoFormat,
@@ -38,6 +39,7 @@ export type {
   JsonObject,
   LibraryId,
   MutationReceipt,
+  PhotoAsset,
   PhotoByteRange,
   PhotoContent,
   PhotoFormat,
@@ -105,6 +107,8 @@ export const SHARING_LIMITS = {
   renditionMaxPixels: PHOTO_LIMITS.maxPixels,
   thumbnailMaxEdge: PHOTO_LIMITS.thumbnailMaxEdge,
   renderLeaseMaxSeconds: 15 * 60,
+  /** Photos a claim may name as currently on screen. */
+  claimPreferMaxPhotos: 60,
   exportStagingMaxSeconds: 24 * 60 * 60,
 } as const;
 
@@ -708,6 +712,12 @@ export interface RenderJob {
   readonly createdAt: Instant;
   readonly leaseExpiresAt: Instant | null;
   readonly failure: RenderFailureCode | null;
+  /**
+   * Full-resolution size of a rendition, computed by NIHO from the source size and the recipe geometry with the
+   * engine's own rule. The commit decodes the uploaded bytes and rejects any other size (content_rejected). null for
+   * previews and when the source size is not known yet.
+   */
+  readonly expectedOutput: { readonly width: number; readonly height: number } | null;
 }
 /** One claim. leaseToken is bearer material for this claim only; memory only. */
 export interface RenderLease {
@@ -729,6 +739,11 @@ export type RenderOutputRequest =
       readonly width: number;
       readonly height: number;
     };
+/**
+ * One output upload of a claimed job, with its storage reservation. A replay of the same startOutput returns
+ * `ticket: null`: continue that upload with renderJobs.renewOutput, or start another output with a new key, which
+ * supersedes this one and releases its reservation at once. A failed job or an expired lease releases it too.
+ */
 export interface RenderOutputUploadStart {
   readonly uploadId: UploadId;
   readonly expiresAt: Instant;
@@ -824,6 +839,24 @@ export interface HostedMaskUpload {
   readonly sizeBytes: number;
   readonly expiresAt: Instant;
   readonly state: "reserved" | "verifying" | "stored" | "cancelled" | "expired" | "rejected";
+}
+
+/** Metadata sent before the connector uploads canonical working-copy bytes. The server assigns the asset ID/kind. */
+export type HostedWorkingCopyInput = Omit<WorkingCopy, "asset"> & { readonly asset: Omit<PhotoAsset, "id" | "kind"> };
+export interface HostedWorkingCopyUpload {
+  readonly id: UploadId;
+  readonly photoId: PhotoId;
+  readonly sourceGeneration: number;
+  readonly sha256: Sha256;
+  readonly sizeBytes: number;
+  readonly contentType: string;
+  readonly expiresAt: Instant;
+  readonly state: "reserved" | "verifying" | "stored" | "cancelled" | "expired" | "rejected";
+}
+export interface HostedWorkingCopyCommit {
+  readonly photoId: PhotoId;
+  readonly sourceGeneration: number;
+  readonly workingCopy: WorkingCopy;
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -1036,6 +1069,8 @@ export interface SharingOperationMap {
     MutationReceipt<PortableExport>
   >;
   readonly "portability.get": Operation<{ readonly exportId: PortableExportId }, PortableExport>;
+  /** Owner-only byte stream for the ready portable archive, including its manifest. */
+  readonly "portability.content": Operation<{ readonly exportId: PortableExportId; readonly range?: PhotoByteRange }, PhotoContent>;
   readonly "portability.restore": Operation<
     { readonly libraryId: LibraryId; readonly manifestSha256: Sha256 },
     MutationReceipt<RestoreReport>
@@ -1090,10 +1125,24 @@ export type SharingOperation = keyof SharingOperationMap;
 
 /** Called by the hosted Mac connector (outbound) or by a signed-in device that holds an original. */
 export interface RenderExecutorOperationMap {
-  /** purposes: only jobs this executor can run (for example, a connector without a renderer takes previews only). */
+  /**
+   * purposes: only jobs this executor can run (for example, a connector without a renderer takes previews only).
+   * prefer: photos on screen right now, served first when they have queued jobs; a hint, never authority.
+   * A claim is keyed: replaying it returns the same jobs and leases while they are still held, so a lost response
+   * does not strand jobs until their leases expire.
+   */
   readonly "renderJobs.claim": Operation<
-    { readonly maxJobs?: number; readonly purposes?: readonly RenderJobPurpose["kind"][] },
-    { readonly jobs: readonly ClaimedRenderJob[] }
+    {
+      readonly maxJobs?: number;
+      readonly purposes?: readonly RenderJobPurpose["kind"][];
+      readonly prefer?: { readonly photoIds: readonly PhotoId[] };
+    },
+    MutationReceipt<{ readonly jobs: readonly ClaimedRenderJob[] }>
+  >;
+  /** A fresh ticket for the same output upload (resume offset included); the reservation is unchanged. */
+  readonly "renderJobs.renewOutput": Operation<
+    { readonly jobId: RenderJobId; readonly leaseToken: string; readonly uploadId: UploadId },
+    { readonly uploadId: UploadId; readonly expiresAt: Instant; readonly ticket: UploadTicket }
   >;
   readonly "renderJobs.startOutput": Operation<
     { readonly jobId: RenderJobId; readonly leaseToken: string; readonly output: RenderOutputRequest },
@@ -1110,7 +1159,7 @@ export interface RenderExecutorOperationMap {
   >;
 }
 export type RenderExecutorOperation = keyof RenderExecutorOperationMap;
-export type RenderExecutorMutationOperation = Exclude<RenderExecutorOperation, "renderJobs.claim">;
+export type RenderExecutorMutationOperation = Exclude<RenderExecutorOperation, "renderJobs.renewOutput">;
 export type RenderExecutorRequestOptions<K extends RenderExecutorOperation> = { readonly signal: AbortSignal } &
   (K extends RenderExecutorMutationOperation ? { readonly idempotencyKey: string } : { readonly idempotencyKey?: never });
 
@@ -1146,6 +1195,16 @@ export interface ConnectorOperationMap extends RenderExecutorOperationMap {
   readonly "connector.getReplicaContent": Operation<
     { readonly entity: "mask"; readonly id: string; readonly range?: PhotoByteRange },
     PhotoContent
+  >;
+  /** Upload the SDK's canonical working-copy bytes and opening metadata for the exact source generation. */
+  readonly "connector.startWorkingCopyUpload": Operation<
+    { readonly photoId: PhotoId; readonly sourceGeneration: number; readonly workingCopy: HostedWorkingCopyInput },
+    MutationReceipt<{ readonly upload: HostedWorkingCopyUpload; readonly ticket: UploadTicket | null }>
+  >;
+  /** Publishes the uploaded copy only if its source generation still matches the hosted photo. */
+  readonly "connector.completeWorkingCopyUpload": Operation<
+    { readonly photoId: PhotoId; readonly uploadId: UploadId },
+    MutationReceipt<HostedWorkingCopyCommit>
   >;
 }
 export type ConnectorOperation = keyof ConnectorOperationMap;
@@ -1230,6 +1289,7 @@ export const SHARING_OPERATION_ACCESS = {
   "exports.content": { actor: "user", scope: "libraryOwner" },
   "portability.export": { actor: "user", scope: "libraryOwner" },
   "portability.get": { actor: "user", scope: "libraryOwner" },
+  "portability.content": { actor: "user", scope: "libraryOwner" },
   "portability.restore": { actor: "user", scope: "libraryOwner" },
   "albums.list": { actor: "user", scope: "self" },
   "albums.get": { actor: "user", scope: "album", action: "view" },
@@ -1264,8 +1324,11 @@ export const CONNECTOR_OPERATION_ACCESS = {
   "connector.pullReplica": { actor: "connector", scope: "ownLibrary" },
   "connector.ackReplica": { actor: "connector", scope: "ownLibrary" },
   "connector.getReplicaContent": { actor: "connector", scope: "ownLibrary" },
+  "connector.startWorkingCopyUpload": { actor: "connector", scope: "ownLibrary" },
+  "connector.completeWorkingCopyUpload": { actor: "connector", scope: "ownLibrary" },
   "renderJobs.claim": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
   "renderJobs.startOutput": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
+  "renderJobs.renewOutput": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
   "renderJobs.commit": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
   "renderJobs.fail": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
 } as const satisfies { readonly [K in ConnectorOperation]: OperationAccess };
@@ -1336,6 +1399,7 @@ export const SHARING_REQUEST_SHAPES = {
   "exports.content": { exportId: "value", range: RANGE_SHAPE },
   "portability.export": { libraryId: "value", mode: "value" },
   "portability.get": { exportId: "value" },
+  "portability.content": { exportId: "value", range: RANGE_SHAPE },
   "portability.restore": { libraryId: "value", manifestSha256: "value" },
   "albums.list": PAGE_FIELDS,
   "albums.get": { albumId: "value" },
@@ -1388,7 +1452,16 @@ export const CONNECTOR_REQUEST_SHAPES = {
   "connector.pullReplica": { sinceRevision: "value", limit: "value", cursor: "value" },
   "connector.ackReplica": { revision: "value" },
   "connector.getReplicaContent": { entity: "value", id: "value", range: RANGE_SHAPE },
-  "renderJobs.claim": { maxJobs: "value", purposes: { items: "value" } },
+  "connector.startWorkingCopyUpload": {
+    photoId: "value", sourceGeneration: "value",
+    workingCopy: { fields: {
+      baseVersion: "value", encoding: "value", meta: "open",
+      asset: { fields: { sha256: "value", sizeBytes: "value", contentType: "value", width: "value", height: "value" } },
+    } },
+  },
+  "connector.completeWorkingCopyUpload": { photoId: "value", uploadId: "value" },
+  "renderJobs.claim": { maxJobs: "value", purposes: { items: "value" }, prefer: { fields: { photoIds: { items: "value" } } } },
+  "renderJobs.renewOutput": { jobId: "value", leaseToken: "value", uploadId: "value" },
   "renderJobs.startOutput": {
     jobId: "value", leaseToken: "value",
     output: {
