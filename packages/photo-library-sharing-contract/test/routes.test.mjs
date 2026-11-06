@@ -2,8 +2,18 @@ import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
 import {
+  CONNECTOR_PATH_PREFIX,
+  CONNECTOR_ROUTES,
   SHARING_CLOUD_PATH_PREFIX,
   SHARING_ROUTES,
+  USER_RENDER_ROUTES,
+  connectorRouteFields,
+  decodeConnectorRequest,
+  decodeUserRenderRequest,
+  encodeConnectorRequest,
+  encodeUserRenderRequest,
+  matchConnectorRoute,
+  matchUserRenderRoute,
   decodeOpaqueSegment,
   decodeSharingRequest,
   encodeOpaqueSegment,
@@ -11,8 +21,8 @@ import {
   matchSharingRoute,
   routeFields,
 } from "../src/routes.ts";
-import { SHARING_OPERATION_ACCESS, SHARING_REQUEST_SHAPES } from "../src/v1.ts";
-import { responses } from "../fixtures/v1.ts";
+import { CONNECTOR_OPERATION_ACCESS, CONNECTOR_REQUEST_SHAPES, SHARING_OPERATION_ACCESS, SHARING_REQUEST_SHAPES } from "../src/v1.ts";
+import { connectorResponses, responses } from "../fixtures/v1.ts";
 
 const operations = Object.keys(SHARING_OPERATION_ACCESS);
 const STREAMS = new Set(["hostedPhotos.content", "exports.content", "albumItems.download"]);
@@ -47,7 +57,13 @@ test("mutations require Idempotency-Key and reads refuse it", () => {
 });
 
 test("no two routes can match the same request", () => {
-  const entries = Object.entries(SHARING_ROUTES);
+  for (const table of [{ ...SHARING_ROUTES, ...Object.fromEntries(Object.entries(USER_RENDER_ROUTES).map(([k, v]) => [`user:${k}`, v])) }, CONNECTOR_ROUTES]) {
+    assertNoOverlap(table);
+  }
+});
+
+function assertNoOverlap(table) {
+  const entries = Object.entries(table);
   for (let a = 0; a < entries.length; a++) {
     for (let b = a + 1; b < entries.length; b++) {
       const [left, l] = entries[a];
@@ -60,7 +76,7 @@ test("no two routes can match the same request", () => {
       assert(!overlap, `${left} and ${right} overlap`);
     }
   }
-});
+}
 
 const sampleValue = (field) => ({
   limit: 10, expectedRevision: 3, cursor: "synthetic-cursor", sort: "captured-desc", variant: "thumbnail",
@@ -130,5 +146,71 @@ test("the route table in the contract document matches SHARING_ROUTES", async ()
   const doc = await readFile(new URL("../../../docs/architecture/photo-library-sharing.md", import.meta.url), "utf8");
   for (const [operation, route] of Object.entries(SHARING_ROUTES)) {
     assert(doc.includes(`| ${operation} | ${route.method} \`${route.path}\` |`), operation);
+  }
+});
+
+test("connector and user render routes place each field once, key mutations, and round-trip", () => {
+  const connectorOps = Object.keys(CONNECTOR_OPERATION_ACCESS);
+  assert.equal(CONNECTOR_PATH_PREFIX, "/connector/v1");
+  assert.deepEqual(Object.keys(CONNECTOR_ROUTES).sort(), [...connectorOps].sort());
+  assert.deepEqual(Object.keys(USER_RENDER_ROUTES).sort(), connectorOps.filter((op) => op.startsWith("renderJobs.")).sort());
+  for (const operation of connectorOps) {
+    const fields = connectorRouteFields(operation);
+    const placed = [...fields.path, ...fields.query, ...fields.body, ...(fields.range ? ["range"] : [])];
+    assert.equal(new Set(placed).size, placed.length, operation);
+    assert.deepEqual([...placed].sort(), Object.keys(CONNECTOR_REQUEST_SHAPES[operation]).sort(), operation);
+    const mutation = operation in connectorResponses && "replayed" in connectorResponses[operation];
+    assert.equal(CONNECTOR_ROUTES[operation].idempotencyKey, mutation, operation);
+    if (operation.startsWith("renderJobs.")) {
+      assert.equal(USER_RENDER_ROUTES[operation].idempotencyKey, mutation, operation);
+      assert.deepEqual(USER_RENDER_ROUTES[operation].body, CONNECTOR_ROUTES[operation].body, operation);
+    }
+  }
+  // Secrets stay out of URLs: poll secret, lease tokens and credential hashes travel in bodies.
+  for (const [operation, route] of Object.entries(CONNECTOR_ROUTES)) {
+    for (const secret of ["pollSecret", "leaseToken", "pollSecretSha256", "credentialSha256", "nextCredentialSha256"]) {
+      assert(!route.path.includes(`{${secret}}`) && !route.query.includes(secret), `${operation}: ${secret}`);
+    }
+  }
+  const samples = {
+    "connector.startPairing": { platform: "macos", displayName: "Synthetic Mac", pollSecretSha256: "8".repeat(64), credentialSha256: "6".repeat(64) },
+    "connector.pollPairing": { pairingId: "synthetic pairing", pollSecret: "synthetic" },
+    "connector.rotateCredential": { nextCredentialSha256: "5".repeat(64) },
+    "connector.heartbeat": { state: "online", renderer: null, replicaRevision: 4 },
+    "connector.putIndex": { entries: [] },
+    "connector.pullReplica": { sinceRevision: 0, limit: 100, cursor: "1:5" },
+    "connector.ackReplica": { revision: 5 },
+    "connector.getReplicaContent": { entity: "mask", id: "photo:surface", range: { start: 0, endInclusive: 9 } },
+    "renderJobs.claim": { maxJobs: 2, purposes: ["preview"] },
+    "renderJobs.startOutput": { jobId: "synthetic job", leaseToken: "lease", output: { kind: "preview", sizeBytes: 1, sha256: "a", contentType: "image/jpeg", width: 1, height: 1 } },
+    "renderJobs.commit": { jobId: "synthetic job", leaseToken: "lease", uploadId: "upload" },
+    "renderJobs.fail": { jobId: "synthetic job", leaseToken: "lease", code: "source_missing" },
+  };
+  for (const [operation, request] of Object.entries(samples)) {
+    const encoded = encodeConnectorRequest(operation, request);
+    const matched = matchConnectorRoute(encoded.method, encoded.path);
+    assert.equal(matched?.operation, operation);
+    const decoded = decodeConnectorRequest(operation, { params: matched.params, query: new URLSearchParams(encoded.query), body: encoded.body, range: encoded.range });
+    assert.deepEqual(decoded, request, operation);
+    if (operation.startsWith("renderJobs.")) {
+      const user = encodeUserRenderRequest(operation, request);
+      assert(user.path.startsWith(`${SHARING_CLOUD_PATH_PREFIX}/render-jobs/`), operation);
+      const userMatch = matchUserRenderRoute(user.method, user.path);
+      assert.equal(userMatch?.operation, operation);
+      assert.deepEqual(decodeUserRenderRequest(operation, { params: userMatch.params, query: new URLSearchParams(user.query), body: user.body, range: user.range }), request);
+      assert.equal(matchSharingRoute(user.method, user.path), null, "user render routes never shadow sharing routes");
+    }
+  }
+  assert.equal(matchConnectorRoute("GET", `${SHARING_CLOUD_PATH_PREFIX}/albums/a`), null, "device credentials never reach user routes");
+  assert.throws(() => encodeConnectorRequest("renderJobs.claim", { purposes: ["preview"], ownerId: "u" }), { code: "invalid_request" });
+});
+
+test("the connector route table in the contract document matches CONNECTOR_ROUTES", async () => {
+  const doc = await readFile(new URL("../../../docs/architecture/photo-library-sharing.md", import.meta.url), "utf8");
+  for (const [operation, route] of Object.entries(CONNECTOR_ROUTES)) {
+    assert(doc.includes(`| ${operation} | ${route.method} \`${route.path}\` |`), operation);
+  }
+  for (const [operation, route] of Object.entries(USER_RENDER_ROUTES)) {
+    assert(doc.includes(`| ${operation}（利用者の端末） | ${route.method} \`${route.path}\` |`), operation);
   }
 });
