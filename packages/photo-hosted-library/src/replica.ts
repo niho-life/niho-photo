@@ -79,6 +79,7 @@ function validatePage(page: ReplicaPage, since: number, after: number): void {
   if (!Array.isArray(page.changes) || typeof page.complete !== "boolean") throw new HostedLibraryError("invalid_response");
   // A diff never carries a cursor; an unfinished snapshot always does.
   if (since !== 0 && page.cursor !== null) throw new HostedLibraryError("invalid_response");
+  if (since === 0 && page.complete && page.cursor !== null) throw new HostedLibraryError("invalid_response");
   if (since === 0 && !page.complete && (typeof page.cursor !== "string" || !page.cursor)) throw new HostedLibraryError("invalid_response");
   let previous = after;
   for (const change of page.changes) {
@@ -186,7 +187,11 @@ export function createHostedReplicaSync(options: CreateHostedReplicaSyncOptions)
     // NIHO decides whether the replica is usable: one ahead of NIHO (or behind its tombstones) comes back as
     // replica_reset_required and is rebuilt, never promoted. A heartbeat alone never triggers a rebuild.
     let reset = false;
-    if (replica !== canonical) {
+    // Revision 0 is a snapshot request by contract. Do not pull its first page as a diff and then continue from
+    // nextRevision: every page must retain sinceRevision 0 and carry its snapshot cursor until the atomic swap.
+    if (replica === 0 && canonical > 0) {
+      reset = true;
+    } else if (replica !== canonical) {
       mode = "diff";
       try {
         for (let pages = 0; ; pages++) {
@@ -231,7 +236,12 @@ export function createHostedReplicaSync(options: CreateHostedReplicaSyncOptions)
       await options.client.request("connector.ackReplica", { revision: replica }, { signal, idempotencyKey: `replica-ack-${replica}` });
       acknowledged = true;
     } catch (error) {
-      if (error instanceof HostedLibraryError && error.code === "aborted") throw error;
+      if (signal.aborted || (error instanceof HostedLibraryError && error.code === "aborted")) {
+        throw new HostedLibraryError("aborted");
+      }
+      // Only an unknown transport outcome can be retried as an idempotent acknowledgement. Contract rejections and
+      // local validation/storage errors are definitive and must remain visible to the caller.
+      if (error instanceof HostedLibraryError || sharingErrorCode(error) !== null) throw error;
     }
     status = { canonicalRevision: canonical, replicaRevision: replica, state: replica >= canonical ? "current" : "behind" };
     return { mode, canonicalRevision: canonical, replicaRevision: replica, appliedChanges: applied, acknowledged };

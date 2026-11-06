@@ -60,6 +60,7 @@ test("an export with access material or a member's source is rejected", async ()
   reject((copy) => { copy.photos[0].uploadTicket = { url: "https://upload.example.test/x" }; });
   reject((copy) => { copy.albums[0].items.push({ itemId: "x", kind: "memberEdit", source: { kind: "devicePhoto", deviceSourceRef: "d" }, renditionSha256: null }); });
   reject((copy) => { copy.photos[0].original.included = true; });
+  reject((copy) => { copy.photos[0].original.sha256 = "0".repeat(64); });
   reject((copy) => { copy.photos.push(structuredClone(copy.photos[0])); });
   reject((copy) => { copy.format = "other"; });
   // The recipe JSON is open, but never a carrier for credentials, sessions or signed URLs.
