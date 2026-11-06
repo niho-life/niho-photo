@@ -292,12 +292,14 @@ export function validateMembership(value: unknown, albumId: string): Membership 
 }
 
 export function validateAlbum(value: unknown): Album {
-  const keys = ["id", "owner", "name", "revision", "createdAt", "updatedAt", "itemCount", "cover", "access"];
+  const keys = ["id", "owner", "name", "revision", "createdAt", "updatedAt", "itemCount", "memberCount", "cover", "access"];
   const album = exactRecord(value, keys, keys);
   if (!isOpaqueWireId(album.id) || typeof album.name !== "string" || album.name.trim().length === 0) invalidResponse();
   if ([...album.name].length > SHARING_LIMITS.albumNameMaxCodePoints) invalidResponse();
   validatePersonLabel(album.owner);
   if (!safeNonNegative(album.revision) || !isInstant(album.createdAt) || !isInstant(album.updatedAt) || !safeNonNegative(album.itemCount)) invalidResponse();
+  // Active members including the owner, so at least one.
+  if (!safeNonNegative(album.memberCount) || album.memberCount < 1) invalidResponse();
   if (album.cover !== null) {
     const cover = exactRecord(album.cover, ["itemId", "renditionId"], ["itemId", "renditionId"]);
     if (!isOpaqueWireId(cover.itemId) || !isOpaqueWireId(cover.renditionId)) invalidResponse();
