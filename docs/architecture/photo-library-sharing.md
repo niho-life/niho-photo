@@ -58,6 +58,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 遷移表は `src/v1.ts` の `*_TRANSITIONS`。表にない遷移は拒否する。
 
 - AlbumItem: `preparing → published`（完成写真の確定）、`published → updatePending`（元データを持つ人の補正保存）、`updatePending → published`、どこからでも `removed`。`removed` は終端で、遅れた upload・job で復活しない。revision は準備中が0で、完成写真を確定するたびに1つ進む。
+- 追加者の削除・離脱・降格（`adderRevoked`。追加・差し替えの権限を失った）: その人の処理中の追加は落とし（`preparing → removed`）、差し替え待ちは前の完成写真へ戻す（`updatePending → published`）。その項目の upload と job は取り消す。公開済みの項目と他の人の項目は変えない（`itemStateAfterAdderRevoked`）。非公開側のサーバーも同じ扱い。
 - RenderJob: `queued → claimed → committed`、`queued ⇄ waitingForHost`、`claimed → queued`（lease切れ）、`failed → queued`（再試行）、非終端から `superseded`/`cancelled`。`committed`・`superseded`・`cancelled` は終端。
 - 待機理由（`ALBUM_ITEM_PENDING_TRANSITIONS`）: `rendering` から Mac・端末の休止で `waitingForHost`/`waitingForDevice`、元データの変更で `sourceChanged`、完成写真の予約が owner の容量で断られたら `quotaExceeded`。`quotaExceeded` は容量が空いたとき（または元データが変わったとき）だけ抜け、`rendering` に戻って描き直す。Mac が起動しても容量不足は解けない。
 - Membership: `active → left`（本人）/ `removed`（owner）。`left` は有効なリンクで再参加できる。`removed` は削除より後に作られたリンクでだけ再参加できる（古いリンクで削除を回避させない）。
@@ -94,7 +95,8 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - job の確定は、呼び出した端末が job の実行端末そのもので、その job の検証済み upload を使い、metadata が許可範囲で、job の束縛が対象の現在の束縛と完全に一致し、lease と端末資格が有効で、項目が残っているときだけ。別の端末・別 job の upload・未完了の upload・古い job・同じ revision で入力が違う結果・preview を完成写真として出す結果は拒否する。
 - 端末が直接描いた写真の差し替えは、前の束縛より新しい世代のときだけ受け付ける。
 - 完成済み JPEG の直接追加は元写真への参照を持たず、自動では差し替えない。
-- metadata は許可した `capturedAt`・`capturedAtOffset`・`colorProfile` と、画素へ反映した向きだけ。位置情報・機材シリアル・元のパスを含むものは公開しない（`sanitizeRenditionMetadata`、`findForbiddenMetadata`、`content_rejected`）。download のファイル名に元のファイル名やパスを使わない。
+- 確定する bytes の metadata は、許可した項目（撮影日時 `capturedAt`・`capturedAtOffset`、向き `orientation: 1`、色 profile `colorProfile`）だけ。それ以外の項目は、位置情報・機材シリアル・元のパスに限らず（機材名・レンズ・ソフトウェア・未知の項目・入れ子も）確定を拒否する（`findDisallowedRenditionMetadata`、`content_rejected`）か、サーバーが `sanitizeRenditionMetadata` で作り直した bytes を確定する。download のファイル名に元のファイル名やパスを使わない。
+- byte が届く前の確定は、v2 と同じ `upload_state_conflict`（409）。upload を続けてから確定し直す。アルバムの upload の ticket は `albumItems.renewUpload`（v2 の `uploads.renew` と同じ形。mutation ではない）で取り直し、取り消して上げ直さない。
 - 共有人数で完成写真を複製しない。容量はアルバムの owner の共有容量（`SharedStorageUsage`）に算入する。追加のときに容量が足りなければ `quota_exceeded`、描いた後の予約で足りなければ項目を `quotaExceeded` で待たせる。
 - アルバム名は 1〜100 文字（Unicode の code point で数える。空白だけは不可。サーバーと同じ規則）。
 
@@ -158,6 +160,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | albumItems.replace | POST `/albums/{albumId}/items/{itemId}/replace` | body: `{expectedRevision, content}` | 必須 |
 | albumItems.commitUpload | POST `/albums/{albumId}/uploads/{uploadId}/commit` | body: `{}` | 必須 |
 | albumItems.cancelUpload | POST `/albums/{albumId}/uploads/{uploadId}/cancel` | body: `{}` | 必須 |
+| albumItems.renewUpload | POST `/albums/{albumId}/uploads/{uploadId}/renew` | body: `{}` | なし |
 | albumItems.remove | DELETE `/albums/{albumId}/items/{itemId}` | なし | 必須 |
 | albumItems.download | GET `/albums/{albumId}/items/{itemId}/renditions/{renditionId}/content` | query: variant、`Range` | 不可 |
 | invites.list | GET `/albums/{albumId}/invites` | なし | 不可 |
@@ -210,7 +213,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | 同じ key で再試行（Retry-After・上限付き backoff） | `rate_limited`、`temporarily_unavailable` |
 | 再認証 | `unauthenticated` |
 | 一覧を読み直して表示から外す | `not_found`、`role_forbidden`、`item_removed` |
-| 読み直して本人が選ぶ | `revision_conflict` |
+| 読み直して本人が選ぶ | `revision_conflict`、`upload_state_conflict` |
 | 結果を捨てる（新しいものがある） | `stale_render`、`lease_expired` |
 | 一覧を最初から読む | `invalid_cursor`、`cursor_expired` |
 | 控えを snapshot から作り直す | `replica_reset_required` |
@@ -267,4 +270,4 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 
 ## 検証
 
-`npm run test|typecheck|lint --workspace packages/photo-library-sharing-contract`。公開CIの `Photo editing` scope が実行する。test は語彙・経路（全操作が1経路、各項目が1か所、key、曖昧さなし、往復）・§10 の表・全操作の担当と閉じた request の形・遷移の閉包・閲覧者ごとの射影・metadata 規則・v2 互換・確定時の照合（実行端末・upload・最新の意図）・114件の負例 vector を参照判定で照合する。型の負例（owner の偽装、ownerの付与、CAS 無しの更新、第2段階の値など）は typecheck で固定する。
+`npm run test|typecheck|lint --workspace packages/photo-library-sharing-contract`。公開CIの `Photo editing` scope が実行する。test は語彙・経路（全操作が1経路、各項目が1か所、key、曖昧さなし、往復）・§10 の表・全操作の担当と閉じた request の形・遷移の閉包・閲覧者ごとの射影・metadata 規則・v2 互換・確定時の照合（実行端末・upload・最新の意図）・負例 vector を参照判定で照合する。型の負例（owner の偽装、ownerの付与、CAS 無しの更新、第2段階の値など）は typecheck で固定する。
