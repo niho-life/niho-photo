@@ -13586,12 +13586,12 @@
     },
     {
       "path": "docs/architecture/photo-library-sharing.md",
-      "sha256": "d6ff78d4dd48185cacb542229ce14b048003b74db5484b5fc3114cca9f63a1ed",
+      "sha256": "80ebc0ba78ae0b20772aa00e80a62485d85bea4a0e95bef727b871faeecffc7b",
       "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/photo-library-sharing-contract/src/routes.ts",
-      "sha256": "b41869ed66fbe68e1b3263e4b06a72d766cb084876aa374c16ce62c245d6e83d",
+      "sha256": "4e0bc15381b5bb70e8f21a7f0d75e180e70d525d8eb43f4efc3bd45ba4dac871",
       "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {

@@ -6,6 +6,9 @@
  * - CONNECTOR_ROUTES: the hosted Mac connector under `/connector/v1`, authenticated by its device credential only.
  *
  * Every path parameter is one opaque segment. Query, body and Range carry the remaining request fields exactly once.
+ *
+ * Decoding checks placement and rejects unexpected fields at any depth; it does not prove that required fields are
+ * present or that scalars have the right type. The BFF and the server still run the full operation validator.
  */
 import { findUnexpectedFields } from "./policy.ts";
 import { CONNECTOR_REQUEST_SHAPES, SHARING_REQUEST_SHAPES } from "./v1.ts";
