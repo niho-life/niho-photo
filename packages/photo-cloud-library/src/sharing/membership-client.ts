@@ -11,13 +11,16 @@ import { PersonalPhotoScope } from "../scope";
 import type { PersonalPhotoCloudIdentity } from "../types";
 import { JSON_LIMITS, readBoundedJson } from "../wire";
 
-import type { SharingOperationMap, SharingRequestOptions, SharingSessionScope } from "./contract";
+import type { InviteJoinResult, SharingOperationMap, SharingRequestOptions, SharingSessionScope } from "./contract";
 import {
   encodeMembershipRequest,
+  encodePendingInviteJoin,
   isSharingErrorEnvelope,
   membershipResponseLimit,
   parseSharingError,
+  validateJoinResult,
   validateMembershipResponse,
+  type EncodedSharingRequest,
   type SharedAlbumMembershipOperation,
 } from "./membership-wire";
 
@@ -29,6 +32,11 @@ export interface SharedAlbumMembershipClient {
     request: SharingOperationMap[K]["request"],
     options: SharingRequestOptions<K>,
   ): Promise<SharingOperationMap[K]["response"]>;
+  /**
+   * `invites.joinPending`: joins with the invite the BFF holds for this browser (opened before signing in). Never
+   * retried: the BFF deletes its cookie after one attempt, so a lost answer means reading the album list again.
+   */
+  joinPending(signal: AbortSignal): Promise<InviteJoinResult>;
   dispose(): void;
 }
 
@@ -50,6 +58,41 @@ export function createBrowserSharedAlbumMembershipClient(options: CreateBrowserS
   let disposed = false;
   let scope: PersonalPhotoScope<null>;
 
+  /** One request under the scope fence, answered by a validated JSON body. */
+  async function exchange<T>(signal: AbortSignal, encode: () => EncodedSharingRequest, limit: number, validate: (raw: unknown) => T): Promise<T> {
+    if (disposed) throw new PersonalPhotoCloudError("disposed");
+    const scoped = scope.begin(signal);
+    const link = linkedAbortController(scoped.signal, lifecycle.signal);
+    try {
+      const encoded = encode();
+      const capture = options.identity.getSnapshot();
+      if (capture === null) throw new PersonalPhotoCloudError("scope_changed");
+      const response = await fetchWithHeaderDeadline(
+        fetchFn,
+        encoded.path,
+        requestInit(capture, encoded.method, encoded.body, null, encoded.idempotencyKey, link.controller.signal),
+        scoped.signal,
+        link.controller,
+      );
+      scoped.assertCurrent();
+      if (response.status < 200 || response.status >= 300) {
+        const { value } = await readBoundedJson(response, JSON_LIMITS.error, scoped.signal);
+        throw parseSharingError(value, response.status);
+      }
+      if (response.status !== 200) throw new PersonalPhotoCloudError("invalid_response");
+      const { value } = await readBoundedJson(response, limit, scoped.signal);
+      scoped.assertCurrent();
+      return validate(value);
+    } catch (error) {
+      // The server no longer accepts this session: fence it so no further request uses the old scope.
+      if (isSharingErrorEnvelope(error) && error.error.code === "unauthenticated") scope.invalidateAuthentication();
+      throw error;
+    } finally {
+      link.dispose();
+      scoped.release();
+    }
+  }
+
   const client: SharedAlbumMembershipClient = {
     scope: Object.freeze({ actorId: actor.userId, sessionEpoch: actor.sessionEpoch }),
     async request<K extends SharedAlbumMembershipOperation>(
@@ -57,38 +100,16 @@ export function createBrowserSharedAlbumMembershipClient(options: CreateBrowserS
       request: SharingOperationMap[K]["request"],
       requestOptions: SharingRequestOptions<K>,
     ): Promise<SharingOperationMap[K]["response"]> {
-      if (disposed) throw new PersonalPhotoCloudError("disposed");
-      const scoped = scope.begin(requestOptions.signal);
-      const link = linkedAbortController(scoped.signal, lifecycle.signal);
-      try {
-        const key = "idempotencyKey" in requestOptions ? requestOptions.idempotencyKey : undefined;
-        const encoded = encodeMembershipRequest(operation, request, key);
-        const capture = options.identity.getSnapshot();
-        if (capture === null) throw new PersonalPhotoCloudError("scope_changed");
-        const response = await fetchWithHeaderDeadline(
-          fetchFn,
-          encoded.path,
-          requestInit(capture, encoded.method, encoded.body, null, encoded.idempotencyKey, link.controller.signal),
-          scoped.signal,
-          link.controller,
-        );
-        scoped.assertCurrent();
-        if (response.status < 200 || response.status >= 300) {
-          const { value } = await readBoundedJson(response, JSON_LIMITS.error, scoped.signal);
-          throw parseSharingError(value, response.status);
-        }
-        if (response.status !== 200) throw new PersonalPhotoCloudError("invalid_response");
-        const { value } = await readBoundedJson(response, membershipResponseLimit(operation), scoped.signal);
-        scoped.assertCurrent();
-        return validateMembershipResponse(operation, request, value);
-      } catch (error) {
-        // The server no longer accepts this session: fence it so no further request uses the old scope.
-        if (isSharingErrorEnvelope(error) && error.error.code === "unauthenticated") scope.invalidateAuthentication();
-        throw error;
-      } finally {
-        link.dispose();
-        scoped.release();
-      }
+      const key = "idempotencyKey" in requestOptions ? requestOptions.idempotencyKey : undefined;
+      return await exchange(
+        requestOptions.signal,
+        () => encodeMembershipRequest(operation, request, key),
+        membershipResponseLimit(operation),
+        (raw) => validateMembershipResponse(operation, request, raw),
+      );
+    },
+    async joinPending(signal) {
+      return await exchange(signal, encodePendingInviteJoin, JSON_LIMITS.success, validateJoinResult);
     },
     dispose() {
       if (disposed) return;

@@ -140,6 +140,35 @@ describe("shared album membership mock (B05)", () => {
     expect(t.server.memberJoinedEvents(OWNER)).toHaveLength(0);
   });
 
+  it("stands in for the BFF's pending invite: kept while signed out, used once after sign-in, by the right person", async () => {
+    const t = setup();
+    const { album, contributorLink } = await albumWithLinks(t);
+    const secret = contributorLink.secret as string;
+    expect(t.server.holdPendingInvite(secret)).toEqual({ expiresAt: "2026-11-07T00:15:00.000Z" });
+    expect(await rejection(t.as(null).joinPending(t.signal))).toBe("unauthenticated");
+    expect(await t.staff1.joinPending(t.signal)).toMatchObject({ joined: true, album: { id: album.id, memberCount: 2 }, membership: { role: "contributor" } });
+    // The cookie is gone after one attempt.
+    expect(await rejection(t.staff1.joinPending(t.signal))).toBe("invite_unavailable");
+    expect(t.server.memberJoinedEvents(OWNER)).toHaveLength(1);
+
+    // Held while signed in as one person: nobody else on the browser can use it.
+    t.server.holdPendingInvite(secret, STAFF2);
+    expect(await rejection(t.outsider.joinPending(t.signal))).toBe("invite_unavailable");
+    // Expired.
+    t.server.holdPendingInvite(secret);
+    t.advance(15 * 60 * 1000);
+    expect(await rejection(t.staff2.joinPending(t.signal))).toBe("invite_unavailable");
+
+    // Over HTTP for the browser in development: hold without a session, join with one.
+    const hold = await t.server.fetch("/cloud/sharing/v1/invites/pending", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ secret }) });
+    expect(hold.status).toBe(200);
+    const join = await t.server.fetch("/cloud/sharing/v1/invites/pending/join", { method: "POST", headers: { "Content-Type": "application/json", "X-NIHO-Photo-Actor-Id": STAFF2 }, body: "{}" });
+    expect(join.status).toBe(200);
+    expect(await join.json()).toMatchObject({ joined: true, membership: { role: "contributor" } });
+    const extra = await t.server.fetch("/cloud/sharing/v1/invites/pending", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ secret, role: "owner" }) });
+    expect(extra.status).toBe(400);
+  });
+
   it("a removed member cannot rejoin through a link made before the removal, but can through a newer one", async () => {
     const t = setup();
     const { album, contributorLink } = await albumWithLinks(t);

@@ -23,6 +23,10 @@
 
 C08の信頼された設定に、C01実producer登録、C02実transport、C03下書き・guard・失効消去、共有dialog取消し、正式なCSP/immutable asset保持を合わせる。安全なUI identity metadataをserverの本人証明として送らない。通常のcredential refreshでは編集を維持し、失効・本人切替では処理と派生資源を同期的に止める。通常の画面終了を下書きの失効消去にしない。
 
+## 未ログインで開いた招待
+
+`PHOTO_WEB_CLOUD_ENABLED=true` で、非公開の運用側が `PHOTO_WEB_PENDING_INVITE_KEYS`（base64url の 32 bytes を 1〜2 個、カンマ区切り。先頭で封じ、どちらでも開く）と `PHOTO_WEB_SHARING_UPSTREAM_PATH_PREFIX`（共有の上流 prefix）を両方渡したときだけ、`/cloud/sharing/v1/invites/pending` と `.../pending/join` を `@niho/photo-cloud-library/server` の `createPendingInviteHandler` が受ける。片方だけなら起動しない。値は source・log・エラーに出さない。鍵の入れ替えは新しい鍵を先頭に足し、15分後に古い鍵を外す。
+
 ## production artifact
 
 Node 24でrepository rootからPhoto Webの静的ファイル、Node host bundle、検証済みSDK artifactを生成する:

@@ -26,9 +26,14 @@ import {
   decideAlbumAction,
   decideJoin,
   decideMembershipChange,
+  decidePendingInviteJoin,
   decideUploadCommit,
+  decodePendingInviteRequest,
   decodeSharingRequest,
+  findUnexpectedPendingInviteFields,
   findUnexpectedRequestFields,
+  holdPendingInvite,
+  matchPendingInviteRoute,
   matchSharingRoute,
   permissionsFor,
   personLabel,
@@ -39,6 +44,7 @@ import {
   type AlbumRole,
   type IdempotencyRecord,
   type Instant,
+  type InviteJoinResult,
   type InviteLink,
   type InviteSecret,
   type LedgerPerson,
@@ -46,6 +52,9 @@ import {
   type MemberRole,
   type Membership,
   type MembershipState,
+  type MutationReceipt,
+  type PendingInvite,
+  type PendingInviteHeld,
   type RenditionUpload,
   type RenditionUploadRequest,
   type SharingErrorCode,
@@ -57,6 +66,7 @@ import {
 } from "./contract";
 import {
   SHARED_ALBUM_MEMBERSHIP_OPERATIONS,
+  isSecret,
   isSharedAlbumMembershipOperation,
   validateMembershipRequest,
 } from "./membership-wire";
@@ -100,6 +110,8 @@ export interface SharedAlbumMockClient {
     request: SharingOperationMap[K]["request"],
     options: SharingRequestOptions<K>,
   ): Promise<SharingOperationMap[K]["response"]>;
+  /** `invites.joinPending` against this mock's stand-in for the BFF (see `holdPendingInvite`). */
+  joinPending(signal: AbortSignal): Promise<InviteJoinResult>;
   dispose(): void;
 }
 
@@ -112,6 +124,11 @@ export interface SharedAlbumMockServer {
    * not authorization.
    */
   readonly fetch: typeof fetch;
+  /**
+   * Stand-in for the BFF's pending-invite cookie of one browser (`invites.holdPending`): the next `joinPending` uses it
+   * under the contract's rules (`decidePendingInviteJoin`). `actorId` is who was signed in when holding, or null.
+   */
+  holdPendingInvite(secret: InviteSecret, actorId?: UserId | null): PendingInviteHeld;
   /** Owner notifications (`MemberJoinedEvent`) in delivery order. */
   memberJoinedEvents(ownerId: UserId): readonly MemberJoinedEvent[];
   /** The next mutation commits but its answer is lost (network failure), to exercise same-key replay. */
@@ -178,6 +195,9 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
   const cursors = new Map<string, { readonly binding: Parameters<typeof checkCursor>[0]; readonly offset: number }>();
   let sequence = 0;
   let loseNext = false;
+  /** The one browser's pending-invite cookie and the pending IDs already used (the BFF's copied-cookie rule). */
+  let heldInvite: PendingInvite | null = null;
+  const usedPendingIds = new Set<string>();
 
   const nextId = (prefix: string): string => `mock-${prefix}-${++sequence}`;
   const fail = (code: SharingErrorCode, extra: Partial<SharingErrorEnvelope["error"]> = {}): never => {
@@ -536,6 +556,25 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
     return response;
   }
 
+  function holdPending(secret: InviteSecret, actorId: UserId | null = null): PendingInviteHeld {
+    if (!isSecret(secret)) fail("invalid_request");
+    // A new hold replaces the previous one.
+    heldInvite = holdPendingInvite({ id: nextId("pending"), secret, actorId, now: instant() });
+    return { expiresAt: heldInvite.expiresAt };
+  }
+
+  /** The BFF's `invites.joinPending`: decide, delete the cookie (unless signed out), then the normal `invites.join`. */
+  function joinPending(actorId: UserId | null): InviteJoinResult {
+    const pending = heldInvite;
+    const decision = decidePendingInviteJoin({ actorId, pending, consumed: pending !== null && usedPendingIds.has(pending.id), now: instant() });
+    if (decision.clearCookie) heldInvite = null;
+    if (!decision.ok) return fail(decision.code);
+    const used = pending as PendingInvite;
+    usedPendingIds.add(used.id);
+    const receipt = dispatch(actorId, "invites.join", { secret: used.secret }, `pending-invite-${used.id}`) as MutationReceipt<InviteJoinResult>;
+    return receipt.value;
+  }
+
   function clientFor(actorId: UserId | null): SharedAlbumMockClient {
     let disposed = false;
     return {
@@ -546,6 +585,11 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
         const key = "idempotencyKey" in requestOptions ? requestOptions.idempotencyKey : undefined;
         // Responses are copied so callers never share the server's objects.
         return structuredClone(dispatch(actorId, operation, structuredClone(request), key)) as never;
+      },
+      async joinPending(signal) {
+        if (disposed) throw new PersonalPhotoCloudError("disposed");
+        if (signal.aborted) throw signal.reason instanceof Error ? signal.reason : new DOMException("Aborted", "AbortError");
+        return structuredClone(joinPending(actorId));
       },
       dispose() {
         disposed = true;
@@ -558,6 +602,8 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
       ? (init === undefined ? input : new Request(input, init))
       : new Request(new URL(String(input), "https://photo.example.test"), init);
     const url = new URL(request.url);
+    const pendingRoute = matchPendingInviteRoute(request.method, url.pathname);
+    if (pendingRoute !== null) return await handlePending(request, url, pendingRoute);
     const matched = matchSharingRoute(request.method, url.pathname);
     if (matched === null || !isMockOperation(matched.operation)) return jsonResponse(404, { error: { code: "not_found", requestId: nextId("request"), retryable: false } });
     const operation = matched.operation;
@@ -583,6 +629,31 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
     }
   };
 
+  /** The pending-invite routes of the BFF, for the browser client in development (one cookie jar, no encryption). */
+  async function handlePending(request: Request, url: URL, route: NonNullable<ReturnType<typeof matchPendingInviteRoute>>): Promise<Response> {
+    const actor = request.headers.get(PHOTO_CAPTURE_HEADERS.actorId);
+    const envelope = (code: SharingErrorCode): Response => jsonResponse(SHARING_ERROR_STATUS[code], { error: { code, requestId: nextId("request"), retryable: false } });
+    let decoded: Record<string, unknown>;
+    try {
+      if (request.headers.has(PHOTO_IDEMPOTENCY_HEADER)) return envelope("invalid_request");
+      const text = await request.text();
+      const body: unknown = text === "" ? null : JSON.parse(text);
+      decoded = decodePendingInviteRequest(route.operation, { params: route.params, query: url.searchParams, body, range: null }) as Record<string, unknown>;
+      if (findUnexpectedPendingInviteFields(route.operation, decoded).length > 0) return envelope("invalid_request");
+    } catch (error) {
+      if (error instanceof SyntaxError || error instanceof SharingRouteError) return envelope("invalid_request");
+      throw error;
+    }
+    try {
+      if (route.operation === "invites.holdPending") return jsonResponse(200, holdPending(decoded.secret as InviteSecret, actor));
+      return jsonResponse(200, joinPending(actor));
+    } catch (error) {
+      if (error instanceof PersonalPhotoCloudError && error.code === "unavailable") throw new TypeError("Failed to fetch");
+      if (isEnvelope(error)) return jsonResponse(SHARING_ERROR_STATUS[error.error.code], error);
+      throw error;
+    }
+  }
+
   const uploader: SharedAlbumMockServer["uploader"] = {
     async upload(ticket, bytes, contentType, signal) {
       if (signal.aborted) throw signal.reason instanceof Error ? signal.reason : new DOMException("Aborted", "AbortError");
@@ -599,6 +670,7 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
   return {
     clientFor,
     fetch: handleFetch,
+    holdPendingInvite: (secret, actorId) => structuredClone(holdPending(secret, actorId ?? null)),
     uploader,
     memberJoinedEvents: (ownerId) => [...(events.get(ownerId) ?? [])],
     loseNextResponse: () => {

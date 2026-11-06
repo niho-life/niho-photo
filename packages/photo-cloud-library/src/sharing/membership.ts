@@ -35,6 +35,7 @@ export type SharedAlbumMembershipTransport = {
     request: SharingOperationMap[K]["request"],
     options: SharingRequestOptions<K>,
   ): Promise<SharingOperationMap[K]["response"]>;
+  joinPending(signal: AbortSignal): Promise<InviteJoinResult>;
 };
 
 export interface CreateSharedAlbumMembershipOptions {
@@ -65,6 +66,11 @@ export interface SharedAlbumMembership {
   revokeInvite(albumId: AlbumId, inviteLinkId: InviteLinkId, signal: AbortSignal): Promise<InviteLink>;
   /** Requires a signed-in session. `joined: false` means already a member; the role is unchanged. */
   join(secret: InviteSecret, signal: AbortSignal): Promise<InviteJoinResult>;
+  /**
+   * Joins with the invite this browser opened before signing in (held by the BFF). One attempt, never replayed: a
+   * lost answer leaves the cookie gone, so the caller reads the album list again.
+   */
+  joinPending(signal: AbortSignal): Promise<InviteJoinResult>;
   listMembers(albumId: AlbumId, page: { readonly cursor?: string; readonly limit?: number }, signal: AbortSignal): Promise<MembershipPage>;
   changeRole(albumId: AlbumId, membershipId: MembershipId, expectedRevision: number, role: MemberRole, signal: AbortSignal): Promise<Membership>;
   removeMember(albumId: AlbumId, membershipId: MembershipId, signal: AbortSignal): Promise<Membership>;
@@ -158,6 +164,9 @@ export function createSharedAlbumMembership(options: CreateSharedAlbumMembership
     },
     async join(secret, signal) {
       return (await send("invites.join", { secret }, signal, true)).value;
+    },
+    async joinPending(signal) {
+      return await options.client.joinPending(signal);
     },
     listMembers(albumId, page, signal) {
       const request: SharingOperationMap["members.list"]["request"] = {

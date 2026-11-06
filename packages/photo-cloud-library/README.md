@@ -45,6 +45,15 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 - 合成 server は photo 単位のリンク共有（`cloudSharing`）とは別で、共有リンクを招待として受け付けない。実際の権限台帳・資格情報・回数制限は既存の非公開境界に置き、この server を本番で選ばない。
 - 契約 package は package 名で読む（`src/sharing/contract.ts` の 1 箇所）。共有シート・招待画面・BFF と 401 の扱いへの接続は後続。
 
+### 未ログインで開いた招待（`@niho/photo-cloud-library/server` の `createPendingInviteHandler`）
+
+契約の `PENDING_INVITE_ROUTES` の BFF 側。`POST /cloud/sharing/v1/invites/pending` と `.../pending/join` だけを受け、他は次の handler へ渡す（`null`）。
+
+- 保留: 画面は secret を一度だけ body で渡す。BFF は AES-256-GCM で封じ、`__Secure-niho-photo-pending-invite`（`HttpOnly; Secure; SameSite=Lax; Path=/cloud/sharing/v1/invites/pending; Max-Age=900`）に入れる。JS は secret も cookie も読めない。ログイン中に保留すると、その人だけが使える。
+- 参加: 検証済みの session で cookie を開き、`decidePendingInviteJoin` で決め、通常の `invites.join` を上流へ送る（key は保留の ID ごと）。session を確かめたあとは成否に関係なく cookie を消す。未ログインなら `unauthenticated` で cookie を残す。応答は `InviteJoinResult`（receipt を外した値）を検証してから返す。
+- 鍵は非公開の運用側から渡す 32 bytes を 1〜2 個（先頭で封じ、どちらでも開く）。値を source・log・エラーに出さない。使った保留の ID は期限までこの process が覚える。
+- 同一 origin・`Origin` 一致・`Sec-Fetch-Site: same-origin`（ある場合）・`Content-Type: application/json`・query と `Idempotency-Key` なし・閉じた body だけを受ける。
+
 ## 完全補正の同期core
 
 C03は `@niho/photo-cloud-sync` と組み合わせ、`recipes.put` / `recipe-conflicts.list` / `recipe-conflicts.get` / `recipe-conflicts.resolve` を同じ固定HTTP/BFFへ接続する。補正文書1MiB/depth32とPUT envelope2MiBを分離し、両版と選択結果を含む競合応答は4MiBまで検証する。`./protocol` はscope/有限待機/純粋なrecipe投影・比較の狭い共有口で、認証やhashの別正本ではない。

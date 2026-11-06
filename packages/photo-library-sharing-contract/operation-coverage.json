@@ -381,13 +381,13 @@
       "issue": 246,
       "backend": "missing",
       "wiring": "not-connected",
-      "evidence": "BFFだけ。未ログインでも受け、secretを暗号化したhttpOnly・Secure・SameSite=Laxのcookieに15分持つ。"
+      "evidence": "BFFだけ。未ログインでも受け、secretを暗号化したhttpOnly・Secure・SameSite=Laxのcookieに15分持つ。公開側: BFF `photo-cloud-library/src/server/pending-invite.ts`（AES-256-GCM、鍵は非公開の運用設定）、Photo Webの組み込み `apps/photo-web/src/server/entry.ts`、試験 `test/sharing-pending-invite.test.ts`。"
     },
     "invites.joinPending": {
       "issue": 246,
       "backend": "missing",
       "wiring": "not-connected",
-      "evidence": "BFFだけ。ログイン後にcookieを開いて上流のinvites.joinへ送り、成否に関係なくcookieを消す。"
+      "evidence": "BFFだけ。ログイン後にcookieを開いて上流のinvites.joinへ送り、成否に関係なくcookieを消す。公開側: 同じBFF、client `membership-client.ts` の `joinPending`、合成server `membership-mock.ts`、試験 `test/sharing-pending-invite.test.ts`・`test/sharing-membership-*.test.ts`。"
     }
   }
 }
