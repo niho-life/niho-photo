@@ -423,6 +423,7 @@ test("B00 negative categories are all present", () => {
       "hosted-save-missing-mask", "hosted-save-online-unacknowledged", "hosted-save-acknowledged-replay",
       "replica-pull-compacted", "replica-pull-ahead-of-niho", "replica-pull-snapshot",
     ],
+    renderOutputs: ["job-full-resolution-output", "job-downscaled-output", "job-superseded-output", "claim-unknown-result-replay"],
   };
   for (const [category, list] of Object.entries(required)) for (const id of list) assert(ids.has(id), `${category}:${id}`);
 });
