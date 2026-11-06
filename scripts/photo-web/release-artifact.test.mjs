@@ -32,7 +32,7 @@ const runtimeRecord = (name, index) => {
 
 function sdkManifestFixture() {
   const source = { commit: "a".repeat(40), tree: "b".repeat(40) };
-  const profile = SDK_RELEASE_PROFILES[2];
+  const profile = SDK_RELEASE_PROFILES[3];
   const ownership = profile.ownedSourcePaths.map((name, index) => ({ path: name, sha256: String(index + 1).padStart(64, "0"), files: 1 }));
   const ownershipDigest = createHash("sha256").update(ownership.map(({ path: name, sha256: digest, files }) => `${name}\0${digest}\0${files}\n`).join("")).digest("hex");
   const packages = profile.packages.map(([id, name], index) => {
@@ -40,7 +40,7 @@ function sdkManifestFixture() {
     return { id, name, file: `${name}-0.1.7.tgz`, sha256: digest, integrity: integrity(digest), size: index + 1 };
   });
   const manifest = {
-    schemaVersion: 2,
+    schemaVersion: 3,
     releaseReady: true,
     repository: "niho-life/niho-photo",
     version: "0.1.7",

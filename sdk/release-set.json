@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 2,
+  "schemaVersion": 3,
   "version": "0.1.10",
   "repository": "niho-life/niho-photo",
   "packages": [
@@ -123,7 +123,8 @@
     "ASSET_LICENSE.md",
     "TRADEMARKS.md",
     "THIRD_PARTY_NOTICES.md",
-    "packages/photo-library-contract"
+    "packages/photo-library-contract",
+    "scripts/ci/photo-web-workflow-lib.mjs"
   ],
   "buildToolingPaths": [
     "package.json",
