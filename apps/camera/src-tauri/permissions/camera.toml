@@ -62,3 +62,13 @@ commands.allow = ["camera_photo_request", "camera_photo_content_open", "camera_p
 identifier = "allow-camera-photo-copy"
 description = "同梱main画面だけに、native認証へ束縛した本人の明示copyの再開・開始・状態確認・取消と、SHA-256・PNG形状を照合したmaskの保存を許可する。opaque ID・mask PNGだけを渡し、原本・path・token・ticket・URL・headerはnative内に保つ。明示copyは原本・全参照mask・完全補正の照合前に完了を返さない。"
 commands.allow = ["camera_photo_copy_recover", "camera_photo_copy_start", "camera_photo_copy_status", "camera_photo_copy_cancel", "camera_photo_mask_upload"]
+
+[[permission]]
+identifier = "allow-camera-hosted-folders"
+description = "Allows the bundled NIHO photo UI (main window) to register folders for the hosted Mac connector with the native folder picker, list them by opaque ID, name and availability, remove a registration (folders and photos are never touched), and read whether the connector's launchd agent is registered. Registering the first folder registers the bundled LaunchAgent and starts the hidden connector window; removing the last one unregisters it and stops the window. No path is accepted or returned."
+commands.allow = ["camera_hosted_folders_list", "camera_hosted_folders_add", "camera_hosted_folders_remove", "camera_hosted_agent_status"]
+
+[[permission]]
+identifier = "allow-camera-hosted-connector"
+description = "Allows only the hidden hosted Mac connector window to list, stat, open and read regular files below registered folders read-only by opaque root ID and relative path (no symlinks, no '..', nothing outside the registered folder, no writes, no commands), hash a file natively with its identity checked before and after, read and replace its vault (one JSON item in the Keychain, at most 64 KiB), hold and release an idle-sleep assertion while it works, and answer the sleep notice. No absolute path is accepted or returned."
+commands.allow = ["camera_hosted_connector_roots", "camera_hosted_connector_root_status", "camera_hosted_connector_list", "camera_hosted_connector_stat", "camera_hosted_connector_open", "camera_hosted_connector_read", "camera_hosted_connector_close", "camera_hosted_connector_hash", "camera_hosted_connector_vault_read", "camera_hosted_connector_vault_write", "camera_hosted_connector_power_hold", "camera_hosted_connector_power_release", "camera_hosted_connector_sleep_ready"]

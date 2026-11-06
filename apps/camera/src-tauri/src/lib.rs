@@ -15,6 +15,9 @@
 //! - 受入用の E2E（feature `e2e`。配布の build には入らない）は `e2e.rs`。
 //! - 自動更新（`updater.rs`。C5 #18393）: 起動時に 1 回、Rust の側で更新フィードを見て、次に開いたときに新しい版になる
 //!   （画面の通信ではない。spec 決まりごと 4 の唯一の例外）。
+//! - 常設 Mac の接続用ソフト（`hosted_connector.rs`。Epic #240 / B03 #244）: 登録したフォルダがあると、表示しない窓で
+//!   接続用ソフトを動かし、launchd の LaunchAgent で常駐する。main 窓は `tauri.conf.json` で自動では作らず、常駐の起動
+//!   （`--hosted-connector`）でなければ setup で作る。
 
 mod account;
 mod activity;
@@ -31,6 +34,9 @@ mod dialog;
 mod e2e;
 mod error;
 mod flags;
+mod hosted_connector;
+mod hosted_connector_fs;
+mod hosted_connector_system;
 mod library;
 mod mask_detection;
 mod mask_surfaces;
@@ -101,8 +107,18 @@ pub fn run() {
       if webview.label() == MAIN_WINDOW_LABEL && payload.event() == PageLoadEvent::Started {
         develop_engine_sidecar::stop(webview.app_handle());
       }
+      // 接続用ソフトの窓を読み直したら、前の画面が持っていた休止の抑止と開いたファイルを外す
+      if webview.label() == hosted_connector::CONNECTOR_WINDOW_LABEL && payload.event() == PageLoadEvent::Started {
+        hosted_connector::release_page_resources(webview.app_handle());
+      }
     })
     .setup(move |app| {
+      // 常駐の起動（launchd）では main 窓を作らず Dock にも出さない。開き直すと出す（RunEvent::Reopen）
+      if hosted_connector::connector_mode() {
+        app.set_activation_policy(tauri::ActivationPolicy::Accessory);
+      } else {
+        hosted_connector::open_main_window(app.handle())?;
+      }
       // フォルダは最初の「フォルダを追加」か覚えたフォルダの一覧まで読まない。現像の sidecar は裏で 1 回だけ確かめる
       account::install(app.handle());
       photo_cloud::install(app.handle());
@@ -115,12 +131,14 @@ pub fn run() {
       cutout_commands::install(app.handle());
       mask_detection::install(app.handle());
       presets::install(app.handle());
+      hosted_connector::install(app.handle());
       // 更新の確認は裏で 1 回（起動を待たせない。結果は camera.log）
       app.manage(updater::UpdateState::new(updates));
       app.manage(updater::StagedInstall::default());
       if updates {
         updater::check_in_background(app.handle(), app_log::log_fn(app.handle()));
       }
+      hosted_connector::start(app.handle());
       Ok(())
     })
     .invoke_handler(tauri::generate_handler![
@@ -182,19 +200,51 @@ pub fn run() {
       save::camera_save_file,
       save::camera_export_original,
       photo_bench::camera_photo_bench_edits,
-      updater::camera_update_status
+      updater::camera_update_status,
+      hosted_connector::camera_hosted_folders_list,
+      hosted_connector::camera_hosted_folders_add,
+      hosted_connector::camera_hosted_folders_remove,
+      hosted_connector::camera_hosted_agent_status,
+      hosted_connector::camera_hosted_connector_roots,
+      hosted_connector::camera_hosted_connector_root_status,
+      hosted_connector::camera_hosted_connector_list,
+      hosted_connector::camera_hosted_connector_stat,
+      hosted_connector::camera_hosted_connector_open,
+      hosted_connector::camera_hosted_connector_read,
+      hosted_connector::camera_hosted_connector_close,
+      hosted_connector::camera_hosted_connector_hash,
+      hosted_connector::camera_hosted_connector_vault_read,
+      hosted_connector::camera_hosted_connector_vault_write,
+      hosted_connector::camera_hosted_connector_power_hold,
+      hosted_connector::camera_hosted_connector_power_release,
+      hosted_connector::camera_hosted_connector_sleep_ready
     ])
     .build(context)
     .expect("error while building NIHO photo")
-    .run(|app, event| {
+    .run(|app, event| match event {
       // アプリを閉じたら、走っている sidecar を止め、書きかけの書き出しを消す。その後で、取得しておいた新しい版へ `.app` を
       // 差し替える（起動中に差し替えると、動いている現像が新しい sidecar・校正を起動してしまう。updater.rs）
-      if let tauri::RunEvent::Exit = event {
+      tauri::RunEvent::Exit => {
         develop::shutdown(app);
         develop_engine_sidecar::stop(app);
         cutout_commands::shutdown(app);
         updater::install_staged_on_exit(app, app_log::log_fn(app));
       }
+      // 常駐中に開き直した（Finder・Launchpad・Dock）: main 窓を出す
+      tauri::RunEvent::Reopen { .. } => hosted_connector::reopen(app),
+      // main 窓を閉じても、接続用ソフトが動いていれば裏で続ける（Dock から消える）
+      tauri::RunEvent::WindowEvent {
+        label,
+        event: tauri::WindowEvent::Destroyed,
+        ..
+      } if label == MAIN_WINDOW_LABEL => hosted_connector::main_window_closed(app),
+      // 接続用ソフトの窓が無くなったら、休止の抑止・開いたファイル・lock を外す
+      tauri::RunEvent::WindowEvent {
+        label,
+        event: tauri::WindowEvent::Destroyed,
+        ..
+      } if label == hosted_connector::CONNECTOR_WINDOW_LABEL => hosted_connector::connector_window_closed(app),
+      _ => {}
     });
 }
 

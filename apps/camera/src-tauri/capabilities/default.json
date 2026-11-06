@@ -22,6 +22,7 @@
     "allow-camera-save",
     "allow-camera-photo-bench-notice",
     "allow-camera-updates",
+    "allow-camera-hosted-folders",
     "core:event:allow-listen",
     "core:event:allow-unlisten"
   ]

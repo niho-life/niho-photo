@@ -1,0 +1,20 @@
+{
+  "name": "@niho/photo-hosted-connector",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "常設Macの接続用ソフトのOS非依存core（登録・端末資格・read-only索引・hash・控えと描画jobの起動・常駐の状態）。描画とOS固有の常駐は含まない",
+  "exports": {
+    ".": "./src/index.ts",
+    "./node": "./node/index.ts"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json && tsc --noEmit -p tsconfig.node.json",
+    "lint": "eslint .",
+    "bench": "node bench/scan-hash.mjs"
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}
