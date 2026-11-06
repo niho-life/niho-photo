@@ -233,6 +233,21 @@ describe("source-device render executor (B07)", () => {
       .rejects.toMatchObject({ error: { code: "content_rejected" } });
   });
 
+  it("the server also refuses an output whose only extra is a comment or camera field, not just location", async () => {
+    const t = setup({ photos: ["photo-comment"] });
+    t.add("item-comment", "photo-comment");
+    const [claimed] = (await t.server.transport.request("renderJobs.claim", { maxJobs: 1 }, { signal: t.signal, idempotencyKey: "manual-claim" })).value.jobs;
+    const commented = syntheticJpeg({ width: 1200, height: 800, comment: "Synthetic Camera Co" });
+    const start = await t.server.transport.request("renderJobs.startOutput", {
+      jobId: claimed.job.id, leaseToken: claimed.lease.leaseToken,
+      output: { kind: "rendition", sizeBytes: commented.length, sha256: hex(commented), contentType: "image/jpeg", width: 1200, height: 800, metadata: { capturedAt: null, capturedAtOffset: null, colorProfile: "sRGB", orientation: 1 } },
+    }, { signal: t.signal, idempotencyKey: "manual-start" });
+    await t.server.uploader.upload(start.value.ticket as never, commented, "image/jpeg", t.signal);
+    await expect(t.server.transport.request("renderJobs.commit", { jobId: claimed.job.id, leaseToken: claimed.lease.leaseToken, uploadId: start.value.uploadId }, { signal: t.signal, idempotencyKey: "manual-commit" }))
+      .rejects.toMatchObject({ error: { code: "content_rejected" } });
+    expect(t.server.item("album-a", "item-comment").published).toBeNull();
+  });
+
   it("refuses, with a reason and without uploading, jobs this device cannot render faithfully", async () => {
     const sources = new Map<string, SyntheticSource>([
       ["photo-ok", syntheticSource("photo-ok")],
