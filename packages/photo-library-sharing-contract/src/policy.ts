@@ -445,7 +445,7 @@ export function nextRenderJobState(state: RenderJobState, event: RenderJobEvent)
 }
 
 export interface RenderCommitContext {
-  readonly job: Pick<RenderJob, "id" | "executor" | "binding" | "state" | "leaseExpiresAt" | "purpose">;
+  readonly job: Pick<RenderJob, "id" | "executor" | "binding" | "state" | "leaseExpiresAt" | "purpose" | "expectedOutput">;
   /** The authenticated caller: a hosted Mac connector or the user's signed-in device. */
   readonly actor: RenderExecutor;
   /** Credential generation captured when the job was claimed. */
@@ -455,8 +455,11 @@ export interface RenderCommitContext {
   readonly upload: {
     readonly jobId: RenderJob["id"];
     readonly kind: RenderOutputRequest["kind"];
-    /** uploaded: all bytes received and hash/size verified by the server. */
-    readonly state: "reserved" | "uploaded" | "expired" | "rejected";
+    /** uploaded: all bytes received and hash/size verified by the server. superseded: a newer output replaced it. */
+    readonly state: "reserved" | "uploaded" | "expired" | "rejected" | "superseded";
+    /** Pixel size decoded from the uploaded bytes by the server (not the size the executor declared). */
+    readonly width?: number;
+    readonly height?: number;
   } | null;
   /** Metadata the server validator decoded from the uploaded bytes. */
   readonly bytesMetadata: Readonly<Record<string, unknown>>;
@@ -480,9 +483,14 @@ export function decideRenderCommit(context: RenderCommitContext): Decision {
   if (!upload || upload.jobId !== job.id) return deny("not_found");
   if (upload.state === "expired") return deny("upload_expired");
   if (upload.state === "rejected") return deny("content_rejected");
+  if (upload.state === "superseded") return deny("stale_render");
   if (upload.state !== "uploaded") return deny("invalid_request");
   const expectedOutput = job.purpose.kind === "preview" ? "preview" : "rendition";
   if (upload.kind !== expectedOutput) return deny("content_rejected");
+  // A rendition is published only at the full-resolution size NIHO expects; a downscale is never a rendition.
+  if (job.expectedOutput && (upload.width !== job.expectedOutput.width || upload.height !== job.expectedOutput.height)) {
+    return deny("content_rejected");
+  }
   if (findForbiddenMetadata(context.bytesMetadata).length) return deny("content_rejected");
   if (job.purpose.kind === "albumItem") {
     const item = context.item;
