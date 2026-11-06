@@ -1,9 +1,9 @@
 {
   "schemaVersion": 1,
-  "sourceCommit": "5ff21a28ae5f7a0e3a64a98b1ef31a7ca523b2a6",
-  "sdkVersion": "0.1.7",
-  "runtimePackageSha256": "253ca897350578d73c764684d8516e6532c72f6fb4e7d779c4a0139a0dcf433d",
-  "origin": "Exact bytes from already audited official photo-sdk-v0.1.7 runtime tar; public notices only. Icon is the existing publication-approved camera512 asset.",
+  "sourceCommit": "86ca0749c6b738e7f6b59dcff5ebe2f5cafa2804",
+  "sdkVersion": "0.1.9",
+  "runtimePackageSha256": "b3b36f8cf83d8fa5934d1795136a8e9ef1a458119585ad6fed00aa0a15c87688",
+  "origin": "Exact bytes from official photo-sdk-v0.1.9 runtime tar; public notices only. Icon is the existing publication-approved camera512 asset.",
   "notices": [
     {
       "path": "LICENSE.md",

@@ -1,12 +1,12 @@
 {
-  "sdkVersion": "0.1.7",
-  "sourceCommit": "5ff21a28ae5f7a0e3a64a98b1ef31a7ca523b2a6",
-  "packageSha256": "0958a5cb74693b479a2817734809f93ece66eae380e59ad96197530b2987066f",
+  "sdkVersion": "0.1.9",
+  "sourceCommit": "86ca0749c6b738e7f6b59dcff5ebe2f5cafa2804",
+  "packageSha256": "08b69f4e04b1e69388672dcace92764fd170304d06a5e51e63a49d0ded33e231",
   "files": [
     {
       "path": "dist/index.js",
-      "sha256": "5e7352026b6cb3e6959ab5590a1508bf71d99ebe8d5d80fecd07b4124c910a71",
-      "sizeBytes": 1195
+      "sha256": "cfe7fcd9b0a407544d661aff446148a7f0805e984a96bf82512654dc745f6c36",
+      "sizeBytes": 1221
     },
     {
       "path": "dist/src/browser-photo-adjustments.js",
@@ -60,8 +60,8 @@
     },
     {
       "path": "dist/src/photo-editing-copy.js",
-      "sha256": "3bb4700c4572e73091333f2ea0fa06ea324d623fd54c6413d800f1a1c57031f6",
-      "sizeBytes": 79691
+      "sha256": "44d86a181ddfdb080fca965fe8d77db7288dd1df9b6d1613276a921e9d4e0892",
+      "sizeBytes": 83434
     },
     {
       "path": "dist/src/photo-editing-effects.js",
@@ -81,7 +81,7 @@
   ],
   "packageMetadata": {
     "path": "package.json",
-    "sha256": "c4da734ab2d73b13e30bb1434709fdceb1df1f2dc9db27f8d0e3c851c779793e",
+    "sha256": "7c3628348e9afb6fa7a899eeaed3ecce71e524bfa875fd99ae15056d4ac882e2",
     "sizeBytes": 492
   }
 }
