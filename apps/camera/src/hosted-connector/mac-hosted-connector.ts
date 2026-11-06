@@ -34,6 +34,8 @@ export async function startMacHostedConnector(options: {
   readonly listen: Listen;
   readonly runtime: MacHostedConnectorRuntime | null;
   readonly intervalMs?: number;
+  /** 登録したフォルダが変わったとき（既定は窓の読み直し。native がその窓の資源を外してから組み立て直す）。 */
+  readonly restart?: () => void;
 }): Promise<MacHostedConnectorStart> {
   const { invoke, listen, runtime } = options;
   if (!runtime) return { state: "notConfigured" };
@@ -49,7 +51,13 @@ export async function startMacHostedConnector(options: {
     power: createNativePower(invoke),
     clock: { now: () => Date.now() },
   });
-  const loop = runHostedConnectorLoop({ connector, intervalMs: options.intervalMs ?? HOSTED_CONNECTOR_INTERVAL_MS });
+  const ids = roots.map((root) => root.id).join("\n");
+  const loop = runHostedConnectorLoop({
+    connector,
+    intervalMs: options.intervalMs ?? HOSTED_CONNECTOR_INTERVAL_MS,
+    rootsChanged: async () => (await readRegisteredRoots(invoke)).map((root) => root.id).join("\n") !== ids,
+    onRootsChanged: options.restart ?? (() => globalThis.location.reload()),
+  });
   const unlisten = await watchHostedPower(listen, invoke, loop.power);
   return {
     state: "running",

@@ -139,7 +139,7 @@ describe("power", () => {
     }) as Listen;
     const send = (payload: unknown) => listener.handler?.({ payload });
     const order: string[] = [];
-    const { invoke } = fakeInvoke({ camera_hosted_connector_sleep_ready: () => order.push("ready") });
+    const { invoke, calls } = fakeInvoke({ camera_hosted_connector_sleep_ready: () => order.push("ready") });
     const unlisten = await watchHostedPower(listen, invoke, {
       willSleep: async () => {
         order.push("sleeping sent");
@@ -148,10 +148,12 @@ describe("power", () => {
         order.push("woke");
       },
     });
-    send({ state: "willSleep" });
+    send({ state: "willSleep", ticket: 4 });
     send({ state: "didWake" });
     send({ state: "unknown" });
     await vi.waitFor(() => expect(order).toEqual(["sleeping sent", "woke", "ready"]));
+    // 知らせと同じ ticket で答える（前の休止への遅れた答えは次の休止を通さない）
+    expect(calls.map((call) => call.args)).toEqual([{ request: { ticket: 4 } }]);
     unlisten();
     expect(listener.handler).toBeNull();
   });
@@ -190,6 +192,23 @@ describe("loop", () => {
     expect(ticks[1]?.aborted).toBe(false);
     loop.stop();
     await loop.done;
+  });
+
+  it("stops and asks to be rebuilt when the registered folders changed", async () => {
+    let changed = false;
+    const onRootsChanged = vi.fn();
+    const tick = vi.fn(async () => ({ phase: "active" as const }));
+    const loop = runHostedConnectorLoop({
+      connector: { tick, willSleep: async () => undefined, didWake: async () => undefined },
+      intervalMs: 1,
+      sleep: () => new Promise((resolve) => setTimeout(resolve, 0)),
+      rootsChanged: async () => changed,
+      onRootsChanged,
+    });
+    await vi.waitFor(() => expect(tick).toHaveBeenCalled());
+    changed = true;
+    await loop.done;
+    expect(onRootsChanged).toHaveBeenCalledTimes(1);
   });
 
   it("keeps going after a failed tick", async () => {

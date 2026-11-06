@@ -9,10 +9,14 @@
 //!   この窓だけに許し、main 窓には許さない。main 窓はフォルダの登録（`camera_hosted_folders_*`）だけを持つ。
 //! - ファイルは登録したフォルダの下を read-only で読む（`hosted_connector_fs.rs`）。path は native の外へ出さない。
 //! - 端末資格は Keychain、休止の抑止と休止・復帰の検知は IOKit（`hosted_connector_system.rs`）。
+//! - 接続用ソフトを動かす process は 1 つだけ（`CONNECTOR_LOCK_FILE` の advisory lock）。launchd の常駐と、利用者が開いた画面の
+//!   process が同時に動いたら、lock を取れなかった方は取れるまで待つ（取った方が終われば引き継ぐ）。
+//! - 接続用ソフトの窓を閉じた・読み直したら、その窓が持っていた休止の抑止と開いたファイルを native が全部外す。
 
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{Read, Write};
+use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Condvar, Mutex, MutexGuard};
@@ -40,6 +44,9 @@ pub const SLEEP_GRACE: Duration = Duration::from_secs(8);
 const CONNECTOR_PAGE: &str = "hosted-connector.html";
 const MAIN_WINDOW_LABEL: &str = "main";
 const ROOTS_FILE: &str = "hosted-connector/roots.json";
+const CONNECTOR_LOCK_FILE: &str = "hosted-connector/connector.lock";
+/// lock を持つ別の process が終わるのを確かめる間隔。
+const LOCK_RETRY: Duration = Duration::from_secs(15);
 const MAX_ROOTS: usize = 64;
 const MAX_OPEN_FILES: usize = 8;
 const READ_CHUNK_BYTES: usize = 4 << 20;
@@ -75,10 +82,11 @@ impl From<FsError> for CameraError {
 // ---------------------------------------------------------------------------
 // 休止の前の待ち合わせ
 
-/// 休止の知らせ（`announce`）に接続用ソフトが答える（`ack`）まで、休止を最長 `SLEEP_GRACE` 待たせる。
+/// 休止の知らせ（`announce` が返す ticket）に、接続用ソフトが同じ ticket で答える（`ack`）まで、休止を最長 `SLEEP_GRACE`
+/// 待たせる。前の休止への遅れた答えは、次の休止の答えにならない。
 #[derive(Default)]
 pub struct SleepGate {
-  /// (知らせた回数, 答えた回数)
+  /// (最後に知らせた ticket, 答えのあった最新の ticket)
   counts: Mutex<(u64, u64)>,
   answered: Condvar,
 }
@@ -90,10 +98,13 @@ impl SleepGate {
     counts.0
   }
 
-  pub fn ack(&self) {
+  /// 今の知らせ（最後の ticket）への答えだけを受ける。
+  pub fn ack(&self, ticket: u64) {
     let mut counts = lock(&self.counts);
-    counts.1 = counts.0;
-    self.answered.notify_all();
+    if ticket == counts.0 {
+      counts.1 = ticket;
+      self.answered.notify_all();
+    }
   }
 
   /// `ticket` の知らせに答えがあれば true、`timeout` を過ぎたら false。
@@ -133,10 +144,15 @@ pub struct HostedConnectorState {
   holds: Mutex<Holds>,
   sleep: SleepGate,
   watching_power: AtomicBool,
+  /// 接続用ソフトを動かす process の lock（持っている間だけ Some。process が終われば OS が外す）
+  connector_lock: Mutex<Option<File>>,
+  lock_path: Option<PathBuf>,
+  waiting_for_lock: AtomicBool,
 }
 
 impl HostedConnectorState {
-  fn new(roots_path: Option<PathBuf>) -> Self {
+  fn new(data_dir: Option<PathBuf>) -> Self {
+    let roots_path = data_dir.as_ref().map(|dir| dir.join(ROOTS_FILE));
     let roots = roots_path.as_deref().map(load_roots).unwrap_or_default();
     Self {
       roots: Mutex::new(roots),
@@ -145,7 +161,35 @@ impl HostedConnectorState {
       holds: Mutex::default(),
       sleep: SleepGate::default(),
       watching_power: AtomicBool::new(false),
+      connector_lock: Mutex::new(None),
+      lock_path: data_dir.map(|dir| dir.join(CONNECTOR_LOCK_FILE)),
+      waiting_for_lock: AtomicBool::new(false),
     }
+  }
+
+  /// 別の process（launchd の常駐・開いた画面）が書き換えたかもしれない一覧を読み直す。
+  fn reload_roots(&self) -> Vec<RegisteredRoot> {
+    let roots = self.roots_path.as_deref().map(load_roots).unwrap_or_default();
+    *lock(&self.roots) = roots.clone();
+    roots
+  }
+
+  fn acquire_connector_lock(&self) -> bool {
+    let mut held = lock(&self.connector_lock);
+    if held.is_none() {
+      *held = self.lock_path.as_deref().and_then(try_lock);
+    }
+    held.is_some()
+  }
+
+  /// 接続用ソフトの窓が持っていた休止の抑止と開いたファイルを外す（窓を閉じた・読み直した）。外した assertion を返す。
+  fn release_page_resources(&self) -> Vec<u32> {
+    lock(&self.files).files.clear();
+    lock(&self.holds)
+      .assertions
+      .drain()
+      .map(|(_, assertion)| assertion)
+      .collect()
   }
 
   fn root(&self, id: &str) -> Result<RegisteredRoot, CameraError> {
@@ -212,6 +256,23 @@ fn random_id(prefix: &str) -> Result<String, CameraError> {
   ))
 }
 
+/// 排他の advisory lock を待たずに取る（取れなければ None）。process が終われば OS が外す。
+fn try_lock(path: &Path) -> Option<File> {
+  use std::os::unix::fs::OpenOptionsExt;
+  std::fs::create_dir_all(path.parent()?).ok()?;
+  let file = std::fs::OpenOptions::new()
+    .read(true)
+    .write(true)
+    .create(true)
+    .truncate(false)
+    .mode(0o600)
+    .open(path)
+    .ok()?;
+  // SAFETY: file は開いている fd。flock は開いた file description ごとの lock で、fd を閉じれば外れる。
+  let locked = unsafe { libc::flock(file.as_raw_fd(), libc::LOCK_EX | libc::LOCK_NB) } == 0;
+  locked.then_some(file)
+}
+
 fn state(app: &tauri::AppHandle) -> Result<tauri::State<'_, HostedConnectorState>, CameraError> {
   app.try_state::<HostedConnectorState>().ok_or_else(internal)
 }
@@ -225,8 +286,7 @@ pub fn connector_mode() -> bool {
 }
 
 pub fn install(app: &tauri::AppHandle) {
-  let roots_path = app.path().app_data_dir().ok().map(|dir| dir.join(ROOTS_FILE));
-  app.manage(HostedConnectorState::new(roots_path));
+  app.manage(HostedConnectorState::new(app.path().app_data_dir().ok()));
 }
 
 /// 起動の最後に呼ぶ。登録したフォルダがあれば接続用ソフトの窓を動かす。常駐の起動でフォルダが無ければ終える
@@ -275,7 +335,15 @@ pub fn main_window_closed(app: &tauri::AppHandle) {
 }
 
 fn ensure_connector_window(app: &tauri::AppHandle) {
+  let Ok(state) = state(app) else {
+    return;
+  };
   if app.get_webview_window(CONNECTOR_WINDOW_LABEL).is_some() {
+    return;
+  }
+  // 別の process が動かしていれば、終わるまで待って引き継ぐ
+  if !state.acquire_connector_lock() {
+    wait_for_connector_lock(app);
     return;
   }
   watch_power(app);
@@ -294,10 +362,60 @@ fn ensure_connector_window(app: &tauri::AppHandle) {
   }
 }
 
+fn wait_for_connector_lock(app: &tauri::AppHandle) {
+  let Ok(current) = state(app) else {
+    return;
+  };
+  if current.waiting_for_lock.swap(true, Ordering::AcqRel) {
+    return;
+  }
+  let handle = app.clone();
+  let spawned = std::thread::Builder::new()
+    .name("hosted-connector-lock".into())
+    .spawn(move || loop {
+      std::thread::sleep(LOCK_RETRY);
+      let Ok(state) = state(&handle) else {
+        return;
+      };
+      // 待っている間に登録が無くなったら、待つのをやめる
+      if state.reload_roots().is_empty() {
+        state.waiting_for_lock.store(false, Ordering::Release);
+        return;
+      }
+      if state.acquire_connector_lock() {
+        state.waiting_for_lock.store(false, Ordering::Release);
+        let main = handle.clone();
+        let _ = handle.run_on_main_thread(move || ensure_connector_window(&main));
+        return;
+      }
+    });
+  if spawned.is_err() {
+    current.waiting_for_lock.store(false, Ordering::Release);
+  }
+}
+
+/// 接続用ソフトの窓を閉じたか読み直した。その窓の休止の抑止と開いたファイルを外す。
+pub fn release_page_resources(app: &tauri::AppHandle) {
+  if let Ok(state) = state(app) {
+    for assertion in state.release_page_resources() {
+      system::release_awake(assertion);
+    }
+  }
+}
+
+/// 接続用ソフトの窓が無くなった。窓の資源を外し、lock を手放す（別の process が引き継げる）。
+pub fn connector_window_closed(app: &tauri::AppHandle) {
+  release_page_resources(app);
+  if let Ok(state) = state(app) {
+    *lock(&state.connector_lock) = None;
+  }
+}
+
 fn close_connector_window(app: &tauri::AppHandle) {
   if let Some(window) = app.get_webview_window(CONNECTOR_WINDOW_LABEL) {
     let _ = window.destroy();
   }
+  connector_window_closed(app);
 }
 
 fn watch_power(app: &tauri::AppHandle) {
@@ -318,6 +436,9 @@ fn watch_power(app: &tauri::AppHandle) {
 #[serde(rename_all = "camelCase")]
 struct PowerPayload {
   state: &'static str,
+  /// 休止の知らせだけ。答え（`camera_hosted_connector_sleep_ready`）は同じ ticket を返す
+  #[serde(skip_serializing_if = "Option::is_none")]
+  ticket: Option<u64>,
 }
 
 fn on_power(app: &tauri::AppHandle, event: PowerEvent) {
@@ -331,14 +452,28 @@ fn on_power(app: &tauri::AppHandle, event: PowerEvent) {
     PowerEvent::WillSleep => {
       let ticket = state.sleep.announce();
       if app
-        .emit_to(CONNECTOR_WINDOW_LABEL, POWER_EVENT, PowerPayload { state: "willSleep" })
+        .emit_to(
+          CONNECTOR_WINDOW_LABEL,
+          POWER_EVENT,
+          PowerPayload {
+            state: "willSleep",
+            ticket: Some(ticket),
+          },
+        )
         .is_ok()
       {
         state.sleep.wait(ticket, SLEEP_GRACE);
       }
     }
     PowerEvent::DidWake => {
-      let _ = app.emit_to(CONNECTOR_WINDOW_LABEL, POWER_EVENT, PowerPayload { state: "didWake" });
+      let _ = app.emit_to(
+        CONNECTOR_WINDOW_LABEL,
+        POWER_EVENT,
+        PowerPayload {
+          state: "didWake",
+          ticket: None,
+        },
+      );
     }
   }
 }
@@ -499,6 +634,12 @@ struct ReleaseRequest {
   hold_id: u64,
 }
 
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct SleepReadyRequest {
+  ticket: u64,
+}
+
 #[derive(Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct HoldAnswer {
@@ -506,13 +647,14 @@ pub struct HoldAnswer {
   hold_id: Option<u64>,
 }
 
-/// 登録したフォルダの ID（名前・path は渡さない）。
+/// 登録したフォルダの ID（名前・path は渡さない）。別の process が書き換えたかもしれないので、毎回読み直す。
 #[tauri::command]
 pub fn camera_hosted_connector_roots(app: tauri::AppHandle) -> Result<Vec<ConnectorRoot>, CameraError> {
   Ok(
-    lock(&state(&app)?.roots)
-      .iter()
-      .map(|root| ConnectorRoot { id: root.id.clone() })
+    state(&app)?
+      .reload_roots()
+      .into_iter()
+      .map(|root| ConnectorRoot { id: root.id })
       .collect(),
   )
 }
@@ -685,10 +827,11 @@ pub fn camera_hosted_connector_power_release(app: tauri::AppHandle, request: Opt
   Ok(())
 }
 
-/// 休止の知らせへの答え（NIHO へ `sleeping` を送り終えた）。待っている休止を進める。
+/// 休止の知らせへの答え（NIHO へ `sleeping` を送り終えた）。同じ ticket の休止だけを進める。
 #[tauri::command]
-pub fn camera_hosted_connector_sleep_ready(app: tauri::AppHandle) -> Result<(), CameraError> {
-  state(&app)?.sleep.ack();
+pub fn camera_hosted_connector_sleep_ready(app: tauri::AppHandle, request: Option<Value>) -> Result<(), CameraError> {
+  let request: SleepReadyRequest = parse_request(request)?;
+  state(&app)?.sleep.ack(request.ticket);
   Ok(())
 }
 
@@ -705,7 +848,7 @@ mod tests {
     let answering = Arc::clone(&gate);
     let answer = std::thread::spawn(move || {
       std::thread::sleep(Duration::from_millis(20));
-      answering.ack();
+      answering.ack(ticket);
     });
     assert!(gate.wait(ticket, Duration::from_secs(5)), "the answer lets sleep go on");
     answer.join().unwrap();
@@ -717,11 +860,46 @@ mod tests {
       "no answer: sleep goes on after the grace"
     );
     assert!(started.elapsed() >= Duration::from_millis(50));
-    // 答えの無いまま次の知らせが来ても、答えるまで待つ
+    // 前の休止への遅れた答えは、次の休止を通さない
     let next = gate.announce();
+    gate.ack(unanswered);
     assert!(!gate.wait(next, Duration::from_millis(10)));
-    gate.ack();
+    gate.ack(next);
     assert!(gate.wait(next, Duration::from_millis(10)));
+  }
+
+  #[test]
+  fn only_one_process_runs_the_connector_and_the_lock_passes_on() {
+    let dir = std::env::temp_dir().join(format!("niho-hosted-lock-{}", std::process::id()));
+    let path = dir.join(CONNECTOR_LOCK_FILE);
+    // flock は開いた file description ごとなので、同じ process の 2 つ目の open は別の process と同じく取れない
+    let first = try_lock(&path).expect("the first holder gets the lock");
+    assert!(try_lock(&path).is_none(), "a second holder waits");
+    drop(first);
+    assert!(try_lock(&path).is_some(), "the lock passes on when the holder ends");
+    let _ = std::fs::remove_dir_all(dir);
+  }
+
+  #[test]
+  fn closing_the_connector_page_releases_its_holds_and_files() {
+    let dir = std::env::temp_dir().join(format!("niho-hosted-release-{}", std::process::id()));
+    let state = HostedConnectorState::new(Some(dir.clone()));
+    {
+      let mut holds = lock(&state.holds);
+      holds.assertions.insert(1, 11);
+      holds.assertions.insert(2, 12);
+    }
+    let file = File::open("/dev/null").unwrap();
+    lock(&state.files).files.insert(1, (file, "a.jpg".into()));
+    let mut released = state.release_page_resources();
+    released.sort_unstable();
+    assert_eq!(released, vec![11, 12]);
+    assert!(lock(&state.holds).assertions.is_empty());
+    assert!(lock(&state.files).files.is_empty());
+    assert!(state.release_page_resources().is_empty(), "nothing is released twice");
+    assert!(state.acquire_connector_lock());
+    assert!(state.acquire_connector_lock(), "the holder keeps it");
+    let _ = std::fs::remove_dir_all(dir);
   }
 
   #[test]

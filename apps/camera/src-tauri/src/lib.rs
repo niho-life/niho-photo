@@ -107,6 +107,10 @@ pub fn run() {
       if webview.label() == MAIN_WINDOW_LABEL && payload.event() == PageLoadEvent::Started {
         develop_engine_sidecar::stop(webview.app_handle());
       }
+      // 接続用ソフトの窓を読み直したら、前の画面が持っていた休止の抑止と開いたファイルを外す
+      if webview.label() == hosted_connector::CONNECTOR_WINDOW_LABEL && payload.event() == PageLoadEvent::Started {
+        hosted_connector::release_page_resources(webview.app_handle());
+      }
     })
     .setup(move |app| {
       // 常駐の起動（launchd）では main 窓を作らず Dock にも出さない。開き直すと出す（RunEvent::Reopen）
@@ -234,6 +238,12 @@ pub fn run() {
         event: tauri::WindowEvent::Destroyed,
         ..
       } if label == MAIN_WINDOW_LABEL => hosted_connector::main_window_closed(app),
+      // 接続用ソフトの窓が無くなったら、休止の抑止・開いたファイル・lock を外す
+      tauri::RunEvent::WindowEvent {
+        label,
+        event: tauri::WindowEvent::Destroyed,
+        ..
+      } if label == hosted_connector::CONNECTOR_WINDOW_LABEL => hosted_connector::connector_window_closed(app),
       _ => {}
     });
 }

@@ -3809,7 +3809,7 @@
         "path": "apps/camera/README.md",
         "sha256": "d0e1f198e83893a73cd3d84122debf76ad9755e00a5fc5e1b69c242daec8d4eb"
       },
-      "outputSha256": "679c9f938ff5c8b2b0e8747e9528f026a8de6030d95e98b43a7c9482c015a79d",
+      "outputSha256": "f8e740a1bff94860640ee87910156873ed814b342f1a0562409248a5b70e9b83",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "フォルダと個別写真の利用方法、公開契約、および許可するネイティブコマンドを明記",
@@ -3825,7 +3825,8 @@
         "個人クラウドの未接続状態と正式native転送を後で注入する境界を明記。",
         "Issue #210のMac写真選択E2E runner、合成fixture、検証範囲と手動DMG受け入れの免除を記載。",
         "Issue #210の自動E2EにMac mini重処理guardとMac Studio実行手順を追記。",
-        "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加"
+        "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加",
+        "Photo #244 / B03 実装後レビューの指摘（接続用ソフトのprocessを1つにする・窓の資源の解放・休止の答えのticket）を反映"
       ]
     },
     {
@@ -4280,7 +4281,7 @@
         "path": "apps/camera/src-tauri/src/lib.rs",
         "sha256": "e6415b3d0633bb4753761b89f8860fffcfa9b67f95832ab971bd9b13eebaaffc"
       },
-      "outputSha256": "0e815676d484113cc35d123f0fca916a6f1f89585bf23136587b97cefc6df53e",
+      "outputSha256": "e3e287bfe617b87cba33fa7045b785f6ba9fc77944eec2f10582fa68d3a68f7d",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "共有形式フィルターを使う複数写真pickerと参照削除コマンドを同梱UIの権限内に追加 / 選択写真専用commandをinvoke handlerへ登録。",
@@ -4309,7 +4310,8 @@
         "本人Photoの実bootstrap・検証済み原本保存・失効と確定の排他・PNGのEOF検証を追加。",
         "本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映",
         "PR232のMac接続を単一のdurable mask barrierへ統合し固定keys・scope・実SDK能力を検証",
-        "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加"
+        "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加",
+        "Photo #244 / B03 実装後レビューの指摘（接続用ソフトのprocessを1つにする・窓の資源の解放・休止の答えのticket）を反映"
       ]
     },
     {
@@ -13817,7 +13819,7 @@
     },
     {
       "path": "apps/camera/src-tauri/src/hosted_connector.rs",
-      "sha256": "e2159ee37b4ad3d90a71b5a499862c049a34c47ef971d08ca9552877bccae543",
+      "sha256": "4057e57174ea1c793a2c03af25ae6303f36992455d3e2dfbff2b4bf098c7a54d",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13852,17 +13854,17 @@
     },
     {
       "path": "apps/camera/src/hosted-connector/mac-hosted-connector.ts",
-      "sha256": "79d1b910cfaab77cf4278b322368b7d906ce953044ae7c03355609f5790d10ea",
+      "sha256": "9f3e4e436938fdca52049a0b81ecf4e29205d8472be12256b5167252dfca83ca",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "apps/camera/src/hosted-connector/native-ports.test.ts",
-      "sha256": "976def1ba19d20a4dde8bd73020d9ccd58c0fe931680c0c561eefa9ae154a9e6",
+      "sha256": "da184b1ff8a799c4fe6c6b2aad78b03416b0ee3c0c147028718d6d2e7678742e",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "apps/camera/src/hosted-connector/native-ports.ts",
-      "sha256": "73171673e75772935f2e23e7fdb8e5ced482e4ba3e89c083b814f5ed2074b716",
+      "sha256": "1ff663213d7899eb83bf4b72a8db6cd749f9fc5a7d2711be6418cd048214f860",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     }
   ],

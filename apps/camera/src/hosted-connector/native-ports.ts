@@ -147,14 +147,17 @@ export type HostedPowerHandlers = {
   didWake(): Promise<void>;
 };
 
-/** 休止・復帰の知らせを受ける。戻り値で受けるのをやめる。 */
+/** 休止・復帰の知らせを受ける。休止の答えは知らせと同じ ticket で返す。戻り値で受けるのをやめる。 */
 export async function watchHostedPower(listen: Listen, invoke: Invoke, handlers: HostedPowerHandlers): Promise<() => void> {
-  return listen<{ state?: unknown }>(HOSTED_POWER_EVENT, (event) => {
+  return listen<{ state?: unknown; ticket?: unknown }>(HOSTED_POWER_EVENT, (event) => {
     if (event.payload.state === "willSleep") {
+      const ticket = event.payload.ticket;
       void handlers
         .willSleep()
         .catch(() => undefined)
-        .finally(() => invoke("camera_hosted_connector_sleep_ready").catch(() => undefined));
+        .finally(() => {
+          if (typeof ticket === "number") void invoke("camera_hosted_connector_sleep_ready", { request: { ticket } }).catch(() => undefined);
+        });
     } else if (event.payload.state === "didWake") {
       void handlers.didWake().catch(() => undefined);
     }
@@ -171,12 +174,15 @@ export type HostedConnectorLoop = {
 
 /**
  * 常駐の間 tick を回す。休止の前は走っている tick を止めて NIHO へ `sleeping` を送り、復帰したら続きから（控えは差分だけ）。
- * tick が失敗しても（通信の切断など）次の間隔で続ける。
+ * tick が失敗しても（通信の切断など）次の間隔で続ける。登録したフォルダが変わったら（別の process が書き換えた場合も）
+ * 止めて `onRootsChanged` を呼ぶ（core は起動時の一覧で動くので、組み立て直す）。
  */
 export function runHostedConnectorLoop(options: {
   readonly connector: Pick<HostedConnector, "tick" | "willSleep" | "didWake">;
   readonly intervalMs: number;
   readonly sleep?: (ms: number, signal: AbortSignal) => Promise<void>;
+  readonly rootsChanged?: () => Promise<boolean>;
+  readonly onRootsChanged?: () => void;
 }): HostedConnectorLoop {
   const wait =
     options.sleep ??
@@ -195,6 +201,11 @@ export function runHostedConnectorLoop(options: {
   let pause = new AbortController();
   const done = (async () => {
     while (!stopped) {
+      if (options.rootsChanged && (await options.rootsChanged().catch(() => false))) {
+        stopped = true;
+        options.onRootsChanged?.();
+        break;
+      }
       if (!asleep) {
         try {
           await options.connector.tick(tick.signal);
