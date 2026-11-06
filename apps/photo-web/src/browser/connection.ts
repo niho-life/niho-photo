@@ -17,6 +17,9 @@ import type { ScopedPhotoWebEditingHost, PhotoWebConnection, PhotoWebRuntimeGuar
 import {
   createBrowserPersonalPhotoCloudClient,
   createBrowserPersonalPhotoTransferController,
+  IndexedDbTransferJournal,
+  PERSONAL_PHOTO_TRANSFER_DATABASE_NAME,
+  type JournalScope,
   type BrowserPersonalPhotoTransferController,
   type PersonalPhotoTransferStatus,
 } from "@niho/photo-cloud-library/browser";
@@ -24,7 +27,7 @@ import type { PersonalPhotoCloudLibraryHandle, PersonalPhotoCloudMemoryBudgets }
 import { rendererIntersection } from "@niho/photo-cloud-library/protocol";
 import { createPersonalPhotoCloudLibrary as createSynchronizedPhotoLibrary } from "@niho/photo-cloud-sync";
 import { IndexedDbRecipeSyncJournal } from "@niho/photo-cloud-sync/browser";
-import type { RecipeSyncLocks } from "@niho/photo-cloud-sync";
+import type { RecipeJournalScope, RecipeSyncLocks } from "@niho/photo-cloud-sync";
 import { createPhotoWebCloudFetch } from "./auth-fetch.ts";
 import { createCapturedPhotoWebCloudClient, createPhotoWebCloudIdentity } from "./session-client.ts";
 import {
@@ -44,8 +47,8 @@ export interface CreatePhotoWebConnectionFactoryOptions {
   readonly presets: PhotoLibraryPresets;
   /** C08's accepted budgets; no browser-memory default is inferred here. */
   readonly memoryBudgets: PersonalPhotoCloudMemoryBudgets;
-  /** Required owner-supplied C03 scope cleanup port; there is deliberately no successful no-op fallback. */
-  readonly clearRevokedScope: (identity: PhotoIdentity, reason: PhotoWebRevocationReason) => void | Promise<void>;
+  /** Optional application cleanup in addition to the exact C02/C03 journals fenced here. */
+  readonly clearRevokedScope?: (identity: PhotoIdentity, reason: PhotoWebRevocationReason) => void | Promise<void>;
   /** Shared copy is optional until C00/C08 publishes the complete transfer labels. */
   readonly transferCopy?: PhotoWebTransferCopy;
   /** Optional same-origin transport seam for tests and the host. It is used only for the BFF client. */
@@ -56,6 +59,8 @@ export interface CreatePhotoWebConnectionFactoryOptions {
   readonly recipeLocks?: LockManager;
   readonly transferIndexedDB?: IDBFactory;
   readonly transferLocks?: LockManager | null;
+  readonly transferDatabaseName?: string;
+  readonly recipeDatabaseName?: string;
   readonly now?: () => number;
 }
 
@@ -67,6 +72,11 @@ type InternalConnection = PhotoWebConnection & {
   readonly hasPending: () => boolean;
   readonly canLeave: (signal: AbortSignal) => Promise<boolean>;
 };
+
+interface CapturedRevocationScope {
+  readonly transfer: JournalScope;
+  readonly recipe: RecipeJournalScope;
+}
 
 function validTransferCopy(value: PhotoWebTransferCopy | undefined): value is PhotoWebTransferCopy {
   if (value === undefined || typeof value !== "object" || value === null) return false;
@@ -120,6 +130,14 @@ function isPersonalPhotoLibrary(value: unknown): value is PersonalPhotoLibrary {
     && typeof (value as PersonalPhotoLibrary).id === "string"
     && typeof (value as PersonalPhotoLibrary).state === "string"
     && typeof (value as PersonalPhotoLibrary).capabilities === "object";
+}
+
+const PENDING_TRANSFER_PHASES = new Set<PersonalPhotoTransferStatus["phase"]>([
+  "start-pending", "uploading", "complete-pending", "verifying", "pending-recipe", "cancel-pending", "needs-file",
+]);
+
+function identityScopeKey(identity: PhotoIdentity): string {
+  return JSON.stringify([identity.userId, identity.sessionId, identity.sessionEpoch, identity.transport]);
 }
 
 /**
@@ -313,6 +331,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
   const factoryOptions = Object.freeze({ ...options, rendererProof: Object.freeze({ ...options.rendererProof }) });
   let active: InternalConnection | null = null;
   let connectionsStarting = 0;
+  const revocationScopes = new Map<string, CapturedRevocationScope>();
 
   const guards: PhotoWebRuntimeGuards = {
     async canLeave(identity, guardOptions) {
@@ -328,7 +347,28 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
     async onScopeRevoked(identity, reason) {
       const connection = active;
       if (connection !== null && samePhotoIdentityScope(connection.identity, identity)) active = null;
-      await factoryOptions.clearRevokedScope(identity, reason);
+      const key = identityScopeKey(identity);
+      const capturedScope = revocationScopes.get(key);
+      const cleanup: Promise<void>[] = [];
+      if (capturedScope !== undefined) {
+        const database = factoryOptions.indexedDB ?? globalThis.indexedDB;
+        const transferDatabase = factoryOptions.transferIndexedDB ?? database;
+        if (database === undefined || transferDatabase === undefined) throw new Error("Photo Web durable journals are unavailable");
+        const recipeJournal = new IndexedDbRecipeSyncJournal(database, factoryOptions.recipeDatabaseName);
+        const transferJournal = new IndexedDbTransferJournal(
+          transferDatabase,
+          factoryOptions.transferDatabaseName ?? PERSONAL_PHOTO_TRANSFER_DATABASE_NAME,
+        );
+        cleanup.push(
+          recipeJournal.purgeScope(capturedScope.recipe).finally(() => recipeJournal.dispose()).then(() => undefined),
+          transferJournal.purgeScope(capturedScope.transfer).finally(() => transferJournal.dispose()).then(() => undefined),
+        );
+      }
+      if (factoryOptions.clearRevokedScope !== undefined) {
+        cleanup.push(Promise.resolve().then(() => factoryOptions.clearRevokedScope!(identity, reason)));
+      }
+      await Promise.all(cleanup);
+      if (capturedScope !== undefined) revocationScopes.delete(key);
     },
   };
 
@@ -368,12 +408,30 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
         scopeSignal: input.signal,
       });
       const client = closeUnconnectedMediaJobCapabilities(capturedClient);
+      const identityKey = identityScopeKey(identity);
+      revocationScopes.set(identityKey, Object.freeze({
+        transfer: Object.freeze({
+          actorId: identity.userId,
+          libraryId: client.scope.libraryId,
+          sessionId: identity.sessionId,
+          sessionEpoch: identity.sessionEpoch,
+        }),
+        recipe: Object.freeze({
+          actorId: identity.userId,
+          libraryId: client.scope.libraryId,
+          sessionId: identity.sessionId,
+          sessionEpoch: identity.sessionEpoch,
+          transport: identity.transport,
+        }),
+      }));
       let handle: PersonalPhotoCloudLibraryHandle | null = null;
       let transferController: BrowserPersonalPhotoTransferController | null = null;
       let maskSurfaceValidator: PhotoWebMaskSurfaceValidator | null = null;
       let previewLibrary: { readonly library: PhotoLibrary; dispose(): void } | null = null;
       let disposed = false;
       let transferOperations = 0;
+      let pendingTransfers: boolean | null = null;
+      let transferReadGeneration = 0;
       let pendingDrafts: boolean | null = null;
       let draftReadGeneration = 0;
       let snapshot: ConnectionSnapshot | null = null;
@@ -406,6 +464,33 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
           if (generation === draftReadGeneration) pendingDrafts = true;
         }
       };
+      const refreshPendingTransfers = async (): Promise<void> => {
+        const generation = ++transferReadGeneration;
+        pendingTransfers = null;
+        const controller = transferController;
+        if (controller === null || !input.host.isScopeCurrent()) {
+          if (generation === transferReadGeneration) pendingTransfers = controller === null ? false : true;
+          return;
+        }
+        try {
+          let cursor: string | undefined;
+          let hasPending = false;
+          while (true) {
+            const page = await controller.list(cursor === undefined ? { limit: 16 } : { limit: 16, cursor });
+            if (generation !== transferReadGeneration || !input.host.isScopeCurrent()) return;
+            if (page.items.some((item) => item.hasPendingRecipe || PENDING_TRANSFER_PHASES.has(item.phase))) {
+              hasPending = true;
+              break;
+            }
+            if (page.nextCursor === null) break;
+            if (page.nextCursor === cursor) throw new Error("Photo Web transfer pagination did not advance");
+            cursor = page.nextCursor;
+          }
+          if (generation === transferReadGeneration && input.host.isScopeCurrent()) pendingTransfers = hasPending;
+        } catch {
+          if (generation === transferReadGeneration) pendingTransfers = true;
+        }
+      };
 
       try {
         const renderer = await probePhotoWebRenderer({ proof: factoryOptions.rendererProof, signal: input.signal });
@@ -435,7 +520,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
           engineAssets: renderer.engineAssets,
           presets: factoryOptions.presets,
           memoryBudgets: factoryOptions.memoryBudgets,
-          journal: new IndexedDbRecipeSyncJournal(indexedDB),
+          journal: new IndexedDbRecipeSyncJournal(indexedDB, factoryOptions.recipeDatabaseName),
           locks: recipeLocks,
           ...(maskSurfaceValidator === null ? {} : { maskSurfaceValidator }),
           ...(factoryOptions.now === undefined ? {} : { clock: { now: factoryOptions.now } }),
@@ -492,7 +577,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
         const notifySettled = async (_status: PersonalPhotoTransferStatus): Promise<void> => {
           if (disposed || !input.host.isScopeCurrent()) return;
           input.host.notifyPhotosChanged();
-          await refreshUsage();
+          await Promise.all([refreshUsage(), refreshPendingTransfers()]);
         };
 
         let transfer: PhotoWebTransferBinding | undefined;
@@ -506,6 +591,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
               ...(maskSurfaceValidator === null ? {} : { maskValidator: maskSurfaceValidator }),
               ...(factoryOptions.providerFetch === undefined ? {} : { fetch: factoryOptions.providerFetch }),
               ...(factoryOptions.now === undefined ? {} : { now: factoryOptions.now }),
+              ...(factoryOptions.transferDatabaseName === undefined ? {} : { databaseName: factoryOptions.transferDatabaseName }),
             });
           } catch {
             transferController = null;
@@ -538,6 +624,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
             onSettled: notifySettled,
           });
         }
+        await refreshPendingTransfers();
 
         snapshot = Object.freeze({
           key: bindingKey,
@@ -546,7 +633,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
           library,
           canEdit: initialCloud.state === "active" && canEdit,
           cloudOriginalsAllowed: initialCloud.state === "active",
-          mobileEditingAllowed: rollout.mobileEditing,
+          mobileEditingAllowed: rollout.mobileEditing && canEdit && durable.isCurrent(),
           disableCloudDelete: initialCloud.state !== "active",
           usage,
           ...(transfer === undefined ? {} : { transfer }),
@@ -559,15 +646,17 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
           identity,
           scopeKey,
           isCurrent: () => !disposed && !input.signal.aborted && input.host.isScopeCurrent(),
-          hasPending: () => transferOperations > 0 || pendingDrafts !== false,
+          hasPending: () => transferOperations > 0 || pendingDrafts !== false || pendingTransfers !== false,
           async canLeave(signal) {
             if (!connection.isCurrent() || signal.aborted || transferOperations > 0 || !durable.isCurrent()) return false;
             try {
-              const page = await durable.list({ limit: 16 }, { signal });
+              const [page] = await Promise.all([
+                durable.list({ limit: 16 }, { signal }),
+                refreshPendingTransfers(),
+              ]);
               if (!connection.isCurrent() || signal.aborted || page.nextCursor !== null) return false;
-              const pending = page.items.some((item) => item.hasLatest || item.hasUnknownAttempt || item.conflictCount > 0);
-              pendingDrafts = pending;
-              return !pending && transferOperations === 0;
+              pendingDrafts = page.items.some((item) => item.hasLatest || item.hasUnknownAttempt || item.conflictCount > 0);
+              return !pendingDrafts && pendingTransfers === false && transferOperations === 0;
             } catch {
               pendingDrafts = true;
               return false;

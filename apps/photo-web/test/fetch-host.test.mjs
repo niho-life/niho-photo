@@ -112,6 +112,26 @@ function options(overrides = {}) {
 }
 
 describe("createPhotoWebFetchHost", () => {
+  it("serves exact no-store health/runtime endpoints without invoking auth or cloud", async () => {
+    let calls = 0;
+    const auth = fakeAuth(Object.fromEntries(["start", "callback", "session", "refresh", "logout", "cancel"]
+      .map((name) => [name, async () => { calls += 1; return new Response("unexpected"); }])));
+    const host = createPhotoWebFetchHost(options({ cloudEnabled: false, auth, cloudHandler: async () => { calls += 1; return null; } }));
+    const health = await host(new Request(`${ORIGIN}/healthz`));
+    assert.equal(health.status, 200);
+    assert.equal(await health.text(), "ready\n");
+    assert.equal(health.headers.get("cache-control"), "no-store");
+    const runtime = await host(new Request(`${ORIGIN}/photo-runtime.json`));
+    assert.deepEqual(await runtime.json(), { cloudEnabled: false });
+    assert.equal(runtime.headers.get("cache-control"), "no-store");
+    const head = await host(new Request(`${ORIGIN}/photo-runtime.json`, { method: "HEAD" }));
+    assert.equal((await head.arrayBuffer()).byteLength, 0);
+    assert.equal(head.headers.get("content-length"), runtime.headers.get("content-length"));
+    assert.equal((await host(new Request(`${ORIGIN}/photo-runtime.json?config=1`))).status, 400);
+    assert.equal((await host(new Request(`${ORIGIN}/photo-runtime.json`, { method: "POST" }))).status, 405);
+    assert.equal(calls, 0);
+  });
+
   it("dispatches only the six exact C01 public paths to their matching methods", async () => {
     const routes = {
       "/auth/start": "start",

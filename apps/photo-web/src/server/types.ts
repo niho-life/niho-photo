@@ -8,6 +8,12 @@ export interface LoadPhotoWebStaticStoreOptions {
   readonly build: PhotoStaticBuildResult;
 }
 
+export interface LoadRetainedPhotoWebStaticStoreOptions {
+  readonly current: LoadPhotoWebStaticStoreOptions;
+  /** Trusted, already accepted release directories ordered oldest to newest. */
+  readonly acceptedPrior?: readonly LoadPhotoWebStaticStoreOptions[];
+}
+
 export interface PhotoWebStaticStore {
   /** Deep-frozen, public-only snapshot. It never exposes the caller's build object. */
   readonly build: PhotoStaticBuildResult;
@@ -24,6 +30,8 @@ export type PhotoWebCloudHandler = (request: Request) => Promise<Response | null
 
 export interface PhotoWebFetchHostOptions {
   readonly enabled: boolean;
+  /** Public runtime admission only. Auth/proxy wiring remains a separate trusted decision. */
+  readonly cloudEnabled?: boolean;
   /**
    * Trusted C08 configuration: one exact public HTTPS origin, including its explicit port.
    * C06 does not read process.env or infer proxy/forwarded-host configuration.

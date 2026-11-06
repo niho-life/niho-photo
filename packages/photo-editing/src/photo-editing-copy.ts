@@ -1300,6 +1300,16 @@ export const PHOTO_WEB_COPY = {
   homeLabel: "Photoに戻る",
 } as const;
 
+/** Photo Web BFFの固定認証HTML。browser bundleとserver entryで同じ利用者向け文言を使う。 */
+export const PHOTO_WEB_AUTH_COPY = {
+  startTitle: PHOTO_WEB_COPY.verifying,
+  startMessage: "NIHOの本人確認へ移動します。",
+  startSubmitLabel: PHOTO_WEB_COPY.login,
+  relayTitle: "写真に戻ります",
+  relayMessage: "本人確認を完了して、NIHO photoに戻ります。",
+  relaySubmitLabel: PHOTO_WEB_COPY.homeLabel,
+} as const;
+
 const PHOTO_WEB_USAGE_UNAVAILABLE_TEXT = "容量を確認できません";
 
 /** 削除処理中のbytesはusedの内数。表示で二重加算しない。5GiBは製品表記5GB。 */

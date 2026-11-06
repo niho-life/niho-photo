@@ -82,6 +82,7 @@ const PACKAGE_DEFINITIONS = Object.freeze({
 const CONFIG_PACKAGE_IDS = Object.freeze({
   1: Object.freeze(["ui", "photo-editing", "cloud-contract", "photo-contract", "develop-engine-source"]),
   2: Object.freeze(["ui", "photo-editing", "cloud-contract", "photo-contract", "personal-cloud-contract", "develop-engine-source"]),
+  3: Object.freeze(["ui", "photo-editing", "cloud-contract", "photo-contract", "personal-cloud-contract", "develop-engine-source"]),
 });
 
 // スレッドの wasm（#151。crossOriginIsolated の画面だけが読む）の build の指定。build と release set の検証が

@@ -302,7 +302,7 @@ async function readSdk(
 ): Promise<PhotoStaticBuildResult["sdk"]> {
   const packageBytes = await readRegularFile(path.join(packageDirectory, "package.json"), MAX_DOCUMENT_BYTES);
   const packageJson = parseJson(packageBytes);
-  if (!isRecord(packageJson) || packageJson.name !== "niho-photo-develop-engine-runtime" || packageJson.version !== "0.1.7") {
+  if (!isRecord(packageJson) || packageJson.name !== "niho-photo-develop-engine-runtime" || packageJson.version !== buildBaseline.sdkVersion) {
     fail("invalid_artifact");
   }
   if (sdkBaseline.sourceCommit !== buildBaseline.sourceCommit

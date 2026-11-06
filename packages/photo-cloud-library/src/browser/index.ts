@@ -1,5 +1,10 @@
 export { createBrowserPersonalPhotoCloudClient, type CreateBrowserPersonalPhotoCloudClientOptions } from "./client";
 export {
+  IndexedDbTransferJournal,
+  PERSONAL_PHOTO_TRANSFER_DATABASE_NAME,
+  type JournalScope,
+} from "./journal";
+export {
   createBrowserPersonalPhotoTransferController,
   type BrowserPersonalPhotoTransferController,
   type CreateBrowserPersonalPhotoTransferControllerOptions,

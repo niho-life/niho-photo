@@ -217,7 +217,7 @@ describe("createPhotoWebNodeServer HTTP boundary", () => {
       for (const [name, message] of cases) {
         await context.test(name, async () => {
           const raw = await bounded(rawRequest(fixture.port, message), name);
-          assert.equal(statusOf(raw), 400);
+          assert.equal(statusOf(raw), name === "wrong host" ? 403 : 400);
           assert.match(raw, /Cache-Control: no-store/iu);
           assert.doesNotMatch(raw, /upstream\.invalid|unexpected/iu);
         });

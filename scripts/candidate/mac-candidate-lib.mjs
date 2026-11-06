@@ -162,8 +162,8 @@ function ownershipDigest(records) {
 
 function candidateSdkManifestSchemaVersion(sdk) {
   if (sdk?.sdkManifestSchemaVersion === undefined) return 1;
-  if (sdk.sdkManifestSchemaVersion !== 2) throw new CandidateError("candidate SDK manifest schema profileが不正です");
-  return 2;
+  if (![2, 3].includes(sdk.sdkManifestSchemaVersion)) throw new CandidateError("candidate SDK manifest schema profileが不正です");
+  return sdk.sdkManifestSchemaVersion;
 }
 
 function jsonFile(file, label) {
@@ -571,7 +571,7 @@ export function packDmg(appPath, output, expectedFiles, options = {}) {
 function validateCandidateManifest(manifest, fileName) {
   const sdkManifestSchemaVersion = candidateSdkManifestSchemaVersion(manifest?.sdk);
   const sdkProfile = sdkReleaseProfile(sdkManifestSchemaVersion);
-  const sdkKeys = ["mode", "version", "source", "manifestFile", "manifestSha256", "packages", ...(sdkManifestSchemaVersion === 2 ? ["sdkManifestSchemaVersion"] : [])].sort();
+  const sdkKeys = ["mode", "version", "source", "manifestFile", "manifestSha256", "packages", ...(sdkManifestSchemaVersion >= 2 ? ["sdkManifestSchemaVersion"] : [])].sort();
   if (JSON.stringify(Object.keys(manifest?.sdk ?? {}).sort()) !== JSON.stringify(sdkKeys) || manifest?.schemaVersion !== 1 || !RELEASE_REPOSITORIES.has(manifest.repository) || manifest.product !== PRODUCT || manifest.bundleId !== BUNDLE_ID || !COMMIT.test(manifest.source?.commit ?? "") || !COMMIT.test(manifest.source?.tree ?? "") || !["published", "local-validation"].includes(manifest.sdk?.mode) || !SAFE_ASSET.test(manifest.sdk?.manifestFile ?? "") || !SHA256.test(manifest.sdk?.manifestSha256 ?? "") || !COMMIT.test(manifest.sdk?.source?.commit ?? "") || !COMMIT.test(manifest.sdk?.source?.tree ?? "") || (manifest.sdk.mode === "local-validation" && manifest.sdk.source.commit !== manifest.source.commit) || manifest.sourceOwnership?.algorithm !== "sha256-git-file-set-v1" || !SHA256.test(manifest.sourceOwnership?.digest ?? "") || manifest.sourceOwnership.digest !== ownershipDigest(manifest.sourceOwnership.paths ?? []) || JSON.stringify((manifest.sourceOwnership.paths ?? []).map(({ path: name }) => name)) !== JSON.stringify(sdkProfile.ownedSourcePaths) || manifest.sourceOwnership.paths.some((item) => !SHA256.test(item.sha256 ?? "") || !Number.isSafeInteger(item.files) || item.files <= 0) || manifest.publicAccountConfig?.name !== "NIHO_PHOTO_PUBLIC_FIREBASE_WEB_API_KEY" || !SHA256.test(manifest.publicAccountConfig?.sha256 ?? "") || manifest.publicAccountConfig?.included !== true || manifest.build?.officialUpdates !== true || manifest.build?.updaterArtifacts !== false || manifest.build?.signing !== "ad-hoc" || manifest.build?.toolchain?.target !== "aarch64-apple-darwin" || !String(manifest.build?.toolchain?.rust ?? "").startsWith("rustc 1.98.1 ") || !["node", "swift", "tauri"].every((key) => typeof manifest.build?.toolchain?.[key] === "string" && manifest.build.toolchain[key].length > 2) || manifest.app?.identity?.product !== PRODUCT || manifest.app?.identity?.bundleId !== BUNDLE_ID || manifest.app?.identity?.version !== manifest.version || manifest.app?.identity?.deepLink !== DEEP_LINK || manifest.app?.updater?.feed !== UPDATER_FEED || manifest.app?.updater?.publicKeySha256 !== candidateContract.updaterPublicKeySha256 || manifest.app?.updater?.officialUpdates !== true || !Array.isArray(manifest.app?.files) || !manifest.app.files.length || !Array.isArray(manifest.overlays) || manifest.overlays.map(({ path: name }) => name).join("\0") !== OVERLAY_PATHS.join("\0") || manifest.overlays.some(({ beforeSha256, afterSha256 }) => !SHA256.test(beforeSha256 ?? "") || !SHA256.test(afterSha256 ?? "") || beforeSha256 === afterSha256)) throw new CandidateError("candidate manifest基本契約が不正です");
   assertStrictVersion(manifest.sdk.version);
   const packageIds = sdkProfile.packages.map(([id]) => id);
@@ -687,7 +687,7 @@ export function writeCandidateTransportProof({ candidate, sdkProof, artifactId, 
       version: candidate.manifest.sdk.version,
       sourceSha: candidate.manifest.sdk.source.commit,
       manifest: { file: sdkProof.manifestFile, sha256: sdkProof.manifestSha256 },
-      ...(sdkManifestSchemaVersion === 2 ? { sdkManifestSchemaVersion: 2 } : {}),
+      ...(sdkManifestSchemaVersion >= 2 ? { sdkManifestSchemaVersion } : {}),
     },
   };
   const receiptBytes = Buffer.from(`${JSON.stringify(receipt, null, 2)}\n`);
@@ -702,7 +702,7 @@ export function writeCandidateTransportProof({ candidate, sdkProof, artifactId, 
       version: candidate.manifest.sdk.version,
       sourceSha: candidate.manifest.sdk.source.commit,
       manifest: receipt.sdk.manifest,
-      ...(sdkManifestSchemaVersion === 2 ? { sdkManifestSchemaVersion: 2 } : {}),
+      ...(sdkManifestSchemaVersion >= 2 ? { sdkManifestSchemaVersion } : {}),
       release: { tag: sdkProof.release.tagName, id: String(sdkProof.release.releaseId), metadataSha256: sha256(readFileSync(path.join(sdkProof.directory, sdkProof.releaseFile))) },
       receipt: { file: sdkProof.receiptFile, sha256: sha256(readFileSync(path.join(sdkProof.directory, sdkProof.receiptFile))) },
     },
