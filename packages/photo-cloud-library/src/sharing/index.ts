@@ -23,6 +23,7 @@ export {
 } from "./membership-wire";
 export {
   SHARED_ALBUM_MOCK_OPERATIONS,
+  SHARED_ALBUM_MOCK_TICKET_PREFIX,
   createSharedAlbumMockServer,
   type CreateSharedAlbumMockServerOptions,
   type SharedAlbumMockClient,

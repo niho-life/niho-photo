@@ -116,7 +116,12 @@ export interface SharedAlbumMockServer {
   memberJoinedEvents(ownerId: UserId): readonly MemberJoinedEvent[];
   /** The next mutation commits but its answer is lost (network failure), to exercise same-key replay. */
   loseNextResponse(): void;
+  /** Puts bytes behind one of this mock's upload tickets (a commit needs every byte, B00 `upload_state_conflict`). */
+  readonly uploader: { upload(ticket: { readonly url: string }, bytes: Uint8Array, contentType: string, signal: AbortSignal): Promise<void> };
 }
+
+/** Tickets of this mock point at a synthetic bucket on the trusted provider origin. */
+export const SHARED_ALBUM_MOCK_TICKET_PREFIX = "https://storage.googleapis.com/synthetic-album-uploads/";
 
 type AlbumRecord = {
   readonly id: string;
@@ -430,7 +435,7 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
             item: projectAlbumItem(item, { userId: actor, role }),
             upload: {
               upload,
-              ticket: { url: `https://upload.example.test/${uploadId}`, method: "PUT", headers: {}, expiresAt: upload.expiresAt, resumeOffsetBytes: 0 },
+              ticket: { url: `${SHARED_ALBUM_MOCK_TICKET_PREFIX}${uploadId}`, method: "PUT", headers: { "Content-Type": "image/jpeg" }, expiresAt: upload.expiresAt, resumeOffsetBytes: 0 },
             },
           },
           replayed: false,
@@ -577,9 +582,23 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
     }
   };
 
+  const uploader: SharedAlbumMockServer["uploader"] = {
+    async upload(ticket, bytes, contentType, signal) {
+      if (signal.aborted) throw signal.reason instanceof Error ? signal.reason : new DOMException("Aborted", "AbortError");
+      const id = ticket.url.startsWith(SHARED_ALBUM_MOCK_TICKET_PREFIX) ? ticket.url.slice(SHARED_ALBUM_MOCK_TICKET_PREFIX.length) : "";
+      const record = uploads.get(id);
+      if (!record || record.upload.state !== "reserved" || contentType !== "image/jpeg" || clock() >= Date.parse(record.upload.expiresAt)) {
+        throw new TypeError("synthetic upload refused");
+      }
+      if (bytes.byteLength !== record.upload.sizeBytes || bytesToHex(sha256(bytes)) !== record.upload.sha256) throw new TypeError("synthetic upload hash mismatch");
+      record.upload = { ...record.upload, uploadedBytes: bytes.byteLength };
+    },
+  };
+
   return {
     clientFor,
     fetch: handleFetch,
+    uploader,
     memberJoinedEvents: (ownerId) => [...(events.get(ownerId) ?? [])],
     loseNextResponse: () => {
       loseNext = true;
