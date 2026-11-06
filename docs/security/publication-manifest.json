@@ -12811,13 +12811,13 @@
     },
     {
       "path": "scripts/candidate/mac-candidate-lib.mjs",
-      "sha256": "62425ce450ea21c6248e010820999eab89bbe51f388a6df9019ec08b2abe3df9",
-      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate-lib.mjs / 元SHA-256 ca11db7292461c7735162da788075be51c2ec418085c4e337a33f11b86cdcb26。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: DMG作成前にapp inventoryを検証し、既知の不一致をhdiutilより前にfail closedする"
+      "sha256": "2fe9268c8a68a67f9bc8cb66e912f87caeeef27ad140b81b082b1b0956ffdbc7",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate-lib.mjs / 元SHA-256 ca11db7292461c7735162da788075be51c2ec418085c4e337a33f11b86cdcb26。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: DMG作成前にapp inventoryを検証し、既知の不一致をhdiutilより前にfail closedする\n変更理由: Support SDK schema 3 candidate proofs"
     },
     {
       "path": "scripts/candidate/mac-candidate.test.mjs",
-      "sha256": "6cbc6bc0bcd2ee776e0f9ac3b483cd1f7e7d0a2c8130a5d20d0f378d9cc89a71",
-      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate.test.mjs / 元SHA-256 317e82bf2949f90503f248a3ea8886e71fd3aa6b19c73b9e7a21196bd3140d95。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: 実DMGの隠しpayload fixtureでmacOS予約の.Trashesを避け、hdiutil検証後にroot拒否を照合"
+      "sha256": "dccfb4cc0d68bb9849a561778255654d1dbdaecd4a65b5d95b0d23ff4fa2df04",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate.test.mjs / 元SHA-256 317e82bf2949f90503f248a3ea8886e71fd3aa6b19c73b9e7a21196bd3140d95。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: 実DMGの隠しpayload fixtureでmacOS予約の.Trashesを避け、hdiutil検証後にroot拒否を照合\n変更理由: Support SDK schema 3 candidate proofs\n変更理由: Support SDK schema 3 candidate proofs"
     },
     {
       "path": "packages/photo-cloud-library/test/lifecycle.test.ts",
@@ -12826,13 +12826,13 @@
     },
     {
       "path": "scripts/candidate/build-mac-candidate.mjs",
-      "sha256": "4cb2b0c0ff5826c3cde296d804b176466e104d5a5e6dbd5c978de63f864654b7",
-      "origin": "NIHO所有の公開済みcandidate/SDK proof用CLI。公開commit 7a98b3467e22a3e538090f36f7117d2c3ccf019f の scripts/candidate/build-mac-candidate.mjs（SHA-256 0d738589165b3dde3f78c28766a17149b110d5470ab5ed194ea66170729c5333）を出発点にC00 SDK profile接続を更新する。秘密・内部URL・実利用データを含まない。\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。"
+      "sha256": "dfcdc0e48fae36187f2e50c362a63aa8277a99b769699aa2a802a740e37d2257",
+      "origin": "NIHO所有の公開済みcandidate/SDK proof用CLI。公開commit 7a98b3467e22a3e538090f36f7117d2c3ccf019f の scripts/candidate/build-mac-candidate.mjs（SHA-256 0d738589165b3dde3f78c28766a17149b110d5470ab5ed194ea66170729c5333）を出発点にC00 SDK profile接続を更新する。秘密・内部URL・実利用データを含まない。\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: Support SDK schema 3 candidate proofs"
     },
     {
       "path": "scripts/candidate/prepare-published-sdk.mjs",
-      "sha256": "bfc66d61b9a6cfc2c0089594e216d551200f96f0aaf2e4138dfbb1e06d593086",
-      "origin": "NIHO所有の公開済みcandidate/SDK proof用CLI。公開commit 7a98b3467e22a3e538090f36f7117d2c3ccf019f の scripts/candidate/prepare-published-sdk.mjs（SHA-256 fccbce57eb3276cde6f88e323b4161c7281d48c18ce48bf3c88828ef5836f82e）を出発点にC00 SDK profile接続を更新する。秘密・内部URL・実利用データを含まない。\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
+      "sha256": "1c895d2e38647e9731091a1d983ae060db769f0443d8155eeda2aae6e86b70db",
+      "origin": "NIHO所有の公開済みcandidate/SDK proof用CLI。公開commit 7a98b3467e22a3e538090f36f7117d2c3ccf019f の scripts/candidate/prepare-published-sdk.mjs（SHA-256 fccbce57eb3276cde6f88e323b4161c7281d48c18ce48bf3c88828ef5836f82e）を出発点にC00 SDK profile接続を更新する。秘密・内部URL・実利用データを含まない。\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: Support SDK schema 3 candidate proofs"
     },
     {
       "path": "packages/photo-cloud-library/test/preview-waiters.test.ts",
