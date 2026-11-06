@@ -16,6 +16,8 @@ import type {
   AlbumItemSnapshot,
   ClaimedRenderJob,
   ConnectorOperationMap,
+  PendingInvite,
+  PendingInviteOperationMap,
   FullResolutionExport,
   HostConnector,
   HostedMacLibrary,
@@ -271,7 +273,7 @@ export const removedItem: AlbumItem = {
 
 export const albumForOwner: Album = {
   id: IDS.album, owner: label(PEOPLE.owner, USERS.owner), name: "Synthetic shared album", revision: 4, createdAt: TIME, updatedAt: TIME,
-  itemCount: 4, cover: { itemId: IDS.ownerItem, renditionId: IDS.rendition },
+  itemCount: 4, memberCount: 3, cover: { itemId: IDS.ownerItem, renditionId: IDS.rendition },
   access: { role: "owner", membershipRevision: 1, permissions: ALBUM_PERMISSIONS.owner, preparation: { prepared: 4, total: 6 } },
 };
 export const albumForViewer: Album = {
@@ -391,7 +393,7 @@ export const responses = {
   },
   "albums.list": { items: [albumForViewer], nextCursor: null },
   "albums.get": albumForOwner,
-  "albums.create": { value: { ...albumForOwner, revision: 1, itemCount: 0, cover: null, access: { ...albumForOwner.access, preparation: null } }, replayed: false },
+  "albums.create": { value: { ...albumForOwner, revision: 1, itemCount: 0, memberCount: 1, cover: null, access: { ...albumForOwner.access, preparation: null } }, replayed: false },
   "albums.rename": { value: { ...albumForOwner, revision: 5, name: "Synthetic renamed album" }, replayed: false },
   "albums.delete": { value: { albumId: IDS.album, state: "deleted" }, replayed: false },
   "albumItems.list": { items: [viewerView.ownerItem, viewerView.memberItem], nextCursor: null, albumRevision: 4, membershipRevision: 2 },
@@ -440,6 +442,16 @@ export const responses = {
   "members.leave": { value: leftMembership, replayed: false },
 } satisfies {
   readonly [K in Exclude<keyof SharingOperationMap, "hostedPhotos.content" | "exports.content" | "portability.content" | "albumItems.download">]: SharingOperationMap[K]["response"];
+};
+
+/** BFF-only routes for a link opened before signing in. */
+export const pendingInviteResponses = {
+  "invites.holdPending": { expiresAt: "2026-11-07T00:15:00.000Z" },
+  "invites.joinPending": responses["invites.join"].value,
+} satisfies { readonly [K in keyof PendingInviteOperationMap]: PendingInviteOperationMap[K]["response"] };
+/** Cookie content held before signing in (encrypted by the BFF; never readable by the page). */
+export const pendingInvite: PendingInvite = {
+  id: "synthetic-pending-invite", secret: "synthetic-invite-secret", heldBy: null, expiresAt: "2026-11-07T00:15:00.000Z",
 };
 
 export const connectorResponses = {

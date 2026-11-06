@@ -94,6 +94,8 @@ export type HostDeferredWork = (typeof HOST_DEFERRED_WORK)[number];
 export const SHARING_LIMITS = {
   inviteLinkLifetimeSeconds: 7 * 24 * 60 * 60,
   inviteSecretMinBits: 128,
+  /** A pending invite held by the BFF for a sign-in in between (`PENDING_INVITE_COOKIE`). */
+  pendingInviteLifetimeSeconds: 15 * 60,
   pairingLifetimeSeconds: 10 * 60,
   /** Counted in Unicode code points, the same rule as the server. Blank names are rejected. */
   albumNameMaxCodePoints: 100,
@@ -428,6 +430,8 @@ export interface Album {
   readonly updatedAt: Instant;
   /** Published items visible to every member. */
   readonly itemCount: number;
+  /** Active members including the owner. Visible to every member. */
+  readonly memberCount: number;
   readonly cover: AlbumCover | null;
   readonly access: AlbumAccess;
 }
@@ -644,6 +648,42 @@ export interface InviteLinkCreated {
   /** Only in the first response. null on replay; revoke that link and create another. */
   readonly secret: InviteSecret | null;
 }
+/**
+ * A link opened before signing in (BFF only; the upstream `invites.join` is unchanged). The browser hands the secret
+ * to the BFF once (`invites.holdPending`); the BFF keeps it in an encrypted cookie (`PENDING_INVITE_COOKIE`) that
+ * JavaScript cannot read, for 15 minutes. Back from sign-in, the page asks the BFF to join with it
+ * (`invites.joinPending`): the BFF opens the cookie, sends the normal `invites.join` upstream and deletes the cookie
+ * whatever the outcome (`decidePendingInviteJoin`). There is no confirmation step and no preview operation: every
+ * join notifies the owner, who can remove the member at once.
+ */
+export interface PendingInviteHeld {
+  readonly expiresAt: Instant;
+}
+/** What the encrypted cookie holds. Never sent to the browser in readable form. */
+export interface PendingInvite {
+  /** Random; the BFF remembers used ids until they expire so a copied cookie cannot be used twice. */
+  readonly id: string;
+  readonly secret: InviteSecret;
+  /** The signed-in user who held it; null when it was held before signing in (then whoever signs in on this browser). */
+  readonly heldBy: UserId | null;
+  readonly expiresAt: Instant;
+}
+export interface PendingInviteOperationMap {
+  /** Anyone, signed in or not. A new hold replaces the previous one. */
+  readonly "invites.holdPending": Operation<{ readonly secret: InviteSecret }, PendingInviteHeld>;
+  /** Signed in only. Not keyed: on a lost answer the page reads the album list again (the cookie is gone). */
+  readonly "invites.joinPending": Operation<Empty, InviteJoinResult>;
+}
+export type PendingInviteOperation = keyof PendingInviteOperationMap;
+/** Cookie attributes of the pending invite (the BFF picks the name). The value is encrypted and authenticated. */
+export const PENDING_INVITE_COOKIE = {
+  httpOnly: true,
+  secure: true,
+  sameSite: "Lax",
+  path: "/cloud/sharing/v1/invites/pending",
+  maxAgeSeconds: 15 * 60,
+} as const;
+
 export interface InviteJoinResult {
   readonly album: Album;
   readonly membership: Membership;
@@ -1461,6 +1501,11 @@ export const SHARING_REQUEST_SHAPES = {
   "members.remove": { albumId: "value", membershipId: "value" },
   "members.leave": { albumId: "value" },
 } as const satisfies ShapeMap<SharingOperationMap>;
+/** BFF-only routes for a link opened before signing in. */
+export const PENDING_INVITE_REQUEST_SHAPES = {
+  "invites.holdPending": { secret: "value" },
+  "invites.joinPending": {},
+} as const satisfies ShapeMap<PendingInviteOperationMap>;
 
 export const CONNECTOR_REQUEST_SHAPES = {
   "connector.startPairing": { platform: "value", displayName: "value", pollSecretSha256: "value", credentialSha256: "value" },

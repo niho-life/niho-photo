@@ -8,6 +8,7 @@ import {
   ALBUM_PERMISSIONS,
   FORBIDDEN_RENDITION_METADATA,
   CONNECTOR_REQUEST_SHAPES,
+  PENDING_INVITE_REQUEST_SHAPES,
   RENDITION_METADATA_FIELDS,
   RENDER_JOB_TRANSITIONS,
   SHARING_LIMITS,
@@ -30,6 +31,7 @@ import type {
   ForbiddenMetadataCategory,
   IdempotencyRecord,
   Instant,
+  InviteSecret,
   InviteLink,
   InviteLinkStatus,
   LedgerPerson,
@@ -49,6 +51,8 @@ import type {
   SharingErrorCode,
   SharingErrorEnvelope,
   SharingOperation,
+  PendingInvite,
+  PendingInviteOperation,
   UserId,
 } from "./v1.ts";
 
@@ -391,6 +395,47 @@ export function decideJoin(context: JoinContext): JoinDecision {
   if (existing?.state === "active") return { ok: true, joined: false, role: existing.role };
   if (context.lastRemovedAt && time(link.createdAt) <= time(context.lastRemovedAt)) return { ok: false, code: "invite_unavailable" };
   return { ok: true, joined: true, role: link.role };
+}
+
+export interface PendingInviteJoinContext {
+  /** The signed-in user asking to join; null before signing in. */
+  readonly actorId: UserId | null;
+  /** The opened cookie; null when there is none or it does not decrypt. */
+  readonly pending: PendingInvite | null;
+  /** The BFF already used this pending id (a copied cookie). */
+  readonly consumed: boolean;
+  readonly now: Instant;
+}
+export type PendingInviteJoinDecision =
+  | { readonly ok: true; readonly clearCookie: true }
+  | { readonly ok: false; readonly code: "unauthenticated" | "invite_unavailable"; readonly clearCookie: boolean };
+
+/**
+ * `invites.joinPending` in the BFF. Before signing in nothing is sent and the cookie stays for after sign-in. Otherwise
+ * the cookie is deleted whatever happens: a missing, expired, used or someone else's pending invite is
+ * `invite_unavailable` (like any unusable link), and an allowed one is sent upstream as the normal `invites.join`
+ * (whose own checks — expiry, revocation, removal — still apply).
+ */
+export function decidePendingInviteJoin(context: PendingInviteJoinContext): PendingInviteJoinDecision {
+  if (!context.actorId) return { ok: false, code: "unauthenticated", clearCookie: false };
+  const pending = context.pending;
+  if (!pending || context.consumed || time(context.now) >= time(pending.expiresAt)) return { ok: false, code: "invite_unavailable", clearCookie: true };
+  if (pending.heldBy !== null && pending.heldBy !== context.actorId) return { ok: false, code: "invite_unavailable", clearCookie: true };
+  return { ok: true, clearCookie: true };
+}
+
+/** The cookie content for `invites.holdPending` (expiry from `SHARING_LIMITS.pendingInviteLifetimeSeconds`). */
+export function holdPendingInvite(input: { readonly id: string; readonly secret: InviteSecret; readonly actorId: UserId | null; readonly now: Instant }): PendingInvite {
+  return {
+    id: input.id,
+    secret: input.secret,
+    heldBy: input.actorId,
+    expiresAt: new Date(time(input.now) + SHARING_LIMITS.pendingInviteLifetimeSeconds * 1000).toISOString(),
+  };
+}
+
+export function findUnexpectedPendingInviteFields(operation: PendingInviteOperation, request: unknown): readonly string[] {
+  return findUnexpectedFields(PENDING_INVITE_REQUEST_SHAPES[operation], request);
 }
 
 // ---------------------------------------------------------------------------------------------------------
