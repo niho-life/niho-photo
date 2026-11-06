@@ -32,11 +32,12 @@
         "path": "packages/photo-editing/package.json",
         "sha256": "515f9303d52be7ff4ae82fac2d73b370427516721073d422a0e6b9d17fa0b3ad"
       },
-      "outputSha256": "e2f36affd6c84b0a2b97b9a6b10dfb8985bd3815295fbb0e9aa88ea17b4b766d",
+      "outputSha256": "4eaf561099cea57d9b529fae13930f803a7097fd89c7446ce3bcf5800f9a6ecb",
       "modifications": [
         "公開workspace向け説明・依存解決・公開export範囲を調整。npm publishはprivate設定で禁止。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
-        "写真編集の型検査とテストをMac miniで開始前に停止する。"
+        "写真編集の型検査とテストをMac miniで開始前に停止する。",
+        "共有アルバムと保存先のUI部品（B08 #249）のtsx exportsを追加"
       ]
     },
     {
@@ -2638,9 +2639,10 @@
         "strict commit後にも自動送信停止を確認し、以前の下書き一覧の閉じる操作を画面内に保持",
         "以前の補正が現在の写真や端末で保存不可の場合の日本語説明を追加",
         "native検証済み原本保存の状態欄copy formatterを追加する",
-        "独立Photoの読み取り専用プリセット管理と共有転送表示を接続"
+        "独立Photoの読み取り専用プリセット管理と共有転送表示を接続",
+        "共有アルバム・共有シート・追加の進捗・招待リンク・保存先の文言定数を追加（B08 #249）"
       ],
-      "outputSha256": "64d965aae6be09979666f0b260fd3483ae3308fbfd495cb1e13a829dd622b99e"
+      "outputSha256": "18cf9117d009a019a0223d0725d7700bc4e2c87071c6df6a941e0b211f6e447c"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-crop.test.ts",
@@ -13442,6 +13444,66 @@
       "path": "apps/photo-web/test/application.test.ts",
       "sha256": "2680e051bad835c7846ab1e5cdadd05e6fe96766be1c558f2bd46e2e31c70d45",
       "origin": "NIHO所有のPhoto Web起動composition回帰試験。合成portだけを使い、実credential・写真・個人情報を含まない。\n変更理由: BFFと公開upload transportを公式起動口から別portで接続する回帰を追加。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-fixtures.ts",
+      "sha256": "9a789acbdc1baacd2faf5fcdf5e8839353ae9faf4027f8800dfb5eb4f3060941",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-invite.tsx",
+      "sha256": "1bfbf3470a6b3c59f70d3172615e90038ea74e4c12e880ffbcdea19225c8be89",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-list.tsx",
+      "sha256": "ebcb447ce9fbb5dd9c846e56fa29d01402378a2f33e6c4a2e7fe739a861a9ef3",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-model.test.ts",
+      "sha256": "ff4dc6eac1f15206448139b7ecdf3e7d2c86b826239647b77617803205cb98de",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-model.ts",
+      "sha256": "390f572a764baacea9f157a96ca4e73799f078bb4126560c83238cd3df60ac3f",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-screens.test.tsx",
+      "sha256": "67a08bd04c73a6a94f2e1426170ba1b04ccd00c12de57dce5ff0b9adb7e47054",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-share-sheet.test.tsx",
+      "sha256": "275d62f91493bb53023faa22376836e078c3665fa9e8c4069e54a859478150e1",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-share-sheet.tsx",
+      "sha256": "b8aab29f319b8905dd88c49f91fb44facb29d715f42e0f577341565db5e3b751",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-upload-panel.tsx",
+      "sha256": "856cd3f0850eb153ea5bc57fe81a78bd2800c50d38c7e789325a34b99898f982",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-view.test.tsx",
+      "sha256": "e8a8ca921e77a8bac88f6847c41f6fe12c7c0bdccbbcaf4a5e4041a8813b1804",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-view.tsx",
+      "sha256": "282e448e206e8283ff9c89b379ade38824d2f7037e3bfaee517964ab1937469b",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-storage-location-settings.tsx",
+      "sha256": "3675a1b632140a478af0e830a826fcc97e440e5eeb5e98bf1b0a25d0c99232c2",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     }
   ],
   "excludedSources": [
