@@ -10,11 +10,11 @@ Epic #240 / B03 #244 の公開側。所有者の常設 Mac にある既存の写
 
 | port | 役割 | Mac での実装 |
 | --- | --- | --- |
-| `CredentialVault` | 端末資格・登録中と回転中の秘密・`localKey` の salt | Keychain |
-| `RootFileSystem` | 登録した root の下の通常ファイルだけを read-only で読む。symlink を辿らず、root 外を拒否し、command を実行しない。root は登録時の実体（real path と identity）に固定し、差し替えや symlink を未接続として扱う | 配布版は directory descriptor 相対（各要素を `O_NOFOLLOW` で開く）の native 実装。`node/index.ts` は開発・計測用で、親 directory の差し替えを狭めるが閉じきれないため配布の境界には使わない |
-| `LocalIndexStore` | `localKey` → 実ファイルの対応と走査の checkpoint | Application Support の file |
-| `ReplicaStore` | NIHO の正本の控え（B01） | Application Support の file |
-| `PowerAssertions` | job・同期の間だけ休止を抑え、終わったら戻す | IOPM assertion |
+| `CredentialVault` | 端末資格・登録中と回転中の秘密・`localKey` の salt | Keychain の 1 項目（[Mac アプリ](../../apps/camera/README.md)） |
+| `RootFileSystem` | 登録した root の下の通常ファイルだけを read-only で読む。symlink を辿らず、root 外を拒否し、command を実行しない。root は登録時の実体（real path と identity）に固定し、差し替えや symlink を未接続として扱う。任意の `hash` は bytes のある側で SHA-256 を読み、前後の同一性が違えば null | Mac アプリの native（directory descriptor 相対で各要素を `O_NOFOLLOW` で開く。`hash` も native）。`node/index.ts` は開発・計測用で、親 directory の差し替えを狭めるが閉じきれないため配布の境界には使わない |
+| `LocalIndexStore` | `localKey` → 実ファイルの対応と走査の checkpoint | Application Support の file（未実装） |
+| `ReplicaStore` | NIHO の正本の控え（B01） | Application Support の file（未実装） |
+| `PowerAssertions` | job・同期の間だけ休止を抑え、終わったら戻す | IOPM assertion（Mac アプリ） |
 | `JobExecutors` | 描画（プレビュー・完成写真・原寸書き出し） | B07 #248 が差し込む |
 | `OutputUploader` | 出力を upload ticket へ送る | #195 の transfer |
 
@@ -67,6 +67,7 @@ node packages/photo-hosted-connector/bench/scan-hash.mjs --files 256 --size 1677
 
 ## 残り
 
-- 配布版の Mac native 部分: 常駐（launchd の LaunchAgent・ログイン時の起動・再起動からの復帰）、Keychain の `CredentialVault`、IOPM の `PowerAssertions`、休止・復帰の通知、フォルダの登録画面、署名・公証付きの配布（既存の配布経路 #201）。
+- Mac の native 部分（常駐・Keychain・休止の抑止・休止と復帰の通知・フォルダの登録・ファイルの読み出し）は [Mac アプリ](../../apps/camera/README.md) にある。署名・公証付きの配布（既存の配布経路 #201）での導入・常駐・再起動からの復帰の実機確認はまだ。
+- Mac の `LocalIndexStore`・`ReplicaStore`（Application Support の file）。
 - 描画の executor（B07 #248）。この package は差し込み口だけを持つ。
-- 本物の正本 API と端末資格の保管（非公開側）への接続。
+- 本物の正本 API（transport）と端末資格の保管（非公開側）への接続。

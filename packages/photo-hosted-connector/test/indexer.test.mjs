@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
+import { sha256Bytes } from "../src/crypto.ts";
 import { ROOT, paired, settle, signal, world } from "./helpers.mjs";
 
 const FILES = {
@@ -118,4 +119,32 @@ test("paths outside the root and symlinked components are refused by the file sy
   for (const path of ["../etc/passwd", "/abs.jpg", "2026/../d.heic", "2026/link/x.jpg", ""]) {
     await assert.rejects(context.fs.open(ROOT, path, signal), path);
   }
+});
+
+test("with a native hash port the originals never pass through the connector, and an unconfirmed hash is not kept", async () => {
+  const context = await paired(world({ files: { "a.jpg": "synthetic one", "b.jpg": "synthetic two" } }));
+  const { fs, index } = context;
+  const hashed = [];
+  const nativeFs = {
+    rootStatus: (...args) => fs.rootStatus(...args),
+    list: (...args) => fs.list(...args),
+    stat: (...args) => fs.stat(...args),
+    open: () => Promise.reject(new Error("originals are not opened by the connector page")),
+    async hash(root, relativePath, expected) {
+      hashed.push(relativePath);
+      // b.jpg changed while it was read (the native side saw another identity afterwards)
+      if (relativePath === "b.jpg") return null;
+      const now = await fs.stat(root, relativePath, signal);
+      if (!now || now.sizeBytes !== expected.sizeBytes || now.fileId !== expected.fileId || now.changeToken !== expected.changeToken) return null;
+      const { bytes } = fs.roots.get(root.id).files.get(relativePath);
+      return { sha256: await sha256Bytes(bytes), bytes: bytes.byteLength };
+    },
+  };
+  await settle(context.build({ fs: nativeFs }));
+  assert.deepEqual([...new Set(hashed)].sort(), ["a.jpg", "b.jpg"]);
+  assert(hashed.filter((name) => name === "b.jpg").length > 1, "the unconfirmed file is tried again on a later step");
+  assert.equal(fs.bytesRead, 0, "no original byte reached the connector");
+  const byName = Object.fromEntries(index.all().map((entry) => [entry.relativePath, entry]));
+  assert.equal(byName["a.jpg"].sha256, await sha256Bytes(new TextEncoder().encode("synthetic one")));
+  assert.equal(byName["b.jpg"].sha256, null, "an unconfirmed hash is retried later, never kept");
 });

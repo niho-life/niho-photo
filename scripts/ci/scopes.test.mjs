@@ -15,9 +15,9 @@ test("文書変更でもpublicationはworkflow側で常時実行、package実行
   assert.deepEqual(selected(["packages/ui/src/cn.ts"]), ["photo-editing", "camera", "desktop-photo", "desktop-account"]);
   assert.deepEqual(selected(["packages/niho-cloud-contract/src/v1.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-library-contract/src/v2.ts"]), ["photo-editing"]);
-  assert.deepEqual(selected(["packages/photo-library-sharing-contract/src/v1.ts"]), ["photo-editing"]);
-  assert.deepEqual(selected(["packages/photo-hosted-library/src/replica.ts"]), ["photo-editing"]);
-  assert.deepEqual(selected(["packages/photo-hosted-connector/src/service.ts"]), ["photo-editing"]);
+  assert.deepEqual(selected(["packages/photo-library-sharing-contract/src/v1.ts"]), ["photo-editing", "camera"]);
+  assert.deepEqual(selected(["packages/photo-hosted-library/src/replica.ts"]), ["photo-editing", "camera"]);
+  assert.deepEqual(selected(["packages/photo-hosted-connector/src/service.ts"]), ["photo-editing", "camera"]);
   assert.deepEqual(selected(["packages/photo-cloud-session/src/server/service.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-cloud-library/src/index.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-cloud-sync/src/index.ts"]), ["photo-editing"]);

@@ -80,6 +80,28 @@ export function createIndexer(options: {
 
   const rootOf = (rootId: string): RegisteredRoot | null => roots.get(rootId) ?? null;
 
+  /** Hash of the whole file, or null when it is not the indexed file before and after the read. */
+  const hashUnchanged = async (root: RegisteredRoot, entry: LocalIndexEntry, signal: AbortSignal) => {
+    if (fs.hash) {
+      const result = await fs.hash(root, entry.relativePath, entry, signal).catch(() => null);
+      return result && result.bytes === entry.sizeBytes ? result : null;
+    }
+    let opened;
+    try {
+      opened = await fs.open(root, entry.relativePath, signal);
+    } catch {
+      return null;
+    }
+    try {
+      if (!sameFile(entry, opened)) return null;
+      const result = await options.hasher.hash(opened.read(signal), signal);
+      const after = await fs.stat(root, entry.relativePath, signal);
+      return after && sameFile(entry, after) && result.bytes === entry.sizeBytes ? result : null;
+    } finally {
+      await opened.close();
+    }
+  };
+
   const finishScan = async (scan: number, unmounted: readonly string[], skipped: readonly { rootId: string; dir: string }[]): Promise<void> => {
     const updates: LocalIndexEntry[] = [];
     const underSkipped = (entry: LocalIndexEntry): boolean =>
@@ -182,29 +204,17 @@ export function createIndexer(options: {
         if (entry.excluded || entry.hold || entry.state !== "present" || entry.sha256 !== null) continue;
         const root = rootOf(entry.rootId);
         if (!root) continue;
-        let opened;
-        try {
-          opened = await fs.open(root, entry.relativePath, signal);
-        } catch {
+        // Bytes that changed while they were read are hashed again on a later step.
+        const result = await hashUnchanged(root, entry, signal);
+        if (!result) continue;
+        // After an index rebuild, returning bytes must match NIHO's record or they are held, never relinked.
+        if (entry.verifyAgainst !== null && result.sha256 !== entry.verifyAgainst) {
+          await store.put([{ ...entry, hold: "sourceMismatch", verifyAgainst: null, dirty: true }]);
           continue;
         }
-        try {
-          if (!sameFile(entry, opened)) continue;
-          const result = await options.hasher.hash(opened.read(signal), signal);
-          const after = await fs.stat(root, entry.relativePath, signal);
-          // Bytes that changed while they were read are hashed again on a later step.
-          if (!after || !sameFile(entry, after) || result.bytes !== entry.sizeBytes) continue;
-          // After an index rebuild, returning bytes must match NIHO's record or they are held, never relinked.
-          if (entry.verifyAgainst !== null && result.sha256 !== entry.verifyAgainst) {
-            await store.put([{ ...entry, hold: "sourceMismatch", verifyAgainst: null, dirty: true }]);
-            continue;
-          }
-          await store.put([{ ...entry, sha256: result.sha256, verifyAgainst: null, dirty: true }]);
-          files++;
-          bytes += result.bytes;
-        } finally {
-          await opened.close();
-        }
+        await store.put([{ ...entry, sha256: result.sha256, verifyAgainst: null, dirty: true }]);
+        files++;
+        bytes += result.bytes;
       }
       const elapsed = clock.now() - started;
       if (bytes > 0 && elapsed > 0) {

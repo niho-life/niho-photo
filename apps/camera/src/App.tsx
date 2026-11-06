@@ -20,6 +20,7 @@ import { readAppInfo, type CameraAppInfo } from "./camera-bridge";
 import { CameraAccount } from "./camera-account";
 import { CameraHeaderBreadcrumb } from "./camera-header-breadcrumb";
 import { CameraUpdateNotice, type WatchUpdate } from "./camera-update-notice";
+import { HostedFolders, type HostedFolderCommands } from "./hosted-connector/hosted-folders";
 import { createCameraCommands, type CameraCommands } from "./local-library/commands";
 import { createLocalPhotoEditingHost } from "./local-library/local-photo-editing-host";
 import { createLocalPhotoCutoutHost } from "./local-library/local-photo-cutout-host";
@@ -55,6 +56,11 @@ export type AppProps = {
   watchUpdate?: WatchUpdate;
   /** Trusted host が明示的に渡したときだけ、個人クラウドの UI と操作を有効にする。 */
   cloudBinding?: PersonalCloudPhotoBinding;
+  /**
+   * 常設 Mac の接続用ソフトに渡すフォルダの登録（Epic #240 / B03 #244）。接続先を持つ trusted host が渡したときだけ
+   * header に出す（公開の build は接続先を持たないので出さない）。
+   */
+  hostedFolders?: HostedFolderCommands;
 };
 
 type PhotoSource = "local" | "cloud";
@@ -161,7 +167,7 @@ function useTreeHidden() {
  * 編集面は窓の底まで使い（`appearance="fill"`）、版は左の木の底の目立たない 1 行。自動更新で新しい版を入れたときだけ、編集面の上に 1 行の案内
  * （niho-photo#50）。
  */
-export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBinding }: AppProps) {
+export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBinding, hostedFolders }: AppProps) {
   const native = commands ?? cameraCommands();
   const localLibrary = useMemo(() => createLocalPhotoLibrary(native), [native]);
   const localHost = useMemo(() => createLocalPhotoEditingHost(native), [native]);
@@ -279,6 +285,7 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
           <div className="min-w-0 flex-1" data-tauri-drag-region>
             <CameraHeaderBreadcrumb />
           </div>
+          {hostedFolders ? <HostedFolders commands={hostedFolders} /> : null}
           <CameraAccount />
         </header>
         <main className="flex min-h-0 flex-1 flex-col">

@@ -2232,6 +2232,7 @@ dependencies = [
  "objc2",
  "objc2-foundation",
  "rfd",
+ "security-framework",
  "serde",
  "serde_jcs",
  "serde_json",

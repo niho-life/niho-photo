@@ -47,6 +47,8 @@ libc = "0.2"
 [target.'cfg(target_os = "macos")'.dependencies]
 objc2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSProcessInfo", "NSString"] }
+# 常設 Mac の接続用ソフトの端末資格を Keychain に置く（src/hosted_connector_system.rs）。niho_desktop_account と同じ版
+security-framework = "3.7"
 # E2E だけ: 画面の snapshot（WKWebView の takeSnapshotWithConfiguration:completionHandler: の completion）
 block2 = { version = "0.6", optional = true }
 

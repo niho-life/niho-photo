@@ -13,6 +13,7 @@
     "windows": [
       {
         "label": "main",
+        "create": false,
         "title": "NIHO photo",
         "titleBarStyle": "Overlay",
         "hiddenTitle": true,
@@ -96,6 +97,9 @@
     "longDescription": "Macのローカル写真編集アプリ。",
     "macOS": {
       "minimumSystemVersion": "14.0",
+      "files": {
+        "Library/LaunchAgents/life.niho.camera.hosted-connector.plist": "launchd/life.niho.camera.hosted-connector.plist"
+      },
       "signingIdentity": "-",
       "hardenedRuntime": false
     }

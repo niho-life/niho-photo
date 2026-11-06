@@ -1,0 +1,16 @@
+{
+  "$schema": "../gen/schemas/desktop-schema.json",
+  "identifier": "hosted-connector",
+  "description": "Allows only the hidden connector window (the bundled hosted-connector.html, never a remote page and never the main window) to read the registered folders read-only, keep the connector vault in the Keychain, hold idle sleep while it works and answer the sleep notice. It may listen to the app's own power event. No other core plugin command is allowed.",
+  "windows": [
+    "hosted-connector"
+  ],
+  "platforms": [
+    "macOS"
+  ],
+  "permissions": [
+    "allow-camera-hosted-connector",
+    "core:event:allow-listen",
+    "core:event:allow-unlisten"
+  ]
+}

@@ -69,6 +69,16 @@ export interface RootFileSystem {
   open(root: RegisteredRoot, relativePath: string, signal: AbortSignal): Promise<OpenedFile>;
   /** Current metadata of a regular file, or null when it is gone (same containment rules as open). */
   stat(root: RegisteredRoot, relativePath: string, signal: AbortSignal): Promise<DirectoryEntry | null>;
+  /**
+   * Optional: SHA-256 of a whole regular file, computed where the bytes are (macOS: natively, so originals never pass
+   * through the connector page). null when the identity was not `expected` when opened or after the read.
+   */
+  hash?(
+    root: RegisteredRoot,
+    relativePath: string,
+    expected: Pick<DirectoryEntry, "sizeBytes" | "fileId" | "changeToken">,
+    signal: AbortSignal,
+  ): Promise<{ readonly sha256: string; readonly bytes: number } | null>;
 }
 
 /** Keeps the Mac awake while work runs; releasing restores the owner's power settings (macOS: IOPM assertion). */
