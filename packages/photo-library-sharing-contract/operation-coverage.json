@@ -285,6 +285,12 @@
       "wiring": "not-connected",
       "evidence": "承認後に端末資格を一度だけ返す。NIHOのログインtokenと別にする。"
     },
+    "connector.rotateCredential": {
+      "issue": 244,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "接続用ソフトが作った次の端末資格をhashで登録し、前の資格を止める。資格そのものは通信に乗せない。"
+    },
     "connector.heartbeat": {
       "issue": 244,
       "backend": "missing",

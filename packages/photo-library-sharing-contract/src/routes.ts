@@ -1,12 +1,27 @@
 /**
- * HTTP routes of the signed-in user's sharing/hosted-library operations, under the same Photo origin as the personal
- * `/cloud/v2` routes. The BFF maps the same suffix to the trusted upstream prefix. Connector (device credential)
- * traffic is a separate protocol and is not routed here.
+ * HTTP routes. Three tables share one rule set:
+ * - SHARING_ROUTES: the signed-in user's sharing/hosted-library operations under `/cloud/sharing/v1`, on the same
+ *   Photo origin as the personal `/cloud/v2`. The BFF maps the same suffix to the trusted upstream prefix.
+ * - USER_RENDER_ROUTES: the same user session running render jobs on a device that holds originals (B07).
+ * - CONNECTOR_ROUTES: the hosted Mac connector under `/connector/v1`, authenticated by its device credential only.
  *
  * Every path parameter is one opaque segment. Query, body and Range carry the remaining request fields exactly once.
  */
-import { findUnexpectedRequestFields } from "./policy.ts";
-import type { PhotoByteRange, SharingMutationOperation, SharingOperation, SharingOperationMap } from "./v1.ts";
+import { findUnexpectedFields } from "./policy.ts";
+import { CONNECTOR_REQUEST_SHAPES, SHARING_REQUEST_SHAPES } from "./v1.ts";
+import type {
+  ConnectorMutationOperation,
+  ConnectorOperation,
+  ConnectorOperationMap,
+  PhotoByteRange,
+  RenderExecutorMutationOperation,
+  RenderExecutorOperation,
+  RenderExecutorOperationMap,
+  RequestFields,
+  SharingMutationOperation,
+  SharingOperation,
+  SharingOperationMap,
+} from "./v1.ts";
 
 export const SHARING_CLOUD_PATH_PREFIX = "/cloud/sharing/v1";
 /** Same capture/key headers as `/cloud/v2`: selectors and fences checked against the verified session, never proof. */
@@ -34,6 +49,16 @@ export interface SharingRoute {
 }
 type RouteMap = {
   readonly [K in SharingOperation]: SharingRoute & { readonly idempotencyKey: K extends SharingMutationOperation ? true : false };
+};
+type UserRenderRouteMap = {
+  readonly [K in RenderExecutorOperation]: SharingRoute & {
+    readonly idempotencyKey: K extends RenderExecutorMutationOperation ? true : false;
+  };
+};
+type ConnectorRouteMap = {
+  readonly [K in ConnectorOperation]: SharingRoute & {
+    readonly idempotencyKey: K extends ConnectorMutationOperation ? true : false;
+  };
 };
 
 const get = (path: string, query: readonly string[] = [], range = false) => ({ method: "GET", path, query, body: null, range, idempotencyKey: false }) as const;
@@ -95,8 +120,42 @@ export const SHARING_ROUTES = {
   "members.leave": post("/albums/{albumId}/leave"),
 } as const satisfies RouteMap;
 
+/** Render jobs on a signed-in device that holds originals; same suffixes as the connector, under the user prefix. */
+export const USER_RENDER_ROUTES = {
+  "renderJobs.claim": { method: "POST", path: "/render-jobs/claim", query: [], body: ["maxJobs", "purposes"], range: false, idempotencyKey: false },
+  "renderJobs.startOutput": post("/render-jobs/{jobId}/outputs", ["leaseToken", "output"]),
+  "renderJobs.commit": post("/render-jobs/{jobId}/commit", ["leaseToken", "uploadId"]),
+  "renderJobs.fail": post("/render-jobs/{jobId}/fail", ["leaseToken", "code"]),
+} as const satisfies UserRenderRouteMap;
+
+/**
+ * The hosted Mac connector. Every call is outbound from the Mac and carries `Authorization: Bearer <device
+ * credential>`, except pairing start/poll, which prove possession of the registered poll secret in the body.
+ * NIHO login cookies or tokens are never accepted here, and device credentials are never accepted on user routes.
+ */
+export const CONNECTOR_PATH_PREFIX = "/connector/v1";
+export const CONNECTOR_HEADERS = {
+  authorization: "Authorization",
+  idempotencyKey: "Idempotency-Key",
+  range: "Range",
+} as const;
+export const CONNECTOR_ROUTES = {
+  "connector.startPairing": post("/pairings", ["platform", "displayName", "pollSecretSha256", "credentialSha256"]),
+  "connector.pollPairing": { method: "POST", path: "/pairings/{pairingId}/poll", query: [], body: ["pollSecret"], range: false, idempotencyKey: false },
+  "connector.rotateCredential": post("/credential/rotate", ["nextCredentialSha256"]),
+  "connector.heartbeat": { method: "POST", path: "/heartbeat", query: [], body: ["state", "renderer", "replicaRevision"], range: false, idempotencyKey: false },
+  "connector.putIndex": post("/index", ["entries"]),
+  "connector.pullReplica": get("/replica", ["sinceRevision", "limit", "cursor"]),
+  "connector.ackReplica": post("/replica/ack", ["revision"]),
+  "connector.getReplicaContent": get("/replica/{entity}/{id}/content", [], true),
+  "renderJobs.claim": { method: "POST", path: "/jobs/claim", query: [], body: ["maxJobs", "purposes"], range: false, idempotencyKey: false },
+  "renderJobs.startOutput": post("/jobs/{jobId}/outputs", ["leaseToken", "output"]),
+  "renderJobs.commit": post("/jobs/{jobId}/commit", ["leaseToken", "uploadId"]),
+  "renderJobs.fail": post("/jobs/{jobId}/fail", ["leaseToken", "code"]),
+} as const satisfies ConnectorRouteMap;
+
 /** Query parameters that carry non-negative safe integers; every other query value is a string. */
-const NUMERIC_QUERY = new Set(["limit", "expectedRevision"]);
+const NUMERIC_QUERY = new Set(["limit", "expectedRevision", "sinceRevision"]);
 const OPAQUE_MAX_BYTES = 512;
 const encoder = new TextEncoder();
 
@@ -129,14 +188,22 @@ export function decodeOpaqueSegment(segment: string): string | null {
 }
 
 const params = (path: string): string[] => [...path.matchAll(/\{([A-Za-z]+)\}/g)].map((match) => match[1] as string);
-export function routeFields(operation: SharingOperation): { readonly path: readonly string[]; readonly query: readonly string[]; readonly body: readonly string[]; readonly range: boolean } {
-  const route: SharingRoute = SHARING_ROUTES[operation];
+type Routes = Readonly<Record<string, SharingRoute>>;
+type Shapes = Readonly<Record<string, RequestFields>>;
+
+function fieldsOf(route: SharingRoute) {
   return { path: params(route.path), query: route.query, body: route.body ?? [], range: route.range };
+}
+export function routeFields(operation: SharingOperation): { readonly path: readonly string[]; readonly query: readonly string[]; readonly body: readonly string[]; readonly range: boolean } {
+  return fieldsOf(SHARING_ROUTES[operation]);
+}
+export function connectorRouteFields(operation: ConnectorOperation) {
+  return fieldsOf(CONNECTOR_ROUTES[operation]);
 }
 
 export interface EncodedSharingRequest {
   readonly method: SharingRouteMethod;
-  /** Full path including SHARING_CLOUD_PATH_PREFIX. */
+  /** Full path including the prefix. */
   readonly path: string;
   /** Encoded query string without "?"; "" when empty. */
   readonly query: string;
@@ -145,11 +212,12 @@ export interface EncodedSharingRequest {
   readonly idempotencyKey: boolean;
 }
 
-/** Client side: places every request field exactly once. Rejects unexpected fields at any depth. */
-export function encodeSharingRequest<K extends SharingOperation>(operation: K, request: SharingOperationMap[K]["request"]): EncodedSharingRequest {
-  const route: SharingRoute = SHARING_ROUTES[operation];
-  const value = request as unknown as Readonly<Record<string, unknown>>;
-  if (value === null || typeof value !== "object" || findUnexpectedRequestFields(operation, value).length) invalid();
+function encodeWith(prefix: string, routes: Routes, shapes: Shapes, operation: string, request: unknown): EncodedSharingRequest {
+  const route = routes[operation];
+  const shape = shapes[operation];
+  if (!route || !shape) return invalid();
+  const value = request as Readonly<Record<string, unknown>>;
+  if (value === null || typeof value !== "object" || findUnexpectedFields(shape, value).length) invalid();
   const path = route.path.replace(/\{([A-Za-z]+)\}/g, (_, field: string) => encodeOpaqueSegment(value[field]));
   const query = new URLSearchParams();
   for (const field of route.query) {
@@ -160,14 +228,13 @@ export function encodeSharingRequest<K extends SharingOperation>(operation: K, r
   }
   const body = route.body === null ? null : Object.fromEntries(route.body.filter((field) => value[field] !== undefined).map((field) => [field, value[field]]));
   const range = route.range ? ((value.range as PhotoByteRange | undefined) ?? null) : null;
-  return { method: route.method, path: `${SHARING_CLOUD_PATH_PREFIX}${path}`, query: query.toString(), body, range, idempotencyKey: route.idempotencyKey };
+  return { method: route.method, path: `${prefix}${path}`, query: query.toString(), body, range, idempotencyKey: route.idempotencyKey };
 }
 
-/** Server/BFF side: the operation and decoded path parameters for a method and full path, or null. */
-export function matchSharingRoute(method: string, fullPath: string): { readonly operation: SharingOperation; readonly params: Readonly<Record<string, string>> } | null {
-  if (!fullPath.startsWith(`${SHARING_CLOUD_PATH_PREFIX}/`)) return null;
-  const segments = fullPath.slice(SHARING_CLOUD_PATH_PREFIX.length).split("/").slice(1);
-  for (const [operation, route] of Object.entries(SHARING_ROUTES) as [SharingOperation, SharingRoute][]) {
+function matchWith<K extends string>(prefix: string, routes: Routes, method: string, fullPath: string): { readonly operation: K; readonly params: Readonly<Record<string, string>> } | null {
+  if (!fullPath.startsWith(`${prefix}/`)) return null;
+  const segments = fullPath.slice(prefix.length).split("/").slice(1);
+  for (const [operation, route] of Object.entries(routes)) {
     if (route.method !== method) continue;
     const template = route.path.split("/").slice(1);
     if (template.length !== segments.length) continue;
@@ -184,25 +251,21 @@ export function matchSharingRoute(method: string, fullPath: string): { readonly 
         else found[param] = decoded;
       }
     }
-    if (ok) return { operation, params: found };
+    if (ok) return { operation: operation as K, params: found };
   }
   return null;
 }
 
-/**
- * Server/BFF side: rebuilds the closed request from the matched route. Unknown or repeated query parameters, a body
- * on GET/DELETE, body fields outside the route and unexpected nested fields are invalid_request.
- */
-export function decodeSharingRequest<K extends SharingOperation>(
-  operation: K,
-  input: {
-    readonly params: Readonly<Record<string, string>>;
-    readonly query: URLSearchParams;
-    readonly body: unknown;
-    readonly range: PhotoByteRange | null;
-  },
-): SharingOperationMap[K]["request"] {
-  const route: SharingRoute = SHARING_ROUTES[operation];
+interface DecodeInput {
+  readonly params: Readonly<Record<string, string>>;
+  readonly query: URLSearchParams;
+  readonly body: unknown;
+  readonly range: PhotoByteRange | null;
+}
+function decodeWith(routes: Routes, shapes: Shapes, operation: string, input: DecodeInput): unknown {
+  const route = routes[operation];
+  const shape = shapes[operation];
+  if (!route || !shape) return invalid();
   const request: Record<string, unknown> = { ...input.params };
   const seen = new Set<string>();
   input.query.forEach((raw, key) => {
@@ -228,6 +291,42 @@ export function decodeSharingRequest<K extends SharingOperation>(
     if (!route.range) invalid();
     request.range = input.range;
   }
-  if (findUnexpectedRequestFields(operation, request).length) invalid();
-  return request as SharingOperationMap[K]["request"];
+  if (findUnexpectedFields(shape, request).length) invalid();
+  return request;
+}
+
+/** Client side: places every request field exactly once. Rejects unexpected fields at any depth. */
+export function encodeSharingRequest<K extends SharingOperation>(operation: K, request: SharingOperationMap[K]["request"]): EncodedSharingRequest {
+  return encodeWith(SHARING_CLOUD_PATH_PREFIX, SHARING_ROUTES, SHARING_REQUEST_SHAPES, operation, request);
+}
+/** Server/BFF side: the operation and decoded path parameters for a method and full path, or null. */
+export function matchSharingRoute(method: string, fullPath: string): { readonly operation: SharingOperation; readonly params: Readonly<Record<string, string>> } | null {
+  return matchWith<SharingOperation>(SHARING_CLOUD_PATH_PREFIX, SHARING_ROUTES, method, fullPath);
+}
+/**
+ * Server/BFF side: rebuilds the closed request from the matched route. Unknown or repeated query parameters, a body
+ * on GET/DELETE, body fields outside the route and unexpected nested fields are invalid_request.
+ */
+export function decodeSharingRequest<K extends SharingOperation>(operation: K, input: DecodeInput): SharingOperationMap[K]["request"] {
+  return decodeWith(SHARING_ROUTES, SHARING_REQUEST_SHAPES, operation, input) as SharingOperationMap[K]["request"];
+}
+
+export function encodeUserRenderRequest<K extends RenderExecutorOperation>(operation: K, request: RenderExecutorOperationMap[K]["request"]): EncodedSharingRequest {
+  return encodeWith(SHARING_CLOUD_PATH_PREFIX, USER_RENDER_ROUTES, CONNECTOR_REQUEST_SHAPES, operation, request);
+}
+export function matchUserRenderRoute(method: string, fullPath: string): { readonly operation: RenderExecutorOperation; readonly params: Readonly<Record<string, string>> } | null {
+  return matchWith<RenderExecutorOperation>(SHARING_CLOUD_PATH_PREFIX, USER_RENDER_ROUTES, method, fullPath);
+}
+export function decodeUserRenderRequest<K extends RenderExecutorOperation>(operation: K, input: DecodeInput): RenderExecutorOperationMap[K]["request"] {
+  return decodeWith(USER_RENDER_ROUTES, CONNECTOR_REQUEST_SHAPES, operation, input) as RenderExecutorOperationMap[K]["request"];
+}
+
+export function encodeConnectorRequest<K extends ConnectorOperation>(operation: K, request: ConnectorOperationMap[K]["request"]): EncodedSharingRequest {
+  return encodeWith(CONNECTOR_PATH_PREFIX, CONNECTOR_ROUTES, CONNECTOR_REQUEST_SHAPES, operation, request);
+}
+export function matchConnectorRoute(method: string, fullPath: string): { readonly operation: ConnectorOperation; readonly params: Readonly<Record<string, string>> } | null {
+  return matchWith<ConnectorOperation>(CONNECTOR_PATH_PREFIX, CONNECTOR_ROUTES, method, fullPath);
+}
+export function decodeConnectorRequest<K extends ConnectorOperation>(operation: K, input: DecodeInput): ConnectorOperationMap[K]["request"] {
+  return decodeWith(CONNECTOR_ROUTES, CONNECTOR_REQUEST_SHAPES, operation, input) as ConnectorOperationMap[K]["request"];
 }

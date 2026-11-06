@@ -236,7 +236,8 @@ export interface HostConnector {
 
 /**
  * Short-lived one-time pairing started by the connector and approved by the owner in NIHO. The connector creates a
- * random poll secret and sends only its SHA-256, so a lost response can be replayed without returning a bearer.
+ * random poll secret and a random device credential and sends only their SHA-256: no bearer ever travels from NIHO,
+ * so every lost response can be replayed.
  */
 export interface ConnectorPairingStart {
   readonly pairingId: PairingId;
@@ -247,16 +248,20 @@ export interface ConnectorPairingStart {
 export type ConnectorPairingTarget =
   | { readonly kind: "newLibrary"; readonly name: string }
   | { readonly kind: "existingLibrary"; readonly libraryId: LibraryId };
-/** Bearer device credential. Response memory to the OS keychain only; never logs, journals or UI. */
-export interface ConnectorCredential {
-  readonly token: string;
-  readonly generation: number;
-  readonly expiresAt: Instant | null;
-}
-/** The approved credential is returned once; a later poll is `pairing_unavailable` and requires a new pairing. */
+/**
+ * After approval the connector authenticates with the credential whose SHA-256 it registered at start (kept in the
+ * OS keychain; never logs, journals or UI). Polling an approved pairing repeats the same answer until it expires.
+ */
 export type ConnectorPairingPoll =
   | { readonly state: "pending"; readonly expiresAt: Instant }
-  | { readonly state: "approved"; readonly connector: HostConnector; readonly credential: ConnectorCredential };
+  | { readonly state: "approved"; readonly connector: HostConnector; readonly credentialGeneration: number };
+/**
+ * Rotation registers the next connector-generated credential by hash. Once committed the previous credential is
+ * fenced; a connector that lost the response tries the next credential first, then replays with the previous one.
+ */
+export interface ConnectorCredentialRotation {
+  readonly credentialGeneration: number;
+}
 
 // ---------------------------------------------------------------------------------------------------------
 // Photos, recipes and previews in a hosted Mac library
@@ -1085,7 +1090,11 @@ export type SharingOperation = keyof SharingOperationMap;
 
 /** Called by the hosted Mac connector (outbound) or by a signed-in device that holds an original. */
 export interface RenderExecutorOperationMap {
-  readonly "renderJobs.claim": Operation<{ readonly maxJobs?: number }, { readonly jobs: readonly ClaimedRenderJob[] }>;
+  /** purposes: only jobs this executor can run (for example, a connector without a renderer takes previews only). */
+  readonly "renderJobs.claim": Operation<
+    { readonly maxJobs?: number; readonly purposes?: readonly RenderJobPurpose["kind"][] },
+    { readonly jobs: readonly ClaimedRenderJob[] }
+  >;
   readonly "renderJobs.startOutput": Operation<
     { readonly jobId: RenderJobId; readonly leaseToken: string; readonly output: RenderOutputRequest },
     MutationReceipt<RenderOutputUploadStart>
@@ -1109,11 +1118,15 @@ export type RenderExecutorRequestOptions<K extends RenderExecutorOperation> = { 
 export interface ConnectorOperationMap extends RenderExecutorOperationMap {
   /** Unauthenticated and rate limited; creates no library or credential until the owner approves. */
   readonly "connector.startPairing": Operation<
-    { readonly platform: "macos"; readonly displayName: string; readonly pollSecretSha256: Sha256 },
+    { readonly platform: "macos"; readonly displayName: string; readonly pollSecretSha256: Sha256; readonly credentialSha256: Sha256 },
     MutationReceipt<ConnectorPairingStart>
   >;
   /** Presents the poll secret whose SHA-256 was registered at start. */
   readonly "connector.pollPairing": Operation<{ readonly pairingId: PairingId; readonly pollSecret: string }, ConnectorPairingPoll>;
+  readonly "connector.rotateCredential": Operation<
+    { readonly nextCredentialSha256: Sha256 },
+    MutationReceipt<ConnectorCredentialRotation>
+  >;
   readonly "connector.heartbeat": Operation<
     {
       readonly state: Exclude<HostConnectorState, "unreachable">;
@@ -1245,6 +1258,7 @@ export const SHARING_OPERATION_ACCESS = {
 export const CONNECTOR_OPERATION_ACCESS = {
   "connector.startPairing": { actor: "anonymousConnector", scope: "pairing" },
   "connector.pollPairing": { actor: "anonymousConnector", scope: "pairing" },
+  "connector.rotateCredential": { actor: "connector", scope: "ownLibrary" },
   "connector.heartbeat": { actor: "connector", scope: "ownLibrary" },
   "connector.putIndex": { actor: "connector", scope: "ownLibrary" },
   "connector.pullReplica": { actor: "connector", scope: "ownLibrary" },
@@ -1364,8 +1378,9 @@ export const SHARING_REQUEST_SHAPES = {
 } as const satisfies ShapeMap<SharingOperationMap>;
 
 export const CONNECTOR_REQUEST_SHAPES = {
-  "connector.startPairing": { platform: "value", displayName: "value", pollSecretSha256: "value" },
+  "connector.startPairing": { platform: "value", displayName: "value", pollSecretSha256: "value", credentialSha256: "value" },
   "connector.pollPairing": { pairingId: "value", pollSecret: "value" },
+  "connector.rotateCredential": { nextCredentialSha256: "value" },
   "connector.heartbeat": { state: "value", renderer: RENDER_CAPABILITY_SHAPE, replicaRevision: "value" },
   "connector.putIndex": {
     entries: { items: { fields: { localKey: "value", fileName: "value", source: SOURCE_SHAPE, capturedAt: "value", availability: "value" } } },
@@ -1373,7 +1388,7 @@ export const CONNECTOR_REQUEST_SHAPES = {
   "connector.pullReplica": { sinceRevision: "value", limit: "value", cursor: "value" },
   "connector.ackReplica": { revision: "value" },
   "connector.getReplicaContent": { entity: "value", id: "value", range: RANGE_SHAPE },
-  "renderJobs.claim": { maxJobs: "value" },
+  "renderJobs.claim": { maxJobs: "value", purposes: { items: "value" } },
   "renderJobs.startOutput": {
     jobId: "value", leaseToken: "value",
     output: {

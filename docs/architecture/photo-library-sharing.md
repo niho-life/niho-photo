@@ -47,7 +47,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - 常設Mac library の mask は `hostedMasks.startUpload`/`completeUpload` で先に NIHO へ置く。参照する mask が全部そろうまで補正の保存は `missing_mask_surface` で拒否し、一部だけ保存しない。
 - 常設Macが休止中でも補正の保存は完了する。`hostedRecipes.put` は `durability: "niho"` を返し、控えの状態だけが `pendingHost` になる。待つのは `HOST_DEFERRED_WORK` の原寸書き出しと所有者の写真の完成写真だけ。
 - 通信は常設Macからの外向きだけ（登録・heartbeat・索引・控え・描画job）。NIHO から Mac へ入る経路はない。
-- 登録は接続用ソフトが始め、owner が NIHO で承認する短期・一回限りの手順。接続用ソフトは乱数の poll secret を作り、その SHA-256 だけを送る。開始は冪等で、応答が失われても同じ key で同じ登録を返し、応答に bearer を含めない。端末資格は一度だけ返り、NIHO のログイン token と別。失効・再登録で `credentialGeneration` が進み、古い資格の確定を拒否する。
+- 登録は接続用ソフトが始め、owner が NIHO で承認する短期・一回限りの手順。接続用ソフトは乱数の poll secret と端末資格を作り、その SHA-256 だけを送る。開始・照会・回転は冪等で、応答が失われても再送でき、NIHO から bearer を返さない。端末資格は NIHO のログイン token と別。回転・失効・再登録で `credentialGeneration` が進み、古い資格の確定を拒否する。
 - 索引は path ではなく不透明な `localKey` で送る。未 mount は削除扱いにしない（`volumeUnmounted`）。除外は一覧からの除外で、再走査で復活させない。索引を作り直したときに hash・source 世代が合わない写真は自動で再紐付けせず `sourceMismatch` にする。
 - 元データが外部で変わったら source 世代が進む。古い世代に対して保存した補正は黙って使わず、保存は `revision_conflict`、共有中の項目は `updatePending`（`sourceChanged`）になる。
 
@@ -113,7 +113,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - query は表の項目を各1回だけ。数値は `limit`・`expectedRevision`。未知・重複の query、GET/DELETE の body、表にない body の項目、入れ子の想定外の項目は `invalid_request`。
 - capture header は `X-NIHO-Photo-Actor-Id` / `X-NIHO-Photo-Session-Id` / `X-NIHO-Photo-Session-Epoch`、key は `Idempotency-Key`（mutation は必須、読み取りは不可）。content は `Range` の単一区間と、`/cloud/v2` と同じ hash・全体 size・206 の検証を使う。
 - 招待の secret は body だけに載せ、URL・log・storage に出さない。
-- 常設 Mac（接続用ソフト）と NIHO の間は端末資格を使う別の通信で、この表に入れない（B03 #244 で決める）。
+- 常設 Mac（接続用ソフト）と NIHO の間は端末資格を使う別の通信で、下の「接続用ソフトの経路」に分ける。
 
 | operation | method / suffix | query / body | key |
 | --- | --- | --- | --- |
@@ -162,6 +162,34 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | members.changeRole | POST `/albums/{albumId}/members/{membershipId}/role` | body: `{expectedRevision, role}` | 必須 |
 | members.remove | DELETE `/albums/{albumId}/members/{membershipId}` | なし | 必須 |
 | members.leave | POST `/albums/{albumId}/leave` | body: `{}` | 必須 |
+
+## 接続用ソフトの経路（`/connector/v1`）
+
+常設 Mac の接続用ソフトから NIHO への外向きの通信だけ。定数と encode/match/decode は [`src/routes.ts`](../../packages/photo-library-sharing-contract/src/routes.ts)（`CONNECTOR_ROUTES`）が正本。
+
+- 認証は `Authorization: Bearer <端末資格>` だけ。端末資格は接続用ソフトが乱数で作り、登録開始（`credentialSha256`）と回転（`nextCredentialSha256`）で SHA-256 だけを NIHO に送る。NIHO から bearer を返すことはない。回転が確定すると前の資格は止まる。
+- 登録開始・照会は資格の前なので、登録開始で hash を送った poll secret を照会の body で示す。poll secret・lease token・資格の hash は path・query に載せない。
+- NIHO のログイン cookie・token はここで受けず、端末資格は利用者の経路で受けない。path の ID・query・body・key の規則は利用者の経路と同じ（数値の query は `sinceRevision`・`limit`）。
+- 利用者の端末が描画 job を実行するときは、同じ body の経路を利用者の prefix の下に置く（下の表の「利用者の端末」）。認証は利用者の session。
+
+| operation | method / suffix | query / body | key |
+| --- | --- | --- | --- |
+| connector.startPairing | POST `/pairings` | body: `{platform, displayName, pollSecretSha256, credentialSha256}` | 必須 |
+| connector.pollPairing | POST `/pairings/{pairingId}/poll` | body: `{pollSecret}` | 不可 |
+| connector.rotateCredential | POST `/credential/rotate` | body: `{nextCredentialSha256}` | 必須 |
+| connector.heartbeat | POST `/heartbeat` | body: `{state, renderer, replicaRevision}` | 不可 |
+| connector.putIndex | POST `/index` | body: `{entries}` | 必須 |
+| connector.pullReplica | GET `/replica` | query: sinceRevision、limit、cursor | 不可 |
+| connector.ackReplica | POST `/replica/ack` | body: `{revision}` | 必須 |
+| connector.getReplicaContent | GET `/replica/{entity}/{id}/content` | `Range` | 不可 |
+| renderJobs.claim | POST `/jobs/claim` | body: `{maxJobs, purposes}` | 不可 |
+| renderJobs.startOutput | POST `/jobs/{jobId}/outputs` | body: `{leaseToken, output}` | 必須 |
+| renderJobs.commit | POST `/jobs/{jobId}/commit` | body: `{leaseToken, uploadId}` | 必須 |
+| renderJobs.fail | POST `/jobs/{jobId}/fail` | body: `{leaseToken, code}` | 必須 |
+| renderJobs.claim（利用者の端末） | POST `/render-jobs/claim` | body: `{maxJobs, purposes}` | 不可 |
+| renderJobs.startOutput（利用者の端末） | POST `/render-jobs/{jobId}/outputs` | body: `{leaseToken, output}` | 必須 |
+| renderJobs.commit（利用者の端末） | POST `/render-jobs/{jobId}/commit` | body: `{leaseToken, uploadId}` | 必須 |
+| renderJobs.fail（利用者の端末） | POST `/render-jobs/{jobId}/fail` | body: `{leaseToken, code}` | 必須 |
 
 ## エラーと再試行
 
