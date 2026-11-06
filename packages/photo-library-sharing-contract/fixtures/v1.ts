@@ -308,8 +308,8 @@ export const revokedInviteLink: InviteLink = { ...inviteLink, revoked: true, rev
 /** Separate owner-charged pool; its quota is server policy, not the personal 5 GiB. */
 export const sharedStorage: SharedStorageUsage = {
   owner: { type: "user", userId: USERS.owner }, quotaBytes: 1024 ** 3,
-  usedBytes: 65536 + 3 * 8 * 1024 ** 2, previewBytes: 65536, renditionBytes: 3 * 8 * 1024 ** 2, exportStagingBytes: 0,
-  reservedBytes: 8 * 1024 ** 2, availableBytes: 1024 ** 3 - 65536 - 4 * 8 * 1024 ** 2,
+  usedBytes: 65536 + 4096 + 3 * 8 * 1024 ** 2, previewBytes: 65536, maskBytes: 4096, renditionBytes: 3 * 8 * 1024 ** 2,
+  exportStagingBytes: 0, reservedBytes: 8 * 1024 ** 2, availableBytes: 1024 ** 3 - 65536 - 4096 - 4 * 8 * 1024 ** 2,
 };
 export const renderJob: RenderJob = {
   id: IDS.job, purpose: { kind: "albumItem", albumId: IDS.album, itemId: IDS.ownerItem, itemRevision: 1 },
@@ -353,6 +353,23 @@ export const responses = {
   "hostedPhotos.get": hostedPhoto,
   "hostedPhotos.info": { camera: null, lens: null, iso: null, width: 6000, height: 4000, gps: null },
   "hostedPhotos.exclude": { value: { ...hostedPhoto, lifecycle: "excluded" }, replayed: false },
+  "hostedMasks.startUpload": {
+    value: {
+      upload: {
+        id: "synthetic-mask-upload", libraryId: IDS.hostedLibrary, photoId: IDS.photo, surfaceId: HASH.mask,
+        sizeBytes: 4096, expiresAt: LATER, state: "reserved",
+      },
+      ticket: ticket("synthetic-mask"),
+    },
+    replayed: false,
+  },
+  "hostedMasks.completeUpload": {
+    value: {
+      id: "synthetic-mask-upload", libraryId: IDS.hostedLibrary, photoId: IDS.photo, surfaceId: HASH.mask,
+      sizeBytes: 4096, expiresAt: LATER, state: "stored",
+    },
+    replayed: false,
+  },
   "hostedRecipes.put": { value: savedWhileAsleep, replayed: false },
   "hostedRecipeConflicts.list": recipeConflictPage,
   "hostedRecipeConflicts.get": recipeConflict,
@@ -368,7 +385,7 @@ export const responses = {
     manifestSha256: HASH.manifestExport, expiresAt: "2026-11-08T00:00:00.000Z",
   },
   "portability.restore": {
-    value: { libraryId: IDS.hostedLibrary, restoredPhotos: 1, restoredAlbums: 1, membershipsRestored: 0, mismatches: [] },
+    value: { libraryId: IDS.hostedLibrary, restoredPhotos: 1, restoredAlbums: 1, keptNewer: 0, membershipsRestored: 0, mismatches: [] },
     replayed: false,
   },
   "albums.list": { items: [albumForViewer], nextCursor: null },
@@ -434,7 +451,8 @@ export const connectorResponses = {
     value: { results: [{ localKey: "synthetic-local-key", photoId: IDS.photo, state: "unchanged" }] }, replayed: false,
   },
   "connector.pullReplica": {
-    changes: [{ revision: 13, entity: "recipe", id: IDS.photo, body: { revision: savedRecipe.revision } }],
+    sinceRevision: 12,
+    changes: [{ revision: 13, op: "upsert", entity: "recipe", id: IDS.photo, body: { recipe: savedRecipe, recipeSourceGeneration: 1 } }],
     nextRevision: 13, complete: true,
   },
   "connector.ackReplica": { value: { acknowledgedRevision: 13, state: "current" }, replayed: false },
@@ -444,4 +462,6 @@ export const connectorResponses = {
   },
   "renderJobs.commit": { value: { ...renderJob, state: "committed", leaseExpiresAt: null }, replayed: false },
   "renderJobs.fail": { value: { ...renderJob, state: "failed", leaseExpiresAt: null, failure: "source_missing" }, replayed: false },
-} satisfies { readonly [K in keyof ConnectorOperationMap]: ConnectorOperationMap[K]["response"] };
+} satisfies {
+  readonly [K in Exclude<keyof ConnectorOperationMap, "connector.getReplicaContent">]: ConnectorOperationMap[K]["response"];
+};

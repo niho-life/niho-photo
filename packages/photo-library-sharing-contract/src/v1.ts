@@ -272,8 +272,11 @@ export interface SourceIdentity {
   readonly width: number | null;
   readonly height: number | null;
 }
-/** An unmounted volume is never treated as deletion. */
-export type SourceAvailability = "available" | "volumeUnmounted" | "missing";
+/**
+ * An unmounted volume is never treated as deletion. sourceMismatch: the bytes at the registered key no longer match
+ * the recorded hash/generation (for example after the local index was rebuilt); never relinked automatically.
+ */
+export type SourceAvailability = "available" | "volumeUnmounted" | "missing" | "sourceMismatch";
 
 /** Exact inputs a preview, rendition or export was produced from (Epic §8, §9). */
 export interface RenderBinding {
@@ -653,9 +656,11 @@ export interface MemberJoinedEvent {
 export interface SharedStorageUsage {
   readonly owner: UserRef;
   readonly quotaBytes: number;
-  /** previewBytes + renditionBytes + exportStagingBytes. */
+  /** previewBytes + maskBytes + renditionBytes + exportStagingBytes. */
   readonly usedBytes: number;
   readonly previewBytes: number;
+  /** Mask surfaces of hosted libraries; unlike previews they cannot be regenerated. */
+  readonly maskBytes: number;
   readonly renditionBytes: number;
   readonly exportStagingBytes: number;
   readonly reservedBytes: number;
@@ -744,16 +749,72 @@ export interface IndexResult {
   /** excluded entries stay excluded; a rescan never revives them. */
   readonly state: "added" | "updated" | "unchanged" | "excluded";
 }
-export interface ReplicaChange {
-  readonly revision: number;
-  readonly entity: "recipe" | "mask" | "albumDefinition" | "exclusion";
-  readonly id: string;
-  readonly body: JsonObject;
+/** NIHO metadata replicated to the hosted Mac (Epic §4). The replica is a copy; it never becomes canonical. */
+export type ReplicaEntity = "photo" | "recipe" | "mask" | "albumDefinition" | "exclusion";
+/** Canonical index record of one photo. localKey is the connector's own opaque key, never a path. */
+export interface ReplicaPhotoRecord {
+  readonly localKey: string;
+  readonly fileName: string;
+  readonly source: SourceIdentity;
+  readonly capturedAt: Instant | null;
+  readonly addedAt: Instant;
 }
+export interface ReplicaRecipeRecord {
+  readonly recipe: RecipeDocument;
+  readonly recipeSourceGeneration: number;
+}
+/** Mask bytes are fetched with connector.getReplicaContent and verified against surfaceId (their SHA-256). */
+export interface ReplicaMaskRecord {
+  readonly photoId: PhotoId;
+  readonly surfaceId: Sha256;
+  readonly sizeBytes: number;
+  readonly width: number;
+  readonly height: number;
+}
+/** The owner's album definition restricted to this library's photos: no members, renditions or other sources. */
+export interface ReplicaAlbumDefinition {
+  readonly name: string;
+  readonly revision: number;
+  readonly photoIds: readonly PhotoId[];
+}
+export interface ReplicaExclusion {
+  readonly excludedAt: Instant;
+}
+type ReplicaUpsert<Entity extends ReplicaEntity, Body> = {
+  readonly revision: number;
+  readonly op: "upsert";
+  readonly entity: Entity;
+  /** Opaque per entity: photoId for photo/recipe/exclusion, albumId for albums, a server key for masks. */
+  readonly id: string;
+  readonly body: Body;
+};
+export type ReplicaChange =
+  | ReplicaUpsert<"photo", ReplicaPhotoRecord>
+  | ReplicaUpsert<"recipe", ReplicaRecipeRecord>
+  | ReplicaUpsert<"mask", ReplicaMaskRecord>
+  | ReplicaUpsert<"albumDefinition", ReplicaAlbumDefinition>
+  | ReplicaUpsert<"exclusion", ReplicaExclusion>
+  | { readonly revision: number; readonly op: "delete"; readonly entity: ReplicaEntity; readonly id: string };
+/**
+ * Changes after sinceRevision in revision order, up to nextRevision. sinceRevision 0 returns the current state as
+ * a snapshot. A sinceRevision older than the retained journal (or ahead of NIHO) is replica_reset_required.
+ */
 export interface ReplicaPage {
+  readonly sinceRevision: number;
   readonly changes: readonly ReplicaChange[];
   readonly nextRevision: number;
   readonly complete: boolean;
+}
+
+/** Mask surface of a hosted photo uploaded to NIHO before a recipe that references it can be saved. */
+export interface HostedMaskUpload {
+  readonly id: UploadId;
+  readonly libraryId: LibraryId;
+  readonly photoId: PhotoId;
+  readonly surfaceId: Sha256;
+  readonly sizeBytes: number;
+  readonly expiresAt: Instant;
+  readonly state: "reserved" | "verifying" | "stored" | "cancelled" | "expired" | "rejected";
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -803,6 +864,8 @@ export interface RestoreReport {
   readonly libraryId: LibraryId;
   readonly restoredPhotos: number;
   readonly restoredAlbums: number;
+  /** Items where NIHO already held something newer; a restore never downgrades a recipe or album. */
+  readonly keptNewer: number;
   /** Access is re-read from the current ledger. A snapshot never grants membership. */
   readonly membershipsRestored: 0;
   readonly mismatches: readonly { readonly photoId: PhotoId; readonly reason: "hash_mismatch" | "source_missing" | "mask_missing" }[];
@@ -829,10 +892,12 @@ export const SHARING_ERROR_STATUS = {
   pairing_unavailable: 410,
   upload_expired: 410,
   cursor_expired: 410,
+  replica_reset_required: 410,
   request_too_large: 413,
   unsupported_format: 415,
   content_rejected: 422,
   unsupported_settings: 422,
+  missing_mask_surface: 422,
   rate_limited: 429,
   temporarily_unavailable: 503,
 } as const;
@@ -851,6 +916,7 @@ export type SharingRecovery =
   | "discardResult"
   | "askOwner"
   | "restartPairing"
+  | "resyncReplica"
   | "fixRequest"
   | "stop";
 export const SHARING_ERROR_RECOVERY = {
@@ -871,10 +937,12 @@ export const SHARING_ERROR_RECOVERY = {
   pairing_unavailable: "restartPairing",
   upload_expired: "fixRequest",
   cursor_expired: "restartList",
+  replica_reset_required: "resyncReplica",
   request_too_large: "fixRequest",
   unsupported_format: "fixRequest",
   content_rejected: "fixRequest",
   unsupported_settings: "stop",
+  missing_mask_surface: "fixRequest",
   rate_limited: "retrySameKey",
   temporarily_unavailable: "retrySameKey",
 } as const satisfies { readonly [C in SharingErrorCode]: SharingRecovery };
@@ -926,6 +994,12 @@ export interface SharingOperationMap {
     PhotoContent
   >;
   readonly "hostedPhotos.exclude": Operation<HostedPhotoRef, MutationReceipt<HostedPhoto>>;
+  readonly "hostedMasks.startUpload": Operation<
+    HostedPhotoRef & { readonly surfaceId: Sha256; readonly sizeBytes: number; readonly width: number; readonly height: number },
+    MutationReceipt<{ readonly upload: HostedMaskUpload; readonly ticket: UploadTicket | null }>
+  >;
+  readonly "hostedMasks.completeUpload": Operation<HostedPhotoRef & { readonly uploadId: UploadId }, MutationReceipt<HostedMaskUpload>>;
+  /** Saved only when every referenced mask is stored (missing_mask_surface otherwise); never partially. */
   readonly "hostedRecipes.put": Operation<
     HostedPhotoRef & {
       readonly expectedRevision: number;
@@ -1048,6 +1122,11 @@ export interface ConnectorOperationMap extends RenderExecutorOperationMap {
   readonly "connector.pullReplica": Operation<{ readonly sinceRevision: number; readonly limit?: number }, ReplicaPage>;
   /** Acknowledges a NIHO revision. The replica never writes back over NIHO. */
   readonly "connector.ackReplica": Operation<{ readonly revision: number }, MutationReceipt<LibraryReplicaStatus>>;
+  /** Mask bytes for the replica, verified against the surface SHA-256. Originals never travel this way. */
+  readonly "connector.getReplicaContent": Operation<
+    { readonly entity: "mask"; readonly id: string; readonly range?: PhotoByteRange },
+    PhotoContent
+  >;
 }
 export type ConnectorOperation = keyof ConnectorOperationMap;
 
@@ -1120,6 +1199,8 @@ export const SHARING_OPERATION_ACCESS = {
   "hostedPhotos.info": { actor: "user", scope: "libraryOwner" },
   "hostedPhotos.content": { actor: "user", scope: "libraryOwner" },
   "hostedPhotos.exclude": { actor: "user", scope: "libraryOwner" },
+  "hostedMasks.startUpload": { actor: "user", scope: "libraryOwner" },
+  "hostedMasks.completeUpload": { actor: "user", scope: "libraryOwner" },
   "hostedRecipes.put": { actor: "user", scope: "libraryOwner" },
   "hostedRecipeConflicts.list": { actor: "user", scope: "libraryOwner" },
   "hostedRecipeConflicts.get": { actor: "user", scope: "libraryOwner" },
@@ -1161,6 +1242,7 @@ export const CONNECTOR_OPERATION_ACCESS = {
   "connector.putIndex": { actor: "connector", scope: "ownLibrary" },
   "connector.pullReplica": { actor: "connector", scope: "ownLibrary" },
   "connector.ackReplica": { actor: "connector", scope: "ownLibrary" },
+  "connector.getReplicaContent": { actor: "connector", scope: "ownLibrary" },
   "renderJobs.claim": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
   "renderJobs.startOutput": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
   "renderJobs.commit": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
@@ -1222,6 +1304,8 @@ export const SHARING_REQUEST_SHAPES = {
   "hostedPhotos.info": HOSTED_PHOTO_FIELDS,
   "hostedPhotos.content": { ...HOSTED_PHOTO_FIELDS, assetId: "value", range: RANGE_SHAPE },
   "hostedPhotos.exclude": HOSTED_PHOTO_FIELDS,
+  "hostedMasks.startUpload": { ...HOSTED_PHOTO_FIELDS, surfaceId: "value", sizeBytes: "value", width: "value", height: "value" },
+  "hostedMasks.completeUpload": { ...HOSTED_PHOTO_FIELDS, uploadId: "value" },
   "hostedRecipes.put": { ...HOSTED_PHOTO_FIELDS, expectedRevision: "value", sourceGeneration: "value", settings: "open", baseVersion: "value" },
   "hostedRecipeConflicts.list": { ...HOSTED_PHOTO_FIELDS, ...PAGE_FIELDS },
   "hostedRecipeConflicts.get": { ...HOSTED_PHOTO_FIELDS, conflictId: "value" },
@@ -1281,6 +1365,7 @@ export const CONNECTOR_REQUEST_SHAPES = {
   },
   "connector.pullReplica": { sinceRevision: "value", limit: "value" },
   "connector.ackReplica": { revision: "value" },
+  "connector.getReplicaContent": { entity: "value", id: "value", range: RANGE_SHAPE },
   "renderJobs.claim": { maxJobs: "value" },
   "renderJobs.startOutput": {
     jobId: "value", leaseToken: "value",

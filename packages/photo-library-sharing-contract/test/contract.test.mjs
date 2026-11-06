@@ -12,7 +12,7 @@ import {
   SHARING_OPERATION_ACCESS, SHARING_REQUEST_SHAPES,
 } from "../src/v1.ts";
 import {
-  checkAlbumName, checkCursor, compareIdempotency, compareRenderBinding, decideAddPhoto, decideAlbumAction, decideHostedRecipeSave,
+  checkAlbumName, checkCursor, compareIdempotency, decideReplicaPull, compareRenderBinding, decideAddPhoto, decideAlbumAction, decideHostedRecipeSave,
   decideJoin, decideLibraryAccess, decideMembershipChange, decidePairingApproval, decideRenderCommit, decideReplaceStart,
   decideUploadCommit, findForbiddenMetadata, findUnexpectedConnectorFields, findUnexpectedRequestFields, inviteLinkStatus,
   nextAlbumItemState, nextPendingReason, nextRenderJobState,
@@ -29,7 +29,7 @@ const vectors = await load("fixtures/security-cases.json");
 const coverage = await load("operation-coverage.json");
 const userOperations = Object.keys(SHARING_OPERATION_ACCESS);
 const connectorOperations = Object.keys(CONNECTOR_OPERATION_ACCESS);
-const STREAM_OPERATIONS = ["hostedPhotos.content", "exports.content", "albumItems.download"];
+const STREAM_OPERATIONS = ["hostedPhotos.content", "exports.content", "albumItems.download", "connector.getReplicaContent"];
 const CREATE_OPERATIONS = new Set(["albums.create", "albumItems.addPhoto", "albumItems.addFile", "invites.create", "connectors.approvePairing"]);
 
 test("UI vocabulary is exactly the identifiers agreed with the B08 session", () => {
@@ -89,7 +89,7 @@ test("every operation has one access rule, closed request keys, an owner Issue a
   assert.deepEqual(Object.keys(CONNECTOR_REQUEST_SHAPES).sort(), [...connectorOperations].sort());
   assert.equal(SHARING_OPERATION_ACCESS["albumItems.addPhoto"].requiresOwnSource, true);
   assert.deepEqual(Object.keys(fixtures.responses).sort(), userOperations.filter((op) => !STREAM_OPERATIONS.includes(op)).sort());
-  assert.deepEqual(Object.keys(fixtures.connectorResponses).sort(), [...connectorOperations].sort());
+  assert.deepEqual(Object.keys(fixtures.connectorResponses).sort(), connectorOperations.filter((op) => !STREAM_OPERATIONS.includes(op)).sort());
   for (const [operation, access] of Object.entries(SHARING_OPERATION_ACCESS)) {
     if (access.scope === "album") assert(access.action === "removeItem" || ALBUM_ACTIONS.includes(access.action), operation);
   }
@@ -227,7 +227,7 @@ test("the personal v2 contract stays unchanged and only maps one way", () => {
 test("shared storage is a separate owner pool with exact arithmetic", () => {
   const usage = fixtures.sharedStorage;
   for (const value of Object.values(usage)) if (typeof value === "number") assert(Number.isSafeInteger(value) && value >= 0);
-  assert.equal(usage.usedBytes, usage.previewBytes + usage.renditionBytes + usage.exportStagingBytes);
+  assert.equal(usage.usedBytes, usage.previewBytes + usage.maskBytes + usage.renditionBytes + usage.exportStagingBytes);
   assert.equal(usage.availableBytes, usage.quotaBytes - usage.usedBytes - usage.reservedBytes);
   assert.equal(usage.owner.userId, fixtures.USERS.owner);
   const need = { availableBytes: 0, requiredBytes: 8 * 1024 ** 2 };
@@ -363,6 +363,8 @@ function evaluate(vector) {
       const projected = projectAlbumItem(fixtures.snapshots[arrange.snapshot], { userId, role: arrange.role });
       return fromDecision(projected ? { ok: true } : { ok: false, code: "not_found" }, operation);
     }
+    case "replicaPull":
+      return fromDecision(decideReplicaPull({ sinceRevision: request.sinceRevision, ...arrange }), operation);
     case "albumName":
       return fromDecision(checkAlbumName(request.name), operation);
     case "closedRequest":
@@ -406,6 +408,7 @@ test("B00 negative categories are all present", () => {
     closedRequests: ["owner-in-request", "path-in-add-source", "unknown-source-kind", "path-in-index-entry"],
     quotaWait: ["quota-wait-visible-to-adder", "quota-wait-hidden-from-viewer", "quota-wait-reason-hidden-from-member", "member-album-full"],
     albumNames: ["album-name-101-code-points", "album-name-100-emoji", "album-name-blank"],
+    hostedReplica: ["hosted-save-missing-mask", "replica-pull-compacted", "replica-pull-ahead-of-niho", "replica-pull-snapshot"],
   };
   for (const [category, list] of Object.entries(required)) for (const id of list) assert(ids.has(id), `${category}:${id}`);
 });

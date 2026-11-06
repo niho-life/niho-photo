@@ -43,10 +43,12 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 ## 常設Mac
 
 - metadata（補正・mask・アルバム定義・索引）の正本は NIHO。常設Macは元データと控え（replica）を持ち、控えで正本を上書きしない（`connector.pullReplica`/`ackReplica`）。
+- 控えの変更は revision 順の型付き upsert/delete（`ReplicaChange`。写真の索引記録・完全 recipe・mask・アルバム定義・除外）。mask の中身は `connector.getReplicaContent` で取り込み、surface の SHA-256 で照合する。`sinceRevision: 0` は現在の状態の snapshot。journal から詰められた revision や NIHO より先の revision は `replica_reset_required` で、控えを snapshot から作り直す（控えを正本へ昇格させない）。
+- 常設Mac library の mask は `hostedMasks.startUpload`/`completeUpload` で先に NIHO へ置く。参照する mask が全部そろうまで補正の保存は `missing_mask_surface` で拒否し、一部だけ保存しない。
 - 常設Macが休止中でも補正の保存は完了する。`hostedRecipes.put` は `durability: "niho"` を返し、控えの状態だけが `pendingHost` になる。待つのは `HOST_DEFERRED_WORK` の原寸書き出しと所有者の写真の完成写真だけ。
 - 通信は常設Macからの外向きだけ（登録・heartbeat・索引・控え・描画job）。NIHO から Mac へ入る経路はない。
 - 登録は接続用ソフトが始め、owner が NIHO で承認する短期・一回限りの手順。接続用ソフトは乱数の poll secret を作り、その SHA-256 だけを送る。開始は冪等で、応答が失われても同じ key で同じ登録を返し、応答に bearer を含めない。端末資格は一度だけ返り、NIHO のログイン token と別。失効・再登録で `credentialGeneration` が進み、古い資格の確定を拒否する。
-- 索引は path ではなく不透明な `localKey` で送る。未 mount は削除扱いにしない（`volumeUnmounted`）。除外は一覧からの除外で、再走査で復活させない。
+- 索引は path ではなく不透明な `localKey` で送る。未 mount は削除扱いにしない（`volumeUnmounted`）。除外は一覧からの除外で、再走査で復活させない。索引を作り直したときに hash・source 世代が合わない写真は自動で再紐付けせず `sourceMismatch` にする。
 - 元データが外部で変わったら source 世代が進む。古い世代に対して保存した補正は黙って使わず、保存は `revision_conflict`、共有中の項目は `updatePending`（`sourceChanged`）になる。
 
 ## 状態遷移
@@ -115,8 +117,10 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | 読み直して本人が選ぶ | `revision_conflict` |
 | 結果を捨てる（新しいものがある） | `stale_render`、`lease_expired` |
 | 一覧を最初から読む | `invalid_cursor`、`cursor_expired` |
+| 控えを snapshot から作り直す | `replica_reset_required` |
 | owner に頼む | `invite_unavailable` |
 | 登録をやり直す | `pairing_unavailable` |
+| mask を先に保存してから送り直す | `missing_mask_surface` |
 | 止める（容量・削除中・key の誤用など） | `quota_exceeded`、`account_deleting`、`idempotency_conflict`、`origin_rejected`、`unsupported_settings` |
 
 `quota_exceeded` の数値は owner だけに返す。メンバーには code だけを返し、UI は「アルバムがいっぱいです」と出す。
@@ -125,7 +129,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 
 - B01 の範囲。schema/engine・完全 recipe・mask・アルバム定義・photo/album ID・元 asset の identity・hash を持ち、参照だけの `metadata` と元データ込みの `full` を分ける。
 - 鍵・ticket・session・招待の secret・在籍は含めない（`PORTABLE_EXPORT_EXCLUDES`）。メンバーが追加した項目と直接追加の項目の `source` は型で `null` に固定し、owner へメンバーの元写真への参照を渡さない。
-- restore は現在の台帳で権限を照合し、snapshot から在籍を戻さない（`membershipsRestored: 0`）。
+- restore は現在の台帳で権限を照合し、snapshot から在籍を戻さない（`membershipsRestored: 0`）。NIHO の方が新しい補正・アルバムは残し（`keptNewer`）、古い snapshot で戻さない。
 
 ## v2 との互換 adapter
 
@@ -134,7 +138,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - `nihoCloudLibraryFromPersonalV2`: 本人の v2 library を `nihoCloud` として投影する。v2 の値は変えない。v2 が `albums: true` などに変わっていたら拒否する。
 - `personalV2ScopeFor`: v2 の scope は本人の有効な `nihoCloud` library だけ。常設Mac・端末内・共有アルバム経由のアクセスは null。
 - `renderBindingFromPersonalV2`: NIHO クラウドの写真の描画束縛（v2 の原本は不変なので source 世代は1）。
-- 容量: v2 の 5GiB は NIHO クラウドの原本と mask だけ。プレビュー・完成写真・一時書き出しは owner の `SharedStorageUsage` に計上し、その上限は server の方針で決める（Epic §14）。v2 の枠を他の範囲へ当てない。
+- 容量: v2 の 5GiB は NIHO クラウドの原本と mask だけ。プレビュー・常設Mac library の mask・完成写真・一時書き出しは owner の `SharedStorageUsage` に計上し、その上限は server の方針で決める（Epic §14）。v2 の枠を他の範囲へ当てない。
 
 ## 公開・非公開の責務と writer
 
@@ -144,7 +148,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | --- | --- |
 | `packages/photo-library-sharing-contract/**`、本書、root workspace/lock・CI scope への登録 | B00 #241 |
 | 契約の変更（語彙・型・権限表・vector） | B00 の writer に戻す。各担当は追加 field を提案し、同時に編集しない |
-| 常設Mac library の正本・控え・索引復旧・export/restore（`hostedRecipes.*`、`hostedRecipeConflicts.*`、`hostedPhotos.exclude`、`portability.*`、`connector.pullReplica`/`ackReplica`、`libraries.*`） | B01 #242 |
+| 常設Mac library の正本・控え・索引復旧・export/restore（`hostedRecipes.*`、`hostedRecipeConflicts.*`、`hostedPhotos.exclude`、`hostedMasks.*`、`portability.*`、`connector.pullReplica`/`ackReplica`/`getReplicaContent`、`libraries.*`） | B01 #242 |
 | 常設Macの登録・索引・プレビュー送信・接続用ソフト（`connectors.*`、`hostedPhotos.list/get/info/content`、`connector.startPairing/pollPairing/heartbeat/putIndex`） | B03 #244 |
 | 招待リンク・役割・解除（`invites.*`、`members.*`） | B05 #246 |
 | 完成写真・プレビュー・原寸書き出しの描画（`renderJobs.*`、`exports.*`） | B07 #248 |
@@ -165,4 +169,4 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 
 ## 検証
 
-`npm run test|typecheck|lint --workspace packages/photo-library-sharing-contract`。公開CIの `Photo editing` scope が実行する。test は語彙・§10 の表・全操作の担当と閉じた request の形・遷移の閉包・閲覧者ごとの射影・metadata 規則・v2 互換・確定時の照合（実行端末・upload・最新の意図）・109件の負例 vector を参照判定で照合する。型の負例（owner の偽装、ownerの付与、CAS 無しの更新、第2段階の値など）は typecheck で固定する。
+`npm run test|typecheck|lint --workspace packages/photo-library-sharing-contract`。公開CIの `Photo editing` scope が実行する。test は語彙・§10 の表・全操作の担当と閉じた request の形・遷移の閉包・閲覧者ごとの射影・metadata 規則・v2 互換・確定時の照合（実行端末・upload・最新の意図）・114件の負例 vector を参照判定で照合する。型の負例（owner の偽装、ownerの付与、CAS 無しの更新、第2段階の値など）は typecheck で固定する。

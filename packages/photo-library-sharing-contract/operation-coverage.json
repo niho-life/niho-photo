@@ -69,6 +69,18 @@
       "wiring": "not-connected",
       "evidence": "一覧からの除外記録。元データを消さず、再走査で復活させない。"
     },
+    "hostedMasks.startUpload": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "常設Mac libraryのmaskをNIHOへ上げる。保存より先に永続化し、同じ所有者の共有容量に算入する。"
+    },
+    "hostedMasks.completeUpload": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "hashと寸法を照合してmaskを確定する。確定前のmaskを参照する保存は拒否する。"
+    },
     "hostedRecipes.put": {
       "issue": 242,
       "backend": "missing",
@@ -296,6 +308,12 @@
       "backend": "missing",
       "wiring": "not-connected",
       "evidence": "控えの世代を記録する。控えで正本を上書きしない。"
+    },
+    "connector.getReplicaContent": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "控えにmaskの中身を取り込む。surfaceのSHA-256で照合し、元データは運ばない。"
     },
     "renderJobs.claim": {
       "issue": 248,
