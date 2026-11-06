@@ -442,10 +442,8 @@ export const responses = {
 
 export const connectorResponses = {
   "connector.startPairing": { value: { pairingId: IDS.pairing, userCode: "SYN-0000", expiresAt: LATER }, replayed: false },
-  "connector.pollPairing": {
-    state: "approved", connector,
-    credential: { token: "synthetic-connector-credential", generation: 1, expiresAt: null },
-  },
+  "connector.pollPairing": { state: "approved", connector, credentialGeneration: 1 },
+  "connector.rotateCredential": { value: { credentialGeneration: 2 }, replayed: false },
   "connector.heartbeat": { serverTime: TIME, metadataRevision: hostedLibrary.metadataRevision, queuedJobs: 1 },
   "connector.putIndex": {
     value: { results: [{ localKey: "synthetic-local-key", photoId: IDS.photo, state: "unchanged" }] }, replayed: false,

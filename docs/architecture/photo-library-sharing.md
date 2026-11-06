@@ -47,7 +47,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - 常設Mac library の mask は `hostedMasks.startUpload`/`completeUpload` で先に NIHO へ置く。参照する mask が全部そろうまで補正の保存は `missing_mask_surface` で拒否し、一部だけ保存しない。
 - 常設Macが休止中でも補正の保存は完了する。`hostedRecipes.put` は `durability: "niho"` を返し、控えの状態だけが `pendingHost` になる。待つのは `HOST_DEFERRED_WORK` の原寸書き出しと所有者の写真の完成写真だけ。
 - 通信は常設Macからの外向きだけ（登録・heartbeat・索引・控え・描画job）。NIHO から Mac へ入る経路はない。
-- 登録は接続用ソフトが始め、owner が NIHO で承認する短期・一回限りの手順。接続用ソフトは乱数の poll secret を作り、その SHA-256 だけを送る。開始は冪等で、応答が失われても同じ key で同じ登録を返し、応答に bearer を含めない。端末資格は一度だけ返り、NIHO のログイン token と別。失効・再登録で `credentialGeneration` が進み、古い資格の確定を拒否する。
+- 登録は接続用ソフトが始め、owner が NIHO で承認する短期・一回限りの手順。接続用ソフトは乱数の poll secret と端末資格を作り、その SHA-256 だけを送る。開始・照会・回転は冪等で、応答が失われても再送でき、NIHO から bearer を返さない。端末資格は NIHO のログイン token と別。回転・失効・再登録で `credentialGeneration` が進み、古い資格の確定を拒否する。
 - 索引は path ではなく不透明な `localKey` で送る。未 mount は削除扱いにしない（`volumeUnmounted`）。除外は一覧からの除外で、再走査で復活させない。索引を作り直したときに hash・source 世代が合わない写真は自動で再紐付けせず `sourceMismatch` にする。
 - 元データが外部で変わったら source 世代が進む。古い世代に対して保存した補正は黙って使わず、保存は `revision_conflict`、共有中の項目は `updatePending`（`sourceChanged`）になる。
 
@@ -105,6 +105,92 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - 応答が失われたら、同じ key と payload で再送して結果を照合する。新しい key で二重に追加しない。
 - cursor は actor・範囲・条件・membership revision に束縛し、15分で失効する。役割が変わった後の cursor は `invalid_cursor` で、別の写真を返さない。アルバム一覧の cursor は actor の在籍の世代（`accessRevision`。参加・離脱・削除・役割変更で進む）に束縛する。
 
+## 利用者の経路（`/cloud/sharing/v1`）
+
+共有アルバム・項目・招待・メンバー・完成写真の upload と、常設 Mac ライブラリの利用者向けの操作は、本人クラウドの [`/cloud/v2`](personal-photo-transfers.md) と同じ Photo origin・同じ形の経路にする。定数と encode/match/decode は [`src/routes.ts`](../../packages/photo-library-sharing-contract/src/routes.ts)（`SHARING_ROUTES`）が正本で、下の表はそこから作る。BFF は既存の Photo auth で本人・親 session・epoch を検証し、同じ suffix を trusted upstream prefix へ写す。
+
+- path は `/cloud/sharing/v1` に続く。path 内の ID は単一の opaque segment（1〜512 bytes、前後の空白・`.`/`..`・`/`・`\`・制御文字を不可、正規の encode だけ受ける）。
+- query は表の項目を各1回だけ。数値は `limit`・`expectedRevision`。未知・重複の query、GET/DELETE の body、表にない body の項目、入れ子の想定外の項目は `invalid_request`。経路の decode は配置と想定外の項目だけを検査する。必須の項目・型・値の範囲は、BFF とサーバーが operation ごとの検査で確かめる。
+- capture header は `X-NIHO-Photo-Actor-Id` / `X-NIHO-Photo-Session-Id` / `X-NIHO-Photo-Session-Epoch`、key は `Idempotency-Key`（mutation は必須、読み取りは不可）。content は `Range` の単一区間と、`/cloud/v2` と同じ hash・全体 size・206 の検証を使う。
+- 招待の secret は body だけに載せ、URL・log・storage に出さない。
+- 常設 Mac（接続用ソフト）と NIHO の間は端末資格を使う別の通信で、下の「接続用ソフトの経路」に分ける。
+
+| operation | method / suffix | query / body | key |
+| --- | --- | --- | --- |
+| libraries.list | GET `/libraries` | なし | 不可 |
+| libraries.get | GET `/libraries/{libraryId}` | なし | 不可 |
+| storage.get | GET `/storage` | なし | 不可 |
+| connectors.approvePairing | POST `/connectors/pairings/approve` | body: `{userCode, target}` | 必須 |
+| connectors.get | GET `/connectors/{connectorId}` | なし | 不可 |
+| connectors.revoke | POST `/connectors/{connectorId}/revoke` | body: `{}` | 必須 |
+| hostedPhotos.list | GET `/libraries/{libraryId}/photos` | query: sort、cursor、limit | 不可 |
+| hostedPhotos.get | GET `/libraries/{libraryId}/photos/{photoId}` | なし | 不可 |
+| hostedPhotos.info | GET `/libraries/{libraryId}/photos/{photoId}/info` | なし | 不可 |
+| hostedPhotos.content | GET `/libraries/{libraryId}/photos/{photoId}/assets/{assetId}/content` | `Range` | 不可 |
+| hostedPhotos.exclude | POST `/libraries/{libraryId}/photos/{photoId}/exclude` | body: `{}` | 必須 |
+| hostedMasks.startUpload | POST `/libraries/{libraryId}/photos/{photoId}/mask-uploads` | body: `{surfaceId, sizeBytes, width, height}` | 必須 |
+| hostedMasks.completeUpload | POST `/libraries/{libraryId}/photos/{photoId}/mask-uploads/{uploadId}/complete` | body: `{}` | 必須 |
+| hostedRecipes.put | PUT `/libraries/{libraryId}/photos/{photoId}/recipe` | body: `{expectedRevision, sourceGeneration, settings, baseVersion}` | 必須 |
+| hostedRecipeConflicts.list | GET `/libraries/{libraryId}/photos/{photoId}/recipe-conflicts` | query: cursor、limit | 不可 |
+| hostedRecipeConflicts.get | GET `/libraries/{libraryId}/photos/{photoId}/recipe-conflicts/{conflictId}` | なし | 不可 |
+| hostedRecipeConflicts.resolve | POST `/libraries/{libraryId}/photos/{photoId}/recipe-conflicts/{conflictId}/resolve` | body: `{expectedRevision, decision}` | 必須 |
+| exports.request | POST `/libraries/{libraryId}/photos/{photoId}/exports` | body: `{recipeRevision}` | 必須 |
+| exports.get | GET `/exports/{exportId}` | なし | 不可 |
+| exports.content | GET `/exports/{exportId}/content` | `Range` | 不可 |
+| portability.export | POST `/libraries/{libraryId}/portable-exports` | body: `{mode}` | 必須 |
+| portability.get | GET `/portable-exports/{exportId}` | なし | 不可 |
+| portability.restore | POST `/libraries/{libraryId}/restore` | body: `{manifestSha256}` | 必須 |
+| albums.list | GET `/albums` | query: cursor、limit | 不可 |
+| albums.get | GET `/albums/{albumId}` | なし | 不可 |
+| albums.create | POST `/albums` | body: `{name}` | 必須 |
+| albums.rename | POST `/albums/{albumId}/rename` | body: `{expectedRevision, name}` | 必須 |
+| albums.delete | DELETE `/albums/{albumId}` | query: expectedRevision | 必須 |
+| albumItems.list | GET `/albums/{albumId}/items` | query: cursor、limit | 不可 |
+| albumItems.get | GET `/albums/{albumId}/items/{itemId}` | なし | 不可 |
+| albumItems.addPhoto | POST `/albums/{albumId}/photo-items` | body: `{source}` | 必須 |
+| albumItems.addFile | POST `/albums/{albumId}/file-items` | body: `{rendition}` | 必須 |
+| albumItems.replace | POST `/albums/{albumId}/items/{itemId}/replace` | body: `{expectedRevision, content}` | 必須 |
+| albumItems.commitUpload | POST `/albums/{albumId}/uploads/{uploadId}/commit` | body: `{}` | 必須 |
+| albumItems.cancelUpload | POST `/albums/{albumId}/uploads/{uploadId}/cancel` | body: `{}` | 必須 |
+| albumItems.remove | DELETE `/albums/{albumId}/items/{itemId}` | なし | 必須 |
+| albumItems.download | GET `/albums/{albumId}/items/{itemId}/renditions/{renditionId}/content` | query: variant、`Range` | 不可 |
+| invites.list | GET `/albums/{albumId}/invites` | なし | 不可 |
+| invites.create | POST `/albums/{albumId}/invites` | body: `{role}` | 必須 |
+| invites.revoke | POST `/albums/{albumId}/invites/{inviteLinkId}/revoke` | body: `{}` | 必須 |
+| invites.join | POST `/invites/join` | body: `{secret}` | 必須 |
+| members.list | GET `/albums/{albumId}/members` | query: cursor、limit | 不可 |
+| members.changeRole | POST `/albums/{albumId}/members/{membershipId}/role` | body: `{expectedRevision, role}` | 必須 |
+| members.remove | DELETE `/albums/{albumId}/members/{membershipId}` | なし | 必須 |
+| members.leave | POST `/albums/{albumId}/leave` | body: `{}` | 必須 |
+
+## 接続用ソフトの経路（`/connector/v1`）
+
+常設 Mac の接続用ソフトから NIHO への外向きの通信だけ。定数と encode/match/decode は [`src/routes.ts`](../../packages/photo-library-sharing-contract/src/routes.ts)（`CONNECTOR_ROUTES`）が正本。
+
+- 認証は `Authorization: Bearer <端末資格>` だけ。端末資格は接続用ソフトが乱数で作り、登録開始（`credentialSha256`）と回転（`nextCredentialSha256`）で SHA-256 だけを NIHO に送る。NIHO から bearer を返すことはない。回転が確定すると前の資格は止まる。
+- 登録開始・照会は資格の前なので、登録開始で hash を送った poll secret を照会の body で示す。poll secret・lease token・資格の hash は path・query に載せない。
+- NIHO のログイン cookie・token はここで受けず、端末資格は利用者の経路で受けない。path の ID・query・body・key の規則は利用者の経路と同じ（数値の query は `sinceRevision`・`limit`）。
+- 利用者の端末が描画 job を実行するときは、同じ body の経路を利用者の prefix の下に置く（下の表の「利用者の端末」）。認証は利用者の session。
+
+| operation | method / suffix | query / body | key |
+| --- | --- | --- | --- |
+| connector.startPairing | POST `/pairings` | body: `{platform, displayName, pollSecretSha256, credentialSha256}` | 必須 |
+| connector.pollPairing | POST `/pairings/{pairingId}/poll` | body: `{pollSecret}` | 不可 |
+| connector.rotateCredential | POST `/credential/rotate` | body: `{nextCredentialSha256}` | 必須 |
+| connector.heartbeat | POST `/heartbeat` | body: `{state, renderer, replicaRevision}` | 不可 |
+| connector.putIndex | POST `/index` | body: `{entries}` | 必須 |
+| connector.pullReplica | GET `/replica` | query: sinceRevision、limit、cursor | 不可 |
+| connector.ackReplica | POST `/replica/ack` | body: `{revision}` | 必須 |
+| connector.getReplicaContent | GET `/replica/{entity}/{id}/content` | `Range` | 不可 |
+| renderJobs.claim | POST `/jobs/claim` | body: `{maxJobs, purposes}` | 不可 |
+| renderJobs.startOutput | POST `/jobs/{jobId}/outputs` | body: `{leaseToken, output}` | 必須 |
+| renderJobs.commit | POST `/jobs/{jobId}/commit` | body: `{leaseToken, uploadId}` | 必須 |
+| renderJobs.fail | POST `/jobs/{jobId}/fail` | body: `{leaseToken, code}` | 必須 |
+| renderJobs.claim（利用者の端末） | POST `/render-jobs/claim` | body: `{maxJobs, purposes}` | 不可 |
+| renderJobs.startOutput（利用者の端末） | POST `/render-jobs/{jobId}/outputs` | body: `{leaseToken, output}` | 必須 |
+| renderJobs.commit（利用者の端末） | POST `/render-jobs/{jobId}/commit` | body: `{leaseToken, uploadId}` | 必須 |
+| renderJobs.fail（利用者の端末） | POST `/render-jobs/{jobId}/fail` | body: `{leaseToken, code}` | 必須 |
+
 ## エラーと再試行
 
 `SHARING_ERROR_STATUS` と `SHARING_ERROR_RECOVERY` が正本。
@@ -153,6 +239,8 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | 招待リンク・役割・解除（`invites.*`、`members.*`） | B05 #246 |
 | 完成写真・プレビュー・原寸書き出しの描画（`renderJobs.*`、`exports.*`） | B07 #248 |
 | アルバムと項目・共有容量（`albums.*`、`albumItems.*`、`storage.get`） | B12 #254 |
+| 利用者の経路の表（`src/routes.ts`、本書の表） | B00 #241。B05 の client と非公開側のサーバーはこの表に合わせる |
+| `operation-coverage.json` の `invites.*`・`members.*` に公開側の client と合成 server の記録を足す | B05 #246 の PR（client のファイルが B00 の branch に無いため） |
 | Mac・Web・iPhone の UI | B08 #249 |
 | SDK export・release set への追加、公式配備 | 既存 C08 #201 の窓口。B00 では追加しない |
 
@@ -169,4 +257,4 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 
 ## 検証
 
-`npm run test|typecheck|lint --workspace packages/photo-library-sharing-contract`。公開CIの `Photo editing` scope が実行する。test は語彙・§10 の表・全操作の担当と閉じた request の形・遷移の閉包・閲覧者ごとの射影・metadata 規則・v2 互換・確定時の照合（実行端末・upload・最新の意図）・114件の負例 vector を参照判定で照合する。型の負例（owner の偽装、ownerの付与、CAS 無しの更新、第2段階の値など）は typecheck で固定する。
+`npm run test|typecheck|lint --workspace packages/photo-library-sharing-contract`。公開CIの `Photo editing` scope が実行する。test は語彙・経路（全操作が1経路、各項目が1か所、key、曖昧さなし、往復）・§10 の表・全操作の担当と閉じた request の形・遷移の閉包・閲覧者ごとの射影・metadata 規則・v2 互換・確定時の照合（実行端末・upload・最新の意図）・114件の負例 vector を参照判定で照合する。型の負例（owner の偽装、ownerの付与、CAS 無しの更新、第2段階の値など）は typecheck で固定する。

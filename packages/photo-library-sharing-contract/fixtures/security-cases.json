@@ -3293,7 +3293,9 @@
         "storedMaskSurfaceIds": [
           "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
         ],
-        "connectorState": "online"
+        "connectorState": "online",
+        "metadataRevisionAfterSave": 13,
+        "acknowledgedRevision": 12
       },
       "expected": {
         "status": 409,
@@ -3330,7 +3332,9 @@
         "storedMaskSurfaceIds": [
           "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
         ],
-        "connectorState": "online"
+        "connectorState": "online",
+        "metadataRevisionAfterSave": 13,
+        "acknowledgedRevision": 12
       },
       "expected": {
         "status": 409,
@@ -3367,14 +3371,97 @@
         "storedMaskSurfaceIds": [
           "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
         ],
-        "connectorState": "sleeping"
+        "connectorState": "sleeping",
+        "metadataRevisionAfterSave": 13,
+        "acknowledgedRevision": 12
       },
       "expected": {
         "status": 200,
         "invariants": [
           "durable_in_niho",
           "replica_pending_host"
-        ]
+        ],
+        "replica": "pendingHost"
+      }
+    },
+    {
+      "id": "hosted-save-online-unacknowledged",
+      "operation": "hostedRecipes.put",
+      "actor": "owner",
+      "check": "hostedSave",
+      "request": {
+        "libraryId": "synthetic-library-hosted",
+        "photoId": "synthetic-hosted-photo",
+        "expectedRevision": 2,
+        "sourceGeneration": 1,
+        "settings": {
+          "v": 5,
+          "engine": "niho-14"
+        },
+        "baseVersion": null
+      },
+      "arrange": {
+        "expectedRevision": 2,
+        "currentRevision": 2,
+        "sourceGeneration": 1,
+        "currentSourceGeneration": 1,
+        "referencedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "storedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "connectorState": "online",
+        "metadataRevisionAfterSave": 13,
+        "acknowledgedRevision": 12
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "durable_in_niho",
+          "replica_pending_until_acknowledged"
+        ],
+        "replica": "pendingHost"
+      }
+    },
+    {
+      "id": "hosted-save-acknowledged-replay",
+      "operation": "hostedRecipes.put",
+      "actor": "owner",
+      "check": "hostedSave",
+      "request": {
+        "libraryId": "synthetic-library-hosted",
+        "photoId": "synthetic-hosted-photo",
+        "expectedRevision": 2,
+        "sourceGeneration": 1,
+        "settings": {
+          "v": 5,
+          "engine": "niho-14"
+        },
+        "baseVersion": null
+      },
+      "arrange": {
+        "expectedRevision": 2,
+        "currentRevision": 2,
+        "sourceGeneration": 1,
+        "currentSourceGeneration": 1,
+        "referencedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "storedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "connectorState": "sleeping",
+        "metadataRevisionAfterSave": 13,
+        "acknowledgedRevision": 13
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "durable_in_niho",
+          "replica_current_only_after_acknowledgement"
+        ],
+        "replica": "current"
       }
     },
     {
@@ -3402,7 +3489,9 @@
           "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
         ],
         "storedMaskSurfaceIds": [],
-        "connectorState": "online"
+        "connectorState": "online",
+        "metadataRevisionAfterSave": 13,
+        "acknowledgedRevision": 12
       },
       "expected": {
         "status": 422,
@@ -3817,7 +3906,8 @@
       "request": {
         "platform": "macos",
         "displayName": "Synthetic Mac",
-        "pollSecretSha256": "8888888888888888888888888888888888888888888888888888888888888888"
+        "pollSecretSha256": "8888888888888888888888888888888888888888888888888888888888888888",
+        "credentialSha256": "6666666666666666666666666666666666666666666666666666666666666666"
       },
       "arrange": {
         "stored": {

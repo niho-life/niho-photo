@@ -27,7 +27,6 @@ import type {
   ConnectorPairingTarget,
   CursorBinding,
   ForbiddenMetadataCategory,
-  HostConnectorState,
   IdempotencyRecord,
   Instant,
   InviteLink,
@@ -149,14 +148,20 @@ export function decideHostedRecipeSave(input: {
   /** Mask surfaces the new recipe references, and those already stored for this photo in NIHO. */
   readonly referencedMaskSurfaceIds: readonly string[];
   readonly storedMaskSurfaceIds: readonly string[];
-  readonly connectorState: HostConnectorState | null;
+  /** Library metadata revision after this save; distinct from the photo's recipe revision. */
+  readonly metadataRevisionAfterSave: number;
+  /** Revision the hosted Mac has durably acknowledged. Heartbeat state does not prove the replica is current. */
+  readonly acknowledgedRevision: number;
 }): { readonly ok: true; readonly replica: "current" | "pendingHost" } | { readonly ok: false; readonly code: SharingErrorCode } {
   if (input.expectedRevision !== input.currentRevision || input.sourceGeneration !== input.currentSourceGeneration) {
     return { ok: false, code: "revision_conflict" };
   }
   // Nothing is saved until every reference is durable; a partial save never reports success.
   if (input.referencedMaskSurfaceIds.some((id) => !input.storedMaskSurfaceIds.includes(id))) return { ok: false, code: "missing_mask_surface" };
-  return { ok: true, replica: input.connectorState === "online" ? "current" : "pendingHost" };
+  return {
+    ok: true,
+    replica: input.acknowledgedRevision === input.metadataRevisionAfterSave ? "current" : "pendingHost",
+  };
 }
 
 /**
