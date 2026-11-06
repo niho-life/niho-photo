@@ -104,7 +104,7 @@ test("real pinned SDK renders crop and exact mask surface without changing the f
     const plain = await provider.render(makeRequest({ bytes: input, format: "png", settings: unmaskedSettings }));
     const masked = await provider.render(makeRequest({ bytes: input, format: "png", settings: maskedSettings, masks: [mask] }));
     assert.deepEqual(maskedSettings, before);
-    assert.equal(masked.renderer.sdkVersion, "0.1.7");
+    assert.equal(masked.renderer.sdkVersion, "0.1.9");
     assert.equal(masked.renderer.crateVersion, "0.27.0");
     assert.equal(masked.renderer.maskSurfaces, true);
     assert.equal(masked.renderer.features.includes("geometry"), true);

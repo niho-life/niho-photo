@@ -16,8 +16,10 @@
     "lint": "eslint ."
   },
   "dependencies": {
-    "niho-photo-contract": "https://github.com/niho-life/niho-photo/releases/download/photo-sdk-v0.1.7/niho-photo-contract-0.1.7.tgz",
-    "niho-photo-develop-engine-runtime": "https://github.com/niho-life/niho-photo/releases/download/photo-sdk-v0.1.7/niho-photo-develop-engine-runtime-0.1.7.tgz"
+    "niho-photo-contract": "https://github.com/niho-life/niho-photo/releases/download/photo-sdk-v0.1.9/niho-photo-contract-0.1.9.tgz",
+    "niho-photo-develop-engine-runtime": "https://github.com/niho-life/niho-photo/releases/download/photo-sdk-v0.1.9/niho-photo-develop-engine-runtime-0.1.9.tgz"
   },
-  "engines": { "node": "24.x" }
+  "engines": {
+    "node": "24.x"
+  }
 }

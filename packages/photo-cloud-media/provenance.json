@@ -69,9 +69,9 @@
     }
   ],
   "officialSdk": {
-    "releaseTag": "photo-sdk-v0.1.7",
-    "sourceCommit": "5ff21a28ae5f7a0e3a64a98b1ef31a7ca523b2a6",
-    "engineManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+    "releaseTag": "photo-sdk-v0.1.9",
+    "sourceCommit": "86ca0749c6b738e7f6b59dcff5ebe2f5cafa2804",
+    "engineManifestSha256": "fb27a86b9e2b4119e6abb7302900b4d9b6bf2a36bd7ef0c3e182f72827062e92",
     "contractFileHashes": "contract-files.json (package metadata including export map +15 compiled JS files from verified official archive)"
   }
 }

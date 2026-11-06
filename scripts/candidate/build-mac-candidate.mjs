@@ -209,7 +209,7 @@ export function buildCandidate(values) {
       source,
       run: { id: values["--run-id"], attempt: values["--run-attempt"] },
       sdk: {
-        ...(sdk.manifest.schemaVersion === 2 ? { sdkManifestSchemaVersion: 2 } : {}),
+        ...(sdk.manifest.schemaVersion >= 2 ? { sdkManifestSchemaVersion: sdk.manifest.schemaVersion } : {}),
         mode: sdk.mode,
         version: sdk.manifest.version,
         source: sdk.manifest.source,

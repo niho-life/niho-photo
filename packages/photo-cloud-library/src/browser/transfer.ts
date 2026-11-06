@@ -20,6 +20,7 @@ import type { PersonalPhotoCloudIdentity, PersonalPhotoCloudMaskValidator } from
 import { TRANSPORT_TIMEOUT_MS, TRUSTED_GCS_UPLOAD_ORIGIN, canonicalContentType } from "../wire";
 import {
   IndexedDbTransferJournal,
+  PERSONAL_PHOTO_TRANSFER_DATABASE_NAME,
   makeEntryId,
   validateCandidate,
   type JournalScope,
@@ -128,7 +129,7 @@ class TransferController implements BrowserPersonalPhotoTransferController {
     const factory = options.indexedDB ?? globalThis.indexedDB;
     const locks = options.locks === undefined ? (typeof navigator === "object" ? navigator.locks : null) : options.locks;
     if (factory === undefined || locks === null || locks === undefined) throw new PersonalPhotoCloudError("unavailable");
-    this.journal = new IndexedDbTransferJournal(factory, options.databaseName ?? "niho-personal-photo-transfers-v1");
+    this.journal = new IndexedDbTransferJournal(factory, options.databaseName ?? PERSONAL_PHOTO_TRANSFER_DATABASE_NAME);
     this.locks = locks;
     this.fetchFn = options.fetch ?? ((...parameters: Parameters<typeof fetch>) => globalThis.fetch(...parameters));
     this.now = options.now ?? Date.now;

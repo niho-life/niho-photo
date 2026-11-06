@@ -7,9 +7,13 @@ type RendererDeclaration = Omit<RenderCapability, "sdkVersion" | "manifestSha256
 type ProbeEngine = Pick<DevelopEngine, "ready" | "dispose"> & {
   readonly renderCapabilities?: () => Promise<RendererDeclaration | null>;
 };
+type MaskSurfaceEngine = Pick<DevelopEngine, "ready" | "dispose"> & {
+  readonly validateMaskSurface?: DevelopEngine["validateMaskSurface"];
+};
 export interface PhotoWebRendererProof {
   readonly sdkVersion: string;
   readonly crateVersion: string;
+  readonly sourceCommit: string;
   readonly manifestSha256: string;
   readonly manifestUrl: string;
 }
@@ -17,18 +21,40 @@ export interface PhotoWebRendererBinding {
   readonly capability: RenderCapability;
   readonly engineAssets: PhotoLibraryEngineAssets;
 }
-
-export interface PhotoWebMaskSurfaceValidator {
-  validateMaskSurface(
-    png: Uint8Array,
-    signal?: AbortSignal,
-  ): Promise<{ readonly id: string; readonly width: number; readonly height: number }>;
+export type PhotoWebMaskSurfaceValidator = {
+  readonly validateMaskSurface: NonNullable<DevelopEngine["validateMaskSurface"]>;
   dispose(): void;
+};
+
+function pinnedManifestUrl(proof: PhotoWebRendererProof): string | null {
+  const { sdkVersion, crateVersion, sourceCommit, manifestSha256, manifestUrl } = proof;
+  if (typeof sdkVersion !== "string" || sdkVersion.length === 0 || sdkVersion.length > 64
+    || typeof crateVersion !== "string" || !/^\d+\.\d+\.\d+$/.test(crateVersion)
+    || typeof sourceCommit !== "string" || !/^[a-f0-9]{40}$/.test(sourceCommit)
+    || typeof manifestSha256 !== "string" || !/^[a-f0-9]{64}$/.test(manifestSha256)
+    || typeof manifestUrl !== "string") return null;
+  const origin = globalThis.location?.origin;
+  if (typeof origin !== "string" || origin.length === 0) return null;
+  let url: URL;
+  try { url = new URL(manifestUrl, origin); } catch { return null; }
+  if (url.origin !== origin || url.username || url.password || url.search || url.hash
+    || url.pathname !== `/develop-engine/${manifestSha256}/manifest-${crateVersion}.json`) return null;
+  return url.href;
 }
 
-type MaskSurfaceEngine = Pick<DevelopEngine, "ready" | "dispose"> & {
-  readonly validateMaskSurface?: DevelopEngine["validateMaskSurface"];
-};
+async function readMatchingCapability(
+  engine: ProbeEngine,
+  proof: PhotoWebRendererProof,
+  signal: AbortSignal,
+): Promise<RendererDeclaration | null> {
+  const readCapabilities = engine.renderCapabilities;
+  if (signal.aborted || typeof readCapabilities !== "function") return null;
+  if (!(await engine.ready()) || signal.aborted) return null;
+  const actual = await readCapabilities.call(engine);
+  return signal.aborted || !actual || actual.schemaVersion !== 1 || actual.crateVersion !== proof.crateVersion
+    ? null
+    : actual;
+}
 
 /** Trusted proof is pinned to this bundle; it must not be fetched from the mutable current build endpoint. */
 export async function probePhotoWebRenderer(options: {
@@ -48,22 +74,13 @@ export async function probePhotoWebRenderer(options: {
   };
   signal.addEventListener("abort", dispose, { once: true });
   try {
-    const { sdkVersion, crateVersion, manifestSha256, manifestUrl } = options.proof;
-    if (typeof sdkVersion !== "string" || sdkVersion.length === 0 || sdkVersion.length > 64
-      || typeof crateVersion !== "string" || !/^\d+\.\d+\.\d+$/.test(crateVersion)
-      || typeof manifestSha256 !== "string" || !/^[a-f0-9]{64}$/.test(manifestSha256)
-      || typeof manifestUrl !== "string") return null;
-    const url = new URL(manifestUrl, globalThis.location.origin);
-    if (url.origin !== globalThis.location.origin || url.username || url.password || url.search || url.hash
-      || url.pathname !== `/develop-engine/${manifestSha256}/manifest-${crateVersion}.json`) return null;
-    const pinnedUrl = url.href;
+    const { sdkVersion, crateVersion, manifestSha256 } = options.proof;
+    const pinnedUrl = pinnedManifestUrl(options.proof);
+    if (pinnedUrl === null) return null;
     engine = (options.createEngine ?? createProbeEngine)(pinnedUrl);
-    const readCapabilities = engine.renderCapabilities;
-    if (signal.aborted || typeof readCapabilities !== "function") return null;
-    if (!(await engine.ready()) || signal.aborted) return null;
     // The shared getter validates the running WASM declaration. C02 alone computes the server/host intersection.
-    const actual = await readCapabilities.call(engine);
-    if (signal.aborted || !actual || actual.schemaVersion !== 1 || actual.crateVersion !== crateVersion) return null;
+    const actual = await readMatchingCapability(engine, options.proof, signal);
+    if (actual === null) return null;
     result = Object.freeze({
       capability: Object.freeze({
         sdkVersion, crateVersion, manifestSha256,

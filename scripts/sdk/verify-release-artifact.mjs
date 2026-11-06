@@ -19,6 +19,8 @@ const PACKAGES_V1 = Object.freeze([
   ["develop-engine-runtime", "niho-photo-develop-engine-runtime"],
 ].map(Object.freeze));
 const OWNED_PATHS_V1 = Object.freeze(["packages/photo-editing", "packages/ui", "packages/niho-cloud-contract", "packages/develop-engine", "packages/desktop-photo", "sdk", "scripts/sdk", "scripts/ci/cloud-contract-sync.mjs", "scripts/ci/image-metadata.mjs", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/ci/photo-sdk-workflow-lib.mjs", "scripts/ci/publication-lib.mjs", "scripts/ci/release-evidence-lib.mjs", "scripts/ci/workflow-lib.mjs", "LICENSE.md", "ASSET_LICENSE.md", "TRADEMARKS.md", "THIRD_PARTY_NOTICES.md"]);
+const OWNED_PATHS_V2 = Object.freeze([...OWNED_PATHS_V1, "packages/photo-library-contract"]);
+const OWNED_PATHS_V3 = Object.freeze([...OWNED_PATHS_V2, "scripts/ci/photo-web-workflow-lib.mjs"]);
 const PERSONAL_CLOUD_PACKAGE = Object.freeze(["personal-cloud-contract", "niho-photo-personal-cloud-contract"]);
 
 export const SDK_RELEASE_PROFILES = Object.freeze({
@@ -26,7 +28,13 @@ export const SDK_RELEASE_PROFILES = Object.freeze({
   2: Object.freeze({
     schemaVersion: 2,
     packages: Object.freeze([...PACKAGES_V1.slice(0, 4), PERSONAL_CLOUD_PACKAGE, ...PACKAGES_V1.slice(4)]),
-    ownedSourcePaths: Object.freeze([...OWNED_PATHS_V1, "packages/photo-library-contract"]),
+    ownedSourcePaths: OWNED_PATHS_V2,
+    directoryFiles: 8,
+  }),
+  3: Object.freeze({
+    schemaVersion: 3,
+    packages: Object.freeze([...PACKAGES_V1.slice(0, 4), PERSONAL_CLOUD_PACKAGE, ...PACKAGES_V1.slice(4)]),
+    ownedSourcePaths: OWNED_PATHS_V3,
     directoryFiles: 8,
   }),
 });
@@ -75,7 +83,7 @@ function hasExactKeys(value, expected) {
 }
 
 export function sdkReleaseProfile(schemaVersion) {
-  if (schemaVersion !== 1 && schemaVersion !== 2) throw new ReleaseArtifactError("release manifest schema profileが不正です");
+  if (schemaVersion !== 1 && schemaVersion !== 2 && schemaVersion !== 3) throw new ReleaseArtifactError("release manifest schema profileが不正です");
   const profile = SDK_RELEASE_PROFILES[schemaVersion];
   if (!profile) throw new ReleaseArtifactError("release manifest schema profileが不正です");
   return profile;

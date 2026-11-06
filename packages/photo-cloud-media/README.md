@@ -19,7 +19,7 @@ canonical base がある写真には、その base の作業コピーを使う�
 
 ## 固定 SDK と出典
 
-初期版は公式 `photo-sdk-v0.1.7`、source `5ff21a28ae5f7a0e3a64a98b1ef31a7ca523b2a6`、engine `niho-14`、crate `0.27.0`。`sdk-baseline.json` の package integrity と 実行入口を選ぶ package metadata と compiled contract files、runtime manifest/files を検証し、未検証の code を読まない。pixel algorithm を変更しない。
+固定版は公式 `photo-sdk-v0.1.9`、source `86ca0749c6b738e7f6b59dcff5ebe2f5cafa2804`、engine `niho-14`、crate `0.27.0`。`sdk-baseline.json` の package integrity と 実行入口を選ぶ package metadata と compiled contract files、runtime manifest/files を検証し、未検証の code を読まない。pixel algorithm を変更しない。
 
 public Editor `d778248ff772496f131b347967b5a2c851899b31` の SDK baseline、PNG inspector、合成 PNG/JPEG fixture を監査して再利用した。元 path/hash は `provenance.json`。旧 store/queue/purge/DB adapter と非公開 Git 履歴は持ち込まない。新規の入力/provider 接続コードは Photo 所有。
 

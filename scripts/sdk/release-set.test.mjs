@@ -281,15 +281,19 @@ test("release-set 定義は package/path/version の改変を拒否する", () =
   legacy.schemaVersion = 1;
   legacy.version = "0.1.7";
   legacy.packages = legacy.packages.filter(({ id }) => id !== "personal-cloud-contract");
-  legacy.ownedSourcePaths = legacy.ownedSourcePaths.slice(0, -1);
+  legacy.ownedSourcePaths = legacy.ownedSourcePaths.slice(0, -2);
   assert.equal(validateConfig(legacy), legacy);
-  for (const invalid of ["1", "2", "__proto__", "constructor", null, true, Object.create({ toString: () => "2" })]) {
+  const previous = structuredClone(config);
+  previous.schemaVersion = 2;
+  previous.ownedSourcePaths = previous.ownedSourcePaths.slice(0, -1);
+  assert.equal(validateConfig(previous), previous);
+  for (const invalid of ["1", "2", "3", "__proto__", "constructor", null, true, Object.create({ toString: () => "3" })]) {
     const basis = invalid === "1" ? legacy : config;
     assert.throws(() => validateConfig({ ...basis, schemaVersion: invalid }), /schema profile/u);
   }
   assert.throws(() => validateConfig({ ...config, repository: "niho-coliving/niho-photo" }), /基本契約/);
   assert.throws(() => validateConfig({ ...config, version: "latest" }), /semver/);
-  assert.throws(() => validateConfig({ ...config, schemaVersion: 3 }), /schema profile/);
+  assert.throws(() => validateConfig({ ...config, schemaVersion: 4 }), /schema profile/);
   const escaped = structuredClone(config);
   escaped.packages[0].sourceRoot = "../niho-app";
   assert.throws(() => validateConfig(escaped), /package profile/);
@@ -374,9 +378,9 @@ test("clean Git object から決定的 tarball を作り repo 外 consumer で T
   const one = await packReleaseSet({ repoRoot: fixture.root, outputDirectory: first, assetDirectory: fixture.assets });
   const two = await packReleaseSet({ repoRoot: fixture.root, outputDirectory: second, assetDirectory: fixture.assets });
   assert.deepEqual(one.manifest.packages, two.manifest.packages);
-  assert.equal(one.manifest.schemaVersion, 2);
+  assert.equal(one.manifest.schemaVersion, 3);
   assert.equal(one.manifest.packages.length, 7);
-  assert.equal(one.manifest.sourceOwnership.paths.length, 19);
+  assert.equal(one.manifest.sourceOwnership.paths.length, 20);
   assert.equal(one.manifest.releaseReady, true);
   assert.deepEqual(one.manifest.recipeCompatibility.supportedVersions, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
   assert.ok(one.manifest.recipeCompatibility.engineIdentifiers.includes("niho-13"));
@@ -500,15 +504,20 @@ test("clean Git object から決定的 tarball を作り repo 外 consumer で T
   legacyManifest.schemaVersion = 1;
   legacyManifest.version = "0.1.7";
   legacyManifest.packages = legacyManifest.packages.filter(({ id }) => id !== "personal-cloud-contract");
-  legacyManifest.sourceOwnership.paths = legacyManifest.sourceOwnership.paths.slice(0, -1);
+  legacyManifest.sourceOwnership.paths = legacyManifest.sourceOwnership.paths.slice(0, -2);
   legacyManifest.sourceOwnership.digest = createHash("sha256").update(legacyManifest.sourceOwnership.paths.map(({ path: name, sha256: digest, files }) => `${name}\0${digest}\0${files}\n`).join("")).digest("hex");
   assert.equal(validateReleaseManifest(legacyManifest, fixture.source.commit).schemaVersion, 1);
-  for (const invalid of ["1", "2", "__proto__", "constructor", null, true, Object.create({ toString: () => "2" })]) {
+  const previousManifest = structuredClone(one.manifest);
+  previousManifest.schemaVersion = 2;
+  previousManifest.sourceOwnership.paths.pop();
+  previousManifest.sourceOwnership.digest = createHash("sha256").update(previousManifest.sourceOwnership.paths.flatMap(({ path: name, sha256: digest, files }) => [name, String.fromCharCode(0), digest, String.fromCharCode(0), String(files), String.fromCharCode(10)]).join("")).digest("hex");
+  assert.equal(validateReleaseManifest(previousManifest, fixture.source.commit).schemaVersion, 2);
+  for (const invalid of ["1", "2", "3", "__proto__", "constructor", null, true, Object.create({ toString: () => "3" })]) {
     const basis = invalid === "1" ? legacyManifest : one.manifest;
     assert.throws(() => validateReleaseManifest({ ...basis, schemaVersion: invalid }, fixture.source.commit), /schema profile/u);
   }
   for (const mutate of [
-    (value) => { value.schemaVersion = 3; },
+    (value) => { value.schemaVersion = 4; },
     (value) => { value.packages.push(one.manifest.packages.find(({ id }) => id === "personal-cloud-contract")); },
     (value) => { value.sourceOwnership.paths.push(one.manifest.sourceOwnership.paths.at(-1)); },
     (value) => { value.extra = true; },

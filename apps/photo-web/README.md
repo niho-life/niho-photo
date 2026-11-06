@@ -23,6 +23,18 @@
 
 C08の信頼された設定に、C01実producer登録、C02実transport、C03下書き・guard・失効消去、共有dialog取消し、正式なCSP/immutable asset保持を合わせる。安全なUI identity metadataをserverの本人証明として送らない。通常のcredential refreshでは編集を維持し、失効・本人切替では処理と派生資源を同期的に止める。通常の画面終了を下書きの失効消去にしない。
 
+## production artifact
+
+Node 24でrepository rootからPhoto Webの静的ファイル、Node host bundle、検証済みSDK artifactを生成する:
+
+```sh
+npm run build --workspace @niho/photo-web
+```
+
+生成物は `apps/photo-web/dist/web`、`dist/server/entry.mjs`、`dist/static`。buildはこの3つの生成済みdirectoryだけを削除して作り直す。`dist/static/photo-build.json`のbuild IDとSDK proofを確認し、release imageには `dist/server/entry.mjs` と`dist/static`を一緒に梱包する。
+
+containerは `node /app/entry.mjs` で起動する。既定portは8080、static rootは `/app/static`、受け入れ済み旧buildは `/app/accepted-prior/<release>/static`。`PHOTO_WEB_STATIC_DIRECTORY`と`PHOTO_WEB_ACCEPTED_PRIOR_DIRECTORY`は検証・ローカル起動用にrootを差し替える。クラウド機能は `PHOTO_WEB_CLOUD_ENABLED=true` のときだけ有効になり、未設定のimageはOFFで起動する。これは正式hostの設定・DNS/TLS・認証登録・proxy readback・実機受け入れを代替しない。
+
 WebのVite bundleは共通の `develop-engine.worker.ts` を、既存の `develop-engine-export.worker.ts` へexact absolute aliasで解決する。これで同じ画素処理を使いながらnative glueや永続analysis DBを含めない。実際の配布graphとworker起動を確認し、SDK名の一致だけで能力や読み込まれたbytesを保証しない。
 
 公式SDK baseline、notice、既存512pxアイコンの由来は `src/build/build-baseline.json` と `provenance.json`。C08が別の正式SDKセットを選ぶ場合は、実発行物のsource/hash/receiptを受入してから更新する。古いassetはPWA更新が終わるまで保持する。CDNで圧縮・変形してContent-Lengthを変えると固定bytes検証に失敗するため、静的配信はno-transformとし、実際の公開応答のbytes/長さ/MIMEをreadbackする。

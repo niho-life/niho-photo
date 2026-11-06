@@ -26,7 +26,7 @@
     "verify:publication": "node scripts/verify-publication.mjs",
     "preverify": "node scripts/ci/guard-local-heavy.mjs verify",
     "verify": "npm run test:ci && npm run verify:publication && npm run format:check && npm run typecheck && npm test && npm run lint",
-    "test:ci": "node --test scripts/ci/*.test.mjs",
+    "test:ci": "node --test scripts/ci/*.test.mjs scripts/photo-web/*.test.mjs",
     "sdk:pack": "node scripts/sdk/pack-release-set.mjs",
     "presdk:build-engine-runtime": "node scripts/ci/guard-local-heavy.mjs sdk:build-engine-runtime",
     "sdk:build-engine-runtime": "node scripts/sdk/build-develop-engine-runtime.mjs",

@@ -217,12 +217,12 @@ function candidateFixture(sdkManifestSchemaVersion = 1) {
     run: { id: runId, attempt: runAttempt },
     sdk: {
       mode: "published",
-      version: sdkManifestSchemaVersion === 2 ? "0.1.8" : "0.1.1",
-      manifestFile: `niho-photo-sdk-${sdkManifestSchemaVersion === 2 ? "0.1.8" : "0.1.1"}-${"1".repeat(40)}.json`,
+      version: ({ 1: "0.1.1", 2: "0.1.8", 3: "0.1.10" })[sdkManifestSchemaVersion],
+      manifestFile: `niho-photo-sdk-${({ 1: "0.1.1", 2: "0.1.8", 3: "0.1.10" })[sdkManifestSchemaVersion]}-${"1".repeat(40)}.json`,
       manifestSha256: "c".repeat(64),
       source: { commit: "1".repeat(40), tree: "2".repeat(40) },
       packages: sdkPackages,
-      ...(sdkManifestSchemaVersion === 2 ? { sdkManifestSchemaVersion: 2 } : {}),
+      ...(sdkManifestSchemaVersion >= 2 ? { sdkManifestSchemaVersion } : {}),
     },
     sourceOwnership: { algorithm: "sha256-git-file-set-v1", digest: ownershipDigest, paths: ownershipPaths },
     publicAccountConfig: { name: "NIHO_PHOTO_PUBLIC_FIREBASE_WEB_API_KEY", sha256: "e".repeat(64), included: true },
@@ -426,8 +426,48 @@ test("SDK schema 2 candidateは7 package・19 ownership path・明示proofだけ
   assert.equal(transport.receipt.sdk.sdkManifestSchemaVersion, 2);
   assert.equal(transport.provenance.sdk.sdkManifestSchemaVersion, 2);
 
-  for (const value of [undefined, 1, 3]) {
+  for (const value of [undefined, 1, 4]) {
     const forged = candidateFixture(2);
+    if (value === undefined) delete forged.manifest.sdk.sdkManifestSchemaVersion;
+    else forged.manifest.sdk.sdkManifestSchemaVersion = value;
+    writeFileSync(path.join(forged.directory, forged.manifestFile), `${JSON.stringify(forged.manifest, null, 2)}\n`);
+    assert.throws(() => verifyCandidateDirectory(forged.directory));
+  }
+});
+
+test("SDK schema 3 candidateは7 package・20 ownership pathとtransport proofを固定する", () => {
+  const candidate = candidateFixture(3);
+  assert.equal(candidate.manifest.sdk.sdkManifestSchemaVersion, 3);
+  assert.equal(candidate.manifest.sdk.packages.length, 7);
+  assert.equal(candidate.manifest.sourceOwnership.paths.length, 20);
+  assert.equal(verifyCandidateDirectory(candidate.directory).manifest.sdk.sdkManifestSchemaVersion, 3);
+
+  const proof = sdkProofFixture(candidate);
+  const verified = verifySdkProofDirectory({
+    directory: proof.directory,
+    candidateManifest: candidate.manifest,
+    expectedSdkVersion: candidate.manifest.sdk.version,
+    expectedSdkManifestSha256: candidate.manifest.sdk.manifestSha256,
+  });
+  assert.equal(verified.manifest.schemaVersion, 3);
+  assert.equal(verified.manifest.sourceOwnership.paths.length, 20);
+
+  const transportDirectory = temp("niho-photo-sdk3-transport-");
+  const transport = writeCandidateTransportProof({
+    candidate: { manifest: candidate.manifest },
+    sdkProof: verified,
+    artifactId: "100",
+    artifactDigest: "b".repeat(64),
+    artifactName: `niho-photo-candidate-${candidate.manifest.source.commit}-run-${candidate.manifest.run.id}-attempt-${candidate.manifest.run.attempt}`,
+    toolingSourceSha: "f".repeat(40),
+    receiptFile: path.join(transportDirectory, "receipt.json"),
+    provenanceFile: path.join(transportDirectory, "provenance.json"),
+  });
+  assert.equal(transport.receipt.sdk.sdkManifestSchemaVersion, 3);
+  assert.equal(transport.provenance.sdk.sdkManifestSchemaVersion, 3);
+
+  for (const value of [undefined, 1, 2, 4]) {
+    const forged = candidateFixture(3);
     if (value === undefined) delete forged.manifest.sdk.sdkManifestSchemaVersion;
     else forged.manifest.sdk.sdkManifestSchemaVersion = value;
     writeFileSync(path.join(forged.directory, forged.manifestFile), `${JSON.stringify(forged.manifest, null, 2)}\n`);
@@ -468,7 +508,7 @@ test("candidate publisher verifierはrun/SDK proof/artifact digestを照合し�
   assert.throws(() => execFileSync(process.execPath, badRun, { stdio: "pipe" }));
 });
 
-for (const sdkSchemaVersion of [1, 2]) test(`published SDK preparerはschema ${sdkSchemaVersion}のdirectoryとGitHub releaseを別proofへ固定する`, () => {
+for (const sdkSchemaVersion of [1, 2, 3]) test(`published SDK preparerはschema ${sdkSchemaVersion}のdirectoryとGitHub releaseを別proofへ固定する`, () => {
   const candidate = candidateFixture(sdkSchemaVersion);
   const sdkDirectory = temp("niho-photo-published-sdk-");
   for (const record of candidate.manifest.sdk.packages) {
