@@ -354,11 +354,17 @@ describe("mountPhotoWeb", () => {
     const holdInvite = vi.fn(() => held.promise);
     const mounted = mountPhotoWeb({ rootElement: rootElement(), runtimeOptions, copy, iconUrl: "/owned-icon.png", holdInvite });
 
-    expect(latestViewProps().invite).toEqual({ kind: "link", secret });
+    // While the secret is on its way to the BFF, the screens get no invite (no direct join with the same secret).
+    expect(latestViewProps().invite).toBeNull();
     // Another render while the hold is in flight does not hand the secret over again.
     controlled.notify(snapshot({ dialogScopeKey: "again" }));
     expect(holdInvite).toHaveBeenCalledTimes(1);
     expect(holdInvite).toHaveBeenCalledWith(secret);
+    // Signed in before the answer: still no direct join.
+    controlled.notify(signedIn);
+    expect(latestViewProps().invite).toBeNull();
+    // The expiry is written before the answer, in case the page leaves for sign-in first.
+    expect(window.sessionStorage.length).toBe(1);
 
     await act(async () => held.resolve({ expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString() }));
     expect(window.location.hash).toBe("");
@@ -392,6 +398,29 @@ describe("mountPhotoWeb", () => {
     expect(latestViewProps().invite).toBeNull();
     expect(window.sessionStorage.length).toBe(0);
     late.dispose();
+  });
+
+  it("預けている途中でログインへ離れても、戻ったページは預けた招待で参加する", async () => {
+    const secret = "synthetic-invite-secret-value";
+    window.history.replaceState(null, "", `/#invite=${secret}`);
+    window.sessionStorage.clear();
+    const controlled = controlledRuntime();
+    mockState.runtimeQueue.push(controlled.runtime);
+    const held = deferred<{ readonly expiresAt: string } | null>();
+    const leaving = mountPhotoWeb({ rootElement: rootElement(), runtimeOptions, copy, iconUrl: "/owned-icon.png", holdInvite: vi.fn(() => held.promise) });
+    // The page leaves for sign-in (keepalive finishes the request); the answer never reaches this page.
+    leaving.dispose();
+    await act(async () => held.resolve({ expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString() }));
+    window.history.replaceState(null, "", "/");
+
+    const back = controlledRuntime({ initial: snapshot({ session: { ...snapshot().session, phase: "ready" } as PhotoWebRuntimeSnapshot["session"] }) });
+    mockState.runtimeQueue.push(back.runtime);
+    const returned = mountPhotoWeb({ rootElement: rootElement(), runtimeOptions, copy, iconUrl: "/owned-icon.png", holdInvite: vi.fn(async () => null) });
+    expect(latestViewProps().invite).toEqual({ kind: "held" });
+    const stored = Object.values(window.sessionStorage).join("\n");
+    expect(stored).not.toContain(secret);
+    returned.dispose();
+    window.sessionStorage.clear();
   });
 
   it("預けられなかった招待はアドレスバーに残し、同じページでは預け直さない", async () => {

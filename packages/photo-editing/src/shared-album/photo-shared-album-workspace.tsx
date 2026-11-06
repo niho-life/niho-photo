@@ -51,6 +51,12 @@ type Screen =
   /** The join could not be completed now (lost answer, rate limit); the same link can be tried again. */
   | { readonly kind: "joinFailed" };
 
+/**
+ * The held invite's one request per port, kept outside any one mount: the BFF deletes what it holds on the first
+ * attempt, so a re-render or an unmount and mount before the answer must not ask again. Dropped once handled.
+ */
+const heldJoins = new WeakMap<PhotoSharedAlbumPort, Promise<PhotoSharedAlbumJoinResult | null>>();
+
 /** An addition belongs to the album it was started in: it is shown and retried there only. */
 type Pending = { readonly albumId: string; readonly upload: PhotoSharedAlbumUpload; readonly file: File };
 
@@ -94,18 +100,19 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
   const onInviteHandledRef = useRef(props.onInviteHandled);
   onInviteHandledRef.current = props.onInviteHandled;
   const settledSecretRef = useRef<string | null>(null);
-  /** The held invite's one request per port: the BFF deletes its cookie on the first attempt. */
-  const heldJoinRef = useRef<{ readonly port: PhotoSharedAlbumPort; readonly result: Promise<PhotoSharedAlbumJoinResult | null> } | null>(null);
   useEffect(() => {
     if (!inviteHeld) return;
-    if (heldJoinRef.current === null || heldJoinRef.current.port !== port) {
-      // Not aborted by a re-render or a development remount: asking twice would find the cookie already gone.
-      heldJoinRef.current = { port, result: port.joinHeld(new AbortController().signal).catch(() => null) };
+    let pending = heldJoins.get(port);
+    if (pending === undefined) {
+      // Never aborted by a re-render or a remount: asking twice would find the held invite already gone.
+      pending = port.joinHeld(new AbortController().signal).catch(() => null);
+      heldJoins.set(port, pending);
     }
     let current = true;
     setScreen({ kind: "joining" });
-    void heldJoinRef.current.result.then((result) => {
+    void pending.then((result) => {
       if (!current) return;
+      heldJoins.delete(port);
       if (result === null) {
         // The answer was lost and the cookie is gone either way: read the albums again.
         setScreen({ kind: "list" });

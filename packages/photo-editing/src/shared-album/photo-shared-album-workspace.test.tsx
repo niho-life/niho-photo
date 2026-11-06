@@ -184,6 +184,22 @@ describe("PhotoSharedAlbumWorkspace", () => {
     expect(onInviteHandled).toHaveBeenCalledTimes(1);
     expect(port.openAlbum).toHaveBeenCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, expect.any(AbortSignal));
 
+    // Unmounted and mounted again with the same port before the answer: still one request, and the new mount gets it.
+    act(() => root.unmount());
+    root = createRoot(container);
+    let later!: (result: { readonly kind: "joined"; readonly albumId: string }) => void;
+    const remounted = fakePort({ joinHeld: vi.fn(async () => await new Promise<{ readonly kind: "joined"; readonly albumId: string }>((resolve) => { later = resolve; })) });
+    const remountHandled = vi.fn();
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={remounted} invite={{ kind: "held" }} onInviteHandled={remountHandled} />));
+    act(() => root.unmount());
+    root = createRoot(container);
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={remounted} invite={{ kind: "held" }} onInviteHandled={remountHandled} />));
+    await act(async () => later({ kind: "joined", albumId: PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId }));
+    await flush();
+    expect(remounted.joinHeld).toHaveBeenCalledTimes(1);
+    expect(remountHandled).toHaveBeenCalledTimes(1);
+    expect(remounted.openAlbum).toHaveBeenCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, expect.any(AbortSignal));
+
     act(() => root.unmount());
     root = createRoot(container);
     const lost = fakePort({ joinHeld: vi.fn(async () => await Promise.reject(new Error("synthetic lost answer"))) });

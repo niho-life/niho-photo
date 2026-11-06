@@ -29,6 +29,8 @@ export interface MountedPhotoWeb {
 }
 
 const mountedRoots = new WeakMap<HTMLElement, object>();
+/** The BFF holds an invite for 15 minutes (B00 `PENDING_INVITE_COOKIE`). */
+const HELD_INVITE_LIFETIME_MS = 15 * 60 * 1000;
 
 function validateOptions(options: MountPhotoWebOptions): HTMLElement {
   if (typeof options !== "object" || options === null) {
@@ -95,6 +97,8 @@ export function mountPhotoWeb(options: MountPhotoWebOptions): MountedPhotoWeb {
   const heldInvites = photoWebHeldInvite(view ? sessionStorageOf(view) : null);
   let inviteHeld = heldInvites.present();
   let holdStarted = false;
+  // While the secret is on its way to the BFF it is not used for a direct join as well.
+  let holdInFlight = false;
   const holdInvite = options.holdInvite ?? ((secret: string) => holdBrowserPendingInvite(secret));
   let unsubscribe: (() => void) | null = null;
   let disposed = false;
@@ -124,7 +128,11 @@ export function mountPhotoWeb(options: MountPhotoWebOptions): MountedPhotoWeb {
       if (!signedOut || inviteSecret === null || holdStarted) return;
       // One attempt per page: a refused hold leaves the link in the address bar to open again after sign-in.
       holdStarted = true;
+      holdInFlight = true;
       const secret = inviteSecret;
+      // Written before sending: if the page leaves for sign-in before the answer, the hold may still reach the BFF.
+      const provisional = !inviteHeld;
+      if (provisional) heldInvites.mark(new Date(Date.now() + HELD_INVITE_LIFETIME_MS).toISOString());
       let holding: Promise<{ readonly expiresAt: string } | null>;
       try {
         holding = holdInvite(secret);
@@ -134,7 +142,14 @@ export function mountPhotoWeb(options: MountPhotoWebOptions): MountedPhotoWeb {
       void Promise.resolve(holding)
         .catch(() => null)
         .then((held) => {
-          if (disposed || held === null || inviteSecret !== secret) return;
+          // Leaving the page (for sign-in): the provisional marker stays for the page that comes back.
+          if (disposed) return;
+          holdInFlight = false;
+          if (held === null || inviteSecret !== secret) {
+            if (provisional) heldInvites.clear();
+            if (runtime !== null) render(runtime.getSnapshot());
+            return;
+          }
           heldInvites.mark(held.expiresAt);
           inviteHeld = true;
           inviteSecret = null;
@@ -153,7 +168,7 @@ export function mountPhotoWeb(options: MountPhotoWebOptions): MountedPhotoWeb {
             {...snapshot}
             copy={options.copy}
             iconUrl={options.iconUrl}
-            invite={inviteSecret !== null ? { kind: "link", secret: inviteSecret } : inviteHeld ? { kind: "held" } : null}
+            invite={holdInFlight ? null : inviteSecret !== null ? { kind: "link", secret: inviteSecret } : inviteHeld ? { kind: "held" } : null}
             onInviteHandled={() => {
               // The link in the address bar is used first; a held invite after it.
               if (inviteSecret !== null) {
