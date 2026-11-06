@@ -211,8 +211,13 @@ function oneHeader(headers: Headers, name: string): string { const value = heade
 function validateStartup(options: CreatePersonalPhotoCloudProxyOptions): string {
   if (options.upstreamOrigin !== NIHO_PRODUCTION_ORIGIN || options.trustedUploadOrigin !== undefined && options.trustedUploadOrigin !== TRUSTED_GCS_UPLOAD_ORIGIN) throw new Error("invalid photo cloud startup configuration");
   const value = options.upstreamPathPrefix;
-  if (!/^\/[A-Za-z0-9._~/-]+$/u.test(value) || value.endsWith("/") || value.startsWith("//") || value.split("/").some((item) => item === "." || item === "..") || new URL(value, NIHO_PRODUCTION_ORIGIN).pathname !== value) throw new Error("invalid photo cloud startup configuration");
+  if (!isValidUpstreamPathPrefix(value)) throw new Error("invalid photo cloud startup configuration");
   return value;
+}
+/** A trusted upstream path prefix: absolute, no trailing slash, no dot segments, already canonical. */
+export function isValidUpstreamPathPrefix(value: unknown): value is string {
+  return typeof value === "string" && /^\/[A-Za-z0-9._~/-]+$/u.test(value) && !value.endsWith("/") && !value.startsWith("//")
+    && !value.split("/").some((item) => item === "." || item === "..") && new URL(value, NIHO_PRODUCTION_ORIGIN).pathname === value;
 }
 function responseLibraryId(value: unknown): string {
   if (!isRecord(value)) return "";
