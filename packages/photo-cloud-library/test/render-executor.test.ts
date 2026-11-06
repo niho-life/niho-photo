@@ -222,7 +222,7 @@ describe("source-device render executor (B07)", () => {
   it("the server refuses an output that still carries location, if a device skipped the scrub", async () => {
     const t = setup({ photos: ["photo-raw"] });
     t.add("item-raw", "photo-raw");
-    const [claimed] = (await t.server.transport.request("renderJobs.claim", { maxJobs: 1 }, { signal: t.signal })).jobs;
+    const [claimed] = (await t.server.transport.request("renderJobs.claim", { maxJobs: 1 }, { signal: t.signal, idempotencyKey: "manual-claim" })).value.jobs;
     const leaky = syntheticJpeg({ width: 1200, height: 800, exif: cameraExifWithLocation() });
     const start = await t.server.transport.request("renderJobs.startOutput", {
       jobId: claimed.job.id, leaseToken: claimed.lease.leaseToken,
@@ -341,7 +341,7 @@ describe("source-device render executor (B07)", () => {
     // The lease (10 min) runs out before the ticket (1 h); offering the job again releases what the old lease reserved.
     t.advance(11 * 60 * 1000);
     expect(t.server.reservedBytes()).toBeGreaterThan(0);
-    const [again] = (await t.server.transport.request("renderJobs.claim", { maxJobs: 1 }, { signal: t.signal })).jobs;
+    const [again] = (await t.server.transport.request("renderJobs.claim", { maxJobs: 1 }, { signal: t.signal, idempotencyKey: "manual-claim" })).value.jobs;
     expect(again.job.id).toBe(t.server.jobs()[0].id);
     expect(t.server.reservedBytes()).toBe(0);
 
@@ -354,17 +354,67 @@ describe("source-device render executor (B07)", () => {
     expect(t2.server.reservedBytes()).toBe(0);
   });
 
-  it("replays lost answers with the same key and starts a fresh output when the ticket was lost", async () => {
+  it("replays lost answers with the same key and renews the ticket of the same output when it was lost", async () => {
     const t = setup({ photos: ["photo-lost"] });
     t.add("item-lost", "photo-lost");
     t.server.loseNextResponse("renderJobs.startOutput");
     t.server.loseNextResponse("renderJobs.commit");
     expect((await t.executor.drain(t.signal)).committed).toBe(1);
     expect(t.server.commitOrder).toEqual(["item-lost"]);
-    // start (lost) → replay without ticket → fresh start; commit (lost) → replay.
-    expect(t.server.calls("renderJobs.startOutput")).toBe(3);
+    // start (lost) → replay without ticket → renew (same upload, same reservation); commit (lost) → replay.
+    expect(t.server.calls("renderJobs.startOutput")).toBe(2);
+    expect(t.server.calls("renderJobs.renewOutput")).toBe(1);
     expect(t.server.calls("renderJobs.commit")).toBe(2);
     expect(t.server.reservedBytes()).toBe(0);
+  });
+
+  it("a lost claim answer is replayed and returns the same jobs, so nothing waits for its lease to run out", async () => {
+    const t = setup({ photos: ["photo-c1", "photo-c2"] });
+    t.add("item-c1", "photo-c1");
+    t.add("item-c2", "photo-c2");
+    t.server.loseNextResponse("renderJobs.claim");
+    expect((await t.executor.drain(t.signal)).committed).toBe(2);
+    expect(t.server.commitOrder).toEqual(["item-c1", "item-c2"]);
+    // Without the replay, the first two jobs would stay claimed by a lost answer until their leases expired.
+    expect(t.server.jobs().every((job) => job.state === "committed")).toBe(true);
+  });
+
+  it("names this device's on-screen photos in its claims, so they are served first from a large backlog", async () => {
+    const photos = Array.from({ length: 400 }, (_, index) => `backlog-${index}`);
+    const t = setup({ photos, executor: { maxConcurrent: 2, claimBatch: 4 } });
+    photos.forEach((photo, index) => t.add(`backlog-item-${index}`, photo));
+    const onScreen = [397, 251, 120].map((index) => `backlog-${index}`);
+    t.executor.prioritize(onScreen.map(photoRef));
+    const summary = await t.executor.drain(t.signal);
+    expect(summary.committed).toBe(400);
+    expect(new Set(t.server.commitOrder.slice(0, 3))).toEqual(new Set(["backlog-item-397", "backlog-item-251", "backlog-item-120"]));
+  });
+
+  it("checks NIHO's expected full-resolution size before uploading, and the server rejects any other size", async () => {
+    const t = setup({ photos: ["photo-size", "photo-wide"] });
+    const recipe = recipeFor(1);
+    const size = hex(t.sources.get("photo-size")?.bytes as Uint8Array);
+    // The synthetic renderer draws 1200×800; NIHO expects 2400×1600 (or 1000×800) for these recipes.
+    t.server.addAlbumItem({ albumId: "album-a", itemId: "item-small", photo: photoRef("photo-size"), recipe, binding: bindingFor(size, recipe), expectedOutput: { width: 2400, height: 1600 } });
+    const wide = hex(t.sources.get("photo-wide")?.bytes as Uint8Array);
+    t.server.addAlbumItem({ albumId: "album-a", itemId: "item-other", photo: photoRef("photo-wide"), recipe, binding: bindingFor(wide, recipe), expectedOutput: { width: 1000, height: 800 } });
+    expect(await t.executor.drain(t.signal)).toMatchObject({ failed: 2, committed: 0 });
+    expect(t.server.jobs().map((job) => job.failure)).toEqual(["full_resolution_unavailable", "renderer_unavailable"]);
+    expect(t.server.calls("renderJobs.startOutput")).toBe(0);
+
+    // A device that skips the check: the commit decodes the upload and refuses the size.
+    const t2 = setup({ photos: ["photo-size"] });
+    const binding = bindingFor(hex(t2.sources.get("photo-size")?.bytes as Uint8Array), recipe);
+    t2.server.addAlbumItem({ albumId: "album-a", itemId: "item-small", photo: photoRef("photo-size"), recipe, binding, expectedOutput: { width: 2400, height: 1600 } });
+    const [claimed] = (await t2.server.transport.request("renderJobs.claim", { maxJobs: 1 }, { signal: t2.signal, idempotencyKey: "manual-claim" })).value.jobs;
+    const bytes = syntheticJpeg({ width: 1200, height: 800 });
+    const start = await t2.server.transport.request("renderJobs.startOutput", {
+      jobId: claimed.job.id, leaseToken: claimed.lease.leaseToken,
+      output: { kind: "rendition", sizeBytes: bytes.length, sha256: hex(bytes), contentType: "image/jpeg", width: 2400, height: 1600, metadata: { capturedAt: null, capturedAtOffset: null, colorProfile: "sRGB", orientation: 1 } },
+    }, { signal: t2.signal, idempotencyKey: "manual-start" });
+    await t2.server.uploader.upload(start.value.ticket as never, bytes, "image/jpeg", t2.signal);
+    await expect(t2.server.transport.request("renderJobs.commit", { jobId: claimed.job.id, leaseToken: claimed.lease.leaseToken, uploadId: start.value.uploadId }, { signal: t2.signal, idempotencyKey: "manual-commit" }))
+      .rejects.toMatchObject({ error: { code: "content_rejected" } });
   });
 
   it("drops a result whose lease ran out while rendering; the job is claimed again and finished", async () => {

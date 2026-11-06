@@ -8,18 +8,21 @@
  * - No stale overwrite: the server commits only the target's current binding (`decideRenderCommit`); a job superseded
  *   by a newer recipe, a removed item or an expired lease is discarded here without retrying.
  * - Order: at most `maxConcurrent` jobs per device. The server's claim order is kept (it ranks photos people are viewing
- *   and new additions); the device can raise its own on-screen photos with `prioritize`.
+ *   and new additions); `prioritize` names this device's on-screen photos in each claim (`prefer`) so the server
+ *   serves them first even from a large backlog, and starts the ones already claimed first.
  * - Local cancellation: `supersede` (a newer recipe saved on this device) and `cancelAlbumItem` (an item or album this
  *   device removed) abort work in flight and drop queued jobs; the server cancels and releases reservations itself.
  * - A full album owner's storage defers the job (`quota_exceeded`) without failing it; the server resumes it when
  *   capacity frees, so a later `drain` picks it up.
- * - Lost answers are replayed with the same idempotency key; a replayed `startOutput` has no ticket, so a fresh output
- *   is started once instead.
+ * - Lost answers are replayed with the same idempotency key, claims included (the server returns the same jobs and
+ *   leases). A replayed `startOutput` has no ticket; `renderJobs.renewOutput` gives a fresh one for the same upload.
+ * - Full resolution is checked against NIHO's `expectedOutput` before any upload; a different size is reported.
  */
 import { PersonalPhotoCloudError } from "../errors";
 
 import {
   SHARING_ERROR_RECOVERY,
+  SHARING_LIMITS,
   canonical,
   compareRenderBinding,
   type ClaimedRenderJob,
@@ -111,7 +114,10 @@ export interface SourceDeviceRenderSummary {
 export interface SourceDeviceRenderExecutor {
   /** Claims and runs jobs until the server has none for this device; resolves with what happened. */
   drain(signal: AbortSignal): Promise<SourceDeviceRenderSummary>;
-  /** Photos on this device's screen: their claimed jobs start first. Replaces the previous set. */
+  /**
+   * Photos on this device's screen: named in the next claims (`prefer`, at most `SHARING_LIMITS.claimPreferMaxPhotos`)
+   * and started first among claimed jobs. Replaces the previous set.
+   */
   prioritize(photos: readonly PhotoRef[]): void;
   /** A newer recipe was saved on this device: drop and abort work bound to an older one. */
   supersede(photo: PhotoRef, binding: RenderBinding): void;
@@ -142,6 +148,7 @@ export function createSourceDeviceRenderExecutor(options: CreateSourceDeviceRend
   const running = new Map<string, Entry>();
   const carried: Entry[] = [];
   let prioritized = new Set<string>();
+  let preferPhotoIds: readonly string[] = [];
   let order = 0;
   let disposed = false;
 
@@ -222,14 +229,19 @@ export function createSourceDeviceRenderExecutor(options: CreateSourceDeviceRend
       }
       if (signal.aborted) return "cancelled";
       if (!leaseLeft()) return "discarded";
-
-      let start = (await send("renderJobs.startOutput", { jobId: job.id, leaseToken: lease.leaseToken, output: output.request }, signal, newKey())).value;
-      if (start.ticket === null) {
-        // The first answer (with the ticket) was lost; a replay carries none, so start a fresh output once.
-        start = (await send("renderJobs.startOutput", { jobId: job.id, leaseToken: lease.leaseToken, output: output.request }, signal, newKey())).value;
-        if (start.ticket === null) return "interrupted";
+      // NIHO computes the full-resolution size with the engine's rule; the commit rejects any other size, so a
+      // mismatch is reported now instead of uploading bytes that can never be published.
+      const expected = job.purpose.kind === "preview" ? null : job.expectedOutput;
+      if (expected && (output.request.width !== expected.width || output.request.height !== expected.height)) {
+        const smaller = output.request.width * output.request.height < expected.width * expected.height;
+        return await report(claimed, smaller ? "full_resolution_unavailable" : "renderer_unavailable", signal);
       }
-      await options.uploader.upload(start.ticket, output.bytes, output.request.contentType, signal);
+
+      const start = (await send("renderJobs.startOutput", { jobId: job.id, leaseToken: lease.leaseToken, output: output.request }, signal, newKey())).value;
+      // The first answer (with the ticket) was lost and the replay carries none: a fresh ticket for the same upload and
+      // reservation, rather than a second output.
+      const ticket = start.ticket ?? (await send("renderJobs.renewOutput", { jobId: job.id, leaseToken: lease.leaseToken, uploadId: start.uploadId }, signal, null)).ticket;
+      await options.uploader.upload(ticket, output.bytes, output.request.contentType, signal);
       if (signal.aborted) return "cancelled";
       if (!leaseLeft()) return "discarded";
       try {
@@ -293,7 +305,9 @@ export function createSourceDeviceRenderExecutor(options: CreateSourceDeviceRend
           const capacity = Math.max(claimBatch, maxConcurrent - running.size);
           let claimed: readonly ClaimedRenderJob[];
           try {
-            claimed = (await send("renderJobs.claim", { maxJobs: capacity }, signal, null)).jobs;
+            // Keyed: a lost answer is replayed and the server returns the same jobs and leases.
+            const prefer = preferPhotoIds.length > 0 ? { prefer: { photoIds: [...preferPhotoIds] } } : {};
+            claimed = (await send("renderJobs.claim", { maxJobs: capacity, ...prefer }, signal, newKey())).value.jobs;
           } catch (error) {
             if (signal.aborted) break;
             throw error;
@@ -337,6 +351,7 @@ export function createSourceDeviceRenderExecutor(options: CreateSourceDeviceRend
     },
     prioritize(photos) {
       prioritized = new Set(photos.map(photoKey));
+      preferPhotoIds = [...new Set(photos.map((photo) => photo.photoId))].slice(0, SHARING_LIMITS.claimPreferMaxPhotos);
     },
     supersede(photo, binding) {
       const key = photoKey(photo);

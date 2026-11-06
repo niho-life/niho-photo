@@ -4,12 +4,16 @@
  * Commits are decided by the contract's reference policy (`decideRenderCommit`) using metadata decoded from the
  * uploaded bytes, so stale, removed or metadata-carrying outputs are refused the same way the server must refuse them.
  *
- * Server-side behaviour it models: claim order (photos being viewed, then new additions, then the backlog), leases,
- * superseding older jobs when a recipe is saved, cancelling jobs and releasing reservations when an item or album is
- * removed, holding jobs while the album owner's storage is full and resuming them when it frees, and lost answers.
+ * Server-side behaviour it models: claim order (photos the claiming device names in `prefer`, photos being viewed, new
+ * additions, then the backlog), keyed claims whose replay returns the same leases, leases, a fresh ticket for the same
+ * output (`renewOutput`), a new output superseding the job's previous one, the expected full-resolution size checked
+ * against the decoded upload, superseding older jobs when a recipe is saved, cancelling jobs and releasing reservations
+ * when an item or album is removed, holding jobs while the album owner's storage is full and resuming them when it
+ * frees, and lost answers.
  */
 import { sha256 } from "@noble/hashes/sha2.js";
 import { bytesToHex } from "@noble/hashes/utils.js";
+import { readJpegPixelSize } from "niho-photo-editing/image-bytes-metadata";
 
 import {
   canonical,
@@ -19,6 +23,7 @@ import {
   type AlbumItemState,
   type RecipeDocument,
   type RenderBinding,
+  type ClaimedRenderJob,
   type RenderExecutor,
   type RenderExecutorOperation,
   type RenderExecutorOperationMap,
@@ -53,7 +58,16 @@ export interface RenderJobMockServer {
   readonly transport: RenderExecutorTransport;
   /** Accepts this mock's tickets only. */
   readonly uploader: RenderOutputUploader;
-  addAlbumItem(input: { albumId: string; itemId: string; photo: PhotoRef; binding: RenderBinding; recipe: RecipeDocument; isNew?: boolean }): string;
+  /** expectedOutput: the full-resolution size NIHO computed for the rendition (default: not known yet). */
+  addAlbumItem(input: {
+    albumId: string;
+    itemId: string;
+    photo: PhotoRef;
+    binding: RenderBinding;
+    recipe: RecipeDocument;
+    isNew?: boolean;
+    expectedOutput?: RenderExpectedOutput | null;
+  }): string;
   requestPreview(photo: PhotoRef, binding: RenderBinding, recipe: RecipeDocument): string;
   /** Items people are looking at: their jobs are claimed first. */
   markVisible(itemIds: readonly string[]): void;
@@ -70,11 +84,12 @@ export interface RenderJobMockServer {
   /** Item IDs in the order their renditions were committed. */
   readonly commitOrder: readonly string[];
   /** The next call of this operation is applied but its answer is lost. */
-  loseNextResponse(operation: Exclude<RenderExecutorOperation, "renderJobs.claim">): void;
+  loseNextResponse(operation: RenderExecutorOperation): void;
   /** Counts of calls by operation (for tests). */
   calls(operation: RenderExecutorOperation): number;
 }
 
+type RenderExpectedOutput = { readonly width: number; readonly height: number };
 type JobRecord = {
   job: RenderJob;
   leaseToken: string | null;
@@ -92,6 +107,7 @@ type ItemRecord = {
   published: RenderBinding | null;
   pendingReason: "rendering" | "quotaExceeded" | null;
   bytes: Uint8Array | null;
+  readonly expectedOutput: RenderExpectedOutput | null;
 };
 type UploadRecord = {
   readonly id: string;
@@ -100,7 +116,8 @@ type UploadRecord = {
   readonly sizeBytes: number;
   readonly sha256: string;
   readonly expiresAtMs: number;
-  state: "reserved" | "uploaded" | "expired" | "rejected" | "released";
+  /** superseded: the job started another output; released: committed or the job ended. */
+  state: "reserved" | "uploaded" | "expired" | "rejected" | "superseded" | "released";
   bytes: Uint8Array | null;
   readonly reservedBytes: number;
 };
@@ -141,12 +158,19 @@ export function createRenderJobMockServer(options: CreateRenderJobMockServerOpti
       }
     }
   };
-  const enqueue = (purpose: RenderJobPurpose, photo: PhotoRef, binding: RenderBinding, recipe: RecipeDocument, tier: number): string => {
+  const enqueue = (
+    purpose: RenderJobPurpose,
+    photo: PhotoRef,
+    binding: RenderBinding,
+    recipe: RecipeDocument,
+    tier: number,
+    expectedOutput: RenderExpectedOutput | null = null,
+  ): string => {
     const id = nextId("job");
     jobs.set(id, {
       job: {
         id, purpose, executor: options.executor, photo, binding, recipe, state: "queued", attempt: 0, createdAt: instant(), leaseExpiresAt: null,
-        failure: null,
+        failure: null, expectedOutput: purpose.kind === "preview" ? null : expectedOutput,
       },
       leaseToken: null, tier, seq: sequence, blockedForQuota: false,
     });
@@ -163,7 +187,8 @@ export function createRenderJobMockServer(options: CreateRenderJobMockServerOpti
   function execute<K extends RenderExecutorOperation>(operation: K, request: RenderExecutorOperationMap[K]["request"]): unknown {
     switch (operation) {
       case "renderJobs.claim": {
-        const { maxJobs = 1 } = request as RenderExecutorOperationMap["renderJobs.claim"]["request"];
+        const { maxJobs = 1, purposes, prefer } = request as RenderExecutorOperationMap["renderJobs.claim"]["request"];
+        const preferred = new Set(prefer?.photoIds ?? []);
         // Expired leases go back to the queue for another attempt; their output reservations are released.
         for (const record of jobs.values()) {
           if (record.job.state === "claimed" && options.now() >= Date.parse(record.job.leaseExpiresAt as string)) {
@@ -174,15 +199,29 @@ export function createRenderJobMockServer(options: CreateRenderJobMockServerOpti
         }
         const candidates = [...jobs.values()]
           .filter((record) => record.job.state === "queued" && !record.blockedForQuota && canonical(record.job.executor) === canonical(options.executor))
-          .sort((a, b) => a.tier - b.tier || a.seq - b.seq)
+          .filter((record) => purposes === undefined || purposes.includes(record.job.purpose.kind))
+          // The claiming device's on-screen photos first (a hint only), then the server's own order.
+          .sort((a, b) => Number(preferred.has(b.job.photo.photoId)) - Number(preferred.has(a.job.photo.photoId)) || a.tier - b.tier || a.seq - b.seq)
           .slice(0, maxJobs);
         return {
-          jobs: candidates.map((record) => {
-            record.leaseToken = nextId("lease");
-            record.job = { ...record.job, state: "claimed", attempt: record.job.attempt + 1, leaseExpiresAt: instant(options.now() + leaseMs) };
-            return { job: record.job, lease: { jobId: record.job.id, leaseToken: record.leaseToken, expiresAt: record.job.leaseExpiresAt as string } };
-          }),
+          value: {
+            jobs: candidates.map((record) => {
+              record.leaseToken = nextId("lease");
+              record.job = { ...record.job, state: "claimed", attempt: record.job.attempt + 1, leaseExpiresAt: instant(options.now() + leaseMs) };
+              return { job: record.job, lease: { jobId: record.job.id, leaseToken: record.leaseToken, expiresAt: record.job.leaseExpiresAt as string } };
+            }),
+          },
+          replayed: false,
         };
+      }
+      case "renderJobs.renewOutput": {
+        const { jobId, leaseToken, uploadId } = request as RenderExecutorOperationMap["renderJobs.renewOutput"]["request"];
+        claimedRecord(jobId, leaseToken);
+        const upload = uploads.get(uploadId);
+        if (!upload || upload.jobId !== jobId || upload.state !== "reserved") return fail("not_found");
+        if (options.now() >= upload.expiresAtMs) return fail("upload_expired");
+        // The same upload and reservation; this synthetic provider never keeps partial bytes.
+        return { uploadId, expiresAt: instant(upload.expiresAtMs), ticket: ticketFor(upload) };
       }
       case "renderJobs.startOutput": {
         const { jobId, leaseToken, output } = request as RenderExecutorOperationMap["renderJobs.startOutput"]["request"];
@@ -203,18 +242,16 @@ export function createRenderJobMockServer(options: CreateRenderJobMockServerOpti
             return fail("quota_exceeded");
           }
         }
+        // A new output supersedes the job's previous one and releases its reservation at once.
+        for (const previous of uploads.values()) {
+          if (previous.jobId === jobId && (previous.state === "reserved" || previous.state === "uploaded")) previous.state = "superseded";
+        }
         const upload: UploadRecord = {
           id: nextId("upload"), jobId, kind: output.kind, sizeBytes: output.sizeBytes, sha256: output.sha256,
           expiresAtMs: options.now() + 60 * 60 * 1000, state: "reserved", bytes: null, reservedBytes: reserve,
         };
         uploads.set(upload.id, upload);
-        return {
-          value: {
-            uploadId: upload.id, expiresAt: instant(upload.expiresAtMs),
-            ticket: { url: `${TICKET_PREFIX}${upload.id}`, method: "PUT", headers: { "Content-Type": output.contentType }, expiresAt: instant(upload.expiresAtMs), resumeOffsetBytes: 0 },
-          },
-          replayed: false,
-        };
+        return { value: { uploadId: upload.id, expiresAt: instant(upload.expiresAtMs), ticket: ticketFor(upload) }, replayed: false };
       }
       case "renderJobs.commit": {
         const { jobId, leaseToken, uploadId } = request as RenderExecutorOperationMap["renderJobs.commit"]["request"];
@@ -224,13 +261,19 @@ export function createRenderJobMockServer(options: CreateRenderJobMockServerOpti
         const purpose = record.job.purpose;
         const item = purpose.kind === "albumItem" ? items.get(itemKey(purpose.albumId, purpose.itemId)) : undefined;
         const preview = purpose.kind === "preview" ? previews.get(photoKey(record.job.photo)) : undefined;
+        const decoded = upload?.bytes ? readJpegPixelSize(upload.bytes) : null;
         const decision = decideRenderCommit({
           job: record.job,
           actor: options.executor,
           claimedGeneration: 1,
           executor: { lifecycle: "active", credentialGeneration: 1 },
           upload: upload && upload.state !== "released"
-            ? { jobId: upload.jobId, kind: upload.kind, state: options.now() >= upload.expiresAtMs ? "expired" : upload.state === "uploaded" ? "uploaded" : upload.state === "rejected" ? "rejected" : "reserved" }
+            ? {
+                jobId: upload.jobId, kind: upload.kind,
+                state: upload.state === "superseded" ? "superseded" : options.now() >= upload.expiresAtMs ? "expired" : upload.state === "uploaded" ? "uploaded" : upload.state === "rejected" ? "rejected" : "reserved",
+                // Pixel size decoded from the uploaded bytes, not the size the executor declared.
+                ...(decoded ? { width: decoded.width, height: decoded.height } : {}),
+              }
             : null,
           bytesMetadata: upload?.bytes ? jpegMetadataRecord(upload.bytes) : {},
           desired: purpose.kind === "albumItem" ? (item && item.state !== "removed" ? item.desired : null) : purpose.kind === "preview" ? preview?.desired ?? null : record.job.binding,
@@ -283,7 +326,12 @@ export function createRenderJobMockServer(options: CreateRenderJobMockServerOpti
       callCounts.set(operation, (callCounts.get(operation) ?? 0) + 1);
       if (requestOptions.signal.aborted) throw requestOptions.signal.reason instanceof Error ? requestOptions.signal.reason : new DOMException("Aborted", "AbortError");
       const key = "idempotencyKey" in requestOptions ? requestOptions.idempotencyKey : undefined;
-      if (operation === "renderJobs.claim") return structuredClone(execute(operation, request)) as never;
+      if (operation === "renderJobs.renewOutput") {
+        if (key !== undefined) return fail("invalid_request");
+        const renewed = execute(operation, request);
+        if (lose.delete(operation)) throw new TypeError("Failed to fetch");
+        return structuredClone(renewed) as never;
+      }
       if (typeof key !== "string" || key.length === 0) return fail("invalid_request");
       const record = {
         actor: { kind: "user", userId: "synthetic-device" }, scope: { kind: "account" }, operation, key, payloadSha256: bytesToHex(sha256(new TextEncoder().encode(canonical(request)))),
@@ -295,8 +343,17 @@ export function createRenderJobMockServer(options: CreateRenderJobMockServerOpti
       let response: unknown;
       if (comparison === "replay" && previous) {
         const value = (previous.response as { value: Record<string, unknown> }).value;
-        // A replayed start carries no bearer ticket.
-        response = { value: operation === "renderJobs.startOutput" ? { ...value, ticket: null } : value, replayed: true };
+        if (operation === "renderJobs.claim") {
+          // The same jobs and leases, while they are still held.
+          const held = (value.jobs as readonly ClaimedRenderJob[]).filter((claimed) => {
+            const record = jobs.get(claimed.job.id);
+            return record?.job.state === "claimed" && record.leaseToken === claimed.lease.leaseToken;
+          });
+          response = { value: { jobs: held }, replayed: true };
+        } else {
+          // A replayed start carries no bearer ticket.
+          response = { value: operation === "renderJobs.startOutput" ? { ...value, ticket: null } : value, replayed: true };
+        }
       } else {
         response = execute(operation, request);
         stored.set(identity, { record, response });
@@ -320,6 +377,11 @@ export function createRenderJobMockServer(options: CreateRenderJobMockServerOpti
     },
   };
 
+  function ticketFor(upload: UploadRecord) {
+    // Outputs are JPEG (renditions and the device's previews alike).
+    return { url: `${TICKET_PREFIX}${upload.id}`, method: "PUT" as const, headers: { "Content-Type": "image/jpeg" }, expiresAt: instant(upload.expiresAtMs), resumeOffsetBytes: 0 };
+  }
+
   function reservedBytes(): number {
     let total = 0;
     // An expired ticket no longer holds storage.
@@ -332,11 +394,12 @@ export function createRenderJobMockServer(options: CreateRenderJobMockServerOpti
   return {
     transport,
     uploader,
-    addAlbumItem({ albumId, itemId, photo, binding, recipe, isNew = false }) {
+    addAlbumItem({ albumId, itemId, photo, binding, recipe, isNew = false, expectedOutput = null }) {
       items.set(itemKey(albumId, itemId), {
         albumId, itemId, photo, state: "preparing", revision: 0, desired: binding, published: null, pendingReason: "rendering", bytes: null,
+        expectedOutput,
       });
-      return enqueue({ kind: "albumItem", albumId, itemId, itemRevision: 0 }, photo, binding, recipe, visible.has(itemId) ? 0 : isNew ? 1 : 2);
+      return enqueue({ kind: "albumItem", albumId, itemId, itemRevision: 0 }, photo, binding, recipe, visible.has(itemId) ? 0 : isNew ? 1 : 2, expectedOutput);
     },
     requestPreview(photo, binding, recipe) {
       previews.set(photoKey(photo), { desired: binding, published: previews.get(photoKey(photo))?.published ?? null, bytes: null });
@@ -356,7 +419,7 @@ export function createRenderJobMockServer(options: CreateRenderJobMockServerOpti
         if (item.state === "published") item.state = "updatePending";
         item.pendingReason = "rendering";
         endJobs((record) => record.job.purpose.kind === "albumItem" && record.job.purpose.itemId === item.itemId && record.job.purpose.albumId === item.albumId, "superseded");
-        enqueue({ kind: "albumItem", albumId: item.albumId, itemId: item.itemId, itemRevision: item.revision }, photo, binding, recipe, visible.has(item.itemId) ? 0 : 1);
+        enqueue({ kind: "albumItem", albumId: item.albumId, itemId: item.itemId, itemRevision: item.revision }, photo, binding, recipe, visible.has(item.itemId) ? 0 : 1, item.expectedOutput);
       }
       const preview = previews.get(key);
       if (preview && compareRenderBinding(binding, preview.desired) === "newer") {
