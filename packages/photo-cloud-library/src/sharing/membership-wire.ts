@@ -1,8 +1,8 @@
 /**
- * Wire for the shared-album membership and invite operations (B05 #246). The contract (B00) fixes the operations,
- * closed request shapes, errors and recovery but no HTTP routes; this module proposes a uniform same-origin form:
- * `POST /cloud/sharing/v1/<operation>` with the closed JSON request as the body, the `Idempotency-Key` header for
- * mutations and the same capture headers as the personal v2 wire. Secrets travel in the body only, never in a URL.
+ * Wire for the shared-album membership and invite operations (B05 #246). Routes are the contract's user table
+ * (`SHARING_ROUTES` under `/cloud/sharing/v1`, B00): IDs as opaque path segments, page fields as query parameters,
+ * the rest as a closed JSON body, the `Idempotency-Key` header for mutations and the same capture headers as the
+ * personal v2 wire. The invite secret travels in the body of `POST /invites/join` only, never in a URL.
  *
  * Every response is validated before it reaches the UI. People are `{ displayName, isSelf }` only: a response that
  * carries another member's user ID, email or any other field is rejected rather than shown.
@@ -16,8 +16,11 @@ import { JSON_LIMITS, isOpaqueWireId, isValidIdempotencyKey } from "../wire";
 import {
   ALBUM_PERMISSIONS,
   MEMBER_ROLES,
+  SHARING_CLOUD_PATH_PREFIX,
   SHARING_ERROR_STATUS,
   SHARING_LIMITS,
+  SharingRouteError,
+  encodeSharingRequest,
   findUnexpectedRequestFields,
   type Album,
   type AlbumRole,
@@ -28,9 +31,10 @@ import {
   type SharingErrorCode,
   type SharingErrorEnvelope,
   type SharingOperationMap,
+  type SharingRouteMethod,
 } from "./contract";
 
-export const SHARING_CLOUD_PATH_PREFIX = "/cloud/sharing/v1";
+export { SHARING_CLOUD_PATH_PREFIX };
 
 /** The operations this client sends (B05). Album and item operations belong to B12 and are not routed here. */
 export const SHARED_ALBUM_MEMBERSHIP_OPERATIONS = [
@@ -71,8 +75,11 @@ export function isSharedAlbumMembershipMutation(operation: SharedAlbumMembership
 
 export interface EncodedSharingRequest {
   readonly operation: SharedAlbumMembershipOperation;
+  readonly method: SharingRouteMethod;
+  /** Full same-origin path, with the encoded query when the route has one. */
   readonly path: string;
-  readonly body: Uint8Array<ArrayBuffer>;
+  /** The closed JSON body, or null for GET/DELETE routes. */
+  readonly body: Uint8Array<ArrayBuffer> | null;
   readonly idempotencyKey: string | null;
 }
 
@@ -85,10 +92,20 @@ export function encodeMembershipRequest(operation: string, request: unknown, ide
   const mutation = MUTATIONS.has(operation);
   if (mutation ? !isValidIdempotencyKey(idempotencyKey) : idempotencyKey !== undefined) invalidRequest();
   validateMembershipRequest(operation, request);
+  let route: ReturnType<typeof encodeSharingRequest>;
+  try {
+    route = encodeSharingRequest(operation, request as SharingOperationMap[typeof operation]["request"]);
+  } catch (error) {
+    if (error instanceof SharingRouteError) invalidRequest();
+    throw error;
+  }
+  // The table and this client must agree on which operations are mutations.
+  if (route.idempotencyKey !== mutation) invalidRequest();
   return {
     operation,
-    path: `${SHARING_CLOUD_PATH_PREFIX}/${operation}`,
-    body: textEncoder.encode(JSON.stringify(request)),
+    method: route.method,
+    path: route.query === "" ? route.path : `${route.path}?${route.query}`,
+    body: route.body === null ? null : textEncoder.encode(JSON.stringify(route.body)),
     idempotencyKey: mutation ? (idempotencyKey as string) : null,
   };
 }

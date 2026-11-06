@@ -77,7 +77,8 @@ describe("shared album membership actions (B05)", () => {
       const fetchLossy: typeof fetch = async (input, init) => {
         const request = new Request(new URL(String(input), "https://photo.example.test"), init);
         const key = request.headers.get("Idempotency-Key");
-        if (request.url.endsWith("/invites.create") && key !== null && !seenKeys.has(key)) {
+        // invites.create is `POST /albums/{albumId}/invites`.
+        if (request.method === "POST" && new URL(request.url).pathname.endsWith("/invites") && key !== null && !seenKeys.has(key)) {
           seenKeys.add(key);
           if (remaining-- > 0) t.server.loseNextResponse();
         }

@@ -18,6 +18,7 @@ import {
   MEMBER_ROLES,
   SHARING_ERROR_STATUS,
   SHARING_LIMITS,
+  SharingRouteError,
   canonical,
   checkAlbumName,
   checkCursor,
@@ -26,7 +27,9 @@ import {
   decideJoin,
   decideMembershipChange,
   decideUploadCommit,
+  decodeSharingRequest,
   findUnexpectedRequestFields,
+  matchSharingRoute,
   permissionsFor,
   personLabel,
   projectAlbumItem,
@@ -54,7 +57,6 @@ import {
 } from "./contract";
 import {
   SHARED_ALBUM_MEMBERSHIP_OPERATIONS,
-  SHARING_CLOUD_PATH_PREFIX,
   isSharedAlbumMembershipOperation,
   validateMembershipRequest,
 } from "./membership-wire";
@@ -105,8 +107,9 @@ export interface SharedAlbumMockServer {
   /** A signed-in user's session, or `null` for a signed-out visitor. */
   clientFor(actorId: UserId | null): SharedAlbumMockClient;
   /**
-   * Handler for the proposed wire (`POST /cloud/sharing/v1/<operation>`) so the browser client can be exercised end to
-   * end. The actor comes from the capture header; this is a test stand-in for the verified session, not authorization.
+   * Handler for the contract's user routes (`SHARING_ROUTES` under `/cloud/sharing/v1`) so the browser client can be
+   * exercised end to end. The actor comes from the capture header; this is a test stand-in for the verified session,
+   * not authorization.
    */
   readonly fetch: typeof fetch;
   /** Owner notifications (`MemberJoinedEvent`) in delivery order. */
@@ -549,19 +552,24 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
       ? (init === undefined ? input : new Request(input, init))
       : new Request(new URL(String(input), "https://photo.example.test"), init);
     const url = new URL(request.url);
-    const prefix = `${SHARING_CLOUD_PATH_PREFIX}/`;
-    const operation = url.pathname.startsWith(prefix) ? url.pathname.slice(prefix.length) : "";
-    if (request.method !== "POST" || !isSharedAlbumMembershipOperation(operation)) return jsonResponse(404, { error: { code: "not_found", requestId: nextId("request"), retryable: false } });
+    const matched = matchSharingRoute(request.method, url.pathname);
+    if (matched === null || !isMockOperation(matched.operation)) return jsonResponse(404, { error: { code: "not_found", requestId: nextId("request"), retryable: false } });
+    const operation = matched.operation;
     const actor = request.headers.get(PHOTO_CAPTURE_HEADERS.actorId);
     const key = request.headers.get(PHOTO_IDEMPOTENCY_HEADER) ?? undefined;
-    let body: unknown;
+    const invalid = (): Response => jsonResponse(400, { error: { code: "invalid_request", requestId: nextId("request"), retryable: false } });
+    let decoded: unknown;
     try {
-      body = JSON.parse(await request.text());
-    } catch {
-      return jsonResponse(400, { error: { code: "invalid_request", requestId: nextId("request"), retryable: false } });
+      const text = await request.text();
+      const body: unknown = text === "" ? null : JSON.parse(text);
+      // Placement (path, query, body) is the route table's; values are checked again by `dispatch`.
+      decoded = decodeSharingRequest(operation, { params: matched.params, query: url.searchParams, body, range: null });
+    } catch (error) {
+      if (error instanceof SyntaxError || error instanceof SharingRouteError) return invalid();
+      throw error;
     }
     try {
-      return jsonResponse(200, dispatch(actor, operation, body, key));
+      return jsonResponse(200, dispatch(actor, operation, decoded, key));
     } catch (error) {
       if (error instanceof PersonalPhotoCloudError && error.code === "unavailable") throw new TypeError("Failed to fetch");
       if (isEnvelope(error)) return jsonResponse(SHARING_ERROR_STATUS[error.error.code], error);

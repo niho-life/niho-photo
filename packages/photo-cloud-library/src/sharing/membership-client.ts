@@ -68,7 +68,7 @@ export function createBrowserSharedAlbumMembershipClient(options: CreateBrowserS
         const response = await fetchWithHeaderDeadline(
           fetchFn,
           encoded.path,
-          requestInit(capture, "POST", encoded.body, null, encoded.idempotencyKey, link.controller.signal),
+          requestInit(capture, encoded.method, encoded.body, null, encoded.idempotencyKey, link.controller.signal),
           scoped.signal,
           link.controller,
         );

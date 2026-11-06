@@ -1,15 +1,11 @@
-/**
- * The shared-album contract (B00 #241) as this package uses it. Imported by relative path until the package
- * dependency and lock entry are added by the contract's writer; replace these two paths with
- * `@niho/photo-library-sharing-contract` and `@niho/photo-library-sharing-contract/policy` then.
- */
+/** The shared-album contract (B00 #241) as this package uses it: types, policy and the user route table. */
 export {
   ALBUM_PERMISSIONS,
   MEMBER_ROLES,
   SHARING_ERROR_RECOVERY,
   SHARING_ERROR_STATUS,
   SHARING_LIMITS,
-} from "../../../photo-library-sharing-contract/src/v1.ts";
+} from "@niho/photo-library-sharing-contract";
 export type {
   Album,
   AlbumAccess,
@@ -50,7 +46,7 @@ export type {
   SharingSessionScope,
   UploadTicket,
   UserId,
-} from "../../../photo-library-sharing-contract/src/v1.ts";
+} from "@niho/photo-library-sharing-contract";
 export {
   canonical,
   checkAlbumName,
@@ -65,4 +61,12 @@ export {
   permissionsFor,
   personLabel,
   projectAlbumItem,
-} from "../../../photo-library-sharing-contract/src/policy.ts";
+} from "@niho/photo-library-sharing-contract/policy";
+export {
+  SHARING_CLOUD_PATH_PREFIX,
+  SharingRouteError,
+  decodeSharingRequest,
+  encodeSharingRequest,
+  matchSharingRoute,
+  type SharingRouteMethod,
+} from "@niho/photo-library-sharing-contract/routes";

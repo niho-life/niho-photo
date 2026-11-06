@@ -337,13 +337,21 @@ describe("shared album membership mock (B05)", () => {
       const mutation = ["albums.create", "invites.create", "invites.join", "members.changeRole", "albumItems.addFile"].includes(operation);
       expect(await rejection(t.owner.request(operation as never, request as never, (mutation ? t.key() : t.read) as never)), operation).toBe("invalid_request");
     }
-    // The same rules apply on the wire.
-    const response = await t.server.fetch(`/cloud/sharing/v1/invites.create`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-NIHO-Photo-Actor-Id": OWNER, "Idempotency-Key": "wire-key" },
-      body: JSON.stringify({ albumId: album.id }),
-    });
-    expect(response.status).toBe(400);
-    expect(((await response.json()) as { error: { code: string } }).error.code).toBe("invalid_request");
+    // The same rules apply on the wire: a missing field, a field outside the route's body, a body on a GET.
+    const wire = async (method: string, path: string, body?: unknown) => {
+      const response = await t.server.fetch(`/cloud/sharing/v1${path}`, {
+        method,
+        headers: { "Content-Type": "application/json", "X-NIHO-Photo-Actor-Id": OWNER, ...(method === "GET" ? {} : { "Idempotency-Key": "wire-key" }) },
+        ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+      });
+      return [response.status, ((await response.json()) as { error?: { code: string } }).error?.code ?? "ok"];
+    };
+    expect(await wire("POST", `/albums/${album.id}/invites`, {})).toEqual([400, "invalid_request"]);
+    expect(await wire("POST", `/albums/${album.id}/invites`, { albumId: album.id, role: "viewer" })).toEqual([400, "invalid_request"]);
+    expect(await wire("POST", `/albums/${album.id}/members?limit=10`, {})).toEqual([404, "not_found"]);
+    expect(await wire("GET", `/albums/${album.id}/members?limit=10&limit=20`)).toEqual([400, "invalid_request"]);
+    // The provisional form before the route table is not served.
+    expect(await wire("POST", "/invites.create", { albumId: album.id, role: "viewer" })).toEqual([404, "not_found"]);
+    expect(await wire("POST", `/albums/${album.id}/invites`, { role: "viewer" })).toEqual([200, "ok"]);
   });
 });

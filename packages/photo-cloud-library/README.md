@@ -39,11 +39,11 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 `@niho/photo-cloud-library/sharing` は共有アルバムの招待リンク・メンバーの client（`createBrowserSharedAlbumMembershipClient`）、UI向けの操作（`createSharedAlbumMembership`）、開発と試験用の合成 in-memory server（`createSharedAlbumMockServer`）を持つ。契約は `@niho/photo-library-sharing-contract`（B00）が正本で、判定は同 package の `./policy` を使う。本人 v2 の port・認可・5GiB の契約は変えない。
 
 - 本人 v2 の transport を複製せず、同じ部品を使う（`PersonalPhotoScope` を session だけに束縛、capture header、header の期限、bounded JSON、idempotency key の規則）。アルバムは library をまたぐので、scope は library を持たない。
-- wire は契約に route が無いため、`POST /cloud/sharing/v1/<operation>`・閉じた JSON body・mutation の `Idempotency-Key` を提案として置く。capture header は BFF が検証済みの session と照合する fence で、認可の根拠にしない。招待の secret は body だけに載せ、URL・storage・log に出さない。
+- wire は契約の利用者の経路の表（`SHARING_ROUTES`、`/cloud/sharing/v1`）に従う。ID は path、`cursor`・`limit` は query、残りは閉じた JSON body、mutation は `Idempotency-Key`。合成 server も同じ表で decode する。capture header は BFF が検証済みの session と照合する fence で、認可の根拠にしない。招待の secret は `POST /invites/join` の body だけに載せ、URL・storage・log に出さない。
 - 応答は厳密に検証し、人は `{displayName, isSelf}` 以外を拒否する。表示用の権限は契約の表と一致しなければ拒否する。
 - 1 操作 1 key。応答喪失は同じ key で再送する（参加の通知は重複しない）。作成時の secret が replay で失われたリンクは毎回無効化してから作り直す。
 - 合成 server は photo 単位のリンク共有（`cloudSharing`）とは別で、共有リンクを招待として受け付けない。実際の権限台帳・資格情報・回数制限は既存の非公開境界に置き、この server を本番で選ばない。
-- 契約 package は B00 の lock 登録まで相対 path で読む（`src/sharing/contract.ts` の 1 箇所）。共有シート・招待画面・BFF の route と 401 の扱いへの接続は後続。
+- 契約 package は package 名で読む（`src/sharing/contract.ts` の 1 箇所）。共有シート・招待画面・BFF と 401 の扱いへの接続は後続。
 
 ## 完全補正の同期core
 

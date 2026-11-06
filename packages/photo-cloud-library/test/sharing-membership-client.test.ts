@@ -55,7 +55,7 @@ function json(value: unknown, status = 200): Response {
 }
 
 describe("browser shared album membership client (B05)", () => {
-  it("sends each operation as a closed JSON POST with the session headers, keys only on mutations", async () => {
+  it("sends each operation on the contract's route with the session headers, keys only on mutations", async () => {
     const t = setup();
     const album = await t.album();
     const owner = t.clientFor(OWNER);
@@ -65,12 +65,16 @@ describe("browser shared album membership client (B05)", () => {
 
     const [create, list] = t.seen;
     expect(create.method).toBe("POST");
-    expect(new URL(create.url).pathname).toBe(`${SHARING_CLOUD_PATH_PREFIX}/invites.create`);
+    expect(new URL(create.url).pathname).toBe(`${SHARING_CLOUD_PATH_PREFIX}/albums/${album.id}/invites`);
     expect(create.headers.get("Idempotency-Key")).toBe("key-2");
     expect(create.headers.get("X-NIHO-Photo-Actor-Id")).toBe(OWNER);
     expect(create.headers.get("X-NIHO-Photo-Session-Epoch")).toBe("epoch-1");
     expect(create.credentials).toBe("same-origin");
-    expect(await create.json()).toEqual({ albumId: album.id, role: "contributor" });
+    // The album is in the path; the body carries the remaining fields only.
+    expect(await create.json()).toEqual({ role: "contributor" });
+    expect(list.method).toBe("GET");
+    expect(new URL(list.url).pathname).toBe(`${SHARING_CLOUD_PATH_PREFIX}/albums/${album.id}/invites`);
+    expect(await list.text()).toBe("");
     expect(list.headers.get("Idempotency-Key")).toBeNull();
 
     const staff = t.clientFor(STAFF);
@@ -78,13 +82,55 @@ describe("browser shared album membership client (B05)", () => {
     expect(joined.value).toMatchObject({ joined: true, membership: { role: "contributor", member: { displayName: "Synthetic Staff", isSelf: true } } });
     const join = t.seen[2];
     // The secret travels in the body only, never in the URL.
-    expect(join.url).not.toContain("synthetic-secret");
+    expect(join.method).toBe("POST");
+    expect(new URL(join.url).pathname).toBe(`${SHARING_CLOUD_PATH_PREFIX}/invites/join`);
+    expect(join.url).not.toContain("synthetic-invite-secret");
     expect(await join.json()).toEqual({ secret: "synthetic-invite-secret-value" });
 
     const members = await owner.request("members.list", { albumId: album.id }, { signal: t.signal });
     expect(members.items.map((member) => member.member)).toEqual([
       { displayName: "Synthetic Owner", isSelf: true },
       { displayName: "Synthetic Staff", isSelf: false },
+    ]);
+  });
+
+  it("places every membership operation where the route table says, and the server decodes it back", async () => {
+    const t = setup();
+    const album = await t.album();
+    const owner = t.clientFor(OWNER);
+    const secret = (await owner.request("invites.create", { albumId: album.id, role: "contributor" }, t.key())).value.secret as string;
+    const staff = t.clientFor(STAFF);
+    const membership = (await staff.request("invites.join", { secret }, t.key())).value.membership;
+    if (!membership) throw new Error("expected a membership");
+    const page = await owner.request("members.list", { albumId: album.id, limit: 10 }, { signal: t.signal });
+    expect(page.items).toHaveLength(2);
+    const changed = await owner.request("members.changeRole", { albumId: album.id, membershipId: membership.id, expectedRevision: membership.revision, role: "viewer" }, t.key());
+    const links = await owner.request("invites.list", { albumId: album.id }, { signal: t.signal });
+    await owner.request("invites.revoke", { albumId: album.id, inviteLinkId: links.links[0].id }, t.key());
+    await owner.request("members.remove", { albumId: album.id, membershipId: changed.value.id }, t.key());
+    // A removed member cannot come back through a link; leaving is shown on a second album.
+    const second = await t.album();
+    const again = (await owner.request("invites.create", { albumId: second.id, role: "viewer" }, t.key())).value.secret as string;
+    await staff.request("invites.join", { secret: again }, t.key());
+    await staff.request("members.leave", { albumId: second.id }, t.key());
+
+    const placed = await Promise.all(t.seen.map(async (request) => {
+      const url = new URL(request.url);
+      const body = await request.text();
+      return [request.method, `${url.pathname.slice(SHARING_CLOUD_PATH_PREFIX.length)}${url.search}`, body === "" ? null : JSON.parse(body)];
+    }));
+    const a = album.id;
+    expect(placed).toEqual([
+      ["POST", `/albums/${a}/invites`, { role: "contributor" }],
+      ["POST", "/invites/join", { secret }],
+      ["GET", `/albums/${a}/members?limit=10`, null],
+      ["POST", `/albums/${a}/members/${membership.id}/role`, { expectedRevision: membership.revision, role: "viewer" }],
+      ["GET", `/albums/${a}/invites`, null],
+      ["POST", `/albums/${a}/invites/${links.links[0].id}/revoke`, {}],
+      ["DELETE", `/albums/${a}/members/${changed.value.id}`, null],
+      ["POST", `/albums/${second.id}/invites`, { role: "viewer" }],
+      ["POST", "/invites/join", { secret: again }],
+      ["POST", `/albums/${second.id}/leave`, {}],
     ]);
   });
 
@@ -120,7 +166,7 @@ describe("browser shared album membership client (B05)", () => {
     const secret = (await t.server.clientFor(OWNER).request("invites.create", { albumId: album.id, role: "viewer" }, t.key())).value.secret as string;
     const staff = t.clientFor(STAFF);
     t.setTamper(async (response, request) => {
-      if (!request.url.endsWith("invites.join")) return response;
+      if (new URL(request.url).pathname !== `${SHARING_CLOUD_PATH_PREFIX}/invites/join`) return response;
       const body = await response.json() as { value: { album: { access: { permissions: Record<string, boolean> } } } };
       body.value.album.access.permissions.addItem = true; // a viewer is never allowed to add
       return json(body);
