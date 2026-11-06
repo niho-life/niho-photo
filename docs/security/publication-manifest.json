@@ -10881,8 +10881,8 @@
     },
     {
       "path": "docs/legal/asset-inventory.csv",
-      "sha256": "36d52a6408c23886220967745c749e42c143a75f5d4444f5f8562d584e62d92e",
-      "origin": "Photo #193 / C00 の契約確定に伴い監査。既存backendの即時purgeとPhoto製品未接続の区別、抽出した合成fixtureの権利・出典または対象型検査を記録。内部URL・実写真・資格情報を含まない。\n変更理由: レビュー反映後の合成型負例のexact hashとサイズを更新\n変更理由: 競合ID取得の合成fixtureの現行公開sourceとexact hashを追加監査し元の抽出記録を保持\n変更理由: B00の合成fixtureを公開資産台帳へ追加。"
+      "sha256": "211e6bea906fbed2ded7c50bb53dcdafd7a0487dda89b5ca662b0e9672f5ebb6",
+      "origin": "Photo #193 / C00 の契約確定に伴い監査。既存backendの即時purgeとPhoto製品未接続の区別、抽出した合成fixtureの権利・出典または対象型検査を記録。内部URL・実写真・資格情報を含まない。\n変更理由: レビュー反映後の合成型負例のexact hashとサイズを更新\n変更理由: 競合ID取得の合成fixtureの現行公開sourceとexact hashを追加監査し元の抽出記録を保持\n変更理由: B00の合成fixtureを公開資産台帳へ追加。\n変更理由: B00の追加合成fixtureの出所hashと公開判定を記録。"
     },
     {
       "path": "docs/lens-adjustments.md",
