@@ -437,6 +437,12 @@ export interface AlbumPage {
 }
 
 /** Only these fields survive into a rendition (Epic §9). Orientation is baked into the pixels. */
+/**
+ * The only metadata a rendition may carry when it is committed: capture time (local time and recorded offset),
+ * orientation (always 1: renditions are rendered upright) and colour profile. Every other field — not only location,
+ * serials and paths — is rejected at commit, or the server rebuilds the bytes with `sanitizeRenditionMetadata` and
+ * checks the rebuilt bytes (`findDisallowedRenditionMetadata`).
+ */
 export const RENDITION_METADATA_FIELDS = ["capturedAt", "capturedAtOffset", "colorProfile", "orientation"] as const;
 export interface RenditionMetadata {
   /** Local capture time without a zone, e.g. 2026-11-01T09:30:00. */
@@ -925,6 +931,8 @@ export const SHARING_ERROR_STATUS = {
   not_found: 404,
   revision_conflict: 409,
   idempotency_conflict: 409,
+  /** The upload is not in a state for this operation, as in v2: e.g. a commit before every byte arrived. */
+  upload_state_conflict: 409,
   quota_exceeded: 409,
   stale_render: 409,
   lease_expired: 409,
@@ -970,6 +978,7 @@ export const SHARING_ERROR_RECOVERY = {
   not_found: "refreshAccess",
   revision_conflict: "refreshAndDecide",
   idempotency_conflict: "stop",
+  upload_state_conflict: "refreshAndDecide",
   quota_exceeded: "stop",
   stale_render: "discardResult",
   lease_expired: "discardResult",
@@ -1097,6 +1106,16 @@ export interface SharingOperationMap {
   /** Revalidates the adder's current role, the item and the target revision before publishing. */
   readonly "albumItems.commitUpload": Operation<AlbumRef & { readonly uploadId: UploadId }, MutationReceipt<AlbumItem>>;
   readonly "albumItems.cancelUpload": Operation<AlbumRef & { readonly uploadId: UploadId }, MutationReceipt<RenditionUpload>>;
+  /**
+   * A fresh ticket for the same reserved upload, like v2 `uploads.renew` (same shape; not a mutation). Only the
+   * adder of the item whose latest upload this is; a committed, cancelled or verifying upload is
+   * `upload_state_conflict`, an expired one `upload_expired`. Bytes already received stay (resume at the ticket's
+   * offset).
+   */
+  readonly "albumItems.renewUpload": Operation<
+    AlbumRef & { readonly uploadId: UploadId },
+    { readonly upload: RenditionUpload & { readonly state: "reserved" }; readonly ticket: UploadTicket }
+  >;
   /** Removes the item from the album only. The adder's original and the owner's library photo stay. */
   readonly "albumItems.remove": Operation<ItemRef, MutationReceipt<AlbumItem>>;
   /** Full-size rendition or its thumbnail, as a bounded stream. */
@@ -1303,6 +1322,7 @@ export const SHARING_OPERATION_ACCESS = {
   "albumItems.replace": { actor: "user", scope: "album", action: "replaceOwnItem" },
   "albumItems.commitUpload": { actor: "user", scope: "album", action: "addItem" },
   "albumItems.cancelUpload": { actor: "user", scope: "album", action: "view" },
+  "albumItems.renewUpload": { actor: "user", scope: "album", action: "addItem" },
   "albumItems.remove": { actor: "user", scope: "album", action: "removeItem" },
   "albumItems.download": { actor: "user", scope: "album", action: "download" },
   "invites.list": { actor: "user", scope: "album", action: "manageInvites" },
@@ -1429,6 +1449,7 @@ export const SHARING_REQUEST_SHAPES = {
   },
   "albumItems.commitUpload": { albumId: "value", uploadId: "value" },
   "albumItems.cancelUpload": { albumId: "value", uploadId: "value" },
+  "albumItems.renewUpload": { albumId: "value", uploadId: "value" },
   "albumItems.remove": { albumId: "value", itemId: "value" },
   "albumItems.download": { albumId: "value", itemId: "value", renditionId: "value", variant: "value", range: RANGE_SHAPE },
   "invites.list": { albumId: "value" },
@@ -1478,12 +1499,18 @@ export const CONNECTOR_REQUEST_SHAPES = {
 // ---------------------------------------------------------------------------------------------------------
 // State transitions. Missing entries are rejected transitions.
 
-export type AlbumItemEvent = "renditionCommitted" | "sourceUpdated" | "remove";
+/**
+ * adderRevoked: the adder was removed from the album, left it, or lost addItem/replaceOwnItem by a role change. Their
+ * additions still in progress are dropped (preparing → removed) and a pending replacement falls back to the last
+ * published rendition (updatePending → published); their uploads and jobs for those items are cancelled. Published
+ * items stay as they are.
+ */
+export type AlbumItemEvent = "renditionCommitted" | "sourceUpdated" | "remove" | "adderRevoked";
 /** removed is terminal: late uploads and jobs never revive an item (Epic §11). */
 export const ALBUM_ITEM_TRANSITIONS = {
-  preparing: { renditionCommitted: "published", remove: "removed" },
-  published: { renditionCommitted: "published", sourceUpdated: "updatePending", remove: "removed" },
-  updatePending: { renditionCommitted: "published", sourceUpdated: "updatePending", remove: "removed" },
+  preparing: { renditionCommitted: "published", remove: "removed", adderRevoked: "removed" },
+  published: { renditionCommitted: "published", sourceUpdated: "updatePending", remove: "removed", adderRevoked: "published" },
+  updatePending: { renditionCommitted: "published", sourceUpdated: "updatePending", remove: "removed", adderRevoked: "published" },
   removed: {},
 } as const satisfies { readonly [S in AlbumItemState]: { readonly [E in AlbumItemEvent]?: AlbumItemState } };
 
