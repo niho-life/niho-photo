@@ -8,6 +8,7 @@ import {
   ALBUM_PERMISSIONS,
   FORBIDDEN_RENDITION_METADATA,
   CONNECTOR_REQUEST_SHAPES,
+  RENDITION_METADATA_FIELDS,
   RENDER_JOB_TRANSITIONS,
   SHARING_LIMITS,
   SHARING_REQUEST_SHAPES,
@@ -484,14 +485,15 @@ export function decideRenderCommit(context: RenderCommitContext): Decision {
   if (upload.state === "expired") return deny("upload_expired");
   if (upload.state === "rejected") return deny("content_rejected");
   if (upload.state === "superseded") return deny("stale_render");
-  if (upload.state !== "uploaded") return deny("invalid_request");
+  // Committing before every byte arrived (and was verified) is a state conflict, as in v2.
+  if (upload.state !== "uploaded") return deny("upload_state_conflict");
   const expectedOutput = job.purpose.kind === "preview" ? "preview" : "rendition";
   if (upload.kind !== expectedOutput) return deny("content_rejected");
   // A rendition is published only at the full-resolution size NIHO expects; a downscale is never a rendition.
   if (job.expectedOutput && (upload.width !== job.expectedOutput.width || upload.height !== job.expectedOutput.height)) {
     return deny("content_rejected");
   }
-  if (findForbiddenMetadata(context.bytesMetadata).length) return deny("content_rejected");
+  if (findDisallowedRenditionMetadata(context.bytesMetadata).length) return deny("content_rejected");
   if (job.purpose.kind === "albumItem") {
     const item = context.item;
     if (!item || item.state === null) return deny("not_found");
@@ -509,7 +511,7 @@ export interface UploadCommitContext {
   readonly viewer: AlbumViewer;
   /** null when the item no longer exists or belongs to another album. */
   readonly item: Pick<AlbumItemSnapshot, "addedBy" | "state" | "revision" | "renditionBinding" | "pendingUpload"> | null;
-  readonly upload: Pick<RenditionUpload, "id" | "targetItemRevision" | "expiresAt" | "state">;
+  readonly upload: Pick<RenditionUpload, "id" | "targetItemRevision" | "expiresAt" | "state" | "sizeBytes" | "uploadedBytes">;
   /** Metadata actually found in the uploaded bytes by the server validator. */
   readonly bytesMetadata: Readonly<Record<string, unknown>>;
   readonly now: Instant;
@@ -535,7 +537,46 @@ export function decideUploadCommit(context: UploadCommitContext): Decision {
   if (context.upload.targetItemRevision !== item.revision + 1) return deny("revision_conflict");
   const binding = item.pendingUpload.binding;
   if (binding && item.renditionBinding && compareRenderBinding(binding, item.renditionBinding) !== "newer") return deny("stale_render");
-  return findForbiddenMetadata(context.bytesMetadata).length ? deny("content_rejected") : allow;
+  // A commit before every byte arrived is a state conflict, as in v2 (continue the upload, then commit again).
+  if (context.upload.state === "reserved" && context.upload.uploadedBytes < context.upload.sizeBytes) return deny("upload_state_conflict");
+  return findDisallowedRenditionMetadata(context.bytesMetadata).length ? deny("content_rejected") : allow;
+}
+
+export interface UploadRenewContext {
+  readonly viewer: AlbumViewer;
+  readonly item: Pick<AlbumItemSnapshot, "addedBy" | "state" | "pendingUpload"> | null;
+  readonly upload: Pick<RenditionUpload, "id" | "expiresAt" | "state">;
+  readonly now: Instant;
+}
+
+/**
+ * `albumItems.renewUpload` (v2 `uploads.renew`): a new ticket only for the adder's latest upload while it is still
+ * reserved and the adder may still add or replace. Removal, leaving or demotion ends the upload like a commit would.
+ */
+export function decideUploadRenew(context: UploadRenewContext): Decision {
+  const membership = context.viewer.membership;
+  if (!membership || membership.state !== "active") return deny("not_found");
+  const item = context.item;
+  if (!item || item.addedBy.userId !== context.viewer.userId) return deny("not_found");
+  if (item.state === "removed") return deny("item_removed");
+  const action: AlbumAction = item.state === "preparing" ? "addItem" : "replaceOwnItem";
+  if (!ALBUM_PERMISSIONS[membership.role][action]) return deny("role_forbidden");
+  if (!item.pendingUpload || item.pendingUpload.uploadId !== context.upload.id) return deny("stale_render");
+  if (context.upload.state === "expired" || time(context.now) >= time(context.upload.expiresAt)) return deny("upload_expired");
+  return context.upload.state === "reserved" ? allow : deny("upload_state_conflict");
+}
+
+/**
+ * The item state after its adder was removed, left or lost addItem/replaceOwnItem (`adderRevoked`): an addition in
+ * progress is dropped and a pending replacement falls back to the last published rendition. Other people's items and
+ * published items do not change. The server also cancels the adder's uploads and jobs for those items.
+ */
+export function itemStateAfterAdderRevoked(
+  item: Pick<AlbumItemSnapshot, "addedBy" | "state">,
+  revokedUserId: UserId,
+): AlbumItemState {
+  if (item.addedBy.userId !== revokedUserId) return item.state;
+  return (ALBUM_ITEM_TRANSITIONS[item.state] as { readonly adderRevoked?: AlbumItemState }).adderRevoked ?? item.state;
 }
 
 // ---------------------------------------------------------------------------------------------------------
@@ -557,6 +598,31 @@ export function sanitizeRenditionMetadata(input: Readonly<Record<string, unknown
 }
 
 const normalizeKey = (key: string): string => key.toLowerCase().replace(/[^a-z0-9]/g, "");
+
+/**
+ * Allow-list check of metadata decoded from bytes about to be committed: only `RENDITION_METADATA_FIELDS` with valid
+ * values (capture time, recorded offset, orientation 1, sRGB or Display P3). Any other key — location, serials and
+ * paths included, but also camera, lens, software or anything unknown — is reported, as is a nested value.
+ */
+export function findDisallowedRenditionMetadata(
+  record: Readonly<Record<string, unknown>>,
+): readonly { readonly key: string; readonly category: ForbiddenMetadataCategory | "unverifiable" | "notAllowed" }[] {
+  const found: { key: string; category: ForbiddenMetadataCategory | "unverifiable" | "notAllowed" }[] = [];
+  const allowed = new Set<string>(RENDITION_METADATA_FIELDS);
+  const valid: { readonly [K in (typeof RENDITION_METADATA_FIELDS)[number]]: (value: unknown) => boolean } = {
+    capturedAt: (value) => value === null || (typeof value === "string" && LOCAL_TIME.test(value)),
+    capturedAtOffset: (value) => value === null || (typeof value === "string" && OFFSET.test(value)),
+    colorProfile: (value) => value === "sRGB" || value === "displayP3",
+    orientation: (value) => value === 1,
+  };
+  for (const [key, value] of Object.entries(record)) {
+    if (allowed.has(key) && valid[key as keyof typeof valid](value)) continue;
+    const forbidden = findForbiddenMetadata({ [key]: value });
+    if (forbidden.length) found.push(...forbidden);
+    else found.push({ key, category: "notAllowed" });
+  }
+  return found;
+}
 
 /**
  * Finds forbidden keys at any depth in decoded metadata of uploaded bytes. Nesting beyond the limit cannot be
