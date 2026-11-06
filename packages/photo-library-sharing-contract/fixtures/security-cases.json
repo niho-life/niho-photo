@@ -6540,6 +6540,181 @@
           "other_people_items_unchanged"
         ]
       }
+    },
+    {
+      "id": "pending-join-after-sign-in",
+      "operation": "invites.joinPending",
+      "actor": "contributor",
+      "check": "pendingInviteJoin",
+      "request": {},
+      "arrange": {
+        "pending": {
+          "id": "synthetic-pending-invite",
+          "secret": "synthetic-invite-secret",
+          "heldBy": null,
+          "expiresAt": "2026-11-07T00:15:00.000Z"
+        },
+        "consumed": false,
+        "now": "2026-11-07T00:05:00.000Z",
+        "expectCookieCleared": true
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "upstream_join_unchanged",
+          "cookie_cleared_after_attempt",
+          "secret_never_readable_by_page"
+        ]
+      }
+    },
+    {
+      "id": "pending-join-expired",
+      "operation": "invites.joinPending",
+      "actor": "contributor",
+      "check": "pendingInviteJoin",
+      "request": {},
+      "arrange": {
+        "pending": {
+          "id": "synthetic-pending-invite",
+          "secret": "synthetic-invite-secret",
+          "heldBy": null,
+          "expiresAt": "2026-11-07T00:04:00.000Z"
+        },
+        "consumed": false,
+        "now": "2026-11-07T00:05:00.000Z",
+        "expectCookieCleared": true
+      },
+      "expected": {
+        "status": 410,
+        "code": "invite_unavailable",
+        "invariants": [
+          "pending_expires_after_15_minutes",
+          "cookie_cleared_after_attempt"
+        ]
+      }
+    },
+    {
+      "id": "pending-join-used",
+      "operation": "invites.joinPending",
+      "actor": "contributor",
+      "check": "pendingInviteJoin",
+      "request": {},
+      "arrange": {
+        "pending": {
+          "id": "synthetic-pending-invite",
+          "secret": "synthetic-invite-secret",
+          "heldBy": null,
+          "expiresAt": "2026-11-07T00:15:00.000Z"
+        },
+        "consumed": true,
+        "now": "2026-11-07T00:05:00.000Z",
+        "expectCookieCleared": true
+      },
+      "expected": {
+        "status": 410,
+        "code": "invite_unavailable",
+        "invariants": [
+          "pending_used_once",
+          "cookie_cleared_after_attempt"
+        ]
+      }
+    },
+    {
+      "id": "pending-join-other-user",
+      "operation": "invites.joinPending",
+      "actor": "contributor",
+      "check": "pendingInviteJoin",
+      "request": {},
+      "arrange": {
+        "pending": {
+          "id": "synthetic-pending-invite",
+          "secret": "synthetic-invite-secret",
+          "heldBy": "synthetic-user-viewer",
+          "expiresAt": "2026-11-07T00:15:00.000Z"
+        },
+        "consumed": false,
+        "now": "2026-11-07T00:05:00.000Z",
+        "expectCookieCleared": true
+      },
+      "expected": {
+        "status": 410,
+        "code": "invite_unavailable",
+        "invariants": [
+          "pending_bound_to_holder",
+          "cookie_cleared_after_attempt"
+        ]
+      }
+    },
+    {
+      "id": "pending-join-no-cookie",
+      "operation": "invites.joinPending",
+      "actor": "contributor",
+      "check": "pendingInviteJoin",
+      "request": {},
+      "arrange": {
+        "pending": null,
+        "consumed": false,
+        "now": "2026-11-07T00:05:00.000Z",
+        "expectCookieCleared": true
+      },
+      "expected": {
+        "status": 410,
+        "code": "invite_unavailable",
+        "invariants": [
+          "no_pending_no_join"
+        ]
+      }
+    },
+    {
+      "id": "pending-join-before-sign-in",
+      "operation": "invites.joinPending",
+      "actor": "none",
+      "check": "pendingInviteJoin",
+      "request": {},
+      "arrange": {
+        "pending": {
+          "id": "synthetic-pending-invite",
+          "secret": "synthetic-invite-secret",
+          "heldBy": null,
+          "expiresAt": "2026-11-07T00:15:00.000Z"
+        },
+        "consumed": false,
+        "now": "2026-11-07T00:05:00.000Z",
+        "expectCookieCleared": false
+      },
+      "expected": {
+        "status": 401,
+        "code": "unauthenticated",
+        "invariants": [
+          "pending_kept_until_sign_in",
+          "no_upstream_join"
+        ]
+      }
+    },
+    {
+      "id": "pending-join-held-by-same-user",
+      "operation": "invites.joinPending",
+      "actor": "contributor",
+      "check": "pendingInviteJoin",
+      "request": {},
+      "arrange": {
+        "pending": {
+          "id": "synthetic-pending-invite",
+          "secret": "synthetic-invite-secret",
+          "heldBy": "synthetic-user-contributor",
+          "expiresAt": "2026-11-07T00:15:00.000Z"
+        },
+        "consumed": false,
+        "now": "2026-11-07T00:05:00.000Z",
+        "expectCookieCleared": true
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "pending_bound_to_holder",
+          "cookie_cleared_after_attempt"
+        ]
+      }
     }
   ]
 }

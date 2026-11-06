@@ -4,6 +4,7 @@ import { test } from "node:test";
 import {
   CONNECTOR_PATH_PREFIX,
   CONNECTOR_ROUTES,
+  PENDING_INVITE_ROUTES,
   SHARING_CLOUD_PATH_PREFIX,
   SHARING_ROUTES,
   USER_RENDER_ROUTES,
@@ -13,7 +14,10 @@ import {
   encodeConnectorRequest,
   encodeUserRenderRequest,
   matchConnectorRoute,
+  matchPendingInviteRoute,
   matchUserRenderRoute,
+  decodePendingInviteRequest,
+  encodePendingInviteRequest,
   decodeOpaqueSegment,
   decodeSharingRequest,
   encodeOpaqueSegment,
@@ -221,5 +225,31 @@ test("the connector route table in the contract document matches CONNECTOR_ROUTE
   }
   for (const [operation, route] of Object.entries(USER_RENDER_ROUTES)) {
     assert(doc.includes(`| ${operation}（利用者の端末） | ${route.method} \`${route.path}\` |`), operation);
+  }
+});
+
+test("pending invite routes are BFF-only, keyless, never collide with upstream routes and keep the secret in the body", async () => {
+  assert.deepEqual(Object.keys(PENDING_INVITE_ROUTES).sort(), ["invites.holdPending", "invites.joinPending"]);
+  for (const [operation, route] of Object.entries(PENDING_INVITE_ROUTES)) {
+    assert.equal(route.idempotencyKey, false, operation);
+    const full = `${SHARING_CLOUD_PATH_PREFIX}${route.path}`;
+    assert.deepEqual(matchPendingInviteRoute(route.method, full), { operation, params: {} });
+    assert.equal(matchSharingRoute(route.method, full), null, `${operation} is not an upstream route`);
+    assert.equal(matchUserRenderRoute(route.method, full), null, operation);
+  }
+  for (const [operation, route] of Object.entries(SHARING_ROUTES)) {
+    if (!route.path.includes("{")) assert.equal(matchPendingInviteRoute(route.method, `${SHARING_CLOUD_PATH_PREFIX}${route.path}`), null, operation);
+  }
+  const held = encodePendingInviteRequest("invites.holdPending", { secret: "synthetic-invite-secret" });
+  assert.deepEqual(held, { method: "POST", path: "/cloud/sharing/v1/invites/pending", query: "", body: { secret: "synthetic-invite-secret" }, range: null, idempotencyKey: false });
+  const input = (extra) => ({ params: {}, query: new URLSearchParams(), body: null, range: null, ...extra });
+  assert.deepEqual(decodePendingInviteRequest("invites.holdPending", input({ body: held.body })), { secret: "synthetic-invite-secret" });
+  const join = encodePendingInviteRequest("invites.joinPending", {});
+  assert.deepEqual(join.body, {});
+  assert.throws(() => decodePendingInviteRequest("invites.joinPending", input({ body: { secret: "x" } })), { code: "invalid_request" });
+  assert.throws(() => decodePendingInviteRequest("invites.holdPending", input({ query: new URLSearchParams("secret=x"), body: {} })), { code: "invalid_request" });
+  const doc = await readFile(new URL("../../../docs/architecture/photo-library-sharing.md", import.meta.url), "utf8");
+  for (const [operation, route] of Object.entries(PENDING_INVITE_ROUTES)) {
+    assert(doc.includes(`| ${operation} | ${route.method} \`${route.path}\` |`), operation);
   }
 });
