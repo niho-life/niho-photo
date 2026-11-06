@@ -16,7 +16,13 @@ import type {
   PhotoSharedAlbumSummary,
   PhotoSharedAlbumUpload,
 } from "./photo-shared-album-model";
-import type { PhotoSharedAlbumOpened, PhotoSharedAlbumPeople, PhotoSharedAlbumPort } from "./photo-shared-album-port";
+import type {
+  PhotoSharedAlbumJoinResult,
+  PhotoSharedAlbumOpened,
+  PhotoSharedAlbumOpenedInvite,
+  PhotoSharedAlbumPeople,
+  PhotoSharedAlbumPort,
+} from "./photo-shared-album-port";
 import { PhotoSharedAlbumShareSheet } from "./photo-shared-album-share-sheet";
 import { PhotoSharedAlbumView } from "./photo-shared-album-view";
 
@@ -25,9 +31,9 @@ const ALBUM_NAME_MAX_CODE_POINTS = 100;
 export interface PhotoSharedAlbumWorkspaceProps {
   /** 本人・scope ごとの口。変わったら親が `key` で作り直す */
   readonly port: PhotoSharedAlbumPort;
-  /** 開いた招待リンクの secret（メモリだけ）。1 回だけ参加に使う */
-  readonly inviteSecret?: string | null;
-  /** 招待の secret を使い終えた（親は secret を捨てる） */
+  /** 開いた招待（リンクの secret はメモリだけ）。1 回だけ参加に使う */
+  readonly invite?: PhotoSharedAlbumOpenedInvite | null;
+  /** 招待を使い終えた（親は secret・預かりの印を捨てる） */
   readonly onInviteHandled?: () => void;
   /** 「保存」の文言（iPhone は「写真に保存」など） */
   readonly saveLabel?: string;
@@ -55,7 +61,7 @@ type Pending = { readonly albumId: string; readonly upload: PhotoSharedAlbumUplo
 export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps) {
   const { port } = props;
   const now = props.now ?? Date.now;
-  const [screen, setScreen] = useState<Screen>(() => (props.inviteSecret ? { kind: "joining" } : { kind: "list" }));
+  const [screen, setScreen] = useState<Screen>(() => (props.invite ? { kind: "joining" } : { kind: "list" }));
   const [albums, setAlbums] = useState<readonly PhotoSharedAlbumSummary[] | null>(null);
   const [listFailed, setListFailed] = useState(false);
   const [listToken, setListToken] = useState(0);
@@ -82,11 +88,37 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
     return () => controller.abort();
   }, []);
 
-  // 招待リンク: 開いたら参加し、そのアルバムを開く（secret はこの呼び出しの中だけで使う）
-  const inviteSecret = props.inviteSecret ?? null;
+  // 招待: 開いたら参加し、そのアルバムを開く（secret はこの呼び出しの中だけで使う）
+  const inviteSecret = props.invite?.kind === "link" ? props.invite.secret : null;
+  const inviteHeld = props.invite?.kind === "held";
   const onInviteHandledRef = useRef(props.onInviteHandled);
   onInviteHandledRef.current = props.onInviteHandled;
   const settledSecretRef = useRef<string | null>(null);
+  /** The held invite's one request per port: the BFF deletes its cookie on the first attempt. */
+  const heldJoinRef = useRef<{ readonly port: PhotoSharedAlbumPort; readonly result: Promise<PhotoSharedAlbumJoinResult | null> } | null>(null);
+  useEffect(() => {
+    if (!inviteHeld) return;
+    if (heldJoinRef.current === null || heldJoinRef.current.port !== port) {
+      // Not aborted by a re-render or a development remount: asking twice would find the cookie already gone.
+      heldJoinRef.current = { port, result: port.joinHeld(new AbortController().signal).catch(() => null) };
+    }
+    let current = true;
+    setScreen({ kind: "joining" });
+    void heldJoinRef.current.result.then((result) => {
+      if (!current) return;
+      if (result === null) {
+        // The answer was lost and the cookie is gone either way: read the albums again.
+        setScreen({ kind: "list" });
+        setListToken((token) => token + 1);
+      } else {
+        setScreen(result.kind === "joined" ? { kind: "album", albumId: result.albumId } : { kind: "inviteUnavailable" });
+      }
+      onInviteHandledRef.current?.();
+    });
+    return () => {
+      current = false;
+    };
+  }, [inviteHeld, port]);
   useEffect(() => {
     // One settled join per secret. An effect that is cleaned up before its answer (a re-render or a development
     // remount) aborts and the next run joins again; the secret is handed back only after a definite answer.

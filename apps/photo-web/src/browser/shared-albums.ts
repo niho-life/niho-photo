@@ -1,13 +1,18 @@
 /**
- * Shared-album pieces of the Web host (B08 #249): the invite link format, reading it once from the address bar, saving
- * a photo as a download, and the per-actor "originals stay on this device" note.
+ * Shared-album pieces of the Web host (B08 #249): the invite link format, reading it once from the address bar, the
+ * marker of an invite held by the BFF, saving a photo as a download, and the per-actor "originals stay on this device"
+ * note.
  *
  * The invite secret travels in the URL fragment: a browser never sends a fragment to the server, so it is absent from
  * requests and server logs. It is read into memory (never storage) and left in the address bar until the join has a
  * definite answer, so a failed attempt or a reload can use the same link again; then it is removed. The join request
- * carries it in its body. Signing in leaves the page and drops the fragment: the member opens the link again.
+ * carries it in its body. Opened while signed out, it is handed to the BFF once (`invites.holdPending`), which keeps it
+ * in an encrypted httpOnly cookie; this page keeps only the hold's expiry in session storage so that, back from sign-in,
+ * it asks the BFF to join with what it holds.
  */
 const INVITE_PREFIX = "#invite=";
+const HELD_INVITE_KEY = "niho-photo-web:held-invite:v1";
+const MAX_HELD_MS = 15 * 60 * 1000 + 60 * 1000;
 const SECRET_PATTERN = /^[A-Za-z0-9_-]{16,512}$/u;
 const NOTE_KEY_PREFIX = "niho-photo-web:shared-album-originals-note:v1:";
 
@@ -38,6 +43,42 @@ export function clearPhotoWebInviteFragment(target: { readonly location: Locatio
   } catch {
     // Still used once from memory.
   }
+}
+
+/**
+ * Whether this tab handed an invite to the BFF before signing in. Only the expiry is stored, never the secret; the BFF
+ * alone can open what it holds.
+ */
+export function photoWebHeldInvite(storage: Storage | null = safeSessionStorage(), now: () => number = Date.now) {
+  return {
+    mark(expiresAt: string): void {
+      try {
+        storage?.setItem(HELD_INVITE_KEY, expiresAt);
+      } catch {
+        // Without storage the held invite is not used after sign-in; the link can be opened again.
+      }
+    },
+    present(): boolean {
+      let value: string | null = null;
+      try {
+        value = storage?.getItem(HELD_INVITE_KEY) ?? null;
+      } catch {
+        return false;
+      }
+      if (value === null) return false;
+      const expiresAt = Date.parse(value);
+      if (Number.isFinite(expiresAt) && expiresAt > now() && expiresAt - now() <= MAX_HELD_MS) return true;
+      this.clear();
+      return false;
+    },
+    clear(): void {
+      try {
+        storage?.removeItem(HELD_INVITE_KEY);
+      } catch {
+        // Expires on its own.
+      }
+    },
+  };
 }
 
 /** Saves one photo as a browser download (iPhone Safari offers it to Photos from the download). */
@@ -80,6 +121,14 @@ export function photoWebOriginalsNote(actorId: string, storage: Storage | null =
       }
     },
   };
+}
+
+function safeSessionStorage(): Storage | null {
+  try {
+    return typeof sessionStorage === "undefined" ? null : sessionStorage;
+  } catch {
+    return null;
+  }
 }
 
 function safeLocalStorage(): Storage | null {

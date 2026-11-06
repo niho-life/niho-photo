@@ -216,7 +216,7 @@ function snapshotDownloadBudget(value: unknown): Readonly<CreatePhotoWebRuntimeO
 /** Every operation the shared-album screens call (B08 #249). */
 const SHARED_ALBUM_PORT_METHODS = [
   "listAlbums", "createAlbum", "openAlbum", "people", "copyInviteLink", "revokeInviteLink", "changeRole", "removeMember",
-  "leave", "addFile", "save", "remove", "join", "storageLocations", "originalsNoteShown", "markOriginalsNoteShown", "dispose",
+  "leave", "addFile", "save", "remove", "join", "joinHeld", "storageLocations", "originalsNoteShown", "markOriginalsNoteShown", "dispose",
 ] as const;
 
 export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): PhotoWebRuntime {

@@ -24,6 +24,7 @@ export { SHARED_ALBUM_ITEM_OPERATIONS, type SharedAlbumItemOperation } from "./a
 export {
   createBrowserSharedAlbumScreensPort,
   createSharedAlbumScreensPort,
+  holdBrowserPendingInvite,
   prepareBrowserAlbumFile,
   sharedAlbumInviteLinkView,
   sharedAlbumItemView,

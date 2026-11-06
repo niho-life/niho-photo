@@ -10547,7 +10547,7 @@
     },
     {
       "path": "apps/photo-web/src/browser/mount.tsx",
-      "sha256": "0687f60a15b586d3150ad444484c1a82eb0211c0e53f24ef2b1a2604db7aa057",
+      "sha256": "40188a761adb74649de53e16964c800a1e2d125a4a1b20d9d8992d4025217462",
       "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。\n変更理由: B08 #249 共有アルバムの画面を Web・Mac に組み込むため: mount.tsx を更新"
     },
     {
@@ -10607,7 +10607,7 @@
     },
     {
       "path": "apps/photo-web/src/runtime/runtime.ts",
-      "sha256": "5c98508106bc930766d7ca6041c05f0498e1be73abfb7b88d4ef105f0e943752",
+      "sha256": "49eced60e5de31043a4b958781896369f61dc2a2cc5a198b49cb8fcc580ac2af",
       "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: 固定Photo BFFの認証拒否を本人・世代に拘束して即時fenceし、実本人再確認と明示retryへ接続する\n変更理由: 同じ本人のBFF認証拒否をpeer通知・BFCacheの世代変更をまたいで保持し、明示retry又は本人変更だけで解除する\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: B08 #249 共有アルバムの画面を Web・Mac に組み込むため: runtime.ts を更新"
     },
     {
@@ -10662,12 +10662,12 @@
     },
     {
       "path": "apps/photo-web/src/view/PhotoWebView.tsx",
-      "sha256": "086c4b0ed2cf7232760ba0548065125e2905dffa7c325d261809da9619ef9b01",
+      "sha256": "302db0ec64361a38cd3890a6a59e1083dd15c84352503a7b227f76a2b0a19e11",
       "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持\n変更理由: B08 #249 共有アルバムの画面を Web・Mac に組み込むため: PhotoWebView.tsx を更新"
     },
     {
       "path": "apps/photo-web/src/view/types.ts",
-      "sha256": "25b0aea79123de3fc61da08c0a0cf6c9e736b0fda8eda44a2018a34e11478acf",
+      "sha256": "8b5609121e134d51db7e370318e36e5b1094fbd3d43ac1f10b2c8bbfd8824385",
       "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持\n変更理由: B08 #249 共有アルバムの画面を Web・Mac に組み込むため: types.ts を更新"
     },
     {
@@ -10692,7 +10692,7 @@
     },
     {
       "path": "apps/photo-web/test/browser-mount.test.tsx",
-      "sha256": "c5636d6cde149d3a339f8e5f1e14a200e625e8f99a5d3d170205eb5339a13429",
+      "sha256": "d56751474569f8f8e33b5e488b6f6233cb52d9a8fdfe3aec0396ed4a241c987e",
       "origin": "NIHO所有の独立Photo Web browser mount・shared copy/style接続・Vite設定と合成対象試験。C06/Bのsource bd959bdd999c4dcfe19934b109dbba8361696de9。由来と除外範囲はapps/photo-web/provenance.json。既存公開UI/engineを再利用し、実credential・写真・内部URLを含まない。ownerの自作PR修復許可に基づく8 leaf公開登録。"
     },
     {
@@ -10727,12 +10727,12 @@
     },
     {
       "path": "apps/photo-web/test/photo-web-view.test.tsx",
-      "sha256": "7b14640bba26a45b2609ed788115bada8719e0ac07b05090622ae16fde125200",
+      "sha256": "2f45a8c0ec5f4e689ae708fd8aff826a4e348a14a7c8d55417a0dbf8d37df9c5",
       "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持\n変更理由: B08 #249 共有アルバムの画面を Web・Mac に組み込むため: photo-web-view.test.tsx を更新"
     },
     {
       "path": "apps/photo-web/test/runtime.test.mjs",
-      "sha256": "adc58c39e742cf73cde979b370a0598b945f5f3fa2411a6d16f0bded52755a3e",
+      "sha256": "3be77e0a1b7b1fde097545f995eaa456e33b0cf3e375c7441c32c4ff06923caf",
       "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: 固定Photo BFFの認証拒否を本人・世代に拘束して即時fenceし、実本人再確認と明示retryへ接続する\n変更理由: 同じ本人のBFF認証拒否をpeer通知・BFCacheの世代変更をまたいで保持し、明示retry又は本人変更だけで解除する\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。"
     },
     {
@@ -13682,7 +13682,7 @@
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/index.ts",
-      "sha256": "c9a4319a197b5f116ec4cfa71eca5b5da3af173cc2525a63131573da6cd9784a",
+      "sha256": "c1bcb5f4d22b4b63a0d3ef48745b94f9f544d182ac632c0f70279a35dc76be02",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: B08 #249 共有アルバムの画面を Web・Mac に組み込むため: index.ts を更新"
     },
     {
@@ -13832,7 +13832,7 @@
     },
     {
       "path": "apps/photo-web/src/browser/shared-albums.ts",
-      "sha256": "7886c70717261511f503189e7682314d850375dec657ce79f2a4ae7456b2949d",
+      "sha256": "f436f86a8f26d4770df0c408b713995d2b166bc6176b18616401a34b401dc8bc",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
@@ -13842,27 +13842,27 @@
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/album-screens.ts",
-      "sha256": "204c43427bad7d8ee233681d0ec11a6788e62c2b81df0fcebcf0180c0939cf90",
+      "sha256": "de809d46fefe6cd349ddfdbbdc79faa3a98a37e594b15757fb0bb403f76f3552",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-album-screens.test.ts",
-      "sha256": "20756e4e15dea1125423072b90ed1665b1b1fdc26c5dfd6255515cde3cb83028",
+      "sha256": "5d077c463cb5e65ca0b0ca35ac1d922f086619eb942c26b8832fe299f23a77b9",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-shared-album-port.ts",
-      "sha256": "9288defdc4d373b14010cee171d797a1eb8660938973c1104bc7ac28ce5c5bcd",
+      "sha256": "fc2b45a2f3c24481a9967d902faa6712e43038365210395cf95428da47497768",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-shared-album-workspace.test.tsx",
-      "sha256": "454ede59d255f1360f7e18fd9b8b03d797860069d5f0476f1c3c81efc0665b79",
+      "sha256": "5b05ddfb07d9dea883e3f3d2b286f72518843e647c476697a698785aca595f71",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-shared-album-workspace.tsx",
-      "sha256": "c7f7efd0b12d15cc8bc4866c003b377fad10eed1ffe8921c7ce6438168983155",
+      "sha256": "fcc7d53d014fc2f5d664ad67f45ee9149f5f7cae54419f581eb162b15c8780c7",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
@@ -13877,7 +13877,7 @@
     },
     {
       "path": "apps/photo-web/dev/shared-albums.tsx",
-      "sha256": "49c9bbf347485df44ffa15d59c33f2635b5ff4f746d8829268baae0a268b1a91",
+      "sha256": "8bdf99a2554dce17ce0589ee6baef960c16def81b83c28c99f3bd5a132ac30c9",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を、開発時だけ合成の in-memory server で動かすページ（製品の build・配信に含めない）。合成の ID・表示名・canvas で描いた画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {

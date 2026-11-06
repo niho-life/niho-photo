@@ -1,5 +1,6 @@
 import { QueryClient } from "@tanstack/react-query";
 import { useEffect } from "react";
+import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 import type {
@@ -342,4 +343,86 @@ describe("mountPhotoWeb", () => {
     expect(createPhotoWebRuntime).not.toHaveBeenCalled();
   });
 
+  it("未ログインで開いた招待をBFFへ一度だけ預け、期限だけを残し、ログイン後に預けた招待で参加する", async () => {
+    const secret = "synthetic-invite-secret-value";
+    window.history.replaceState(null, "", `/#invite=${secret}`);
+    window.sessionStorage.clear();
+    const signedIn = snapshot({ session: { ...snapshot().session, phase: "ready" } as PhotoWebRuntimeSnapshot["session"] });
+    const controlled = controlledRuntime();
+    mockState.runtimeQueue.push(controlled.runtime);
+    const held = deferred<{ readonly expiresAt: string } | null>();
+    const holdInvite = vi.fn(() => held.promise);
+    const mounted = mountPhotoWeb({ rootElement: rootElement(), runtimeOptions, copy, iconUrl: "/owned-icon.png", holdInvite });
+
+    expect(latestViewProps().invite).toEqual({ kind: "link", secret });
+    // Another render while the hold is in flight does not hand the secret over again.
+    controlled.notify(snapshot({ dialogScopeKey: "again" }));
+    expect(holdInvite).toHaveBeenCalledTimes(1);
+    expect(holdInvite).toHaveBeenCalledWith(secret);
+
+    await act(async () => held.resolve({ expiresAt: new Date(Date.now() + 15 * 60 * 1000).toISOString() }));
+    expect(window.location.hash).toBe("");
+    expect(latestViewProps().invite).toEqual({ kind: "held" });
+    // Only the expiry is stored; the secret is in no storage.
+    const stored = Object.entries(window.sessionStorage).concat(Object.entries(window.localStorage)).map(([key, value]) => `${key}=${value}`).join("\n");
+    expect(stored).not.toContain(secret);
+    expect(window.sessionStorage.length).toBe(1);
+
+    controlled.notify(signedIn);
+    expect(latestViewProps().invite).toEqual({ kind: "held" });
+    expect(holdInvite).toHaveBeenCalledTimes(1);
+    act(() => latestViewProps().onInviteHandled?.());
+    expect(latestViewProps().invite).toBeNull();
+    expect(window.sessionStorage.length).toBe(0);
+    mounted.dispose();
+
+    // Back on a new page in the same tab before the hold expires, the held invite is still used once.
+    window.sessionStorage.setItem("niho-photo-web:held-invite:v1", new Date(Date.now() + 60 * 1000).toISOString());
+    const next = controlledRuntime({ initial: signedIn });
+    mockState.runtimeQueue.push(next.runtime);
+    const again = mountPhotoWeb({ rootElement: rootElement(), runtimeOptions, copy, iconUrl: "/owned-icon.png", holdInvite });
+    expect(latestViewProps().invite).toEqual({ kind: "held" });
+    again.dispose();
+
+    // An expired marker is dropped.
+    window.sessionStorage.setItem("niho-photo-web:held-invite:v1", new Date(Date.now() - 1000).toISOString());
+    const expired = controlledRuntime({ initial: signedIn });
+    mockState.runtimeQueue.push(expired.runtime);
+    const late = mountPhotoWeb({ rootElement: rootElement(), runtimeOptions, copy, iconUrl: "/owned-icon.png", holdInvite });
+    expect(latestViewProps().invite).toBeNull();
+    expect(window.sessionStorage.length).toBe(0);
+    late.dispose();
+  });
+
+  it("預けられなかった招待はアドレスバーに残し、同じページでは預け直さない", async () => {
+    const secret = "synthetic-invite-secret-value";
+    window.history.replaceState(null, "", `/#invite=${secret}`);
+    window.sessionStorage.clear();
+    const controlled = controlledRuntime();
+    mockState.runtimeQueue.push(controlled.runtime);
+    const holdInvite = vi.fn(async () => null);
+    const mounted = mountPhotoWeb({ rootElement: rootElement(), runtimeOptions, copy, iconUrl: "/owned-icon.png", holdInvite });
+    await act(async () => undefined);
+    controlled.notify(snapshot({ dialogScopeKey: "again" }));
+    await act(async () => undefined);
+    expect(holdInvite).toHaveBeenCalledTimes(1);
+    expect(window.location.hash).toBe(`#invite=${secret}`);
+    expect(latestViewProps().invite).toEqual({ kind: "link", secret });
+    expect(window.sessionStorage.length).toBe(0);
+    mounted.dispose();
+    window.history.replaceState(null, "", "/");
+  });
+
+  it("ログイン中に開いた招待はBFFへ預けない", () => {
+    const secret = "synthetic-invite-secret-value";
+    window.history.replaceState(null, "", `/#invite=${secret}`);
+    const controlled = controlledRuntime({ initial: snapshot({ session: { ...snapshot().session, phase: "ready" } as PhotoWebRuntimeSnapshot["session"] }) });
+    mockState.runtimeQueue.push(controlled.runtime);
+    const holdInvite = vi.fn(async () => null);
+    const mounted = mountPhotoWeb({ rootElement: rootElement(), runtimeOptions, copy, iconUrl: "/owned-icon.png", holdInvite });
+    expect(holdInvite).not.toHaveBeenCalled();
+    expect(latestViewProps().invite).toEqual({ kind: "link", secret });
+    mounted.dispose();
+    window.history.replaceState(null, "", "/");
+  });
 });

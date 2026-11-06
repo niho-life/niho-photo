@@ -42,6 +42,12 @@ export type PhotoSharedAlbumAddResult = { readonly ok: true } | { readonly ok: f
 
 export type PhotoSharedAlbumJoinResult = { readonly kind: "joined"; readonly albumId: string } | { readonly kind: "unavailable" };
 
+/**
+ * 開いた招待。`link`: アドレスバーの secret（メモリだけ）。`held`: ログインの前に開いたリンクを BFF が cookie で預かっている
+ * （画面からは secret も cookie も読めない）。
+ */
+export type PhotoSharedAlbumOpenedInvite = { readonly kind: "link"; readonly secret: string } | { readonly kind: "held" };
+
 export interface PhotoSharedAlbumPort {
   listAlbums(signal: AbortSignal): Promise<readonly PhotoSharedAlbumSummary[]>;
   /** 作ったアルバムの ID */
@@ -62,6 +68,11 @@ export interface PhotoSharedAlbumPort {
   remove(albumId: string, itemIds: readonly string[], signal: AbortSignal): Promise<{ readonly failed: number }>;
   /** 招待リンクの secret で参加する（secret は呼び出しの中だけで使い、どこにも残さない） */
   join(secret: string, signal: AbortSignal): Promise<PhotoSharedAlbumJoinResult>;
+  /**
+   * ログインの前に開いた招待（BFF が預かっている）で参加する。BFF は 1 回で預かりを消すので、結果が分からない失敗は throw し、
+   * 呼び出し側はアルバムの一覧を読み直す（同じ招待で再試行しない）
+   */
+  joinHeld(signal: AbortSignal): Promise<PhotoSharedAlbumJoinResult>;
   storageLocations(signal: AbortSignal): Promise<readonly PhotoStorageLocation[]>;
   /** 初めて追加するときの「元データはこの端末に残ります」を出したか（接続側が覚える） */
   originalsNoteShown(): boolean;

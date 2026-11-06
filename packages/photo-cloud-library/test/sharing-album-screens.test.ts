@@ -5,6 +5,7 @@ import {
   createSharedAlbumMembership,
   createSharedAlbumMockServer,
   createSharedAlbumScreensPort,
+  holdBrowserPendingInvite,
 } from "../src/sharing";
 import { cameraExifWithLocation, exifPayload, syntheticJpeg } from "./render-support";
 
@@ -234,6 +235,36 @@ describe("shared album screens port (B08 on B05/B12)", () => {
     t.server.setQuotaBytes(OWNER, 1024 ** 3);
     expect(await member.addFile(albumId, t.file(3), t.signal)).toEqual({ ok: true });
     expect((await member.openAlbum(albumId, t.signal))?.album.capacity.state).toBe("available");
+  });
+
+  it("joins with an invite held from before sign-in once; the browser hands the secret over in the body only", async () => {
+    const t = setup();
+    const { albumId, owner } = await sharedAlbum(t);
+    const url = await owner.copyInviteLink(albumId, "contributor", t.signal);
+    const secret = url.slice(url.indexOf("#invite=") + "#invite=".length);
+
+    const sent: { url: string; init: RequestInit }[] = [];
+    const browserFetch: typeof fetch = async (input, init) => {
+      sent.push({ url: String(input), init: init ?? {} });
+      return await t.server.fetch(input, init);
+    };
+    expect(await holdBrowserPendingInvite(secret, { fetch: browserFetch })).toEqual({ expiresAt: "2026-11-07T00:15:00.000Z" });
+    expect(sent).toHaveLength(1);
+    expect(sent[0]?.url).toBe("/cloud/sharing/v1/invites/pending");
+    expect(sent[0]?.init).toMatchObject({ method: "POST", credentials: "same-origin", cache: "no-store", keepalive: true, referrerPolicy: "no-referrer" });
+    expect(JSON.parse(String(sent[0]?.init.body))).toEqual({ secret });
+
+    const member = t.portFor(MEMBER);
+    expect(await member.joinHeld(t.signal)).toEqual({ kind: "joined", albumId });
+    expect((await member.openAlbum(albumId, t.signal))?.album.role).toBe("contributor");
+    // The held invite is gone after one attempt.
+    expect(await member.joinHeld(t.signal)).toEqual({ kind: "unavailable" });
+
+    // A refused or malformed hold is not a hold.
+    expect(await holdBrowserPendingInvite("has spaces in it", { fetch: browserFetch })).toBeNull();
+    expect(await holdBrowserPendingInvite(secret, { fetch: async () => new Response("{}", { status: 503 }) })).toBeNull();
+    expect(await holdBrowserPendingInvite(secret, { fetch: async () => Response.json({ expiresAt: "later", secret }) })).toBeNull();
+    expect(await holdBrowserPendingInvite(secret, { fetch: async () => { throw new TypeError("Failed to fetch"); } })).toBeNull();
   });
 
   it("reads every page: more albums than one page, more members than one page", async () => {

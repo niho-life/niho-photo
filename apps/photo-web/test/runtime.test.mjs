@@ -586,7 +586,7 @@ describe("createPhotoWebRuntime", () => {
 
   it("passes a complete shared-album port through and refuses an incomplete one (fail closed)", async () => {
     const methods = ["listAlbums", "createAlbum", "openAlbum", "people", "copyInviteLink", "revokeInviteLink", "changeRole", "removeMember",
-      "leave", "addFile", "save", "remove", "join", "storageLocations", "originalsNoteShown", "markOriginalsNoteShown", "dispose"];
+      "leave", "addFile", "save", "remove", "join", "joinHeld", "storageLocations", "originalsNoteShown", "markOriginalsNoteShown", "dispose"];
     const sharedAlbums = Object.fromEntries(methods.map((method) => [method, () => undefined]));
     const complete = harness({ connect: async () => new FakeConnection(binding("owner-a", { sharedAlbums })) });
     await complete.runtime.start();

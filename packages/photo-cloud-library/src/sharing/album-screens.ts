@@ -45,6 +45,7 @@ import {
 import {
   SHARING_ERROR_RECOVERY,
   SHARING_LIMITS,
+  encodePendingInviteRequest,
   sanitizeRenditionMetadata,
   type Album,
   type AlbumItem,
@@ -60,7 +61,7 @@ import {
 } from "./contract";
 import { createBrowserSharedAlbumMembershipClient } from "./membership-client";
 import { createSharedAlbumMembership, type SharedAlbumMembership } from "./membership";
-import { isSharingErrorEnvelope } from "./membership-wire";
+import { isSecret, isSharingErrorEnvelope } from "./membership-wire";
 
 // The view-model vocabularies are the contract's (B08 kept them as literal unions so the components need no contract
 // dependency). A change on either side fails this check.
@@ -269,6 +270,9 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
     return results;
   }
 
+  /** A refusal that ends the invite (not a lost answer, a rate limit or a short outage). */
+  const definiteRefusal = (error: unknown): boolean =>
+    isSharingErrorEnvelope(error) && !error.error.retryable && SHARING_ERROR_RECOVERY[error.error.code] !== "retrySameKey";
   const gone = (error: unknown): boolean => isSharingErrorEnvelope(error) && (error.error.code === "not_found" || error.error.code === "role_forbidden");
 
   return {
@@ -383,9 +387,18 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
       } catch (error) {
         // Only a definite refusal ends the invite; a lost answer, a rate limit or a short outage is retried by the user
         // with the same link.
-        if (isSharingErrorEnvelope(error) && !error.error.retryable && SHARING_ERROR_RECOVERY[error.error.code] !== "retrySameKey") {
-          return { kind: "unavailable" };
-        }
+        if (definiteRefusal(error)) return { kind: "unavailable" };
+        throw error;
+      }
+    },
+    async joinHeld(signal) {
+      // The BFF deletes the held invite after this one attempt. Anything but a definite answer is thrown and the screen
+      // reads the album list again.
+      try {
+        const result = await options.membership.joinPending(live(signal));
+        return { kind: "joined", albumId: result.album.id };
+      } catch (error) {
+        if (definiteRefusal(error)) return { kind: "unavailable" };
         throw error;
       }
     },
@@ -454,6 +467,40 @@ export function createBrowserSharedAlbumScreensPort(options: CreateBrowserShared
       membershipClient.dispose();
     },
   };
+}
+
+/**
+ * `invites.holdPending` from a signed-out page: hands the invite secret to the BFF once, in the body. The BFF keeps it in
+ * an encrypted httpOnly cookie for 15 minutes; this page can read neither. Returns when the hold ends (null when the
+ * BFF did not take it). `keepalive` lets the request finish if the page leaves for sign-in right away.
+ */
+export async function holdBrowserPendingInvite(secret: string, options: { readonly fetch?: typeof fetch; readonly signal?: AbortSignal } = {}): Promise<{ readonly expiresAt: string } | null> {
+  if (!isSecret(secret)) return null;
+  const route = encodePendingInviteRequest("invites.holdPending", { secret });
+  const fetchFn = options.fetch ?? ((...parameters: Parameters<typeof fetch>) => globalThis.fetch(...parameters));
+  try {
+    const response = await fetchFn(route.path, {
+      method: route.method,
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(route.body),
+      credentials: "same-origin",
+      cache: "no-store",
+      redirect: "error",
+      referrerPolicy: "no-referrer",
+      keepalive: true,
+      ...(options.signal ? { signal: options.signal } : {}),
+    });
+    if (response.status !== 200) {
+      void response.body?.cancel().catch(() => undefined);
+      return null;
+    }
+    const value: unknown = await response.json();
+    if (typeof value !== "object" || value === null || Object.keys(value).join(",") !== "expiresAt") return null;
+    const expiresAt = (value as { readonly expiresAt: unknown }).expiresAt;
+    return typeof expiresAt === "string" && Number.isFinite(Date.parse(expiresAt)) ? { expiresAt } : null;
+  } catch {
+    return null;
+  }
 }
 
 /**

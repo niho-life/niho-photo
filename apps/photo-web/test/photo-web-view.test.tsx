@@ -458,7 +458,7 @@ describe("PhotoWebView", () => {
     const port = () => ({ listAlbums: vi.fn(), storageLocations: vi.fn(async () => []), dispose: vi.fn() }) as unknown as NonNullable<PhotoWebViewBinding["sharedAlbums"]>;
 
     it("出さない: rolloutが閉じた拠点では切替・設定・共有アルバムを出さず、招待のsecretも使わない", () => {
-      act(() => root.render(<PhotoWebView {...props({ inviteSecret: "synthetic-invite-secret-value" })} />));
+      act(() => root.render(<PhotoWebView {...props({ invite: { kind: "link", secret: "synthetic-invite-secret-value" } })} />));
       expect(container.querySelector("nav")).toBeNull();
       expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent === "設定")).toBe(false);
       expect(container.querySelector("[data-testid=shared-workspace]")).toBeNull();
@@ -500,13 +500,20 @@ describe("PhotoWebView", () => {
     it("招待のsecretは開いた拠点で共有アルバムへ渡し、使い終えたら共有アルバムに留まる", () => {
       const onInviteHandled = vi.fn();
       const sharedAlbums = port();
-      act(() => root.render(<PhotoWebView {...props({ binding: binding({ sharedAlbums }), inviteSecret: "synthetic-invite-secret-value", onInviteHandled })} />));
-      expect(mockState.workspaceProps.at(-1)?.inviteSecret).toBe("synthetic-invite-secret-value");
+      act(() => root.render(<PhotoWebView {...props({ binding: binding({ sharedAlbums }), invite: { kind: "link", secret: "synthetic-invite-secret-value" }, onInviteHandled })} />));
+      expect(mockState.workspaceProps.at(-1)?.invite).toEqual({ kind: "link", secret: "synthetic-invite-secret-value" });
       act(() => (mockState.workspaceProps.at(-1)?.onInviteHandled as () => void)());
       expect(onInviteHandled).toHaveBeenCalledTimes(1);
-      act(() => root.render(<PhotoWebView {...props({ binding: binding({ sharedAlbums }), inviteSecret: null, onInviteHandled })} />));
+      act(() => root.render(<PhotoWebView {...props({ binding: binding({ sharedAlbums }), invite: null, onInviteHandled })} />));
       expect(container.querySelector("[data-testid=shared-workspace]")?.parentElement?.hidden).toBe(false);
-      expect(mockState.workspaceProps.at(-1)?.inviteSecret).toBeNull();
+      expect(mockState.workspaceProps.at(-1)?.invite).toBeNull();
+    });
+
+    it("ログインの前に預けた招待は共有アルバムを開いて渡す", () => {
+      const sharedAlbums = port();
+      act(() => root.render(<PhotoWebView {...props({ binding: binding({ sharedAlbums }), invite: { kind: "held" } })} />));
+      expect(mockState.workspaceProps.at(-1)?.invite).toEqual({ kind: "held" });
+      expect(container.querySelector("[data-testid=shared-workspace]")?.parentElement?.hidden).toBe(false);
     });
   });
 });

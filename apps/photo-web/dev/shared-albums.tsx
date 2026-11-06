@@ -1,7 +1,7 @@
 /**
  * Development only (B08 #249): the shared-album screens in the Photo Web shell, on the synthetic in-memory server with
  * canvas-drawn gradient photos. No real photo, person, secret or server. `?as=owner|member|viewer` picks the viewer,
- * `?scene=list|album|share|settings|invite-unavailable` the starting screen, and `#frame:<query>:<width>:<height>` shows
+ * `?scene=list|album|share|settings|invite-unavailable|held` the starting screen, and `#frame:<query>:<width>:<height>` shows
  * that page in a fixed-size frame (narrow screenshots).
  */
 import { useEffect, useState } from "react";
@@ -15,7 +15,7 @@ import {
 } from "@niho/photo-cloud-library/sharing";
 import { PHOTO_STORAGE_LOCATION_COPY } from "niho-photo-editing/photo-editing-copy";
 import { PhotoLibraryScreenTabs } from "niho-photo-editing/shared-album/photo-shared-album-list";
-import type { PhotoSharedAlbumPort } from "niho-photo-editing/shared-album/photo-shared-album-port";
+import type { PhotoSharedAlbumOpenedInvite, PhotoSharedAlbumPort } from "niho-photo-editing/shared-album/photo-shared-album-port";
 import { PhotoSharedAlbumWorkspace } from "niho-photo-editing/shared-album/photo-shared-album-workspace";
 import { PhotoStorageSettingsDialog } from "niho-photo-editing/shared-album/photo-storage-settings-dialog";
 import { AppDialogHost } from "niho-ui/components/app-dialog-host";
@@ -107,11 +107,11 @@ async function seed() {
     const url = await ports.owner.copyInviteLink(workshop, "viewer", signal);
     return who === "owner" ? null : decodeURIComponent(url.slice(url.indexOf("#invite=") + 8));
   };
-  return { ports, workshop, openWorkshop };
+  return { server, ports, workshop, openWorkshop };
 }
 
 function Harness(props: { readonly who: Who; readonly scene: string }) {
-  const [state, setState] = useState<{ port: PhotoSharedAlbumPort; secret: string | null } | null>(null);
+  const [state, setState] = useState<{ port: PhotoSharedAlbumPort; invite: PhotoSharedAlbumOpenedInvite | null } | null>(null);
   const [settingsOpen, setSettingsOpen] = useState(props.scene === "settings");
   const [failure, setFailure] = useState<string | null>(null);
   useEffect(() => {
@@ -130,7 +130,16 @@ function Harness(props: { readonly who: Who; readonly scene: string }) {
         }
       }
       if (props.scene === "invite-unavailable") secret = "synthetic-expired-invite-secret";
-      setState({ port, secret });
+      // Opened before signing in: the synthetic BFF holds it and the screen joins with what it holds.
+      if (props.scene === "held" && secret === null) {
+        const held = await seeded.openWorkshop(props.who);
+        if (held !== null) {
+          seeded.server.holdPendingInvite(held);
+          setState({ port, invite: { kind: "held" } });
+          return;
+        }
+      }
+      setState({ port, invite: secret === null ? null : { kind: "link", secret } });
     });
   }, [props.who, props.scene]);
   useEffect(() => {
@@ -162,7 +171,7 @@ function Harness(props: { readonly who: Who; readonly scene: string }) {
       <pre id="seed-steps" hidden={!new URLSearchParams(location.search).has("debug")} />
       <main className="photo-web-workspace">
         <div className="photo-web-shared-albums">
-          {state ? <PhotoSharedAlbumWorkspace port={state.port} inviteSecret={state.secret} onOpenStorage={() => setSettingsOpen(true)} /> : null}
+          {state ? <PhotoSharedAlbumWorkspace port={state.port} invite={state.invite} onOpenStorage={() => setSettingsOpen(true)} /> : null}
         </div>
         {state ? <PhotoStorageSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} loadLocations={(signal) => state.port.storageLocations(signal)} /> : null}
       </main>

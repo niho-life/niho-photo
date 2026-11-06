@@ -66,6 +66,7 @@ function fakePort(overrides: Partial<PhotoSharedAlbumPort> = {}): PhotoSharedAlb
     save: vi.fn(async () => ({ failed: 0 })),
     remove: vi.fn(async () => ({ failed: 0 })),
     join: vi.fn(async () => ({ kind: "joined" as const, albumId: PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId })),
+    joinHeld: vi.fn(async () => ({ kind: "joined" as const, albumId: PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId })),
     storageLocations: vi.fn(async () => []),
     originalsNoteShown: () => noteShown,
     markOriginalsNoteShown: () => { noteShown = true; },
@@ -147,10 +148,10 @@ describe("PhotoSharedAlbumWorkspace", () => {
   it("joins once from an invite link and opens the album; an unusable link says so", async () => {
     const onInviteHandled = vi.fn();
     const port = fakePort();
-    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} inviteSecret="synthetic-secret" onInviteHandled={onInviteHandled} />));
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} invite={{ kind: "link", secret: "synthetic-secret" }} onInviteHandled={onInviteHandled} />));
     await flush();
     // A re-render with the same secret does not join again.
-    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} inviteSecret="synthetic-secret" onInviteHandled={onInviteHandled} />));
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} invite={{ kind: "link", secret: "synthetic-secret" }} onInviteHandled={onInviteHandled} />));
     await flush();
     expect(port.join).toHaveBeenCalledTimes(1);
     expect(onInviteHandled).toHaveBeenCalledTimes(1);
@@ -159,12 +160,47 @@ describe("PhotoSharedAlbumWorkspace", () => {
     act(() => root.unmount());
     root = createRoot(container);
     const unusable = fakePort({ join: vi.fn(async () => ({ kind: "unavailable" as const })) });
-    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={unusable} inviteSecret="expired-secret" />));
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={unusable} invite={{ kind: "link", secret: "expired-secret" }} />));
     await flush();
     expect(container.querySelector("h1")?.textContent).toBe("このリンクは使えません");
     await act(async () => buttonByText("共有アルバムへ", container)?.click());
     await flush();
     expect(unusable.listAlbums).toHaveBeenCalled();
+  });
+
+  it("joins once with an invite held from before sign-in, even across a remount; a lost answer shows the albums", async () => {
+    const onInviteHandled = vi.fn();
+    let answer!: (result: { readonly kind: "joined"; readonly albumId: string }) => void;
+    const port = fakePort({ joinHeld: vi.fn(async () => await new Promise<{ readonly kind: "joined"; readonly albumId: string }>((resolve) => { answer = resolve; })) });
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} invite={{ kind: "held" }} onInviteHandled={onInviteHandled} />));
+    await flush();
+    expect(container.textContent).toContain("参加しています");
+    // A re-render before the answer does not ask the BFF again (it deletes what it holds on the first attempt).
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} invite={{ kind: "held" }} onInviteHandled={onInviteHandled} />));
+    await act(async () => answer({ kind: "joined", albumId: PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId }));
+    await flush();
+    expect(port.joinHeld).toHaveBeenCalledTimes(1);
+    expect(port.join).not.toHaveBeenCalled();
+    expect(onInviteHandled).toHaveBeenCalledTimes(1);
+    expect(port.openAlbum).toHaveBeenCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, expect.any(AbortSignal));
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    const lost = fakePort({ joinHeld: vi.fn(async () => await Promise.reject(new Error("synthetic lost answer"))) });
+    const handled = vi.fn();
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={lost} invite={{ kind: "held" }} onInviteHandled={handled} />));
+    await flush();
+    expect(handled).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("[role='alert']")).toBeNull();
+    expect(lost.listAlbums).toHaveBeenCalled();
+    expect(lost.joinHeld).toHaveBeenCalledTimes(1);
+
+    act(() => root.unmount());
+    root = createRoot(container);
+    const unusable = fakePort({ joinHeld: vi.fn(async () => ({ kind: "unavailable" as const })) });
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={unusable} invite={{ kind: "held" }} />));
+    await flush();
+    expect(container.querySelector("h1")?.textContent).toBe("このリンクは使えません");
   });
 
   it("shows the album as ended when it can no longer be opened, and creates an album by name", async () => {
@@ -216,7 +252,7 @@ describe("PhotoSharedAlbumWorkspace", () => {
         return { kind: "joined" as const, albumId: PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId };
       }),
     });
-    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} inviteSecret="synthetic-secret" onInviteHandled={onInviteHandled} />));
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} invite={{ kind: "link", secret: "synthetic-secret" }} onInviteHandled={onInviteHandled} />));
     await flush();
     expect(container.querySelector("[role=alert]")?.textContent).toBe("参加できませんでした。もう一度お試しください。");
     expect(onInviteHandled).not.toHaveBeenCalled();
@@ -230,7 +266,7 @@ describe("PhotoSharedAlbumWorkspace", () => {
   it("joins and opens the album under development double effects without losing the invite", async () => {
     const onInviteHandled = vi.fn();
     const port = fakePort();
-    await act(async () => root.render(<StrictMode><PhotoSharedAlbumWorkspace port={port} inviteSecret="synthetic-secret" onInviteHandled={onInviteHandled} /></StrictMode>));
+    await act(async () => root.render(<StrictMode><PhotoSharedAlbumWorkspace port={port} invite={{ kind: "link", secret: "synthetic-secret" }} onInviteHandled={onInviteHandled} /></StrictMode>));
     await flush();
     expect(onInviteHandled).toHaveBeenCalledTimes(1);
     expect(port.openAlbum).toHaveBeenCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, expect.any(AbortSignal));

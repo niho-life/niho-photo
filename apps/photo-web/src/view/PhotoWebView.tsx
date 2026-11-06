@@ -174,9 +174,9 @@ export function PhotoWebView(props: PhotoWebViewProps) {
   const sharedScope = binding && sharedAlbums ? binding.scopeKey : null;
   // The screen and its first visit belong to one scope; another actor or library starts again on 写真.
   const [screenState, setScreenState] = useState<{ readonly scope: string | null; readonly screen: PhotoLibraryScreen; readonly visited: boolean }>({ scope: null, screen: "photos", visited: false });
-  const inviteSecret = sharedAlbums ? props.inviteSecret ?? null : null;
+  const invite = sharedAlbums ? props.invite ?? null : null;
   const current = screenState.scope === sharedScope ? screenState : { scope: sharedScope, screen: "photos" as PhotoLibraryScreen, visited: false };
-  const screen: PhotoLibraryScreen = sharedAlbums && (current.screen === "sharedAlbums" || inviteSecret) ? "sharedAlbums" : "photos";
+  const screen: PhotoLibraryScreen = sharedAlbums && (current.screen === "sharedAlbums" || invite) ? "sharedAlbums" : "photos";
   const visited = sharedAlbums !== null && (current.visited || screen === "sharedAlbums");
   const selectScreen = (next: PhotoLibraryScreen) => setScreenState({ scope: sharedScope, screen: next, visited: visited || next === "sharedAlbums" });
   // The settings belong to the scope they were opened in; another scope never sees them (even for one render).
@@ -316,7 +316,7 @@ export function PhotoWebView(props: PhotoWebViewProps) {
                     <PhotoSharedAlbumWorkspace
                       key={`${binding.key}:${binding.scopeKey}`}
                       port={sharedAlbums}
-                      inviteSecret={inviteSecret}
+                      invite={invite}
                       onInviteHandled={() => {
                         // The joined album stays on screen after the secret is dropped.
                         selectScreen("sharedAlbums");
