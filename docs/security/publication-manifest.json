@@ -13822,12 +13822,12 @@
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/album-screens.ts",
-      "sha256": "5f7fde8e9b7d8c896a1ab6ead44a4e2e0010a6b73015d0c43ba142dfabdd327b",
+      "sha256": "204c43427bad7d8ee233681d0ec11a6788e62c2b81df0fcebcf0180c0939cf90",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-album-screens.test.ts",
-      "sha256": "feef006ddbc815bc5fb9e136e0949a901ea1f6f6ad3bd33818687ff438acd2f2",
+      "sha256": "20756e4e15dea1125423072b90ed1665b1b1fdc26c5dfd6255515cde3cb83028",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {

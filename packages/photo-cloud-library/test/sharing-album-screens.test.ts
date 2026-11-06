@@ -30,12 +30,20 @@ function setup(options: { extraUsers?: number } = {}) {
   const created: string[] = [];
   const revoked: string[] = [];
   const saved: { name: string; bytes: Uint8Array }[] = [];
+  const memberLists = { count: 0 };
   const portFor = (user: string) => {
     const client = server.clientFor(user);
     const key = () => `${user}-key-${++keys}`;
+    const membership = createSharedAlbumMembership({ client, newIdempotencyKey: key, sleep: async () => undefined });
     return createSharedAlbumScreensPort({
       items: createSharedAlbumItems({ client, uploader: server.uploader, newIdempotencyKey: key, sleep: async () => undefined }),
-      membership: createSharedAlbumMembership({ client, newIdempotencyKey: key, sleep: async () => undefined }),
+      membership: {
+        ...membership,
+        listMembers: (...args: Parameters<typeof membership.listMembers>) => {
+          memberLists.count += 1;
+          return membership.listMembers(...args);
+        },
+      },
       download: (request, signal) => client.download(request, signal),
       now: () => clock,
       inviteUrl: (secret) => `https://photo.example.test/#invite=${secret}`,
@@ -53,7 +61,7 @@ function setup(options: { extraUsers?: number } = {}) {
   const signal = new AbortController().signal;
   const file = (seed: number, options: Parameters<typeof syntheticJpeg>[0] = { width: 1200, height: 800 }) =>
     new File([syntheticJpeg({ ...options, seed }).slice()], `IMG_${seed}.JPG`, { type: "image/jpeg" });
-  return { server, portFor, signal, file, created, revoked, saved, advance: (ms: number) => { clock += ms; } };
+  return { server, portFor, signal, file, created, revoked, saved, memberLists, advance: (ms: number) => { clock += ms; } };
 }
 
 async function sharedAlbum(t: ReturnType<typeof setup>) {
@@ -244,6 +252,10 @@ describe("shared album screens port (B08 on B05/B12)", () => {
     const last = people.members.at(-1);
     await owner.changeRole(albumId, last?.userId as string, "viewer", t.signal);
     expect((await owner.people(albumId, t.signal)).members.find((member) => member.userId === last?.userId)?.role).toBe("viewer");
+    // The count comes with the album (B00 memberCount): listing and opening albums never list members.
+    t.memberLists.count = 0;
     expect((await owner.listAlbums(t.signal)).find((album) => album.albumId === albumId)?.memberCount).toBe(102);
+    expect((await owner.openAlbum(albumId, t.signal))?.album.memberCount).toBe(102);
+    expect(t.memberLists.count).toBe(0);
   });
 });

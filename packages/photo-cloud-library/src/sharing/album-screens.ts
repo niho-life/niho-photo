@@ -116,7 +116,7 @@ export function sharedAlbumPermissionsView(album: Album): PhotoSharedAlbumPermis
   };
 }
 
-export function sharedAlbumSummaryView(album: Album, memberCount: number, coverUrl: string | null): PhotoSharedAlbumSummary {
+export function sharedAlbumSummaryView(album: Album, coverUrl: string | null): PhotoSharedAlbumSummary {
   const preparation = album.access.preparation;
   return {
     albumId: album.id,
@@ -124,7 +124,7 @@ export function sharedAlbumSummaryView(album: Album, memberCount: number, coverU
     role: album.access.role,
     // People are labels only; the owner never has an ID on this side.
     owner: { userId: `owner:${album.id}`, displayName: album.owner.displayName, isSelf: album.owner.isSelf },
-    memberCount,
+    memberCount: album.memberCount,
     itemCount: album.itemCount,
     coverUrl,
     preparing: preparation ? { done: preparation.prepared, total: preparation.total } : null,
@@ -133,9 +133,9 @@ export function sharedAlbumSummaryView(album: Album, memberCount: number, coverU
 
 export function sharedAlbumView(
   album: Album,
-  details: { readonly memberCount: number; readonly coverUrl: string | null; readonly capacity: PhotoSharedAlbumCapacity; readonly accessEnded?: boolean },
+  details: { readonly coverUrl: string | null; readonly capacity: PhotoSharedAlbumCapacity; readonly accessEnded?: boolean },
 ): PhotoSharedAlbum {
-  return { ...sharedAlbumSummaryView(album, details.memberCount, details.coverUrl), capacity: details.capacity, accessEnded: details.accessEnded ?? false };
+  return { ...sharedAlbumSummaryView(album, details.coverUrl), capacity: details.capacity, accessEnded: details.accessEnded ?? false };
 }
 
 export function sharedAlbumItemView(item: AlbumItem, thumbnailUrl: string | null, isNew: boolean): PhotoSharedAlbumItem {
@@ -216,14 +216,6 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
     return members;
   }
 
-  async function memberCount(albumId: string, signal: AbortSignal): Promise<number> {
-    try {
-      return (await allMembers(albumId, signal)).length;
-    } catch {
-      return 0;
-    }
-  }
-
   async function allAlbums(signal: AbortSignal): Promise<Album[]> {
     const albums: Album[] = [];
     let cursor: string | undefined;
@@ -283,11 +275,8 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
     async listAlbums(signal) {
       const albums = await allAlbums(signal);
       return await Promise.all(albums.map(async (album) => {
-        const [count, cover] = await Promise.all([
-          memberCount(album.id, signal),
-          album.cover ? thumbnail(album.id, album.cover.itemId, album.cover.renditionId, signal) : Promise.resolve(null),
-        ]);
-        return sharedAlbumSummaryView(album, count, cover);
+        const cover = album.cover ? await thumbnail(album.id, album.cover.itemId, album.cover.renditionId, signal) : null;
+        return sharedAlbumSummaryView(album, cover);
       }));
     },
     async createAlbum(name, signal) {
@@ -313,14 +302,13 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
       }
       seen.set(albumId, new Set([...(known ?? []), ...items.map((item) => item.id)]));
       newMarks.set(albumId, marks);
-      const [count, capacity, thumbs] = await Promise.all([
-        memberCount(albumId, signal),
+      const [capacity, thumbs] = await Promise.all([
         capacityOf(album, signal),
         mapLimited(items, (item) => (item.rendition ? thumbnail(albumId, item.id, item.rendition.id, signal) : Promise.resolve(null))),
       ]);
       const cover = album.cover ? await thumbnail(albumId, album.cover.itemId, album.cover.renditionId, signal) : null;
       return {
-        album: sharedAlbumView(album, { memberCount: count, coverUrl: cover, capacity }),
+        album: sharedAlbumView(album, { coverUrl: cover, capacity }),
         items: items.map((item, index) => sharedAlbumItemView(item, thumbs[index] ?? null, marks.has(item.id))),
         permissions: sharedAlbumPermissionsView(album),
       };
