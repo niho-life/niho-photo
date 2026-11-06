@@ -10884,8 +10884,8 @@
     },
     {
       "path": "docs/legal/asset-inventory.csv",
-      "sha256": "19d1886610fca1222881207aac8cef8fce0b51fef7aec10a6af534027bcc0576",
-      "origin": "Photo #193 / C00 の契約確定に伴い監査。既存backendの即時purgeとPhoto製品未接続の区別、抽出した合成fixtureの権利・出典または対象型検査を記録。内部URL・実写真・資格情報を含まない。\n変更理由: レビュー反映後の合成型負例のexact hashとサイズを更新\n変更理由: 競合ID取得の合成fixtureの現行公開sourceとexact hashを追加監査し元の抽出記録を保持\n変更理由: B00の合成fixtureを公開資産台帳へ追加。\n変更理由: B00の追加合成fixtureの出所hashと公開判定を記録。\n変更理由: Photo #241 / B00 の合成fixture（B12の提案を反映）の資産台帳の行を更新"
+      "sha256": "f43a8ac737efaaf3a888614b0614f3463dea2594a46b38d3a7d8c9b4411c776d",
+      "origin": "Photo #193 / C00 の契約確定に伴い監査。既存backendの即時purgeとPhoto製品未接続の区別、抽出した合成fixtureの権利・出典または対象型検査を記録。内部URL・実写真・資格情報を含まない。\n変更理由: レビュー反映後の合成型負例のexact hashとサイズを更新\n変更理由: 競合ID取得の合成fixtureの現行公開sourceとexact hashを追加監査し元の抽出記録を保持\n変更理由: B00の合成fixtureを公開資産台帳へ追加。\n変更理由: B00の追加合成fixtureの出所hashと公開判定を記録。\n変更理由: Photo #241 / B00 の合成fixture（B12の提案を反映）の資産台帳の行を更新\n変更理由: Photo #241 / B00 の合成fixture（招待の保留・memberCount）の資産台帳の行を更新"
     },
     {
       "path": "docs/lens-adjustments.md",
