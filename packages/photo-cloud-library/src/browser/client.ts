@@ -120,7 +120,8 @@ export async function createBrowserPersonalPhotoCloudClient(
   return client;
 }
 
-function requestInit(
+/** Same-origin request with the captured session headers; shared with the shared-album client. */
+export function requestInit(
   actor: VerifiedPhotoActor,
   method: string,
   body: Uint8Array<ArrayBuffer> | null,
@@ -246,7 +247,8 @@ function checkedStream(
   });
 }
 
-async function fetchWithHeaderDeadline(fetchFn: typeof fetch, url: string, init: RequestInit, signal: AbortSignal, controller: AbortController): Promise<Response> {
+/** Bounds the wait for response headers (TRANSPORT_TIMEOUT_MS) and cancels a late response. */
+export async function fetchWithHeaderDeadline(fetchFn: typeof fetch, url: string, init: RequestInit, signal: AbortSignal, controller: AbortController): Promise<Response> {
   return await awaitBounded(Promise.resolve().then(async () => await fetchFn(url, init)), {
     signal,
     timeoutMs: TRANSPORT_TIMEOUT_MS,
