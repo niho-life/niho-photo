@@ -11,11 +11,13 @@
  * present or that scalars have the right type. The BFF and the server still run the full operation validator.
  */
 import { findUnexpectedFields } from "./policy.ts";
-import { CONNECTOR_REQUEST_SHAPES, SHARING_REQUEST_SHAPES } from "./v1.ts";
+import { CONNECTOR_REQUEST_SHAPES, PENDING_INVITE_REQUEST_SHAPES, SHARING_REQUEST_SHAPES } from "./v1.ts";
 import type {
   ConnectorMutationOperation,
   ConnectorOperation,
   ConnectorOperationMap,
+  PendingInviteOperation,
+  PendingInviteOperationMap,
   PhotoByteRange,
   RenderExecutorMutationOperation,
   RenderExecutorOperation,
@@ -58,6 +60,7 @@ type UserRenderRouteMap = {
     readonly idempotencyKey: K extends RenderExecutorMutationOperation ? true : false;
   };
 };
+type PendingInviteRouteMap = { readonly [K in PendingInviteOperation]: SharingRoute & { readonly idempotencyKey: false } };
 type ConnectorRouteMap = {
   readonly [K in ConnectorOperation]: SharingRoute & {
     readonly idempotencyKey: K extends ConnectorMutationOperation ? true : false;
@@ -134,6 +137,16 @@ export const USER_RENDER_ROUTES = {
   "renderJobs.commit": post("/render-jobs/{jobId}/commit", ["leaseToken", "uploadId"]),
   "renderJobs.fail": post("/render-jobs/{jobId}/fail", ["leaseToken", "code"]),
 } as const satisfies UserRenderRouteMap;
+
+/**
+ * A link opened before signing in (BFF only, under the user prefix). The BFF keeps the secret in its encrypted cookie
+ * (`PENDING_INVITE_COOKIE`) and turns `invites.joinPending` into the normal upstream `invites.join`; neither route is
+ * forwarded as is. Not keyed: holding replaces the previous hold, and the cookie is gone after a join attempt.
+ */
+export const PENDING_INVITE_ROUTES = {
+  "invites.holdPending": { method: "POST", path: "/invites/pending", query: [], body: ["secret"], range: false, idempotencyKey: false },
+  "invites.joinPending": { method: "POST", path: "/invites/pending/join", query: [], body: [], range: false, idempotencyKey: false },
+} as const satisfies PendingInviteRouteMap;
 
 /**
  * The hosted Mac connector. Every call is outbound from the Mac and carries `Authorization: Bearer <device
@@ -329,6 +342,16 @@ export function matchUserRenderRoute(method: string, fullPath: string): { readon
 }
 export function decodeUserRenderRequest<K extends RenderExecutorOperation>(operation: K, input: DecodeInput): RenderExecutorOperationMap[K]["request"] {
   return decodeWith(USER_RENDER_ROUTES, CONNECTOR_REQUEST_SHAPES, operation, input) as RenderExecutorOperationMap[K]["request"];
+}
+
+export function encodePendingInviteRequest<K extends PendingInviteOperation>(operation: K, request: PendingInviteOperationMap[K]["request"]): EncodedSharingRequest {
+  return encodeWith(SHARING_CLOUD_PATH_PREFIX, PENDING_INVITE_ROUTES, PENDING_INVITE_REQUEST_SHAPES, operation, request);
+}
+export function matchPendingInviteRoute(method: string, fullPath: string): { readonly operation: PendingInviteOperation; readonly params: Readonly<Record<string, string>> } | null {
+  return matchWith<PendingInviteOperation>(SHARING_CLOUD_PATH_PREFIX, PENDING_INVITE_ROUTES, method, fullPath);
+}
+export function decodePendingInviteRequest<K extends PendingInviteOperation>(operation: K, input: DecodeInput): PendingInviteOperationMap[K]["request"] {
+  return decodeWith(PENDING_INVITE_ROUTES, PENDING_INVITE_REQUEST_SHAPES, operation, input) as PendingInviteOperationMap[K]["request"];
 }
 
 export function encodeConnectorRequest<K extends ConnectorOperation>(operation: K, request: ConnectorOperationMap[K]["request"]): EncodedSharingRequest {
