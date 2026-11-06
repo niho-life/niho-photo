@@ -50,8 +50,9 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 契約の `PENDING_INVITE_ROUTES` の BFF 側。`POST /cloud/sharing/v1/invites/pending` と `.../pending/join` だけを受け、他は次の handler へ渡す（`null`）。
 
 - 保留: 画面は secret を一度だけ body で渡す。BFF は AES-256-GCM で封じ、`__Secure-niho-photo-pending-invite`（`HttpOnly; Secure; SameSite=Lax; Path=/cloud/sharing/v1/invites/pending; Max-Age=900`）に入れる。JS は secret も cookie も読めない。ログイン中に保留すると、その人だけが使える。
+- 契約の path では `__Host-` を使えないので、親ドメインの別 host が同じ名前の cookie を置ける。保留の ID を host 限定の `__Host-niho-photo-pending-invite-id`（`Path=/`）にも入れ、封じた ID がそれと一致する cookie だけを開く（置かれた cookie は使わず、こちらの cookie も妨げない）。
 - 参加: 検証済みの session で cookie を開き、`decidePendingInviteJoin` で決め、通常の `invites.join` を上流へ送る（key は保留の ID ごと）。session を確かめたあとは成否に関係なく cookie を消す。未ログインなら `unauthenticated` で cookie を残す。応答は `InviteJoinResult`（receipt を外した値）を検証してから返す。
-- 鍵は非公開の運用側から渡す 32 bytes を 1〜2 個（先頭で封じ、どちらでも開く）。値を source・log・エラーに出さない。使った保留の ID は期限までこの process が覚える。
+- 鍵は非公開の運用側から渡す 32 bytes を 1〜2 個（先頭で封じ、どちらでも開く）。値を source・log・エラーに出さない。使った保留の ID は期限までこの process が覚え、別の instance で同じ cookie が使われたときは上流の key の replay（`replayed: true`）を `invite_unavailable` にする。
 - 同一 origin・`Origin` 一致・`Sec-Fetch-Site: same-origin`（ある場合）・`Content-Type: application/json`・query と `Idempotency-Key` なし・閉じた body だけを受ける。
 
 ## 完全補正の同期core

@@ -27,6 +27,8 @@ C08の信頼された設定に、C01実producer登録、C02実transport、C03下
 
 `PHOTO_WEB_CLOUD_ENABLED=true` で、非公開の運用側が `PHOTO_WEB_PENDING_INVITE_KEYS`（base64url の 32 bytes を 1〜2 個、カンマ区切り。先頭で封じ、どちらでも開く）と `PHOTO_WEB_SHARING_UPSTREAM_PATH_PREFIX`（共有の上流 prefix）を両方渡したときだけ、`/cloud/sharing/v1/invites/pending` と `.../pending/join` を `@niho/photo-cloud-library/server` の `createPendingInviteHandler` が受ける。片方だけなら起動しない。値は source・log・エラーに出さない。鍵の入れ替えは新しい鍵を先頭に足し、15分後に古い鍵を外す。
 
+この 2 つの経路だけでは共有アルバムは使えない。参加のあとの一覧・アルバムなど `/cloud/sharing/v1` の通常の経路を上流へ送る BFF proxy はまだ無いので、その proxy と同時に設定し、拠点の rollout（`sharedAlbums`）もそれまで閉じておく。
+
 ## production artifact
 
 Node 24でrepository rootからPhoto Webの静的ファイル、Node host bundle、検証済みSDK artifactを生成する:

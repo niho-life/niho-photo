@@ -11,8 +11,12 @@
  *   deleted whatever happens. Not signed in: `unauthenticated`, and the cookie stays for after sign-in.
  *
  * The secret never goes into a URL, a log line or an error. Used pending IDs are remembered in this process until they
- * expire (a copied cookie is refused); the upstream join is keyed by the pending ID, so a copy replayed against another
- * instance still joins at most once.
+ * expire (a copied cookie is refused); the upstream join is keyed by the pending ID, and an upstream replay of that key
+ * (the same cookie used on another instance) is refused as well.
+ *
+ * The contract's path rules out a `__Host-` name, so another host under the parent domain could add a cookie of the same
+ * name. A second, `__Host-` cookie (host only, `Path=/`) carries the pending ID: only the pending cookie whose sealed ID
+ * matches it is opened, so a cookie planted from elsewhere is neither used nor able to block ours.
  */
 import { Buffer } from "node:buffer";
 
@@ -54,6 +58,8 @@ import { isValidUpstreamPathPrefix } from "./proxy";
 
 /** The BFF picks the name (B00). `__Secure-`: browsers refuse it without Secure; `__Host-` would force `Path=/`. */
 export const PENDING_INVITE_COOKIE_NAME = "__Secure-niho-photo-pending-invite";
+/** Host-only binding: the pending ID (not secret by itself; useless without the sealed cookie). */
+export const PENDING_INVITE_BINDING_COOKIE_NAME = "__Host-niho-photo-pending-invite-id";
 
 const SEAL_VERSION = 1;
 const IV_BYTES = 12;
@@ -63,6 +69,8 @@ const KEY_BYTES = 32;
 const MAX_KEYS = 2;
 const MAX_REQUEST_BODY_BYTES = 2048;
 const MAX_COOKIE_VALUE_BYTES = 3072;
+/** Same-named pending cookies looked at (ours plus any planted from another host). */
+const MAX_PENDING_COOKIES = 4;
 const PENDING_ID_BYTES = 16;
 const PENDING_ID = /^[A-Za-z0-9_-]{22}$/u;
 const ISO_INSTANT = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
@@ -70,6 +78,7 @@ const DEFAULT_MAX_REMEMBERED_IDS = 10_000;
 const CLOCK_SKEW_MS = 60_000;
 const SEAL_CONTEXT = new TextEncoder().encode("niho-photo-pending-invite/v1");
 const COOKIE_ATTRIBUTES = cookieAttributes();
+const BINDING_ATTRIBUTES = `Path=/; HttpOnly; Secure; SameSite=${PENDING_INVITE_COOKIE.sameSite}`;
 const textEncoder = new TextEncoder();
 const textDecoder = new TextDecoder("utf-8", { fatal: true });
 
@@ -111,14 +120,14 @@ export function createPendingInviteHandler(options: CreatePendingInviteHandlerOp
   const instant = (): string => new Date(now()).toISOString();
   const requestId = (): string => `bff-${Buffer.from(randomBytes(12)).toString("base64url")}`;
 
-  function errorResponse(code: SharingErrorCode, cookie?: string): Response {
+  function errorResponse(code: SharingErrorCode, cookies: readonly string[] = []): Response {
     const envelope: SharingErrorEnvelope = { error: { code, requestId: requestId(), retryable: code === "temporarily_unavailable" } };
-    return jsonResponse(SHARING_ERROR_STATUS[code], envelope, cookie);
+    return jsonResponse(SHARING_ERROR_STATUS[code], envelope, cookies);
   }
 
-  function authorizationFailure(error: unknown, cookie?: string): Response {
-    if (error instanceof PhotoAuthorizationError && error.code !== "unavailable") return errorResponse("unauthenticated", cookie);
-    return errorResponse("temporarily_unavailable", cookie);
+  function authorizationFailure(error: unknown, cookies: readonly string[] = []): Response {
+    if (error instanceof PhotoAuthorizationError && error.code !== "unavailable") return errorResponse("unauthenticated", cookies);
+    return errorResponse("temporarily_unavailable", cookies);
   }
 
   async function authorized<T>(request: Request, capture: CapturedPhotoActor | null, perform: (credential: string, actor: CapturedPhotoActor) => Promise<T>): Promise<T> {
@@ -152,7 +161,11 @@ export function createPendingInviteHandler(options: CreatePendingInviteHandlerOp
     const pending = holdPendingInvite({ id: Buffer.from(randomBytes(PENDING_ID_BYTES)).toString("base64url"), secret, actorId, now: instant() });
     const sealed = await seal((await keys)[0] as CryptoKey, pending, randomBytes);
     if (sealed.length > MAX_COOKIE_VALUE_BYTES) return errorResponse("invalid_request");
-    return jsonResponse(200, { expiresAt: pending.expiresAt }, `${PENDING_INVITE_COOKIE_NAME}=${sealed}; Max-Age=${PENDING_INVITE_COOKIE.maxAgeSeconds}; ${COOKIE_ATTRIBUTES}`);
+    const maxAge = `Max-Age=${PENDING_INVITE_COOKIE.maxAgeSeconds}`;
+    return jsonResponse(200, { expiresAt: pending.expiresAt }, [
+      `${PENDING_INVITE_COOKIE_NAME}=${sealed}; ${maxAge}; ${COOKIE_ATTRIBUTES}`,
+      `${PENDING_INVITE_BINDING_COOKIE_NAME}=${pending.id}; ${maxAge}; ${BINDING_ATTRIBUTES}`,
+    ]);
   }
 
   async function sendJoin(credential: string, actor: CapturedPhotoActor, pending: PendingInvite, signal: AbortSignal): Promise<JoinOutcome> {
@@ -186,7 +199,11 @@ export function createPendingInviteHandler(options: CreatePendingInviteHandlerOp
       });
       if (upstream.status === 200) {
         const { value } = await readBoundedJson(upstream, JSON_LIMITS.success, signal);
-        return { kind: "joined", result: validateJoinResult(validateReceipt(value).value) };
+        const receipt = validateReceipt(value);
+        const result = validateJoinResult(receipt.value);
+        // A replay of this pending ID's key: the same cookie was already used (on another instance).
+        if (receipt.replayed) return { kind: "refused", code: "invite_unavailable" };
+        return { kind: "joined", result };
       }
       if (upstream.ok) {
         cancelResponse(upstream);
@@ -203,8 +220,7 @@ export function createPendingInviteHandler(options: CreatePendingInviteHandlerOp
   }
 
   async function join(request: Request, capture: CapturedPhotoActor | null): Promise<Response> {
-    const raw = singleCookie(request.headers.get("cookie"));
-    const pending = raw === null ? null : await open(await keys, raw, now());
+    const pending = await boundPending(request.headers.get("cookie"), await keys, now());
     let outcome: JoinOutcome;
     try {
       // The session decides who is joining; the capture headers, when sent, must match it.
@@ -219,7 +235,10 @@ export function createPendingInviteHandler(options: CreatePendingInviteHandlerOp
       // Not signed in (or the session could not be checked): nothing was sent and the cookie stays.
       return authorizationFailure(error);
     }
-    const cleared = `${PENDING_INVITE_COOKIE_NAME}=; Max-Age=0; ${COOKIE_ATTRIBUTES}`;
+    const cleared = [
+      `${PENDING_INVITE_COOKIE_NAME}=; Max-Age=0; ${COOKIE_ATTRIBUTES}`,
+      `${PENDING_INVITE_BINDING_COOKIE_NAME}=; Max-Age=0; ${BINDING_ATTRIBUTES}`,
+    ];
     if (outcome.kind === "refused") return errorResponse(outcome.code, cleared);
     // As the personal proxy does, the session must still be valid when the answer is published.
     try {
@@ -359,15 +378,31 @@ function parsePending(plain: ArrayBuffer, now: number): PendingInvite | null {
   return { id, secret, heldBy, expiresAt };
 }
 
-/** The one value of the pending cookie; null when absent or sent more than once (never trust either copy). */
-function singleCookie(header: string | null): string | null {
-  if (header === null) return null;
+/**
+ * This browser's pending invite: the one pending cookie whose sealed ID equals the host-only binding cookie. Cookies of
+ * the same name planted from another host under the parent domain do not match and are ignored.
+ */
+async function boundPending(header: string | null, keys: readonly CryptoKey[], now: number): Promise<PendingInvite | null> {
+  const bindings = cookieValues(header, PENDING_INVITE_BINDING_COOKIE_NAME);
+  const binding = bindings.length === 1 ? (bindings[0] as string) : null;
+  if (binding === null || !PENDING_ID.test(binding)) return null;
+  const candidates = cookieValues(header, PENDING_INVITE_COOKIE_NAME);
+  if (candidates.length > MAX_PENDING_COOKIES) return null;
+  for (const candidate of candidates) {
+    const pending = await open(keys, candidate, now);
+    if (pending !== null && pending.id === binding) return pending;
+  }
+  return null;
+}
+
+function cookieValues(header: string | null, name: string): string[] {
+  if (header === null) return [];
   const values: string[] = [];
   for (const part of header.split(";")) {
     const separator = part.indexOf("=");
-    if (separator > 0 && part.slice(0, separator).trim() === PENDING_INVITE_COOKIE_NAME) values.push(part.slice(separator + 1).trim());
+    if (separator > 0 && part.slice(0, separator).trim() === name) values.push(part.slice(separator + 1).trim());
   }
-  return values.length === 1 ? (values[0] as string) : null;
+  return values;
 }
 
 /** The capture headers: all three or none (none: the session alone decides). */
@@ -379,9 +414,9 @@ function readCapture(headers: Headers): CapturedPhotoActor | null | false {
   return { userId, sessionId, sessionEpoch, transport: "browser-session" };
 }
 
-function jsonResponse(status: number, value: unknown, cookie?: string): Response {
+function jsonResponse(status: number, value: unknown, cookies: readonly string[] = []): Response {
   const headers = new Headers({ "Cache-Control": "no-store", "Content-Type": "application/json", "Referrer-Policy": "no-referrer" });
-  if (cookie !== undefined) headers.append("Set-Cookie", cookie);
+  for (const cookie of cookies) headers.append("Set-Cookie", cookie);
   return new Response(JSON.stringify(value), { status, headers });
 }
 
