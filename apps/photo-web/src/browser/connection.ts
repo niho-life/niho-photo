@@ -349,24 +349,26 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
       if (connection !== null && samePhotoIdentityScope(connection.identity, identity)) active = null;
       const key = identityScopeKey(identity);
       const capturedScope = revocationScopes.get(key);
-      if (capturedScope === undefined) throw new Error("Photo Web revoked scope was not captured");
-      const database = factoryOptions.indexedDB ?? globalThis.indexedDB;
-      const transferDatabase = factoryOptions.transferIndexedDB ?? database;
-      if (database === undefined || transferDatabase === undefined) throw new Error("Photo Web durable journals are unavailable");
-      const recipeJournal = new IndexedDbRecipeSyncJournal(database, factoryOptions.recipeDatabaseName);
-      const transferJournal = new IndexedDbTransferJournal(
-        transferDatabase,
-        factoryOptions.transferDatabaseName ?? PERSONAL_PHOTO_TRANSFER_DATABASE_NAME,
-      );
-      const cleanup: Promise<void>[] = [
-        recipeJournal.purgeScope(capturedScope.recipe).finally(() => recipeJournal.dispose()).then(() => undefined),
-        transferJournal.purgeScope(capturedScope.transfer).finally(() => transferJournal.dispose()).then(() => undefined),
-      ];
+      const cleanup: Promise<void>[] = [];
+      if (capturedScope !== undefined) {
+        const database = factoryOptions.indexedDB ?? globalThis.indexedDB;
+        const transferDatabase = factoryOptions.transferIndexedDB ?? database;
+        if (database === undefined || transferDatabase === undefined) throw new Error("Photo Web durable journals are unavailable");
+        const recipeJournal = new IndexedDbRecipeSyncJournal(database, factoryOptions.recipeDatabaseName);
+        const transferJournal = new IndexedDbTransferJournal(
+          transferDatabase,
+          factoryOptions.transferDatabaseName ?? PERSONAL_PHOTO_TRANSFER_DATABASE_NAME,
+        );
+        cleanup.push(
+          recipeJournal.purgeScope(capturedScope.recipe).finally(() => recipeJournal.dispose()).then(() => undefined),
+          transferJournal.purgeScope(capturedScope.transfer).finally(() => transferJournal.dispose()).then(() => undefined),
+        );
+      }
       if (factoryOptions.clearRevokedScope !== undefined) {
         cleanup.push(Promise.resolve().then(() => factoryOptions.clearRevokedScope!(identity, reason)));
       }
       await Promise.all(cleanup);
-      revocationScopes.delete(key);
+      if (capturedScope !== undefined) revocationScopes.delete(key);
     },
   };
 
@@ -471,10 +473,20 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
           return;
         }
         try {
-          const page = await controller.list({ limit: 16 });
-          if (generation !== transferReadGeneration || !input.host.isScopeCurrent()) return;
-          pendingTransfers = page.nextCursor !== null
-            || page.items.some((item) => item.hasPendingRecipe || PENDING_TRANSFER_PHASES.has(item.phase));
+          let cursor: string | undefined;
+          let hasPending = false;
+          while (true) {
+            const page = await controller.list(cursor === undefined ? { limit: 16 } : { limit: 16, cursor });
+            if (generation !== transferReadGeneration || !input.host.isScopeCurrent()) return;
+            if (page.items.some((item) => item.hasPendingRecipe || PENDING_TRANSFER_PHASES.has(item.phase))) {
+              hasPending = true;
+              break;
+            }
+            if (page.nextCursor === null) break;
+            if (page.nextCursor === cursor) throw new Error("Photo Web transfer pagination did not advance");
+            cursor = page.nextCursor;
+          }
+          if (generation === transferReadGeneration && input.host.isScopeCurrent()) pendingTransfers = hasPending;
         } catch {
           if (generation === transferReadGeneration) pendingTransfers = true;
         }

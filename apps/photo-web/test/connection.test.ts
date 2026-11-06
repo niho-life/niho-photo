@@ -170,6 +170,11 @@ describe("Photo Web product composition", () => {
       usage: currentLibrary.usage,
     });
     const cloudRequests: string[] = [];
+    let pauseInitialLibraryProbe = true;
+    let libraryProbeStarted!: () => void;
+    const libraryProbeEntered = new Promise<void>((resolve) => { libraryProbeStarted = resolve; });
+    let releaseLibraryProbe!: () => void;
+    const libraryProbeGate = new Promise<void>((resolve) => { releaseLibraryProbe = resolve; });
     const cloudFetch: typeof fetch = async (input, init) => {
       const request = new Request(new URL(String(input), ORIGIN), init);
       const url = new URL(request.url);
@@ -182,7 +187,14 @@ describe("Photo Web product composition", () => {
       expect(request.headers.get("Cookie")).toBeNull();
       expect(init?.cache).toBe("no-store");
       expect(init?.credentials).toBe("same-origin");
-      if (path === "/library") return json(currentLibrary);
+      if (path === "/library") {
+        if (pauseInitialLibraryProbe) {
+          pauseInitialLibraryProbe = false;
+          libraryProbeStarted();
+          await libraryProbeGate;
+        }
+        return json(currentLibrary);
+      }
       if (path === "/photos" && request.method === "GET") return json(currentPage());
       const photoPath = /^\/photos\/([^/]+)$/u.exec(path);
       if (photoPath !== null && request.method === "GET") {
@@ -314,6 +326,22 @@ describe("Photo Web product composition", () => {
 
     let connection: Awaited<ReturnType<typeof composition.connect>> | null = null;
     try {
+      const partialScope = new AbortController();
+      const partialConnect = composition.connect({
+        identity: actor,
+        signal: partialScope.signal,
+        host,
+        session,
+        onAuthenticationRejected: vi.fn(),
+      });
+      await libraryProbeEntered;
+      partialScope.abort();
+      await expect(composition.guards.onScopeRevoked(actor, "revoked")).resolves.toBeUndefined();
+      expect(purged).toEqual([actor]);
+      purged.length = 0;
+      releaseLibraryProbe();
+      await expect(partialConnect).rejects.toThrow();
+
       connection = await composition.connect({
         identity: actor,
         signal: scope.signal,
@@ -432,12 +460,6 @@ describe("Photo Web product composition", () => {
         sessionEpoch: actor.sessionEpoch,
         transport: actor.transport,
       };
-      const revokedDraft = drafts.open({ photoId: IDS.photo, sourceSha256: digest, expectedRevision: 1 });
-      const revokedStage = revokedDraft.stage(structuredClone(responses["photos.get"].recipe.settings) as never);
-      await expect(revokedStage.committed).resolves.toBe("committed");
-      const recipeJournal = new IndexedDbRecipeSyncJournal(indexedDB);
-      await expect(recipeJournal.list(recipeScope)).resolves.toMatchObject({ writers: [{ photoId: IDS.photo }] });
-
       const transferScope = {
         actorId: actor.userId,
         libraryId: fixtureLibrary.id,
@@ -448,6 +470,41 @@ describe("Photo Web product composition", () => {
       const journal = new IndexedDbTransferJournal(indexedDB, PERSONAL_PHOTO_TRANSFER_DATABASE_NAME);
       const completed = await journal.get(transferScope, added.intentId);
       expect(completed).not.toBeNull();
+      let lastHistoryEntry = completed!;
+      for (let index = 0; index < 16; index += 1) {
+        const intentId = `composition-history-${String(index).padStart(2, "0")}`;
+        const historyEntry = {
+          ...completed!,
+          id: JSON.stringify([transferScope.actorId, transferScope.libraryId, transferScope.sessionId, transferScope.sessionEpoch, intentId]),
+          revision: 0,
+          intentId,
+          phase: "done" as const,
+          startKey: `history-start-${index}`,
+          completeKey: `history-complete-${index}`,
+          cancelKey: `history-cancel-${index}`,
+        };
+        await journal.add(historyEntry);
+        lastHistoryEntry = historyEntry;
+      }
+      const firstTransferPage = await binding.transfer!.controller.list({ limit: 16 });
+      expect(firstTransferPage.nextCursor).not.toBeNull();
+      expect(firstTransferPage.items.every(({ phase, hasPendingRecipe }) => phase === "done" && !hasPendingRecipe)).toBe(true);
+      const secondTransferPage = await binding.transfer!.controller.list({ limit: 16, cursor: firstTransferPage.nextCursor! });
+      expect(secondTransferPage.nextCursor).toBeNull();
+      expect(secondTransferPage.items).toHaveLength(1);
+      expect(secondTransferPage.items[0]?.phase).toBe("done");
+      await expect(composition.guards.canLeave(actor, { release: false, signal: scope.signal })).resolves.toBe(true);
+      await journal.compareAndSet(lastHistoryEntry, { ...lastHistoryEntry, revision: 1, phase: "complete-pending" });
+      await expect(composition.guards.canLeave(actor, { release: false, signal: scope.signal })).resolves.toBe(false);
+      const pendingHistoryEntry = await journal.get(transferScope, lastHistoryEntry.intentId);
+      expect(pendingHistoryEntry).not.toBeNull();
+      await journal.compareAndSet(pendingHistoryEntry!, { ...pendingHistoryEntry!, revision: pendingHistoryEntry!.revision + 1, phase: "done" });
+      await expect(composition.guards.canLeave(actor, { release: false, signal: scope.signal })).resolves.toBe(true);
+      const revokedDraft = drafts.open({ photoId: IDS.photo, sourceSha256: digest, expectedRevision: 1 });
+      const revokedStage = revokedDraft.stage(structuredClone(responses["photos.get"].recipe.settings) as never);
+      await expect(revokedStage.committed).resolves.toBe("committed");
+      const recipeJournal = new IndexedDbRecipeSyncJournal(indexedDB);
+      await expect(recipeJournal.list(recipeScope)).resolves.toMatchObject({ writers: [{ photoId: IDS.photo }] });
       await journal.compareAndSet(completed!, { ...completed!, revision: completed!.revision + 1, phase: "complete-pending" });
       await journal.add({
         ...completed!,
