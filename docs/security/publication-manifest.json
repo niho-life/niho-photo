@@ -13664,6 +13664,66 @@
       "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: 最新の共有マスク・初期proof・readonly presetを不変な新しい正式SDK 0.1.10として発行する。\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
     },
     {
+      "path": "packages/photo-cloud-library/src/render-executor/contract.ts",
+      "sha256": "bf02903c513b5e5905b3ad6ad331d3b4520450173088fd7bdfab37dbf9ac79dc",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/engine-renderer.ts",
+      "sha256": "8f84da10956a05110eabe916f18b4793a2454af25539dc5b722218a43b61e3f4",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/index.ts",
+      "sha256": "53f6c5db0d83ab59657b031a56b9903f88a714477b778e1e4b36bb85b4ec0a17",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/jpeg-metadata.ts",
+      "sha256": "46f0bc325f84ca5aa6c5df0280b2536335c9938b5024c13f64d800afb8c53f4e",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/personal-cloud-source.ts",
+      "sha256": "3f27c60a756d2dd9162fe9950feea5dfe17fa683dadd34b8b111b38c639536c0",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/render-executor.ts",
+      "sha256": "d3c4b19265381d7bdbb598b5285d5f97b772b24a05bdc7ea714c3df5c200d99a",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/render-mock.ts",
+      "sha256": "a23cd91902db292eea4ae8276ba00169c78c5c65422f60a8bfd2d794ece6dcfb",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/render-output.ts",
+      "sha256": "836fffa37e2c894d5a7140c4ba3861028f5fea92ab2b581d7754531bd1ab856f",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/ticket-upload.ts",
+      "sha256": "208168530272644af2fac07e7924059b2095dbd2758c2ea8e838f7f4b3da2002",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/render-adapters.test.ts",
+      "sha256": "732c7d47991f78669e2da16ea66ede6cf74326bf1b49b939f74eeed0cd0d20fe",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/render-executor.test.ts",
+      "sha256": "985a9092167ac1870d079d246c903c7184b932b552f904de6b29a8048a5e09bb",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/render-support.ts",
+      "sha256": "06132e497fe747d096ac0566d2848a5e043bc52676babc9ecce917fb042c7b35",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
       "path": "packages/photo-cloud-library/src/sharing/contract.ts",
       "sha256": "1b8c3b893e513a36493407dbe45547da9ca189a123daa28eb0697fb9858794a6",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
@@ -13707,66 +13767,6 @@
       "path": "packages/photo-cloud-library/test/sharing-membership-service.test.ts",
       "sha256": "8459fbcba68b4a9b905c5948f0d880c609b5dc4f11a572f7385e4cc7791a5322",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/contract.ts",
-      "sha256": "bf02903c513b5e5905b3ad6ad331d3b4520450173088fd7bdfab37dbf9ac79dc",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/engine-renderer.ts",
-      "sha256": "8f84da10956a05110eabe916f18b4793a2454af25539dc5b722218a43b61e3f4",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/index.ts",
-      "sha256": "53f6c5db0d83ab59657b031a56b9903f88a714477b778e1e4b36bb85b4ec0a17",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/jpeg-metadata.ts",
-      "sha256": "9ceb09af71f41db07392e2bd98ecb1131718394383e08dffaed304ae475e0cff",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/personal-cloud-source.ts",
-      "sha256": "3f27c60a756d2dd9162fe9950feea5dfe17fa683dadd34b8b111b38c639536c0",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/render-executor.ts",
-      "sha256": "d3c4b19265381d7bdbb598b5285d5f97b772b24a05bdc7ea714c3df5c200d99a",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/render-mock.ts",
-      "sha256": "a23cd91902db292eea4ae8276ba00169c78c5c65422f60a8bfd2d794ece6dcfb",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/render-output.ts",
-      "sha256": "836fffa37e2c894d5a7140c4ba3861028f5fea92ab2b581d7754531bd1ab856f",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/ticket-upload.ts",
-      "sha256": "208168530272644af2fac07e7924059b2095dbd2758c2ea8e838f7f4b3da2002",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/test/render-adapters.test.ts",
-      "sha256": "732c7d47991f78669e2da16ea66ede6cf74326bf1b49b939f74eeed0cd0d20fe",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/test/render-executor.test.ts",
-      "sha256": "b997ac513aa838a7c41867d5a77c9e67143a564ca7fc701970dc78ff13a8f332",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/test/render-support.ts",
-      "sha256": "06132e497fe747d096ac0566d2848a5e043bc52676babc9ecce917fb042c7b35",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/album-client.ts",
