@@ -219,6 +219,12 @@
       "wiring": "not-connected",
       "evidence": "予約を一度だけ解放する。"
     },
+    "albumItems.renewUpload": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "v2 uploads.renew と同じ形で同じ予約の ticket を取り直す。追加者・最新の upload・reserved だけ。"
+    },
     "albumItems.remove": {
       "issue": 254,
       "backend": "missing",

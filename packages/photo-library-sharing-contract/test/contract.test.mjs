@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { PHOTO_LIBRARY_CONTRACT_VERSION, PHOTO_LIMITS } from "../../photo-library-contract/src/v2.ts";
+import { PHOTO_ERROR_STATUS, PHOTO_LIBRARY_CONTRACT_VERSION, PHOTO_LIMITS } from "../../photo-library-contract/src/v2.ts";
 import { library as personalLibrary, maskedPhoto } from "../../photo-library-contract/fixtures/v2.ts";
 import {
   ALBUM_ACTIONS, ALBUM_ITEM_KINDS, ALBUM_ITEM_PENDING_REASONS, ALBUM_ITEM_PENDING_TRANSITIONS, ALBUM_ITEM_STATES,
@@ -14,7 +14,7 @@ import {
 import {
   checkAlbumName, checkCursor, compareIdempotency, decideReplicaPull, compareRenderBinding, decideAddPhoto, decideAlbumAction, decideHostedRecipeSave,
   decideJoin, decideLibraryAccess, decideMembershipChange, decidePairingApproval, decideRenderCommit, decideReplaceStart,
-  decideUploadCommit, findForbiddenMetadata, findUnexpectedConnectorFields, findUnexpectedRequestFields, inviteLinkStatus,
+  decideUploadCommit, decideUploadRenew, findDisallowedRenditionMetadata, findForbiddenMetadata, itemStateAfterAdderRevoked, findUnexpectedConnectorFields, findUnexpectedRequestFields, inviteLinkStatus,
   nextAlbumItemState, nextPendingReason, nextRenderJobState,
   projectAlbumItem, quotaExceededError, sanitizeRenditionMetadata,
 } from "../src/policy.ts";
@@ -188,6 +188,30 @@ test("renditions carry only the metadata allow-list", () => {
     capturedAt: null, capturedAtOffset: null, colorProfile: "sRGB", orientation: 1,
   });
   assert.deepEqual(findForbiddenMetadata(sanitizeRenditionMetadata(decoded)), []);
+  // 確定は許可した項目だけ: 位置・シリアル・パス以外の項目も拒否し、作り直した metadata は通す
+  const disallowed = findDisallowedRenditionMetadata(decoded).map((hit) => `${hit.category}:${hit.key}`).sort();
+  assert.deepEqual(disallowed, [
+    "location:GPSLatitude", "notAllowed:Make", "notAllowed:Model", "path:DocumentName", "path:nested.xmpMM.DerivedFrom",
+    "serial:BodySerialNumber", "serial:CameraOwnerName", "serial:LensSerialNumber",
+  ]);
+  assert.deepEqual(findDisallowedRenditionMetadata(sanitizeRenditionMetadata(decoded)), []);
+  assert.deepEqual(findDisallowedRenditionMetadata(fixtures.renditionMetadata), []);
+  for (const bad of [{ orientation: 6 }, { colorProfile: "AdobeRGB" }, { capturedAt: "2026:11:01 09:30:00" }, { Software: "synthetic" }, { capturedAt: { nested: true } }]) {
+    assert.equal(findDisallowedRenditionMetadata(bad).length, 1, JSON.stringify(bad));
+  }
+});
+
+test("an adder who loses the right to add drops additions in progress and reverts pending replacements", () => {
+  const item = (state, adder) => ({ state, addedBy: fixtures.PEOPLE[adder] });
+  const revoked = fixtures.USERS.contributor;
+  assert.equal(itemStateAfterAdderRevoked(item("preparing", "contributor"), revoked), "removed");
+  assert.equal(itemStateAfterAdderRevoked(item("updatePending", "contributor"), revoked), "published");
+  assert.equal(itemStateAfterAdderRevoked(item("published", "contributor"), revoked), "published");
+  assert.equal(itemStateAfterAdderRevoked(item("removed", "contributor"), revoked), "removed");
+  assert.equal(itemStateAfterAdderRevoked(item("preparing", "owner"), revoked), "preparing", "other people's items do not change");
+  for (const [state, next] of Object.entries(ALBUM_ITEM_TRANSITIONS)) {
+    if (state !== "removed") assert.ok("adderRevoked" in next, state);
+  }
 });
 
 test("the personal v2 contract stays unchanged and only maps one way", () => {
@@ -296,7 +320,7 @@ test("commit decisions bind the executor, the job's verified upload and the late
   assert.deepEqual(decideReplaceStart(viewer, pending, { expectedRevision: 1, content: content(newer) }), { ok: false, code: "stale_render" });
   const commit = (uploadId) => decideUploadCommit({
     viewer, item: { ...fixtures.snapshots.memberItem, pendingUpload: { uploadId: "u-newest", binding: newest } },
-    upload: { id: uploadId, targetItemRevision: 2, expiresAt: fixtures.LATER, state: "reserved" }, bytesMetadata: {}, now: fixtures.TIME,
+    upload: { id: uploadId, targetItemRevision: 2, expiresAt: fixtures.LATER, state: "reserved", sizeBytes: 8, uploadedBytes: 8 }, bytesMetadata: {}, now: fixtures.TIME,
   });
   assert.deepEqual(commit("u-older"), { ok: false, code: "stale_render" });
   assert.deepEqual(commit("u-newest"), { ok: true });
@@ -312,6 +336,9 @@ test("error codes have one status and one recovery each", () => {
   for (const code of ["not_found", "item_removed", "invite_unavailable"]) assert.notEqual(SHARING_ERROR_RECOVERY[code], "retrySameKey");
   assert.equal(SHARING_ERROR_RECOVERY.stale_render, "discardResult");
   assert.equal(SHARING_ERROR_RECOVERY.temporarily_unavailable, "retrySameKey");
+  // v2 と同じ意味のコードは同じ名前・同じ status
+  assert.equal(SHARING_ERROR_STATUS.upload_state_conflict, PHOTO_ERROR_STATUS.upload_state_conflict);
+  assert.equal(SHARING_ERROR_STATUS.upload_expired, PHOTO_ERROR_STATUS.upload_expired);
 });
 
 // ---------------------------------------------------------------------------------------------------------
@@ -359,6 +386,10 @@ function evaluate(vector) {
       return fromDecision(decideRenderCommit(arrange), operation);
     case "uploadCommit":
       return fromDecision(decideUploadCommit(arrange), operation);
+    case "uploadRenew":
+      return fromDecision(decideUploadRenew(arrange), operation);
+    case "adderRevoked":
+      return { status: 200, itemState: itemStateAfterAdderRevoked(arrange.item, actorId(arrange.revoked)) };
     case "revision":
       return fromDecision(arrange.expectedRevision === arrange.currentRevision ? { ok: true } : { ok: false, code: "revision_conflict" }, operation);
     case "hostedSave": {
@@ -400,7 +431,11 @@ test("every conformance vector matches the reference policy", () => {
     const actual = evaluate(vector);
     const expected = vector.expected.code
       ? { status: vector.expected.status, code: vector.expected.code }
-      : { status: vector.expected.status, ...(vector.expected.replica ? { replica: vector.expected.replica } : {}) };
+      : {
+        status: vector.expected.status,
+        ...(vector.expected.replica ? { replica: vector.expected.replica } : {}),
+        ...(vector.expected.itemState ? { itemState: vector.expected.itemState } : {}),
+      };
     assert.deepEqual(actual, expected, vector.id);
   }
 });
@@ -424,6 +459,12 @@ test("B00 negative categories are all present", () => {
       "replica-pull-compacted", "replica-pull-ahead-of-niho", "replica-pull-snapshot",
     ],
     renderOutputs: ["job-full-resolution-output", "job-downscaled-output", "job-superseded-output", "claim-unknown-result-replay"],
+    adderRevoked: [
+      "removed-adder-preparing-dropped", "demoted-adder-pending-replace-reverts", "left-adder-published-stays", "revoked-adder-other-item-unchanged",
+      "renew-after-removal", "renew-after-demotion",
+    ],
+    metadataAllowList: ["rendition-with-camera-model", "rendition-with-software", "rendition-with-rotated-orientation", "job-output-with-lens", "rendition-allowed-only"],
+    uploadState: ["commit-before-bytes", "job-commit-before-bytes", "renew-reserved-upload", "renew-committed-upload", "renew-expired-upload", "renew-older-upload"],
   };
   for (const [category, list] of Object.entries(required)) for (const id of list) assert(ids.has(id), `${category}:${id}`);
 });
