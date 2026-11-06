@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 3,
-  "version": "0.1.10",
+  "schemaVersion": 4,
+  "version": "0.1.11",
   "repository": "niho-life/niho-photo",
   "packages": [
     {
@@ -72,6 +72,20 @@
       "exclude": []
     },
     {
+      "id": "sharing-contract",
+      "name": "niho-photo-library-sharing-contract",
+      "sourceRoot": "packages",
+      "kind": "node-contract",
+      "entry": "photo-library-sharing-contract/src/routes.ts",
+      "include": [
+        "photo-library-sharing-contract/src/v1.ts",
+        "photo-library-sharing-contract/src/policy.ts",
+        "photo-library-sharing-contract/src/routes.ts",
+        "photo-library-contract/src/v2.ts"
+      ],
+      "exclude": []
+    },
+    {
       "id": "develop-engine-source",
       "name": "niho-photo-develop-engine-source",
       "sourceRoot": "packages/develop-engine",
@@ -124,7 +138,8 @@
     "TRADEMARKS.md",
     "THIRD_PARTY_NOTICES.md",
     "packages/photo-library-contract",
-    "scripts/ci/photo-web-workflow-lib.mjs"
+    "scripts/ci/photo-web-workflow-lib.mjs",
+    "packages/photo-library-sharing-contract"
   ],
   "buildToolingPaths": [
     "package.json",

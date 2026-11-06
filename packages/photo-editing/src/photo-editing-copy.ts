@@ -1327,3 +1327,141 @@ export function photoWebUsageLabel(usage: { usedBytes: number; quotaBytes: numbe
   if (usage.pendingPurgeBytes > 0) parts.push(`削除処理中 ${format(usage.pendingPurgeBytes)}（使用中に含む）`);
   return parts.join("、");
 }
+
+/**
+ * 「写真」「共有アルバム」と、アルバムの「共有」シート（Epic #240 B08 #249・owner 決定 2026-11-07）。説明文は置かず、何ができるかは
+ * 配置・ラベル・状態で伝える。文は「できない理由と次に起きること」と、誤解が損失につながる場面（初めて追加するときの元データの扱い）
+ * だけにする。役割・状態の内部識別子（`contributor`・`preparing` など）は画面へ出さず、ここで日本語にする。
+ */
+export const PHOTO_SHARED_ALBUM_COPY = {
+  photos: "写真",
+  sharedAlbums: "共有アルバム",
+  screensLabel: "表示する画面",
+  share: "共有",
+  members: "メンバー",
+  memberCount: (count: number) => `${count}人`,
+  itemCount: (count: number) => `${count}枚`,
+  newAlbum: "新しいアルバム",
+  listEmpty: "共有アルバムはまだありません",
+  back: "共有アルバムに戻る",
+  add: "追加",
+  addFromLibrary: "写真から選ぶ",
+  addFromFiles: "ファイルから選ぶ",
+  select: "選択",
+  endSelection: "選択を終了",
+  selectPrompt: "写真を選択",
+  selectedCount: (count: number) => `${count}枚を選択`,
+  save: "保存",
+  remove: "アルバムから外す",
+  removeTitle: (count: number) => `${count}枚をアルバムから外しますか？`,
+  removeDescription: "元の写真は消えません。",
+  removeConfirm: "外す",
+  empty: "まだ写真はありません",
+  dropHeadline: "ドロップして追加",
+  originalsStayHere: "元データはこの端末に残ります",
+  photoFallback: "写真",
+  you: "あなた",
+  ownerAlbum: (ownerName: string) => `${ownerName}さんのアルバム`,
+  addedBy: (name: string) => `${name}が追加`,
+  roles: {
+    owner: "オーナー",
+    contributor: "写真を追加できる",
+    viewer: "見るだけ",
+  },
+  itemStates: {
+    preparing: "準備中",
+    updatePending: "更新待ち",
+  },
+  newMark: "新着",
+  preparingProgress: (done: number, total: number) => `準備中 ${done}/${total}`,
+  macWaiting: "Mac の起動後に更新",
+  /** 追加した人の端末（元データのある端末）の起動を待っている。 */
+  deviceWaiting: "追加した端末の起動後に更新",
+  albumFull: "アルバムがいっぱいです",
+  ownerFull: (usage: string) => `容量がいっぱいです（${usage}）`,
+  /** 容量不足で完成写真の準備を止めた項目があるときのオーナー向け（追加したメンバーには `albumFull`）。 */
+  ownerQuotaExceeded: "容量が足りません",
+  ownerFullAction: "容量を確認",
+  accessEnded: "このアルバムは見られなくなりました",
+  accessEndedAction: "共有アルバムへ",
+  actionFailed: "できませんでした。もう一度お試しください。",
+  close: "閉じる",
+} as const;
+
+/** アルバムの「共有」シート。オーナーはメンバーの役割を変え、招待リンクをコピー・無効化できる。メンバーは一覧を見るだけ。 */
+export const PHOTO_SHARED_ALBUM_SHARE_COPY = {
+  title: "共有",
+  inviteHeading: "招待リンク",
+  inviteRoleLabel: "リンクから参加する人の役割",
+  copyLink: "リンクをコピー",
+  copying: "リンクを準備中",
+  copied: "コピーしました",
+  copyFailed: "コピーできませんでした。もう一度お試しください。",
+  expiresInDays: (days: number) => `あと${days}日`,
+  expiresInHours: (hours: number) => `あと${hours}時間`,
+  expiresSoon: "まもなく期限切れ",
+  revokeLink: "リンクを無効にする",
+  revokeTitle: "リンクを無効にしますか？",
+  revokeDescription: "参加済みのメンバーはそのままです。",
+  revokeConfirm: "無効にする",
+  memberRoleLabel: (name: string) => `${name}さんの役割`,
+  removeMember: (name: string) => `${name}さんを外す`,
+  removeMemberTitle: (name: string) => `${name}さんをアルバムから外しますか？`,
+  removeMemberDescription: "追加した写真はアルバムに残ります。",
+  removeMemberConfirm: "外す",
+  leave: "アルバムから抜ける",
+  leaveTitle: "このアルバムから抜けますか？",
+  leaveDescription: "追加した写真はアルバムに残ります。",
+  leaveConfirm: "抜ける",
+} as const;
+
+/** 写真の追加の進捗（項目ごと）。結果が分からない間は「確認中」とし、同じ追加を照合して二重に足さない。 */
+export const PHOTO_SHARED_ALBUM_UPLOAD_COPY = {
+  regionLabel: "追加の進捗",
+  adding: (done: number, total: number) => `追加中 ${done}/${total}`,
+  added: (count: number) => `${count}枚を追加しました`,
+  someNotAdded: (count: number) => `${count}枚を追加できませんでした`,
+  phases: {
+    waiting: "待機中",
+    sending: "送信中",
+    checking: "確認中",
+    added: "追加済み",
+    failed: "追加できませんでした",
+  },
+  reasons: {
+    albumFull: "アルバムがいっぱいです",
+    unsupported: "この形式は追加できません",
+    tooLarge: "大きすぎて追加できません",
+    accessEnded: "共有が解除されました",
+  },
+  retry: "再試行",
+  showDetails: "詳細を表示",
+  hideDetails: "詳細を閉じる",
+  dismiss: "閉じる",
+} as const;
+
+/** 招待リンクを開いたとき。参加にはログインが要る（入口の動詞は「参加する」）。使えないリンクは理由と頼む先だけを出す。 */
+export const PHOTO_SHARED_ALBUM_INVITE_COPY = {
+  join: "参加する",
+  joining: "参加しています",
+  joinFailed: "参加できませんでした。もう一度お試しください。",
+  unavailable: "このリンクは使えません",
+  unavailableNext: "オーナーに新しいリンクを頼んでください。",
+  goToAlbums: "共有アルバムへ",
+} as const;
+
+/** 設定の「保存先」。標準は NIHO クラウドで最初に選ばせない。自前サーバー（常設 Mac）はここから足し、日常の画面には出さない。 */
+export const PHOTO_STORAGE_LOCATION_COPY = {
+  heading: "保存先",
+  nihoCloud: "NIHO クラウド",
+  thisMac: "この Mac",
+  hostedMacFallback: "自前サーバー",
+  standard: "標準",
+  addHostedMac: "自前サーバーを追加",
+  status: {
+    online: "接続中",
+    sleeping: "休止中",
+    unreachable: "接続できません",
+  },
+  macWaiting: "Mac の起動後に更新",
+} as const;

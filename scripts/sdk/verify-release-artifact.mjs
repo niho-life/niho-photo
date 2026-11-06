@@ -21,7 +21,9 @@ const PACKAGES_V1 = Object.freeze([
 const OWNED_PATHS_V1 = Object.freeze(["packages/photo-editing", "packages/ui", "packages/niho-cloud-contract", "packages/develop-engine", "packages/desktop-photo", "sdk", "scripts/sdk", "scripts/ci/cloud-contract-sync.mjs", "scripts/ci/image-metadata.mjs", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/ci/photo-sdk-workflow-lib.mjs", "scripts/ci/publication-lib.mjs", "scripts/ci/release-evidence-lib.mjs", "scripts/ci/workflow-lib.mjs", "LICENSE.md", "ASSET_LICENSE.md", "TRADEMARKS.md", "THIRD_PARTY_NOTICES.md"]);
 const OWNED_PATHS_V2 = Object.freeze([...OWNED_PATHS_V1, "packages/photo-library-contract"]);
 const OWNED_PATHS_V3 = Object.freeze([...OWNED_PATHS_V2, "scripts/ci/photo-web-workflow-lib.mjs"]);
+const OWNED_PATHS_V4 = Object.freeze([...OWNED_PATHS_V3, "packages/photo-library-sharing-contract"]);
 const PERSONAL_CLOUD_PACKAGE = Object.freeze(["personal-cloud-contract", "niho-photo-personal-cloud-contract"]);
+const SHARING_CONTRACT_PACKAGE = Object.freeze(["sharing-contract", "niho-photo-library-sharing-contract"]);
 
 export const SDK_RELEASE_PROFILES = Object.freeze({
   1: Object.freeze({ schemaVersion: 1, packages: PACKAGES_V1, ownedSourcePaths: OWNED_PATHS_V1, directoryFiles: 7 }),
@@ -36,6 +38,14 @@ export const SDK_RELEASE_PROFILES = Object.freeze({
     packages: Object.freeze([...PACKAGES_V1.slice(0, 4), PERSONAL_CLOUD_PACKAGE, ...PACKAGES_V1.slice(4)]),
     ownedSourcePaths: OWNED_PATHS_V3,
     directoryFiles: 8,
+  }),
+  // 保管場所・共有アルバム・完成写真の契約 v1（Epic #240 / B00 #241）を足した集合。v3 までの公開済み release はそれぞれの
+  // profile のまま検証する（同じ artifact 集合や proof として混在させない）。
+  4: Object.freeze({
+    schemaVersion: 4,
+    packages: Object.freeze([...PACKAGES_V1.slice(0, 4), PERSONAL_CLOUD_PACKAGE, SHARING_CONTRACT_PACKAGE, ...PACKAGES_V1.slice(4)]),
+    ownedSourcePaths: OWNED_PATHS_V4,
+    directoryFiles: 9,
   }),
 });
 const TOOLING_PATHS = ["package.json", "package-lock.json"];
@@ -83,7 +93,7 @@ function hasExactKeys(value, expected) {
 }
 
 export function sdkReleaseProfile(schemaVersion) {
-  if (schemaVersion !== 1 && schemaVersion !== 2 && schemaVersion !== 3) throw new ReleaseArtifactError("release manifest schema profileが不正です");
+  if (schemaVersion !== 1 && schemaVersion !== 2 && schemaVersion !== 3 && schemaVersion !== 4) throw new ReleaseArtifactError("release manifest schema profileが不正です");
   const profile = SDK_RELEASE_PROFILES[schemaVersion];
   if (!profile) throw new ReleaseArtifactError("release manifest schema profileが不正です");
   return profile;
