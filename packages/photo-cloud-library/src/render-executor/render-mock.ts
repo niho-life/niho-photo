@@ -33,7 +33,7 @@ import {
   type SharingErrorCode,
   type SharingErrorEnvelope,
 } from "./contract";
-import { jpegMetadataRecord } from "./jpeg-metadata";
+import { jpegMetadataRecord, renditionMetadataViolations } from "./jpeg-metadata";
 import type { PhotoRef, RenderExecutorTransport } from "./render-executor";
 import type { RenderOutputUploader } from "./ticket-upload";
 
@@ -262,6 +262,9 @@ export function createRenderJobMockServer(options: CreateRenderJobMockServerOpti
         const item = purpose.kind === "albumItem" ? items.get(itemKey(purpose.albumId, purpose.itemId)) : undefined;
         const preview = purpose.kind === "preview" ? previews.get(photoKey(record.job.photo)) : undefined;
         const decoded = upload?.bytes ? readJpegPixelSize(upload.bytes) : null;
+        // Server re-decode: anything outside the rendition allow-list (comments, camera make/model, vendor blocks,
+        // trailing bytes — not only location, serials and paths) is never published.
+        if (upload?.bytes && upload.state === "uploaded" && renditionMetadataViolations(upload.bytes).length > 0) upload.state = "rejected";
         const decision = decideRenderCommit({
           job: record.job,
           actor: options.executor,
