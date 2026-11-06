@@ -315,6 +315,7 @@ export const renderJob: RenderJob = {
   id: IDS.job, purpose: { kind: "albumItem", albumId: IDS.album, itemId: IDS.ownerItem, itemRevision: 1 },
   executor: { kind: "hostedMac", connectorId: IDS.connector }, photo: { libraryId: IDS.hostedLibrary, photoId: IDS.photo },
   binding: nextBinding, recipe: savedRecipe, state: "claimed", attempt: 1, createdAt: TIME, leaseExpiresAt: LATER, failure: null,
+  expectedOutput: { width: 6000, height: 4000 },
 };
 export const claimedJob: ClaimedRenderJob = {
   job: renderJob, lease: { jobId: IDS.job, leaseToken: "synthetic-lease", expiresAt: LATER },
@@ -437,7 +438,7 @@ export const responses = {
   "members.remove": { value: removedMembership, replayed: false },
   "members.leave": { value: leftMembership, replayed: false },
 } satisfies {
-  readonly [K in Exclude<keyof SharingOperationMap, "hostedPhotos.content" | "exports.content" | "albumItems.download">]: SharingOperationMap[K]["response"];
+  readonly [K in Exclude<keyof SharingOperationMap, "hostedPhotos.content" | "exports.content" | "portability.content" | "albumItems.download">]: SharingOperationMap[K]["response"];
 };
 
 export const connectorResponses = {
@@ -454,7 +455,28 @@ export const connectorResponses = {
     nextRevision: 13, complete: true, cursor: null,
   },
   "connector.ackReplica": { value: { acknowledgedRevision: 13, state: "current" }, replayed: false },
-  "renderJobs.claim": { jobs: [claimedJob] },
+  "connector.startWorkingCopyUpload": {
+    value: {
+      upload: {
+        id: "synthetic-working-copy-upload", photoId: IDS.photo, sourceGeneration: 1, sha256: HASH.payload,
+        sizeBytes: 8192, contentType: "image/png", expiresAt: LATER, state: "reserved",
+      },
+      ticket: ticket("synthetic-working-copy"),
+    },
+    replayed: false,
+  },
+  "connector.completeWorkingCopyUpload": {
+    value: {
+      photoId: IDS.photo, sourceGeneration: 1,
+      workingCopy: {
+        asset: { id: "synthetic-working-copy-asset", kind: "working-copy", sha256: HASH.payload, sizeBytes: 8192, contentType: "image/png", width: 6000, height: 4000 },
+        baseVersion: "niho-sdk-197", encoding: "png16", meta: { synthetic: true },
+      },
+    },
+    replayed: false,
+  },
+  "renderJobs.claim": { value: { jobs: [claimedJob] }, replayed: false },
+  "renderJobs.renewOutput": { uploadId: IDS.outputUpload, expiresAt: LATER, ticket: ticket("synthetic-output-renewed") },
   "renderJobs.startOutput": {
     value: { uploadId: IDS.outputUpload, expiresAt: LATER, ticket: ticket("synthetic-output") }, replayed: false,
   },

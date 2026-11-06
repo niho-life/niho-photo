@@ -38,6 +38,7 @@ Epic #240 / B03 #244 の公開側。所有者の常設 Mac にある既存の写
   - 実行できる目的の job だけを claim する。
   - 元データは自分の索引から read-only で開く。executor には一度きりの順読みとして渡し、読んだ bytes をその場で hash する。読み残しも最後まで読んで、job が束縛する hash と一致しなければ出力を捨てる（メタデータを変えない書き換えも描画しない）。
   - 出力の大きさと SHA-256 を照合してから upload・確定する。休止は job の間だけ抑える。
+  - claim・出力の開始・確定は key 付きで、応答を失ったら同じ key で1回だけ送り直す。claim は同じ job を返し、lease の期限切れまで job を止めない。再送した開始は ticket を返さないので、`renewOutput` で ticket を取り直して送り直す。
 - **service**（`service.ts`）
   - tick ごとに heartbeat → 控えの同期（B01）→ 走査 → hash → 索引の送信 → job の順で進める。
   - 休止の前に `sleeping` を知らせ、復帰後は控えの差分だけを取り込む。

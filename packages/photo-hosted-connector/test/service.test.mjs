@@ -33,6 +33,25 @@ test("without an executor no job is claimed; with one, previews are rendered on 
   assert.deepEqual(niho.requests.filter((request) => JSON.stringify(request.body).includes("synthetic raw one")), []);
 });
 
+test("a lost claim answer replays the leased jobs; a replayed start renews its ticket and sends the output again", async () => {
+  const context = await paired(world({ files: FILES, executors: { preview: previewExecutor } }));
+  const { connector, niho, index } = context;
+  await settle(connector);
+  const job = niho.enqueue("preview", index.all()[0].photoId);
+  niho.dropNextResponse.add("renderJobs.claim");
+  niho.dropNextResponse.add("renderJobs.startOutput");
+  const from = niho.requests.length;
+  await connector.tick(signal);
+  const sent = niho.requests.slice(from);
+  const [lost, retried, next] = sent.filter((request) => request.operation === "renderJobs.claim");
+  assert.equal(retried.key, lost.key, "the lost claim is sent again with the same key");
+  assert.notEqual(next?.key, lost.key, "a later claim is a new claim");
+  assert.equal(niho.jobs.get(job).job.state, "committed", "the replayed lease is used, not left to expire");
+  assert.equal(sent.filter((request) => request.operation === "renderJobs.startOutput").length, 2);
+  assert.equal(niho.renewals, 1, "the replayed start had no ticket, so it was renewed");
+  assert.equal(niho.committedOutputs.size, 1);
+});
+
 test("a job bound to older bytes fails as source_changed instead of rendering new bytes", async () => {
   const context = await paired(world({ files: FILES, executors: { preview: previewExecutor } }));
   const { connector, niho, index, fs } = context;

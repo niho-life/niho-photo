@@ -29,7 +29,7 @@ const vectors = await load("fixtures/security-cases.json");
 const coverage = await load("operation-coverage.json");
 const userOperations = Object.keys(SHARING_OPERATION_ACCESS);
 const connectorOperations = Object.keys(CONNECTOR_OPERATION_ACCESS);
-const STREAM_OPERATIONS = ["hostedPhotos.content", "exports.content", "albumItems.download", "connector.getReplicaContent"];
+const STREAM_OPERATIONS = ["hostedPhotos.content", "exports.content", "portability.content", "albumItems.download", "connector.getReplicaContent"];
 const CREATE_OPERATIONS = new Set(["albums.create", "albumItems.addPhoto", "albumItems.addFile", "invites.create", "connectors.approvePairing"]);
 
 test("UI vocabulary is exactly the identifiers agreed with the B08 session", () => {
@@ -273,7 +273,7 @@ test("commit decisions bind the executor, the job's verified upload and the late
   const job = fixtures.renderJob;
   const base = {
     job, actor: job.executor, claimedGeneration: 1, executor: { lifecycle: "active", credentialGeneration: 1 },
-    upload: { jobId: job.id, kind: "rendition", state: "uploaded" }, bytesMetadata: fixtures.renditionMetadata,
+    upload: { jobId: job.id, kind: "rendition", state: "uploaded", width: 6000, height: 4000 }, bytesMetadata: fixtures.renditionMetadata,
     desired: job.binding, now: fixtures.TIME,
     item: { state: "updatePending", revision: job.purpose.itemRevision, adder: { userId: fixtures.USERS.owner, membership: fixtures.memberships.owner } },
   };
@@ -281,6 +281,10 @@ test("commit decisions bind the executor, the job's verified upload and the late
   assert.deepEqual(decideRenderCommit({ ...base, actor: { kind: "userDevice", userId: fixtures.USERS.owner } }), { ok: false, code: "not_found" });
   assert.deepEqual(decideRenderCommit({ ...base, upload: null }), { ok: false, code: "not_found" });
   assert.deepEqual(decideRenderCommit({ ...base, desired: fixtures.binding }), { ok: false, code: "stale_render" });
+  // Only the full-resolution size NIHO expects is published; a superseded output never commits.
+  assert.deepEqual(decideRenderCommit({ ...base, upload: { ...base.upload, width: 3000, height: 2000 } }), { ok: false, code: "content_rejected" });
+  assert.deepEqual(decideRenderCommit({ ...base, upload: { ...base.upload, width: undefined, height: undefined } }), { ok: false, code: "content_rejected" });
+  assert.deepEqual(decideRenderCommit({ ...base, upload: { ...base.upload, state: "superseded" } }), { ok: false, code: "stale_render" });
 
   const viewer = { userId: fixtures.USERS.contributor, membership: fixtures.memberships.contributor };
   const item = { ...fixtures.snapshots.memberItem, addedBy: fixtures.PEOPLE.contributor, inRequestedAlbum: true };
@@ -357,8 +361,12 @@ function evaluate(vector) {
       return fromDecision(decideUploadCommit(arrange), operation);
     case "revision":
       return fromDecision(arrange.expectedRevision === arrange.currentRevision ? { ok: true } : { ok: false, code: "revision_conflict" }, operation);
-    case "hostedSave":
-      return fromDecision(decideHostedRecipeSave(arrange), operation);
+    case "hostedSave": {
+      const decision = decideHostedRecipeSave(arrange);
+      return decision.ok
+        ? { ...success(operation, CREATE_OPERATIONS.has(operation)), replica: decision.replica }
+        : fromDecision(decision, operation);
+    }
     case "visibility": {
       const projected = projectAlbumItem(fixtures.snapshots[arrange.snapshot], { userId, role: arrange.role });
       return fromDecision(projected ? { ok: true } : { ok: false, code: "not_found" }, operation);
@@ -390,7 +398,10 @@ test("every conformance vector matches the reference policy", () => {
     if (vector.expected.code) assert.equal(SHARING_ERROR_STATUS[vector.expected.code], vector.expected.status, vector.id);
     if (vector.check !== "closedRequest") assert.deepEqual(unexpected(vector.operation, vector.request), [], vector.id);
     const actual = evaluate(vector);
-    assert.deepEqual(actual, vector.expected.code ? { status: vector.expected.status, code: vector.expected.code } : { status: vector.expected.status }, vector.id);
+    const expected = vector.expected.code
+      ? { status: vector.expected.status, code: vector.expected.code }
+      : { status: vector.expected.status, ...(vector.expected.replica ? { replica: vector.expected.replica } : {}) };
+    assert.deepEqual(actual, expected, vector.id);
   }
 });
 
@@ -408,7 +419,11 @@ test("B00 negative categories are all present", () => {
     closedRequests: ["owner-in-request", "path-in-add-source", "unknown-source-kind", "path-in-index-entry"],
     quotaWait: ["quota-wait-visible-to-adder", "quota-wait-hidden-from-viewer", "quota-wait-reason-hidden-from-member", "member-album-full"],
     albumNames: ["album-name-101-code-points", "album-name-100-emoji", "album-name-blank"],
-    hostedReplica: ["hosted-save-missing-mask", "replica-pull-compacted", "replica-pull-ahead-of-niho", "replica-pull-snapshot"],
+    hostedReplica: [
+      "hosted-save-missing-mask", "hosted-save-online-unacknowledged", "hosted-save-acknowledged-replay",
+      "replica-pull-compacted", "replica-pull-ahead-of-niho", "replica-pull-snapshot",
+    ],
+    renderOutputs: ["job-full-resolution-output", "job-downscaled-output", "job-superseded-output", "claim-unknown-result-replay"],
   };
   for (const [category, list] of Object.entries(required)) for (const id of list) assert(ids.has(id), `${category}:${id}`);
 });

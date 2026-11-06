@@ -3,8 +3,8 @@
  * executor for, resolves the original read-only from its own index, checks the job's source binding, keeps the Mac
  * awake while running, and uploads only the executor's output. Originals never leave the Mac.
  */
-import type { HostConnectorClient, RenderFailureCode, RenderJob } from "../../photo-library-sharing-contract/src/v1.ts";
-import { sha256Bytes } from "./crypto.ts";
+import type { ConnectorOperationMap, HostConnectorClient, RenderFailureCode, RenderJob } from "../../photo-library-sharing-contract/src/v1.ts";
+import { randomSecret, sha256Bytes } from "./crypto.ts";
 import type {
   JobExecutors,
   LocalIndexStore,
@@ -33,6 +33,27 @@ class JobFailure extends Error {
   constructor(failure: RenderFailureCode) {
     super(`render job failed: ${failure}`);
     this.failure = failure;
+  }
+}
+
+type Client = Pick<HostConnectorClient, "request">;
+/**
+ * Keyed job requests (claim, start, commit) are retried once with the same key when the answer was lost: a claim
+ * would otherwise strand the jobs it leased until the lease expires. Answers the server gave are never retried.
+ */
+async function sendKeyed<O extends "renderJobs.claim" | "renderJobs.startOutput" | "renderJobs.commit">(
+  client: Client,
+  operation: O,
+  body: ConnectorOperationMap[O]["request"],
+  idempotencyKey: string,
+  signal: AbortSignal,
+): Promise<ConnectorOperationMap[O]["response"]> {
+  const send = () => client.request(operation, body, { signal, idempotencyKey } as never);
+  try {
+    return await send();
+  } catch (error) {
+    if (codeOf(error) !== null || signal.aborted) throw error;
+    return send();
   }
 }
 
@@ -123,7 +144,7 @@ export function createJobRunner(options: {
   const roots = new Map(options.roots.map((root) => [root.id, root]));
   const purposes = (Object.keys(options.executors) as RenderJob["purpose"]["kind"][]).filter((kind) => options.executors[kind]);
 
-  const runOne = async (client: Pick<HostConnectorClient, "request">, job: RenderJob, leaseToken: string, signal: AbortSignal): Promise<number> => {
+  const runOne = async (client: Client, job: RenderJob, leaseToken: string, signal: AbortSignal): Promise<number> => {
     const executor = options.executors[job.purpose.kind];
     if (!executor) throw new JobFailure("renderer_unavailable");
     const entry = await options.store.byPhotoId(job.photo.photoId);
@@ -145,18 +166,21 @@ export function createJobRunner(options: {
       if (output.request.kind !== expected || output.bytes.byteLength !== output.request.sizeBytes || (await sha256Bytes(output.bytes)) !== output.request.sha256) {
         throw new JobFailure("renderer_unavailable");
       }
-      const started = await client.request(
+      const started = await sendKeyed(
+        client,
         "renderJobs.startOutput",
         { jobId: job.id, leaseToken, output: output.request },
-        { signal, idempotencyKey: `job-${job.id}-${job.attempt}-output` },
+        `job-${job.id}-${job.attempt}-output`,
+        signal,
       );
-      const ticket = started.value.ticket;
-      if (ticket) await options.uploader.put(ticket, output.bytes, signal);
-      await client.request(
-        "renderJobs.commit",
+      // A replayed start has no ticket: whether the bytes arrived is unknown, so renew the ticket and send them again.
+      const ticket = started.value.ticket ?? (await client.request(
+        "renderJobs.renewOutput",
         { jobId: job.id, leaseToken, uploadId: started.value.uploadId },
-        { signal, idempotencyKey: `job-${job.id}-${job.attempt}-commit` },
-      );
+        { signal },
+      )).ticket;
+      await options.uploader.put(ticket, output.bytes, signal);
+      await sendKeyed(client, "renderJobs.commit", { jobId: job.id, leaseToken, uploadId: started.value.uploadId }, `job-${job.id}-${job.attempt}-commit`, signal);
       return output.bytes.byteLength;
     } finally {
       await original.close();
@@ -165,9 +189,9 @@ export function createJobRunner(options: {
 
   return {
     purposes: () => purposes,
-    async step(client: Pick<HostConnectorClient, "request">, signal: AbortSignal, maxJobs: number): Promise<JobStepResult> {
+    async step(client: Client, signal: AbortSignal, maxJobs: number): Promise<JobStepResult> {
       if (!purposes.length) return { claimed: 0, committed: 0, failed: 0, dropped: 0, uploadedBytes: 0 };
-      const claimed = await client.request("renderJobs.claim", { maxJobs, purposes }, { signal });
+      const claimed = (await sendKeyed(client, "renderJobs.claim", { maxJobs, purposes }, `claim-${randomSecret()}`, signal)).value;
       let committed = 0;
       let failed = 0;
       let dropped = 0;

@@ -38,7 +38,7 @@ interface Job {
 export class FakeNiho {
   readonly canonical = new SyntheticHostedCanonical();
   now = START;
-  readonly requests: { operation: string; body: unknown; credential: string | null }[] = [];
+  readonly requests: { operation: string; body: unknown; credential: string | null; key: string | undefined }[] = [];
   /** Operations whose next response is lost after the server applied it. */
   readonly dropNextResponse = new Set<string>();
   readonly connectors = new Map<string, Connector>();
@@ -47,7 +47,13 @@ export class FakeNiho {
   readonly uploads = new Map<string, Uint8Array>();
   private readonly pairings = new Map<string, Pairing>();
   private readonly idempotency = new Map<string, { record: IdempotencyRecord; result: unknown }>();
+  /** renewOutput calls answered. */
+  renewals = 0;
   private seq = 1;
+
+  private ticket(url: string) {
+    return { url, method: "PUT" as const, headers: {}, expiresAt: iso(this.now + 30 * 60 * 1000), resumeOffsetBytes: 0 };
+  }
 
   /** Owner action in NIHO's own screen (signed-in user session). */
   approve(userCode: string, ownerId: string, target: { kind: "newLibrary" } | { kind: "existingLibrary"; libraryId: string; libraryOwner: string }): string {
@@ -82,7 +88,8 @@ export class FakeNiho {
           sourceGeneration: photo.source.generation, sourceSha256: photo.source.sha256, recipeRevision: recipe.revision,
           settingsSha256: recipe.settingsSha256, engine: recipe.settings.engine, rendererManifestSha256: "c".repeat(64), maskSurfaceIds: recipe.maskSurfaceIds,
         },
-        recipe, state: "queued", attempt: 1, createdAt: iso(this.now), leaseExpiresAt: null, failure: null,
+        // The fake never decodes outputs, so it states no expected full-resolution size.
+        recipe, expectedOutput: null, state: "queued", attempt: 1, createdAt: iso(this.now), leaseExpiresAt: null, failure: null,
       },
       leaseToken: null,
       output: null,
@@ -113,7 +120,7 @@ export class FakeNiho {
 
   readonly transport: ConnectorTransport = (secret) => ({
     request: (async (operation: string, body: Record<string, unknown>, options: { idempotencyKey?: string }) => {
-      this.requests.push({ operation, body: structuredClone(body), credential: secret });
+      this.requests.push({ operation, body: structuredClone(body), credential: secret, key: options.idempotencyKey });
       const result = await this.handle(operation, body, options.idempotencyKey, secret);
       if (this.dropNextResponse.delete(operation)) throw networkError();
       return result;
@@ -169,30 +176,39 @@ export class FakeNiho {
       case "connector.ackReplica":
       case "connector.getReplicaContent":
         return this.canonical.client().request(operation as never, body as never, { idempotencyKey: key } as never);
-      case "renderJobs.claim": {
-        const purposes = (body.purposes as string[] | undefined) ?? [];
-        const claimed = [...this.jobs.values()]
-          .filter((item) => item.job.state === "queued" && purposes.includes(item.job.purpose.kind) && item.job.executor.kind === "hostedMac" && item.job.executor.connectorId === connector.id)
-          .slice(0, (body.maxJobs as number | undefined) ?? 1);
-        return {
-          jobs: claimed.map((item) => {
-            item.leaseToken = `lease-${this.seq++}`;
-            item.job = { ...item.job, state: "claimed", leaseExpiresAt: iso(this.now + 15 * 60 * 1000) };
-            return { job: item.job, lease: { jobId: item.job.id, leaseToken: item.leaseToken, expiresAt: item.job.leaseExpiresAt } };
-          }),
-        };
+      case "renderJobs.claim":
+        // Keyed: a lost answer replays the same leased jobs instead of stranding them until the lease expires.
+        return this.replayable(actor, "renderJobs.claim", key, body, async () => {
+          const purposes = (body.purposes as string[] | undefined) ?? [];
+          const claimed = [...this.jobs.values()]
+            .filter((item) => item.job.state === "queued" && purposes.includes(item.job.purpose.kind) && item.job.executor.kind === "hostedMac" && item.job.executor.connectorId === connector.id)
+            .slice(0, (body.maxJobs as number | undefined) ?? 1);
+          return {
+            jobs: claimed.map((item) => {
+              item.leaseToken = `lease-${this.seq++}`;
+              item.job = { ...item.job, state: "claimed", leaseExpiresAt: iso(this.now + 15 * 60 * 1000) };
+              return { job: item.job, lease: { jobId: item.job.id, leaseToken: item.leaseToken, expiresAt: item.job.leaseExpiresAt } };
+            }),
+          };
+        });
+      case "renderJobs.renewOutput": {
+        const item = this.jobs.get(body.jobId as string);
+        const output = item?.output;
+        if (!item || !output || item.leaseToken !== body.leaseToken || item.job.state !== "claimed" || output.uploadId !== body.uploadId) throw contractError("not_found");
+        this.renewals++;
+        return { uploadId: output.uploadId, expiresAt: iso(this.now + 30 * 60 * 1000), ticket: this.ticket(output.url) };
       }
       case "renderJobs.startOutput":
       case "renderJobs.commit":
       case "renderJobs.fail": {
         const item = this.jobs.get(body.jobId as string);
         if (!item || item.leaseToken !== body.leaseToken || item.job.executor.kind !== "hostedMac" || item.job.executor.connectorId !== connector.id) throw contractError("not_found");
-        return this.replayable(actor, operation as "renderJobs.commit", key, body, async () => {
+        const answer = await this.replayable(actor, operation as "renderJobs.commit", key, body, async () => {
           if (item.job.state !== "claimed") throw contractError("stale_render");
           if (operation === "renderJobs.startOutput") {
             const uploadId = `synthetic-output-${this.seq++}`;
             item.output = { uploadId, url: `https://upload.example.test/${uploadId}`, request: body.output as RenderOutputRequest };
-            return { uploadId, expiresAt: iso(this.now + 30 * 60 * 1000), ticket: { url: item.output.url, method: "PUT", headers: {}, expiresAt: iso(this.now + 30 * 60 * 1000), resumeOffsetBytes: 0 } };
+            return { uploadId, expiresAt: iso(this.now + 30 * 60 * 1000), ticket: this.ticket(item.output.url) };
           }
           if (operation === "renderJobs.fail") {
             item.job = { ...item.job, state: "failed", failure: body.code as never, leaseExpiresAt: null };
@@ -204,6 +220,9 @@ export class FakeNiho {
           item.job = { ...item.job, state: "committed", leaseExpiresAt: null };
           return item.job;
         });
+        // A replayed start never repeats the signed ticket (B00): the executor renews it.
+        if (operation === "renderJobs.startOutput" && answer.replayed) return { ...answer, value: { ...(answer.value as object), ticket: null } };
+        return answer;
       }
       default:
         throw contractError("not_found");
