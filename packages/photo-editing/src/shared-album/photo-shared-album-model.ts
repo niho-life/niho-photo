@@ -26,6 +26,11 @@ export type PhotoSharedAlbumMemberRole = Exclude<PhotoSharedAlbumRole, "owner">;
 export type PhotoSharedAlbumItemKind = "ownerPhoto" | "memberEdit" | "fileUpload";
 /** アルバムの項目の状態（準備中 / 公開中 / 更新待ち / 削除）。 */
 export type PhotoSharedAlbumItemState = "preparing" | "published" | "updatePending" | "removed";
+/**
+ * 準備中・更新待ちの理由（B00 の `pendingReason`。オーナーと追加者にだけ届く）。描いている / 常設 Mac の起動待ち / 追加した端末の
+ * 起動待ち / 元データが変わった / 容量不足で止めた。
+ */
+export type PhotoSharedAlbumPendingReason = "rendering" | "waitingForHost" | "waitingForDevice" | "sourceChanged" | "quotaExceeded";
 
 export const PHOTO_SHARED_ALBUM_MEMBER_ROLES: readonly PhotoSharedAlbumMemberRole[] = ["contributor", "viewer"];
 
@@ -60,6 +65,8 @@ export interface PhotoSharedAlbumItem {
   readonly thumbnailUrl: string | null;
   /** 本人が前に見たあとに足された（追加者の表示を出す） */
   readonly isNew: boolean;
+  /** 準備中・更新待ちの理由（オーナーと追加者にだけ届く。他の人・理由の無いときは null） */
+  readonly pendingReason: PhotoSharedAlbumPendingReason | null;
 }
 
 /** アルバムの容量。オーナーにだけ使用量を渡す（メンバーには「いっぱい」だけを伝える）。 */
@@ -84,8 +91,6 @@ export interface PhotoSharedAlbumSummary {
 /** 開いているアルバム。 */
 export interface PhotoSharedAlbum extends PhotoSharedAlbumSummary {
   readonly capacity: PhotoSharedAlbumCapacity;
-  /** オーナーの写真の完成写真を描く常設 Mac の状態（オーナーにだけ渡す。常設 Mac でなければ null） */
-  readonly hostedMacStatus: PhotoHostedMacStatus | null;
   /** 共有の解除・メンバーから外れた。追加中の写真は確定しない */
   readonly accessEnded: boolean;
 }
@@ -166,30 +171,54 @@ export function visiblePhotoSharedAlbumItems(
   });
 }
 
-/** 準備中・更新待ちの項目に出す短い状態（オーナーの写真で常設 Mac が止まっているときは「Mac の起動後に更新」）。 */
+function photoSharedAlbumItemPending(item: Pick<PhotoSharedAlbumItem, "state">): boolean {
+  return item.state === "preparing" || item.state === "updatePending";
+}
+
+/**
+ * 準備中・更新待ちの項目が止まっている理由の種類（タイルの印に使う）。起動を待っている（常設 Mac・追加した端末）なら `waiting`、
+ * 容量不足で止めたなら `quota`、描いている途中などは null。
+ */
+export function photoSharedAlbumItemPause(item: Pick<PhotoSharedAlbumItem, "state" | "pendingReason">): "waiting" | "quota" | null {
+  if (!photoSharedAlbumItemPending(item)) return null;
+  if (item.pendingReason === "waitingForHost" || item.pendingReason === "waitingForDevice") return "waiting";
+  if (item.pendingReason === "quotaExceeded") return "quota";
+  return null;
+}
+
+/**
+ * 準備中・更新待ちの項目の状態（読み上げ名とアルバムの 1 行に使う）。常設 Mac の起動待ちは「Mac の起動後に更新」、追加した端末の
+ * 起動待ちは「追加した端末の起動後に更新」、容量不足はオーナーに「容量が足りません」・追加したメンバーに「アルバムがいっぱいです」。
+ */
 export function photoSharedAlbumItemStatus(
-  item: Pick<PhotoSharedAlbumItem, "state" | "kind">,
-  hostedMacStatus: PhotoHostedMacStatus | null,
+  item: Pick<PhotoSharedAlbumItem, "state" | "pendingReason">,
+  role: PhotoSharedAlbumRole,
 ): string | null {
   if (item.state !== "preparing" && item.state !== "updatePending") return null;
-  if (item.kind === "ownerPhoto" && hostedMacStatus !== null && hostedMacStatus !== "online") {
-    return PHOTO_SHARED_ALBUM_COPY.macWaiting;
+  switch (item.pendingReason) {
+    case "waitingForHost":
+      return PHOTO_SHARED_ALBUM_COPY.macWaiting;
+    case "waitingForDevice":
+      return PHOTO_SHARED_ALBUM_COPY.deviceWaiting;
+    case "quotaExceeded":
+      return role === "owner" ? PHOTO_SHARED_ALBUM_COPY.ownerQuotaExceeded : PHOTO_SHARED_ALBUM_COPY.albumFull;
+    default:
+      return PHOTO_SHARED_ALBUM_COPY.itemStates[item.state];
   }
-  return PHOTO_SHARED_ALBUM_COPY.itemStates[item.state];
 }
 
 /** タイルの読み上げ名（例「写真 3/24、佐藤さんが追加、新着」）。 */
 export function photoSharedAlbumItemLabel(
   item: PhotoSharedAlbumItem,
   position: { index: number; total: number },
-  hostedMacStatus: PhotoHostedMacStatus | null,
+  role: PhotoSharedAlbumRole,
 ): string {
   const adder = item.addedBy.isSelf ? PHOTO_SHARED_ALBUM_COPY.you : `${item.addedBy.displayName}さん`;
   const parts = [
     `${PHOTO_SHARED_ALBUM_COPY.photoFallback} ${position.index + 1}/${position.total}`,
     PHOTO_SHARED_ALBUM_COPY.addedBy(adder),
   ];
-  const status = photoSharedAlbumItemStatus(item, hostedMacStatus);
+  const status = photoSharedAlbumItemStatus(item, role);
   if (status) parts.push(status);
   if (item.isNew) parts.push(PHOTO_SHARED_ALBUM_COPY.newMark);
   return parts.join("、");
@@ -201,13 +230,14 @@ export function photoSharedAlbumItemLabel(
 export type PhotoSharedAlbumNotice =
   | { readonly kind: "accessEnded"; readonly text: string; readonly actionLabel: string }
   | { readonly kind: "full"; readonly text: string; readonly actionLabel: string | null }
-  | { readonly kind: "macWaiting"; readonly text: string }
+  | { readonly kind: "waiting"; readonly text: string }
   | { readonly kind: "preparing"; readonly text: string; readonly fraction: number };
 
 /**
- * アルバムの上に出す 1 行（出さなければ null）。優先は 解除後 > 容量不足 > 常設 Mac の休止 > 準備中。
- * 容量不足はメンバーには「アルバムがいっぱいです」、オーナーには使用量と次の操作を出す。常設 Mac の休止は、オーナーの写真の
- * 完成写真を待っている項目があるときだけ出す（一覧・保存は止めない）。
+ * アルバムの上に出す 1 行（出さなければ null）。優先は 解除後 > 容量不足 > 起動待ち > 準備中。
+ * 容量不足はメンバーには「アルバムがいっぱいです」、オーナーには容量と次の操作を出す。容量不足で止めた項目があるときも同じ行で
+ * 示す（オーナーには「容量が足りません」）。起動待ちは、見えている項目に常設 Mac・追加した端末を待つものがあるときだけ出し、
+ * 常設 Mac を先に出す（一覧・保存は止めない）。項目の理由はオーナーと追加者にだけ届く。
  */
 export function photoSharedAlbumNotice(
   album: PhotoSharedAlbum,
@@ -227,14 +257,14 @@ export function photoSharedAlbumNotice(
     }
     return { kind: "full", text: PHOTO_SHARED_ALBUM_COPY.albumFull, actionLabel: null };
   }
-  if (
-    album.role === "owner"
-    && album.hostedMacStatus !== null
-    && album.hostedMacStatus !== "online"
-    && items.some((item) => item.kind === "ownerPhoto" && (item.state === "preparing" || item.state === "updatePending"))
-  ) {
-    return { kind: "macWaiting", text: PHOTO_SHARED_ALBUM_COPY.macWaiting };
+  const waitingReasons = new Set(items.filter(photoSharedAlbumItemPending).map((item) => item.pendingReason));
+  if (waitingReasons.has("quotaExceeded")) {
+    return album.role === "owner"
+      ? { kind: "full", text: PHOTO_SHARED_ALBUM_COPY.ownerQuotaExceeded, actionLabel: PHOTO_SHARED_ALBUM_COPY.ownerFullAction }
+      : { kind: "full", text: PHOTO_SHARED_ALBUM_COPY.albumFull, actionLabel: null };
   }
+  if (waitingReasons.has("waitingForHost")) return { kind: "waiting", text: PHOTO_SHARED_ALBUM_COPY.macWaiting };
+  if (waitingReasons.has("waitingForDevice")) return { kind: "waiting", text: PHOTO_SHARED_ALBUM_COPY.deviceWaiting };
   const preparing = album.preparing;
   if (preparing && preparing.total > 0 && preparing.done < preparing.total) {
     const done = Math.max(0, Math.min(preparing.done, preparing.total));

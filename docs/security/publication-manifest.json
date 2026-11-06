@@ -2640,9 +2640,10 @@
         "以前の補正が現在の写真や端末で保存不可の場合の日本語説明を追加",
         "native検証済み原本保存の状態欄copy formatterを追加する",
         "独立Photoの読み取り専用プリセット管理と共有転送表示を接続",
-        "共有アルバム・共有シート・追加の進捗・招待リンク・保存先の文言定数を追加（B08 #249）"
+        "共有アルバム・共有シート・追加の進捗・招待リンク・保存先の文言定数を追加（B08 #249）",
+        "共有アルバムの項目の待機理由（追加した端末の起動待ち・容量不足で止めた項目）を状態の表示に追加（B08 #249）"
       ],
-      "outputSha256": "18cf9117d009a019a0223d0725d7700bc4e2c87071c6df6a941e0b211f6e447c"
+      "outputSha256": "78fd57b2c63baf96245804cd1d08a08b66cebf63d65f2475b062fd4e93308815"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-crop.test.ts",
@@ -13447,8 +13448,8 @@
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-shared-album-fixtures.ts",
-      "sha256": "9a789acbdc1baacd2faf5fcdf5e8839353ae9faf4027f8800dfb5eb4f3060941",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "97b81fea8b8f06cce626ca7bef561bfd50d250b9e627e6f2caff7b06cd837ed0",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 共有アルバムの項目の待機理由（追加した端末の起動待ち・容量不足で止めた項目）を状態の表示に追加（B08 #249）"
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-shared-album-invite.tsx",
@@ -13462,13 +13463,13 @@
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-shared-album-model.test.ts",
-      "sha256": "ff4dc6eac1f15206448139b7ecdf3e7d2c86b826239647b77617803205cb98de",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "31514b911caf5da6eae78be4956a36c666e86d6357ce0e89c019e1f744de393c",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 共有アルバムの項目の待機理由（追加した端末の起動待ち・容量不足で止めた項目）を状態の表示に追加（B08 #249）"
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-shared-album-model.ts",
-      "sha256": "390f572a764baacea9f157a96ca4e73799f078bb4126560c83238cd3df60ac3f",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "27ea666e718893939c1a4449bfada68e746bc8e6f502d92b9dc91147b3768dd5",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 共有アルバムの項目の待機理由（追加した端末の起動待ち・容量不足で止めた項目）を状態の表示に追加（B08 #249）"
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-shared-album-screens.test.tsx",
@@ -13492,13 +13493,13 @@
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-shared-album-view.test.tsx",
-      "sha256": "e8a8ca921e77a8bac88f6847c41f6fe12c7c0bdccbbcaf4a5e4041a8813b1804",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "ed93811d887f16a5a564839718f60ca98651bd4f6791c73e7aceb8d50db9b742",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 共有アルバムの項目の待機理由（追加した端末の起動待ち・容量不足で止めた項目）を状態の表示に追加（B08 #249）"
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-shared-album-view.tsx",
-      "sha256": "282e448e206e8283ff9c89b379ade38824d2f7037e3bfaee517964ab1937469b",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "c849774b2caab807f8324fa2a6ee1310f00992456e40ce77afc5809651048885",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 共有アルバムの項目の待機理由（追加した端末の起動待ち・容量不足で止めた項目）を状態の表示に追加（B08 #249）"
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-storage-location-settings.tsx",

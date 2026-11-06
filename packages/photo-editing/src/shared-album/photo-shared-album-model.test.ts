@@ -15,6 +15,7 @@ import {
   photoSharedAlbumCanRemoveItem,
   photoSharedAlbumInviteExpiryLabel,
   photoSharedAlbumItemLabel,
+  photoSharedAlbumItemPause,
   photoSharedAlbumItemSavable,
   photoSharedAlbumItemStatus,
   photoSharedAlbumNotice,
@@ -84,31 +85,60 @@ describe("見せる項目", () => {
 });
 
 describe("項目の状態と読み上げ", () => {
-  it("オーナーの写真で常設 Mac が止まっていれば「Mac の起動後に更新」、それ以外は準備中・更新待ち", () => {
-    expect(photoSharedAlbumItemStatus({ state: "preparing", kind: "ownerPhoto" }, "sleeping")).toBe("Mac の起動後に更新");
-    expect(photoSharedAlbumItemStatus({ state: "updatePending", kind: "ownerPhoto" }, "unreachable")).toBe("Mac の起動後に更新");
-    expect(photoSharedAlbumItemStatus({ state: "preparing", kind: "ownerPhoto" }, "online")).toBe("準備中");
-    expect(photoSharedAlbumItemStatus({ state: "preparing", kind: "memberEdit" }, "sleeping")).toBe("準備中");
-    expect(photoSharedAlbumItemStatus({ state: "updatePending", kind: "fileUpload" }, null)).toBe("更新待ち");
-    expect(photoSharedAlbumItemStatus({ state: "published", kind: "ownerPhoto" }, "sleeping")).toBeNull();
+  it("常設 Mac の起動待ちは「Mac の起動後に更新」、追加した端末の起動待ちは「追加した端末の起動後に更新」", () => {
+    expect(photoSharedAlbumItemStatus({ state: "preparing", pendingReason: "waitingForHost" }, "owner")).toBe("Mac の起動後に更新");
+    expect(photoSharedAlbumItemStatus({ state: "updatePending", pendingReason: "waitingForHost" }, "owner")).toBe("Mac の起動後に更新");
+    expect(photoSharedAlbumItemStatus({ state: "preparing", pendingReason: "waitingForDevice" }, "contributor")).toBe("追加した端末の起動後に更新");
+    expect(photoSharedAlbumItemStatus({ state: "updatePending", pendingReason: "waitingForDevice" }, "owner")).toBe("追加した端末の起動後に更新");
+    expect(photoSharedAlbumItemPause({ state: "preparing", pendingReason: "waitingForHost" })).toBe("waiting");
+    expect(photoSharedAlbumItemPause({ state: "updatePending", pendingReason: "waitingForDevice" })).toBe("waiting");
+  });
+
+  it("容量不足で止めた項目は、オーナーには「容量が足りません」、追加したメンバーには「アルバムがいっぱいです」", () => {
+    expect(photoSharedAlbumItemStatus({ state: "preparing", pendingReason: "quotaExceeded" }, "owner")).toBe("容量が足りません");
+    expect(photoSharedAlbumItemStatus({ state: "updatePending", pendingReason: "quotaExceeded" }, "contributor")).toBe("アルバムがいっぱいです");
+    expect(photoSharedAlbumItemPause({ state: "preparing", pendingReason: "quotaExceeded" })).toBe("quota");
+  });
+
+  it("描いている途中・元データが変わった・理由の無いときは準備中・更新待ちのまま。公開中は出さない", () => {
+    expect(photoSharedAlbumItemStatus({ state: "preparing", pendingReason: "rendering" }, "owner")).toBe("準備中");
+    expect(photoSharedAlbumItemStatus({ state: "updatePending", pendingReason: "sourceChanged" }, "owner")).toBe("更新待ち");
+    expect(photoSharedAlbumItemStatus({ state: "preparing", pendingReason: null }, "contributor")).toBe("準備中");
+    expect(photoSharedAlbumItemStatus({ state: "published", pendingReason: "waitingForHost" }, "owner")).toBeNull();
+    expect(photoSharedAlbumItemPause({ state: "preparing", pendingReason: "rendering" })).toBeNull();
+    expect(photoSharedAlbumItemPause({ state: "published", pendingReason: "quotaExceeded" })).toBeNull();
   });
 
   it("読み上げ名に位置・追加者・状態・新着を入れ、内部識別子を出さない", () => {
     const label = photoSharedAlbumItemLabel(
       photoSharedAlbumFixtureItem(0, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.contributor, state: "updatePending", kind: "memberEdit", isNew: true }),
       { index: 2, total: 24 },
-      null,
+      "owner",
     );
     expect(label).toBe("写真 3/24、佐藤 花子さんが追加、更新待ち、新着");
     expect(label).not.toMatch(/memberEdit|updatePending|contributor/);
-    expect(photoSharedAlbumItemLabel(photoSharedAlbumFixtureItem(0, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.ownerSelf }), { index: 0, total: 1 }, null))
+    expect(photoSharedAlbumItemLabel(photoSharedAlbumFixtureItem(0, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.ownerSelf }), { index: 0, total: 1 }, "owner"))
       .toBe("写真 1/1、あなたが追加");
+    const waiting = photoSharedAlbumItemLabel(
+      photoSharedAlbumFixtureItem(0, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.contributorSelf, state: "preparing", pendingReason: "waitingForDevice" }),
+      { index: 0, total: 1 },
+      "contributor",
+    );
+    expect(waiting).toBe("写真 1/1、あなたが追加、追加した端末の起動後に更新");
+    expect(waiting).not.toMatch(/waitingForDevice/);
   });
 });
 
 describe("アルバムの状態の 1 行（Epic §12）", () => {
   const album = (overrides: Partial<PhotoSharedAlbum>): PhotoSharedAlbum => ({ ...PHOTO_SHARED_ALBUM_FIXTURE_ALBUM, ...overrides });
-  const waitingOwnerItem = photoSharedAlbumFixtureItem(0, { state: "preparing", kind: "ownerPhoto" });
+  const waitingForHostItem = photoSharedAlbumFixtureItem(0, { state: "preparing", kind: "ownerPhoto", pendingReason: "waitingForHost" });
+  const waitingForDeviceItem = photoSharedAlbumFixtureItem(1, {
+    state: "updatePending",
+    kind: "memberEdit",
+    addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.contributor,
+    pendingReason: "waitingForDevice",
+  });
+  const quotaItem = photoSharedAlbumFixtureItem(2, { state: "preparing", kind: "fileUpload", pendingReason: "quotaExceeded" });
 
   it("できるときは出さない", () => {
     expect(photoSharedAlbumNotice(album({}), [photoSharedAlbumFixtureItem(0)])).toBeNull();
@@ -128,11 +158,28 @@ describe("アルバムの状態の 1 行（Epic §12）", () => {
     });
   });
 
-  it("常設 Mac の休止はオーナーの写真を待っているときだけ出し、メンバーには出さない", () => {
-    expect(photoSharedAlbumNotice(album({ hostedMacStatus: "sleeping" }), [waitingOwnerItem])).toEqual({ kind: "macWaiting", text: "Mac の起動後に更新" });
-    expect(photoSharedAlbumNotice(album({ hostedMacStatus: "sleeping" }), [photoSharedAlbumFixtureItem(0)])).toBeNull();
-    expect(photoSharedAlbumNotice(album({ hostedMacStatus: "online" }), [waitingOwnerItem])).toBeNull();
-    expect(photoSharedAlbumNotice(album({ role: "contributor", hostedMacStatus: "sleeping" }), [waitingOwnerItem])).toBeNull();
+  it("容量不足で止めた項目があれば、オーナーには「容量が足りません」と次の操作、追加したメンバーには「アルバムがいっぱいです」", () => {
+    expect(photoSharedAlbumNotice(album({}), [photoSharedAlbumFixtureItem(0), quotaItem])).toEqual({
+      kind: "full",
+      text: "容量が足りません",
+      actionLabel: "容量を確認",
+    });
+    expect(photoSharedAlbumNotice(album({ role: "contributor" }), [quotaItem])).toEqual({
+      kind: "full",
+      text: "アルバムがいっぱいです",
+      actionLabel: null,
+    });
+    // 起動待ちより先に出す
+    expect(photoSharedAlbumNotice(album({}), [waitingForHostItem, quotaItem])?.kind).toBe("full");
+  });
+
+  it("起動待ちは待っている項目があるときだけ出し、常設 Mac を先に出す", () => {
+    expect(photoSharedAlbumNotice(album({}), [waitingForHostItem])).toEqual({ kind: "waiting", text: "Mac の起動後に更新" });
+    expect(photoSharedAlbumNotice(album({ role: "contributor" }), [waitingForDeviceItem])).toEqual({ kind: "waiting", text: "追加した端末の起動後に更新" });
+    expect(photoSharedAlbumNotice(album({}), [waitingForDeviceItem, waitingForHostItem])).toEqual({ kind: "waiting", text: "Mac の起動後に更新" });
+    // 公開中になった項目に古い理由が残っていても出さない
+    expect(photoSharedAlbumNotice(album({}), [{ ...waitingForHostItem, state: "published" }])).toBeNull();
+    expect(photoSharedAlbumNotice(album({}), [photoSharedAlbumFixtureItem(0)])).toBeNull();
   });
 
   it("準備中は進み具合だけを出す", () => {
@@ -141,7 +188,7 @@ describe("アルバムの状態の 1 行（Epic §12）", () => {
   });
 
   it("解除後が最優先で、戻る操作を付ける", () => {
-    expect(photoSharedAlbumNotice(album({ accessEnded: true, capacity: { state: "full", ownerUsage: null }, preparing: { done: 1, total: 2 } }), [waitingOwnerItem]))
+    expect(photoSharedAlbumNotice(album({ accessEnded: true, capacity: { state: "full", ownerUsage: null }, preparing: { done: 1, total: 2 } }), [waitingForHostItem, quotaItem]))
       .toEqual({ kind: "accessEnded", text: "このアルバムは見られなくなりました", actionLabel: "共有アルバムへ" });
   });
 });

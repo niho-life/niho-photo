@@ -98,7 +98,7 @@ describe("PhotoSharedAlbumView", () => {
       photoSharedAlbumFixtureItem(0, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.contributorSelf, isNew: true }),
       photoSharedAlbumFixtureItem(1, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.owner, isNew: true }),
     ];
-    render(props({ album: album({ role: "contributor", hostedMacStatus: null }), items }));
+    render(props({ album: album({ role: "contributor" }), items }));
     const [mine, others] = tiles();
     expect(mine.textContent).not.toContain("あなた");
     expect(others.textContent).toContain("中村");
@@ -106,7 +106,7 @@ describe("PhotoSharedAlbumView", () => {
 
   it("見るだけのメンバーには「追加」を出さず、役割を見出しの下に出す", () => {
     const items = photoSharedAlbumFixtureItems().map((item) => ({ ...item, addedBy: { ...item.addedBy, isSelf: false } }));
-    render(props({ album: album({ role: "viewer", hostedMacStatus: null }), items }));
+    render(props({ album: album({ role: "viewer" }), items }));
     expect(buttonByText("追加")).toBeUndefined();
     expect(container.querySelector("input[type=file]")).not.toBeNull();
     expect(container.textContent).toContain("見るだけ");
@@ -117,7 +117,7 @@ describe("PhotoSharedAlbumView", () => {
 
   it("「追加」はファイルを選ぶ画面を開き、選んだファイルを確認なしでそのまま渡す", () => {
     const onAddFiles = vi.fn();
-    render(props({ album: album({ role: "contributor", hostedMacStatus: null }), onAddFiles }));
+    render(props({ album: album({ role: "contributor" }), onAddFiles }));
     const input = container.querySelector<HTMLInputElement>("input[type=file]");
     if (!input) throw new Error("input not found");
     expect(input.accept).toBe("image/*");
@@ -145,7 +145,7 @@ describe("PhotoSharedAlbumView", () => {
   });
 
   it("容量がいっぱいのときは「追加」を押せず、メンバーには短い理由だけを出す", () => {
-    render(props({ album: album({ role: "contributor", capacity: { state: "full", ownerUsage: null }, hostedMacStatus: null }) }));
+    render(props({ album: album({ role: "contributor", capacity: { state: "full", ownerUsage: null } }) }));
     expect(buttonByText("追加")?.disabled).toBe(true);
     expect(container.querySelector("[role=alert]")?.textContent).toBe("アルバムがいっぱいです");
   });
@@ -161,11 +161,50 @@ describe("PhotoSharedAlbumView", () => {
     expect(onOpenStorage).toHaveBeenCalledTimes(1);
   });
 
-  it("常設 Mac の休止中は「Mac の起動後に更新」を出し、一覧と保存は止めない", () => {
-    render(props({ album: album({ hostedMacStatus: "sleeping" }) }));
+  it("常設 Mac の起動待ちは「Mac の起動後に更新」を出し、一覧と保存は止めない", () => {
+    const items = photoSharedAlbumFixtureItems().map((item) =>
+      item.state === "preparing" || item.state === "updatePending" ? { ...item, pendingReason: "waitingForHost" as const } : item);
+    render(props({ items }));
     expect(container.querySelector("[role=status]")?.textContent).toBe("Mac の起動後に更新");
-    expect(tiles().find((tile) => tile.getAttribute("aria-label")?.includes("Mac の起動後に更新"))).toBeDefined();
+    expect(tiles().filter((tile) => tile.getAttribute("aria-label")?.includes("Mac の起動後に更新"))).toHaveLength(2);
     expect(buttonByText("選択")).toBeDefined();
+  });
+
+  it("追加した端末の起動待ちは「追加した端末の起動後に更新」を出す", () => {
+    const items = [
+      photoSharedAlbumFixtureItem(0),
+      photoSharedAlbumFixtureItem(1, {
+        addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.contributorSelf,
+        kind: "memberEdit",
+        state: "preparing",
+        thumbnailUrl: null,
+        pendingReason: "waitingForDevice",
+      }),
+    ];
+    render(props({ album: album({ role: "contributor" }), items }));
+    expect(container.querySelector("[role=status]")?.textContent).toBe("追加した端末の起動後に更新");
+    expect(tiles()[1].getAttribute("aria-label")).toBe("写真 2/2、あなたが追加、追加した端末の起動後に更新");
+    // タイルの字は短いまま（全文は読み上げ名と 1 行）
+    expect(tiles()[1].textContent).toBe("準備中");
+  });
+
+  it("容量不足で止めた項目は、オーナーには「容量が足りません」、追加したメンバーには「アルバムがいっぱいです」を 1 行で示す", () => {
+    const stopped = (addedBy: typeof PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE[keyof typeof PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE]) => [
+      photoSharedAlbumFixtureItem(0),
+      photoSharedAlbumFixtureItem(1, { addedBy, kind: "fileUpload", state: "preparing", thumbnailUrl: null, pendingReason: "quotaExceeded" }),
+    ];
+    const onOpenStorage = vi.fn();
+    render(props({ items: stopped(PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.contributor), onOpenStorage }));
+    expect(container.querySelector("[role=alert]")?.textContent).toContain("容量が足りません");
+    expect(tiles()[1].textContent).toBe("容量が足りません");
+    click(buttonByText("容量を確認"));
+    expect(onOpenStorage).toHaveBeenCalledTimes(1);
+
+    render(props({ album: album({ role: "contributor" }), items: stopped(PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.contributorSelf) }));
+    expect(container.querySelector("[role=alert]")?.textContent).toBe("アルバムがいっぱいです");
+    expect(tiles()[1].getAttribute("aria-label")).toBe("写真 2/2、あなたが追加、アルバムがいっぱいです");
+    expect(buttonByText("容量を確認")).toBeUndefined();
+    expect(container.textContent).not.toMatch(/quotaExceeded/);
   });
 
   it("選択すると主操作が「保存」になり、準備中の項目は選べない", () => {
@@ -223,7 +262,7 @@ describe("PhotoSharedAlbumView", () => {
       photoSharedAlbumFixtureItem(1, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.owner }),
     ];
     const onRemove = vi.fn(async () => undefined);
-    render(props({ album: album({ role: "contributor", hostedMacStatus: null }), items, onRemove }));
+    render(props({ album: album({ role: "contributor" }), items, onRemove }));
     click(buttonByText("選択"));
     click(tiles()[0]);
     expect(buttonByText("アルバムから外す")).toBeDefined();
@@ -299,7 +338,7 @@ describe("PhotoSharedAlbumView", () => {
   });
 
   it("選択している間はドロップを受けない（保存の操作と混ぜない）", () => {
-    render(props({ album: album({ role: "contributor", hostedMacStatus: null }) }));
+    render(props({ album: album({ role: "contributor" }) }));
     const section = container.querySelector("section");
     const dragEnter = () => {
       const event = new Event("dragenter", { bubbles: true, cancelable: true });
@@ -372,9 +411,9 @@ describe("PhotoSharedAlbumView", () => {
   });
 
   it("空のアルバムは、追加できる人には「追加」、見るだけには短い状態を出す", () => {
-    render(props({ items: [], album: album({ role: "contributor", hostedMacStatus: null }) }));
+    render(props({ items: [], album: album({ role: "contributor" }) }));
     expect(Array.from(container.querySelectorAll("button")).filter((element) => element.textContent?.trim() === "追加")).toHaveLength(2);
-    render(props({ items: [], album: album({ role: "viewer", hostedMacStatus: null }) }));
+    render(props({ items: [], album: album({ role: "viewer" }) }));
     expect(container.textContent).toContain("まだ写真はありません");
   });
 });

@@ -1365,8 +1365,12 @@ export const PHOTO_SHARED_ALBUM_COPY = {
   newMark: "新着",
   preparingProgress: (done: number, total: number) => `準備中 ${done}/${total}`,
   macWaiting: "Mac の起動後に更新",
+  /** 追加した人の端末（元データのある端末）の起動を待っている。 */
+  deviceWaiting: "追加した端末の起動後に更新",
   albumFull: "アルバムがいっぱいです",
   ownerFull: (usage: string) => `容量がいっぱいです（${usage}）`,
+  /** 容量不足で完成写真の準備を止めた項目があるときのオーナー向け（追加したメンバーには `albumFull`）。 */
+  ownerQuotaExceeded: "容量が足りません",
   ownerFullAction: "容量を確認",
   accessEnded: "このアルバムは見られなくなりました",
   accessEndedAction: "共有アルバムへ",

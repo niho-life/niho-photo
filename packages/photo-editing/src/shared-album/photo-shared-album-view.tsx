@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { Check, ChevronLeft, CloudUpload, FolderOpen, Images, Moon, Plus, RefreshCw, Users, X } from "lucide-react";
+import { AlertCircle, Check, ChevronLeft, CloudUpload, FolderOpen, Images, Moon, Plus, RefreshCw, Users, X } from "lucide-react";
 
 import { appDialog } from "niho-ui/app-dialog";
 import { cn } from "niho-ui/cn";
@@ -23,12 +23,13 @@ import {
   photoSharedAlbumCanRemoveItem,
   photoSharedAlbumItemLabel,
   photoSharedAlbumItemSavable,
+  photoSharedAlbumItemPause,
   photoSharedAlbumItemStatus,
   photoSharedAlbumNotice,
   photoSharedAlbumPersonLabel,
   photoSharedAlbumRoleLabel,
   visiblePhotoSharedAlbumItems,
-  type PhotoHostedMacStatus,
+  type PhotoSharedAlbumRole,
   type PhotoSharedAlbum,
   type PhotoSharedAlbumItem,
   type PhotoSharedAlbumNotice,
@@ -408,8 +409,8 @@ export function PhotoSharedAlbumView(props: PhotoSharedAlbumViewProps) {
               <PhotoSharedAlbumTile
                 key={item.itemId}
                 item={item}
-                label={photoSharedAlbumItemLabel(item, { index, total: items.length }, album.hostedMacStatus)}
-                hostedMacStatus={album.hostedMacStatus}
+                label={photoSharedAlbumItemLabel(item, { index, total: items.length }, album.role)}
+                role={album.role}
                 selecting={selecting}
                 selected={selected.has(item.itemId)}
                 onPress={() => {
@@ -507,18 +508,20 @@ function PhotoSharedAlbumAddButton(props: {
 function PhotoSharedAlbumTile(props: {
   item: PhotoSharedAlbumItem;
   label: string;
-  hostedMacStatus: PhotoHostedMacStatus | null;
+  role: PhotoSharedAlbumRole;
   selecting: boolean;
   selected: boolean;
   onPress: () => void;
 }) {
   const { item } = props;
   const savable = photoSharedAlbumItemSavable(item);
-  const status = photoSharedAlbumItemStatus(item, props.hostedMacStatus);
-  // タイルの字は短く（準備中・更新待ち）し、常設 Mac を待っているときは月の印で示す（全文は読み上げ名とアルバムの 1 行にある）
-  const macWaiting = status === PHOTO_SHARED_ALBUM_COPY.macWaiting;
+  // タイルの字は短く（準備中・更新待ち）し、起動を待っているときは月、容量不足で止めたときは注意の印で示す（全文は読み上げ名と
+  // アルバムの 1 行にある）。準備中のまま止めた項目だけは「準備中」と誤らないよう理由を出す
+  const pause = photoSharedAlbumItemPause(item);
   const shortStatus = item.state === "preparing" || item.state === "updatePending" ? PHOTO_SHARED_ALBUM_COPY.itemStates[item.state] : null;
   const preparing = item.state === "preparing";
+  const preparingText = pause === "quota" ? photoSharedAlbumItemStatus(item, props.role) : shortStatus;
+  const PauseIcon = pause === "waiting" ? Moon : pause === "quota" ? AlertCircle : null;
   // 自分が足した写真には追加者の札を付けない（新着の印は他の人が足した写真を見分けるため）
   const showAdder = item.isNew && !preparing && !item.addedBy.isSelf;
   return (
@@ -541,14 +544,14 @@ function PhotoSharedAlbumTile(props: {
         {props.selected ? <span aria-hidden className="absolute inset-0 bg-white/25 ring-4 ring-inset ring-niho-accent-ink" /> : null}
         {preparing ? (
           <span aria-hidden className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/45 px-2 text-center">
-            {macWaiting ? <Moon className="h-5 w-5 text-white" strokeWidth={1.75} /> : <Spinner size="sm" tone="onColor" />}
-            <span className="text-xs font-bold leading-tight text-white">{shortStatus}</span>
+            {PauseIcon ? <PauseIcon className="h-5 w-5 text-white" strokeWidth={1.75} /> : <Spinner size="sm" tone="onColor" />}
+            <span className="text-xs font-bold leading-tight text-white">{preparingText}</span>
           </span>
         ) : null}
         {item.state === "updatePending" && !props.selecting ? (
           <span aria-hidden className={cn(ON_PHOTO_BADGE_CLASS_NAME, "absolute left-1.5 top-1.5 max-w-[calc(100%-0.75rem)]")}>
-            {macWaiting ? (
-              <Moon className="h-3 w-3 shrink-0" strokeWidth={2.5} />
+            {PauseIcon ? (
+              <PauseIcon className="h-3 w-3 shrink-0" strokeWidth={2.5} />
             ) : (
               <RefreshCw className="h-3 w-3 shrink-0" strokeWidth={2.5} />
             )}
@@ -589,7 +592,7 @@ function PhotoSharedAlbumNoticeBar(props: { notice: Exclude<PhotoSharedAlbumNoti
         problem ? "bg-niho-orange-pale" : "bg-niho-surface-subtle",
       )}
     >
-      {notice.kind === "macWaiting" ? <Moon className="h-4 w-4 shrink-0 text-niho-text-sub" aria-hidden /> : null}
+      {notice.kind === "waiting" ? <Moon className="h-4 w-4 shrink-0 text-niho-text-sub" aria-hidden /> : null}
       <p className={cn("min-w-0 flex-1 text-sub font-bold", problem ? "text-niho-text" : "text-niho-text-sub")}>{notice.text}</p>
       {notice.kind === "preparing" ? (
         <span aria-hidden className="block h-1 w-full overflow-hidden rounded-full bg-niho-border">

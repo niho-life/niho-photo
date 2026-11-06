@@ -59,6 +59,7 @@ export function photoSharedAlbumFixtureItem(
     addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.owner,
     thumbnailUrl: photoSharedAlbumSyntheticImage(from, to),
     isNew: false,
+    pendingReason: null,
     ...overrides,
   };
 }
@@ -73,7 +74,6 @@ export const PHOTO_SHARED_ALBUM_FIXTURE_ALBUM: PhotoSharedAlbum = {
   coverUrl: photoSharedAlbumSyntheticImage("#F6D8AE", "#E58F65"),
   preparing: null,
   capacity: { state: "available" },
-  hostedMacStatus: "online",
   accessEnded: false,
 };
 
@@ -83,10 +83,10 @@ export function photoSharedAlbumFixtureItems(): PhotoSharedAlbumItem[] {
     photoSharedAlbumFixtureItem(0, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.contributor, kind: "memberEdit", isNew: true }),
     photoSharedAlbumFixtureItem(1, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.longName, kind: "fileUpload", isNew: true }),
     photoSharedAlbumFixtureItem(2, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.ownerSelf }),
-    photoSharedAlbumFixtureItem(3, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.ownerSelf, state: "updatePending" }),
+    photoSharedAlbumFixtureItem(3, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.ownerSelf, state: "updatePending", pendingReason: "rendering" }),
     photoSharedAlbumFixtureItem(4, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.ownerSelf }),
     photoSharedAlbumFixtureItem(5, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.contributor, kind: "memberEdit" }),
-    photoSharedAlbumFixtureItem(6, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.ownerSelf, state: "preparing", thumbnailUrl: null }),
+    photoSharedAlbumFixtureItem(6, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.ownerSelf, state: "preparing", thumbnailUrl: null, pendingReason: "rendering" }),
     photoSharedAlbumFixtureItem(7, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.ownerSelf }),
     photoSharedAlbumFixtureItem(8, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.ownerSelf }),
     photoSharedAlbumFixtureItem(9, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.viewer, state: "removed" }),
