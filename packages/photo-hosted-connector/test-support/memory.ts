@@ -99,6 +99,7 @@ interface FakeFile {
   bytes: Uint8Array;
   mtimeMs: number;
   fileId: string;
+  version: number;
 }
 interface FakeRoot {
   mounted: boolean;
@@ -110,6 +111,8 @@ interface FakeRoot {
 export class FakeFileSystem implements RootFileSystem {
   readonly roots = new Map<string, FakeRoot>();
   bytesRead = 0;
+  /** Directories whose listing fails (vanished or temporarily unreadable). */
+  readonly failList = new Set<string>();
   private nextFileId = 1;
   private clock = 1_000;
 
@@ -122,7 +125,7 @@ export class FakeFileSystem implements RootFileSystem {
     return root;
   }
   addFile(rootId: string, path: string, text: string): void {
-    this.root(rootId).files.set(path, { bytes: new TextEncoder().encode(text), mtimeMs: this.clock++, fileId: `fid-${this.nextFileId++}` });
+    this.root(rootId).files.set(path, { bytes: new TextEncoder().encode(text), mtimeMs: this.clock++, fileId: `fid-${this.nextFileId++}`, version: 1 });
   }
   /** In-place edit: same file, new bytes and mtime. */
   modify(rootId: string, path: string, text: string): void {
@@ -130,12 +133,19 @@ export class FakeFileSystem implements RootFileSystem {
     if (!file) throw new Error("no file");
     file.bytes = new TextEncoder().encode(text);
     file.mtimeMs = this.clock++;
+    file.version++;
+  }
+  /** Rewrites bytes keeping size, file id and every timestamp: invisible to metadata, only the bytes differ. */
+  rewriteInvisibly(rootId: string, path: string, text: string): void {
+    const file = this.root(rootId).files.get(path);
+    if (!file || new TextEncoder().encode(text).byteLength !== file.bytes.byteLength) throw new Error("same size required");
+    file.bytes = new TextEncoder().encode(text);
   }
   /** Another file moved in under the same name, keeping size and mtime: only the file id differs. */
   replace(rootId: string, path: string, text: string): void {
     const file = this.root(rootId).files.get(path);
     if (!file) throw new Error("no file");
-    this.root(rootId).files.set(path, { bytes: new TextEncoder().encode(text), mtimeMs: file.mtimeMs, fileId: `fid-${this.nextFileId++}` });
+    this.root(rootId).files.set(path, { bytes: new TextEncoder().encode(text), mtimeMs: file.mtimeMs, fileId: `fid-${this.nextFileId++}`, version: file.version });
   }
   remove(rootId: string, path: string): void {
     this.root(rootId).files.delete(path);
@@ -167,6 +177,7 @@ export class FakeFileSystem implements RootFileSystem {
     const state = this.root(root.id);
     if (!state.mounted) throw new Error("unmounted");
     if (relativeDir) this.checkPath(state, relativeDir);
+    if (this.failList.has(relativeDir)) throw new Error("listing failed");
     const prefix = relativeDir ? `${relativeDir}/` : "";
     const entries = new Map<string, DirectoryEntry>();
     for (const [path, file] of state.files) {
@@ -175,13 +186,13 @@ export class FakeFileSystem implements RootFileSystem {
       const [name, ...more] = rest.split("/");
       if (!name) continue;
       entries.set(name, more.length
-        ? { name, kind: "directory", sizeBytes: 0, mtimeMs: 0, fileId: `dir-${prefix}${name}` }
-        : { name, kind: "file", sizeBytes: file.bytes.byteLength, mtimeMs: file.mtimeMs, fileId: file.fileId });
+        ? { name, kind: "directory", sizeBytes: 0, mtimeMs: 0, fileId: `dir-${prefix}${name}`, changeToken: "" }
+        : { name, kind: "file", sizeBytes: file.bytes.byteLength, mtimeMs: file.mtimeMs, fileId: file.fileId, changeToken: `${file.mtimeMs}:${file.version}` });
     }
     for (const path of state.symlinks.keys()) {
       if (!path.startsWith(prefix)) continue;
       const name = path.slice(prefix.length);
-      if (name && !name.includes("/")) entries.set(name, { name, kind: "symlink", sizeBytes: 0, mtimeMs: 0, fileId: `link-${path}` });
+      if (name && !name.includes("/")) entries.set(name, { name, kind: "symlink", sizeBytes: 0, mtimeMs: 0, fileId: `link-${path}`, changeToken: "" });
     }
     return [...entries.values()].sort((a, b) => a.name.localeCompare(b.name));
   }
@@ -191,7 +202,7 @@ export class FakeFileSystem implements RootFileSystem {
     this.checkPath(state, relativePath);
     const file = state.files.get(relativePath);
     const name = relativePath.split("/").at(-1) as string;
-    return file ? { name, kind: "file", sizeBytes: file.bytes.byteLength, mtimeMs: file.mtimeMs, fileId: file.fileId } : null;
+    return file ? { name, kind: "file", sizeBytes: file.bytes.byteLength, mtimeMs: file.mtimeMs, fileId: file.fileId, changeToken: `${file.mtimeMs}:${file.version}` } : null;
   }
   async open(root: RegisteredRoot, relativePath: string): Promise<OpenedFile> {
     const state = this.root(root.id);
@@ -205,6 +216,7 @@ export class FakeFileSystem implements RootFileSystem {
       sizeBytes: bytes.byteLength,
       mtimeMs: file.mtimeMs,
       fileId: file.fileId,
+      changeToken: `${file.mtimeMs}:${file.version}`,
       async *read() {
         for (let offset = 0; offset < bytes.byteLength; offset += 4) {
           const chunk = bytes.slice(offset, offset + 4);

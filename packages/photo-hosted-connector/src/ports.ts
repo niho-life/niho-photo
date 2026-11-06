@@ -42,11 +42,17 @@ export interface DirectoryEntry {
   readonly mtimeMs: number;
   /** Device + inode (or equivalent): detects a file replaced under the same name. */
   readonly fileId: string;
+  /**
+   * Changes whenever the bytes may have changed: modification and status-change times at full precision. A cheap
+   * filter only; render jobs still verify the bytes themselves.
+   */
+  readonly changeToken: string;
 }
 export interface OpenedFile {
   readonly sizeBytes: number;
   readonly mtimeMs: number;
   readonly fileId: string;
+  readonly changeToken: string;
   /** Read-only stream of the whole file. */
   read(signal: AbortSignal): AsyncIterable<Uint8Array>;
   close(): Promise<void>;
@@ -79,7 +85,8 @@ export interface LocalIndexEntry {
   readonly sizeBytes: number;
   readonly mtimeMs: number;
   readonly fileId: string;
-  /** SHA-256 of the bytes as of (sizeBytes, mtimeMs, fileId); null until hashed. */
+  readonly changeToken: string;
+  /** SHA-256 of the bytes as of (sizeBytes, fileId, changeToken); null until hashed. */
   readonly sha256: string | null;
   readonly photoId: string | null;
   /** Excluded in NIHO: never hashed, rendered or re-added; the original stays where it is. */
@@ -102,6 +109,8 @@ export interface ScanCheckpoint {
   /** Directories still to list, as (rootId, relativeDir). */
   readonly pending: readonly { readonly rootId: string; readonly dir: string }[];
   readonly unmountedRoots: readonly string[];
+  /** Directories that could not be listed in this pass: their files keep their last state and are retried next pass. */
+  readonly skipped: readonly { readonly rootId: string; readonly dir: string }[];
   readonly startedAt: number;
 }
 /** Local index of this Mac (macOS: a file in Application Support). Rebuildable with recoverLocalIndex. */
@@ -121,7 +130,11 @@ export interface ExecutorOutput {
   readonly request: RenderOutputRequest;
   readonly bytes: Uint8Array;
 }
-/** Rendering lives elsewhere (B07): the connector only resolves the original and uploads what the executor returns. */
+/**
+ * Rendering lives elsewhere (B07): the connector only resolves the original and uploads what the executor returns.
+ * `original` is a single sequential pass; the connector hashes every byte it yields (and the rest afterwards) and
+ * discards the output unless the bytes match the job's source hash.
+ */
 export interface JobExecutor {
   readonly renderer: RenderCapability | null;
   run(input: { readonly job: RenderJob; readonly original: OpenedFile; readonly signal: AbortSignal }): Promise<ExecutorOutput>;

@@ -135,6 +135,8 @@ export class FakeNiho {
     if (operation === "connector.pollPairing") {
       const pairing = this.pairings.get(body.pairingId as string);
       if (!pairing || (await sha256Text(body.pollSecret as string)) !== pairing.pollSecretSha256) throw contractError("not_found");
+      // Approved or not, a pairing answers only until it expires.
+      if (this.now >= pairing.expiresAt) throw contractError("pairing_unavailable");
       if (pairing.connectorId) {
         const connector = this.connectors.get(pairing.connectorId) as Connector;
         return {
@@ -147,7 +149,6 @@ export class FakeNiho {
           credentialGeneration: connector.generation,
         };
       }
-      if (this.now >= pairing.expiresAt) throw contractError("pairing_unavailable");
       return { state: "pending", expiresAt: iso(pairing.expiresAt) };
     }
     const connector = await this.authenticate(secret);

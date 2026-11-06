@@ -8,7 +8,7 @@ import type { ReplicaStatus, ReplicaStore, SourceScanner } from "../../photo-hos
 import type { HostConnectorClient } from "../../photo-library-sharing-contract/src/v1.ts";
 import { localKeyFor } from "./crypto.ts";
 import { ConnectorError, createCredentialManager, isUnauthenticated } from "./credentials.ts";
-import { createIndexer, formatOf } from "./indexer.ts";
+import { createIndexer, formatOf, isHiddenName, shouldDescend } from "./indexer.ts";
 import type { IndexProgress } from "./indexer.ts";
 import { createJobRunner } from "./jobs.ts";
 import type { JobStepResult } from "./jobs.ts";
@@ -77,6 +77,7 @@ export function createHostedConnector(options: HostedConnectorOptions) {
   });
   const jobs = createJobRunner({
     executors: options.executors, store: options.index, fs: options.fs, roots: options.roots, power: options.power, uploader: options.uploader,
+    hasher: options.hasher,
   });
   const renderer = Object.values(options.executors).find((executor) => executor?.renderer)?.renderer ?? null;
   /** Resolves the current credential per request, so a rotation never strands a long-lived client. */
@@ -130,10 +131,14 @@ export function createHostedConnector(options: HostedConnectorOptions) {
       const queue = [""];
       while (queue.length) {
         const dir = queue.shift() as string;
-        for (const item of await options.fs.list(root, dir, signal)) {
-          if (item.name.startsWith(".")) continue;
+        // Same rules as the indexer: hidden entries and other apps' libraries are never walked.
+        const listing = await options.fs.list(root, dir, signal).catch(() => []);
+        for (const item of listing) {
+          if (isHiddenName(item.name)) continue;
           const relativePath = dir ? `${dir}/${item.name}` : item.name;
-          if (item.kind === "directory") queue.push(relativePath);
+          if (item.kind === "directory") {
+            if (shouldDescend(item.name)) queue.push(relativePath);
+          }
           else if (item.kind === "file" && formatOf(item.name)) located.set(await localKeyFor(salt, root.id, relativePath), { root, relativePath });
         }
       }
@@ -242,6 +247,7 @@ export function createHostedConnector(options: HostedConnectorOptions) {
           sizeBytes: meta?.sizeBytes ?? photo.body.source.sizeBytes,
           mtimeMs: meta?.mtimeMs ?? 0,
           fileId: meta?.fileId ?? "",
+          changeToken: meta?.changeToken ?? "",
           sha256: relinked ? photo.body.source.sha256 : null,
           photoId: item.photoId,
           excluded: item.state === "excluded",

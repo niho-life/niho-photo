@@ -5,7 +5,16 @@
  */
 import type { HostConnectorClient, RenderFailureCode, RenderJob } from "../../photo-library-sharing-contract/src/v1.ts";
 import { sha256Bytes } from "./crypto.ts";
-import type { JobExecutors, LocalIndexStore, OutputUploader, PowerAssertions, RegisteredRoot, RootFileSystem } from "./ports.ts";
+import type {
+  JobExecutors,
+  LocalIndexStore,
+  OpenedFile,
+  OutputUploader,
+  PowerAssertions,
+  RegisteredRoot,
+  RootFileSystem,
+  StreamHasher,
+} from "./ports.ts";
 
 export interface JobStepResult {
   readonly claimed: number;
@@ -27,6 +36,81 @@ class JobFailure extends Error {
   }
 }
 
+/** Chunks pushed by one producer, consumed once by the hasher. */
+function chunkQueue() {
+  const items: Uint8Array[] = [];
+  let ended = false;
+  let wake: (() => void) | null = null;
+  return {
+    push(chunk: Uint8Array) {
+      items.push(chunk);
+      wake?.();
+    },
+    end() {
+      ended = true;
+      wake?.();
+    },
+    async *iterate(): AsyncIterable<Uint8Array> {
+      for (;;) {
+        const next = items.shift();
+        if (next) {
+          yield next;
+          continue;
+        }
+        if (ended) return;
+        await new Promise<void>((resolve) => { wake = resolve; });
+        wake = null;
+      }
+    },
+  };
+}
+
+/**
+ * One sequential pass over the original for the executor, hashing every byte it reads; `finish` reads whatever the
+ * executor left and returns the hash of the whole file. The output is only kept when that hash is the job's.
+ */
+function verifiedPass(original: OpenedFile, hasher: StreamHasher, signal: AbortSignal) {
+  const queue = chunkQueue();
+  const hashed = hasher.hash(queue.iterate(), signal);
+  let source: AsyncIterator<Uint8Array> | null = null;
+  let done = false;
+  const pull = async (): Promise<Uint8Array | null> => {
+    source ??= original.read(signal)[Symbol.asyncIterator]();
+    const next = await source.next();
+    if (next.done) {
+      done = true;
+      return null;
+    }
+    queue.push(next.value);
+    return next.value;
+  };
+  let started = false;
+  const file: OpenedFile = {
+    sizeBytes: original.sizeBytes,
+    mtimeMs: original.mtimeMs,
+    fileId: original.fileId,
+    changeToken: original.changeToken,
+    async *read() {
+      if (started) throw new Error("single pass");
+      started = true;
+      for (;;) {
+        const chunk = await pull();
+        if (!chunk) return;
+        yield chunk;
+      }
+    },
+    close: async () => {},
+  };
+  return {
+    file,
+    async finish() {
+      while (!done) await pull();
+      queue.end();
+      return hashed;
+    },
+  };
+}
+
 export function createJobRunner(options: {
   readonly executors: JobExecutors;
   readonly store: LocalIndexStore;
@@ -34,6 +118,7 @@ export function createJobRunner(options: {
   readonly roots: readonly RegisteredRoot[];
   readonly power: PowerAssertions;
   readonly uploader: OutputUploader;
+  readonly hasher: StreamHasher;
 }) {
   const roots = new Map(options.roots.map((root) => [root.id, root]));
   const purposes = (Object.keys(options.executors) as RenderJob["purpose"]["kind"][]).filter((kind) => options.executors[kind]);
@@ -48,10 +133,14 @@ export function createJobRunner(options: {
     if (entry.hold || entry.sha256 !== job.binding.sourceSha256) throw new JobFailure("source_changed");
     const original = await options.fs.open(root, entry.relativePath, signal).catch(() => { throw new JobFailure("source_missing"); });
     try {
-      if (original.sizeBytes !== entry.sizeBytes || original.mtimeMs !== entry.mtimeMs || original.fileId !== entry.fileId) {
+      if (original.sizeBytes !== entry.sizeBytes || original.fileId !== entry.fileId || original.changeToken !== entry.changeToken) {
         throw new JobFailure("source_changed");
       }
-      const output = await executor.run({ job, original, signal });
+      const pass = verifiedPass(original, options.hasher, signal);
+      const output = await executor.run({ job, original: pass.file, signal });
+      // The bytes the executor rendered must be the bytes the job is bound to, whatever the metadata said.
+      const verified = await pass.finish();
+      if (verified.sha256 !== job.binding.sourceSha256 || verified.bytes !== entry.sizeBytes) throw new JobFailure("source_changed");
       const expected = job.purpose.kind === "preview" ? "preview" : "rendition";
       if (output.request.kind !== expected || output.bytes.byteLength !== output.request.sizeBytes || (await sha256Bytes(output.bytes)) !== output.request.sha256) {
         throw new JobFailure("renderer_unavailable");

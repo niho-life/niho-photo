@@ -57,9 +57,22 @@ export function createCredentialManager(options: {
   const { vault, transport } = options;
   const newKey = options.newKey ?? (() => `connector-${randomSecret()}`);
   const read = async (): Promise<VaultContents> => ({ ...EMPTY, ...(await vault.read()) });
+  /**
+   * Every credential operation runs one at a time, in call order. A disconnect queued behind an in-flight rotation
+   * runs after it and wins; nothing written before it can resurrect the credential.
+   */
+  let chain: Promise<unknown> = Promise.resolve();
+  const exclusive = <T>(run: () => Promise<T>): Promise<T> => {
+    const next = chain.then(run, run);
+    chain = next.catch(() => undefined);
+    return next;
+  };
 
-  const adoptNext = async (current: VaultContents, generation: number): Promise<void> => {
-    if (!current.credential || !current.rotation) return;
+  /** Adopts the next credential only if the vault still holds the same credential and rotation. */
+  const adoptNext = async (snapshot: VaultContents, generation: number): Promise<void> => {
+    const current = await read();
+    if (!snapshot.credential || !snapshot.rotation || !current.credential || !current.rotation) return;
+    if (current.credential.secret !== snapshot.credential.secret || current.rotation.key !== snapshot.rotation.key) return;
     await vault.write({ ...current, credential: { ...current.credential, secret: current.rotation.nextSecret, generation }, rotation: null });
   };
 
@@ -102,15 +115,7 @@ export function createCredentialManager(options: {
     throw new ConnectorError("revoked");
   };
 
-  return {
-    async installSalt() {
-      const current = await read();
-      if (current.installSalt) return current.installSalt;
-      const installSalt = randomSecret();
-      await vault.write({ ...current, installSalt });
-      return installSalt;
-    },
-    async startPairing(displayName, signal) {
+  const startPairing = async (displayName: string, signal: AbortSignal) => {
       let current = await read();
       if (current.credential) throw new ConnectorError("revoked");
       if (!current.pairing || current.pairing.displayName !== displayName) {
@@ -134,8 +139,8 @@ export function createCredentialManager(options: {
       const started = receipt.value;
       await vault.write({ ...current, pairing: { ...pairing, pairingId: started.pairingId, userCode: started.userCode, expiresAt: started.expiresAt } });
       return { userCode: started.userCode, expiresAt: started.expiresAt };
-    },
-    async pollPairing(signal) {
+  };
+  const pollPairing = async (signal: AbortSignal): Promise<Awaited<ReturnType<CredentialManager["pollPairing"]>>> => {
       const current = await read();
       const pairing = current.pairing;
       if (!pairing?.pairingId || !pairing.userCode || !pairing.expiresAt) throw new ConnectorError("not_paired");
@@ -158,19 +163,8 @@ export function createCredentialManager(options: {
         await vault.write({ ...current, pairing: null });
         return { state: "expired" };
       }
-    },
-    async client() {
-      const current = await read();
-      if (!current.credential) throw new ConnectorError("not_paired");
-      return transport(current.credential.secret);
-    },
-    async paired() {
-      const current = await read();
-      return current.credential
-        ? { connectorId: current.credential.connectorId, libraryId: current.credential.libraryId, generation: current.credential.generation }
-        : null;
-    },
-    async rotate(probe, signal) {
+  };
+  const rotate = async (probe: (client: Pick<HostConnectorClient, "request">) => Promise<unknown>, signal: AbortSignal): Promise<number> => {
       let current = await read();
       if (!current.credential) throw new ConnectorError("not_paired");
       if (current.rotation) {
@@ -186,11 +180,34 @@ export function createCredentialManager(options: {
         await onUnauthenticated(probe, signal);
         return (await read()).credential?.generation ?? 0;
       }
-    },
-    onUnauthenticated,
-    async forget() {
+  };
+
+  return {
+    installSalt: () => exclusive(async () => {
+      const current = await read();
+      if (current.installSalt) return current.installSalt;
+      const installSalt = randomSecret();
+      await vault.write({ ...current, installSalt });
+      return installSalt;
+    }),
+    startPairing: (displayName, signal) => exclusive(() => startPairing(displayName, signal)),
+    pollPairing: (signal) => exclusive(() => pollPairing(signal)),
+    rotate: (probe, signal) => exclusive(() => rotate(probe, signal)),
+    onUnauthenticated: (probe, signal) => exclusive(() => onUnauthenticated(probe, signal)),
+    forget: () => exclusive(async () => {
       const current = await read();
       await vault.write({ ...current, credential: null, rotation: null, pairing: null });
+    }),
+    async client() {
+      const current = await read();
+      if (!current.credential) throw new ConnectorError("not_paired");
+      return transport(current.credential.secret);
+    },
+    async paired() {
+      const current = await read();
+      return current.credential
+        ? { connectorId: current.credential.connectorId, libraryId: current.credential.libraryId, generation: current.credential.generation }
+        : null;
     },
   };
 }

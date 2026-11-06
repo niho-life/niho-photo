@@ -17,6 +17,11 @@ export const PHOTO_EXTENSIONS: Readonly<Record<string, PhotoFormat>> = {
 const SKIPPED_DIRECTORY_SUFFIXES = [".photoslibrary", ".lrlibrary", ".lrdata", ".app"];
 const INDEX_BATCH = 200;
 
+/** Hidden entries, names with separators and other apps' library packages are never registered or descended into. */
+export const isHiddenName = (name: string): boolean => name.startsWith(".") || name.includes("/") || name.includes("\\");
+export const shouldDescend = (name: string): boolean =>
+  !isHiddenName(name) && !SKIPPED_DIRECTORY_SUFFIXES.some((suffix) => name.toLowerCase().endsWith(suffix));
+
 export const formatOf = (fileName: string): PhotoFormat | null => {
   const dot = fileName.lastIndexOf(".");
   return dot > 0 ? PHOTO_EXTENSIONS[fileName.slice(dot + 1).toLowerCase()] ?? null : null;
@@ -51,8 +56,10 @@ export interface ConnectorIndexer {
   progress(): Promise<IndexProgress>;
 }
 
-const sameFile = (entry: Pick<LocalIndexEntry, "sizeBytes" | "mtimeMs" | "fileId">, other: { readonly sizeBytes: number; readonly mtimeMs: number; readonly fileId: string }): boolean =>
-  entry.sizeBytes === other.sizeBytes && entry.mtimeMs === other.mtimeMs && entry.fileId === other.fileId;
+const sameFile = (
+  entry: Pick<LocalIndexEntry, "sizeBytes" | "fileId" | "changeToken">,
+  other: { readonly sizeBytes: number; readonly fileId: string; readonly changeToken: string },
+): boolean => entry.sizeBytes === other.sizeBytes && entry.fileId === other.fileId && entry.changeToken === other.changeToken;
 
 export function availabilityOf(entry: LocalIndexEntry): SourceAvailability {
   if (entry.hold === "sourceMismatch") return "sourceMismatch";
@@ -73,13 +80,15 @@ export function createIndexer(options: {
 
   const rootOf = (rootId: string): RegisteredRoot | null => roots.get(rootId) ?? null;
 
-  const finishScan = async (scan: number, unmounted: readonly string[]): Promise<void> => {
+  const finishScan = async (scan: number, unmounted: readonly string[], skipped: readonly { rootId: string; dir: string }[]): Promise<void> => {
     const updates: LocalIndexEntry[] = [];
+    const underSkipped = (entry: LocalIndexEntry): boolean =>
+      skipped.some((item) => item.rootId === entry.rootId && (item.dir === "" || entry.relativePath.startsWith(`${item.dir}/`)));
     for await (const entry of store.entries()) {
       if (entry.excluded) continue;
       if (unmounted.includes(entry.rootId) || !roots.has(entry.rootId)) {
         if (entry.state !== "unmounted") updates.push({ ...entry, state: "unmounted", dirty: true });
-      } else if (entry.seenInScan !== scan && entry.state !== "missing") {
+      } else if (entry.seenInScan !== scan && entry.state !== "missing" && !underSkipped(entry)) {
         // Gone from a mounted volume: reported missing, never deleted here or in NIHO.
         updates.push({ ...entry, state: "missing", dirty: true });
       }
@@ -98,8 +107,8 @@ export function createIndexer(options: {
         if ((await fs.rootStatus(root, signal)) === "available") pending.push({ rootId: root.id, dir: "" });
         else unmountedRoots.push(root.id);
       }
-      await store.setCheckpoint({ scan, pending, unmountedRoots, startedAt: clock.now() });
-      if (!pending.length) await finishScan(scan, unmountedRoots);
+      await store.setCheckpoint({ scan, pending, unmountedRoots, skipped: [], startedAt: clock.now() });
+      if (!pending.length) await finishScan(scan, unmountedRoots, []);
     },
     async scanStep(signal, maxDirectories) {
       const checkpoint = await store.checkpoint();
@@ -107,6 +116,7 @@ export function createIndexer(options: {
       const salt = await options.installSalt();
       const pending = [...checkpoint.pending];
       let unmountedRoots = [...checkpoint.unmountedRoots];
+      const skipped = [...(checkpoint.skipped ?? [])];
       for (let processed = 0; processed < maxDirectories && pending.length; processed++) {
         if (signal.aborted) break;
         const next = pending[0] as { rootId: string; dir: string };
@@ -115,17 +125,26 @@ export function createIndexer(options: {
           // The volume went away mid-scan: skip it without marking anything missing.
           pending.shift();
           if (!unmountedRoots.includes(next.rootId)) unmountedRoots = [...unmountedRoots, next.rootId];
-          await store.setCheckpoint({ ...checkpoint, pending, unmountedRoots });
+          await store.setCheckpoint({ ...checkpoint, pending, unmountedRoots, skipped });
           continue;
         }
-        const listing = await fs.list(root, next.dir, signal);
+        let listing;
+        try {
+          listing = await fs.list(root, next.dir, signal);
+        } catch {
+          // A directory that vanished or failed to list is skipped for this pass; nothing under it becomes missing.
+          pending.shift();
+          skipped.push(next);
+          await store.setCheckpoint({ ...checkpoint, pending, unmountedRoots, skipped });
+          continue;
+        }
         const updates: LocalIndexEntry[] = [];
         const subdirectories: { rootId: string; dir: string }[] = [];
         for (const item of listing) {
-          if (item.name.startsWith(".") || item.name.includes("/") || item.name.includes("\\")) continue;
+          if (isHiddenName(item.name)) continue;
           const relativePath = next.dir ? `${next.dir}/${item.name}` : item.name;
           if (item.kind === "directory") {
-            if (!SKIPPED_DIRECTORY_SUFFIXES.some((suffix) => item.name.toLowerCase().endsWith(suffix))) subdirectories.push({ rootId: root.id, dir: relativePath });
+            if (shouldDescend(item.name)) subdirectories.push({ rootId: root.id, dir: relativePath });
             continue;
           }
           // Symlinks and special files are never followed or registered.
@@ -140,7 +159,7 @@ export function createIndexer(options: {
             // New, changed or replaced bytes: identity unknown until hashed; NIHO keeps the last known one meanwhile.
             updates.push({
               localKey, rootId: root.id, relativePath, fileName: item.name, sizeBytes: item.sizeBytes, mtimeMs: item.mtimeMs,
-              fileId: item.fileId, sha256: null, photoId: existing?.photoId ?? null, excluded: false, state: "present",
+              fileId: item.fileId, changeToken: item.changeToken, sha256: null, photoId: existing?.photoId ?? null, excluded: false, state: "present",
               seenInScan: checkpoint.scan, dirty: true, hold: existing?.hold ?? null, verifyAgainst: existing?.verifyAgainst ?? null,
             });
           }
@@ -148,10 +167,10 @@ export function createIndexer(options: {
         if (updates.length) await store.put(updates);
         pending.shift();
         pending.push(...subdirectories);
-        await store.setCheckpoint({ ...checkpoint, pending, unmountedRoots });
+        await store.setCheckpoint({ ...checkpoint, pending, unmountedRoots, skipped });
       }
       if (pending.length) return { complete: false };
-      await finishScan(checkpoint.scan, unmountedRoots);
+      await finishScan(checkpoint.scan, unmountedRoots, skipped);
       return { complete: true };
     },
     async hashStep(signal, budget) {

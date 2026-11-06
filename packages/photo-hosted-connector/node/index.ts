@@ -1,10 +1,14 @@
 /**
  * Node adapters for development and measurement on macOS. Read-only file access with symlink and containment checks,
- * and a streaming SHA-256. The packaged Mac connector supplies the same ports natively (Keychain, power assertions).
+ * and a streaming SHA-256.
+ *
+ * Not the distribution boundary: Node cannot walk a path relative to directory descriptors (openat with O_NOFOLLOW
+ * per component), so a parent directory swapped between the checks and the open is narrowed, not closed. The packaged
+ * connector implements RootFileSystem natively with descriptor-relative traversal, and the Keychain and power ports.
  */
 import { createHash } from "node:crypto";
 import { constants } from "node:fs";
-import { lstat, open, readdir, realpath, stat } from "node:fs/promises";
+import { lstat, open, readdir, realpath } from "node:fs/promises";
 import path from "node:path";
 import type { DirectoryEntry, OpenedFile, RegisteredRoot, RootFileSystem, StreamHasher } from "../src/ports.ts";
 
@@ -24,6 +28,8 @@ export const nodeHasher: StreamHasher = {
 };
 
 const fileId = (info: { readonly dev: number | bigint; readonly ino: number | bigint }): string => `${info.dev}:${info.ino}`;
+/** Full-precision modification and status-change times: a rewrite that restores mtime still changes ctime. */
+const changeToken = (info: { readonly mtimeNs: bigint; readonly ctimeNs: bigint }): string => `${info.mtimeNs}:${info.ctimeNs}`;
 
 /**
  * `roots` maps a registered root id to its absolute folder. Only regular files below it are readable: every path
@@ -32,34 +38,49 @@ const fileId = (info: { readonly dev: number | bigint; readonly ino: number | bi
  */
 export function createNodeRootFileSystem(roots: ReadonlyMap<string, string>): RootFileSystem & { bytesRead(): number } {
   let readTotal = 0;
+  /** The root's real path and directory identity, pinned when first seen (at registration). */
+  const pinned = new Map<string, { readonly real: string; readonly id: string }>();
   const base = (root: RegisteredRoot): string => {
     const folder = roots.get(root.id);
     if (!folder || !path.isAbsolute(folder)) throw new Error("unknown root");
     return folder;
   };
-  const resolve = async (root: RegisteredRoot, relative: string, allowRoot: boolean): Promise<string> => {
+  /** The registered folder itself must be a real directory, the same one as when it was registered. */
+  const checkRoot = async (root: RegisteredRoot): Promise<string> => {
     const folder = base(root);
-    if (relative === "" && allowRoot) return folder;
+    const info = await lstat(folder, { bigint: true });
+    if (info.isSymbolicLink() || !info.isDirectory()) throw new Error("root is not a directory");
+    const real = await realpath(folder);
+    const id = fileId(info);
+    const pin = pinned.get(root.id);
+    if (!pin) pinned.set(root.id, { real, id });
+    else if (pin.real !== real || pin.id !== id) throw new Error("root replaced");
+    return real;
+  };
+  const resolve = async (root: RegisteredRoot, relative: string, allowRoot: boolean): Promise<string> => {
+    const realRoot = await checkRoot(root);
+    if (relative === "" && allowRoot) return realRoot;
     const parts = relative.split("/");
     if (!relative || relative.includes("\\") || relative.includes("\u0000") || parts.some((part) => !part || part === "." || part === "..")) {
       throw new Error("outside root");
     }
-    let current = folder;
+    let current = realRoot;
     for (const part of parts) {
       current = path.join(current, part);
       if ((await lstat(current)).isSymbolicLink()) throw new Error("symlink");
     }
     const real = await realpath(current);
-    const realRoot = await realpath(folder);
-    if (!real.startsWith(`${realRoot}${path.sep}`)) throw new Error("outside root");
+    if (real !== current || !real.startsWith(`${realRoot}${path.sep}`)) throw new Error("outside root");
     return real;
   };
   return {
     bytesRead: () => readTotal,
     async rootStatus(root) {
       try {
-        return (await stat(base(root))).isDirectory() ? "available" : "unmounted";
+        await checkRoot(root);
+        return "available";
       } catch {
+        // Unmounted, unreadable, replaced or a symlink: unavailable, never followed and never a deletion.
         return "unmounted";
       }
     },
@@ -67,18 +88,18 @@ export function createNodeRootFileSystem(roots: ReadonlyMap<string, string>): Ro
       const dir = await resolve(root, relativeDir, true);
       const out: DirectoryEntry[] = [];
       for (const dirent of await readdir(dir, { withFileTypes: true })) {
-        const info = await lstat(path.join(dir, dirent.name)).catch(() => null);
+        const info = await lstat(path.join(dir, dirent.name), { bigint: true }).catch(() => null);
         if (!info) continue;
         const kind = info.isSymbolicLink() ? "symlink" : info.isFile() ? "file" : info.isDirectory() ? "directory" : "other";
-        out.push({ name: dirent.name, kind, sizeBytes: info.size, mtimeMs: Math.trunc(info.mtimeMs), fileId: fileId(info) });
+        out.push({ name: dirent.name, kind, sizeBytes: Number(info.size), mtimeMs: Number(info.mtimeMs), fileId: fileId(info), changeToken: changeToken(info) });
       }
       return out;
     },
     async stat(root, relativePath) {
       try {
-        const info = await lstat(await resolve(root, relativePath, false));
+        const info = await lstat(await resolve(root, relativePath, false), { bigint: true });
         return info.isFile()
-          ? { name: path.basename(relativePath), kind: "file", sizeBytes: info.size, mtimeMs: Math.trunc(info.mtimeMs), fileId: fileId(info) }
+          ? { name: path.basename(relativePath), kind: "file", sizeBytes: Number(info.size), mtimeMs: Number(info.mtimeMs), fileId: fileId(info), changeToken: changeToken(info) }
           : null;
       } catch {
         return null;
@@ -86,17 +107,18 @@ export function createNodeRootFileSystem(roots: ReadonlyMap<string, string>): Ro
     },
     async open(root, relativePath): Promise<OpenedFile> {
       const resolved = await resolve(root, relativePath, false);
-      const checked = await lstat(resolved);
+      const checked = await lstat(resolved, { bigint: true });
       const handle = await open(resolved, constants.O_RDONLY | constants.O_NOFOLLOW);
-      const info = await handle.stat();
+      const info = await handle.stat({ bigint: true });
       if (!info.isFile() || fileId(info) !== fileId(checked)) {
         await handle.close();
         throw new Error("replaced");
       }
       return {
-        sizeBytes: info.size,
-        mtimeMs: Math.trunc(info.mtimeMs),
+        sizeBytes: Number(info.size),
+        mtimeMs: Number(info.mtimeMs),
         fileId: fileId(info),
+        changeToken: changeToken(info),
         async *read(signal) {
           const buffer = new Uint8Array(CHUNK);
           let position = 0;

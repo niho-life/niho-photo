@@ -13681,7 +13681,7 @@
     },
     {
       "path": "packages/photo-hosted-connector/README.md",
-      "sha256": "a065f0077f9f72e03453a780e0b95b444aa63cf5623f9d5655d4b24d07ae2ed7",
+      "sha256": "c3f206f5b4c3ca243592d01af141f0bc3896eed943b8d9e136564becb1bf4d8d",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13696,7 +13696,7 @@
     },
     {
       "path": "packages/photo-hosted-connector/node/index.ts",
-      "sha256": "bf4520fc048ddc7bba15430c30087d7b6a2ae05a5f652c243afe9d1e75e6e478",
+      "sha256": "bfdb26ffa1f40e5b548851312f2339283fff21177e5fdc54d7e45fd2e610590b",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13706,7 +13706,7 @@
     },
     {
       "path": "packages/photo-hosted-connector/src/credentials.ts",
-      "sha256": "25e8414f895fbd236efa9a9c3965862146e077e4fbd9e62247d8bbc0dde2edcb",
+      "sha256": "4ade72c9180126e0cce47414a24bb51f1ede9cabe5c2b81ef53d825eacc09618",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13721,32 +13721,32 @@
     },
     {
       "path": "packages/photo-hosted-connector/src/indexer.ts",
-      "sha256": "534bf1c5eaa2ca01d8b6f5512bcb6725616e1a616123912141054b9763ca7eee",
+      "sha256": "d091338b4295f61904d0ac3febfbc2583abde98164c8f8d8581c9b072fb94c62",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/photo-hosted-connector/src/jobs.ts",
-      "sha256": "2459ee8689097aaa96af84b6ff91f3c95ee64605d474bf4cbcd532c48197149b",
+      "sha256": "3b925ca2776ef0bdcdacd6b60ded7c45a3ef5a7a1e6b7da6061d37655ce3b23c",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/photo-hosted-connector/src/ports.ts",
-      "sha256": "143e955d9d95292dad8cbeddcf6ce302a37d0041d1225001ecba1ea0b82ff926",
+      "sha256": "189b6eb35ace387634f756a09fbab7a56e849c4e61842b3500810b8cd9c94102",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/photo-hosted-connector/src/service.ts",
-      "sha256": "7431968bfd26e0bb3bac59804f0ff84f2c9a4c9853e8f9ad43a0667b7ee83fdf",
+      "sha256": "f80614d9f8f08e0b9a3e8b073918c8ebce9e2265f8db3086880101095204b277",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/photo-hosted-connector/test-support/fake-niho.ts",
-      "sha256": "1229b9b732ff029f9718c15a83e2c6e925bde7d6d935f945849ac43d9429f7a9",
+      "sha256": "3f715ca5abf12ef25d1b73657b5636b6035df7f73559926d00f002c65e03a987",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/photo-hosted-connector/test-support/memory.ts",
-      "sha256": "94deb26b56e8e2fa5a2b513941de9806f5f78df230b4398192e104274c62d463",
+      "sha256": "4834989db7bd7a77395886e968a87fddae3377b15b58f98a6ceeceffc74bc0f6",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13782,6 +13782,11 @@
     {
       "path": "packages/photo-hosted-connector/tsconfig.node.json",
       "sha256": "5d07a94acc37467818414d3c733db408ad1e32f0527eb5e4b96968facb572d37",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/test/regressions.test.mjs",
+      "sha256": "2ba01bfc3db15b0066f05ce63d3408996f81798c0c7859d83d758aaf67a81b9b",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     }
   ],
