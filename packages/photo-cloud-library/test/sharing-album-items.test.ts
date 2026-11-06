@@ -5,6 +5,7 @@ import { createSourceDeviceRenderExecutor, renderFinishedOutput, renditionMetada
 import type { RenderOutputUploader } from "../src/render-executor";
 import {
   SharedAlbumFileError,
+  type SharedAlbumItemsTransport,
   createSharedAlbumItems,
   createSharedAlbumMembership,
   createSharedAlbumMockServer,
@@ -383,6 +384,75 @@ describe("shared album items (B12)", () => {
     const committed = (await client.request("albumItems.commitUpload", { albumId: album.id, uploadId: newer.upload?.upload.id as string }, { signal: t.signal, idempotencyKey: "commit-b" })).value;
     expect(committed).toMatchObject({ state: "published", revision: 2, rendition: { asset: { sha256: latest.rendition.sha256 } } });
     expect(t.server.storageOf(OWNER)).toEqual({ usedBytes: latest.bytes.length, reservedBytes: 0 });
+  });
+
+  it("an action aborted while its commit is in flight keeps the photo the server may already have published", async () => {
+    const t = setup();
+    const album = await t.sharedAlbum();
+    const controller = new AbortController();
+    const base = t.server.clientFor(MEMBER);
+    const client = {
+      async request(operation: string, request: unknown, requestOptions: never) {
+        const answer = await base.request(operation as never, request as never, requestOptions);
+        if (operation === "albumItems.commitUpload") {
+          // Published on the server; the user cancels before the answer arrives.
+          controller.abort(new DOMException("Aborted", "AbortError"));
+          throw new DOMException("Aborted", "AbortError");
+        }
+        return answer;
+      },
+      download: base.download,
+    } as unknown as SharedAlbumItemsTransport;
+    const actions = createSharedAlbumItems({ client, uploader: t.server.uploader, sleep: async () => undefined });
+    await expect(actions.addFile(album.id, FILE, controller.signal)).rejects.toThrow();
+    const listed = (await t.owner.listItems(album.id, {}, t.signal)).items;
+    expect(listed.map((item) => item.state)).toEqual(["published"]);
+    expect(t.server.calls("albumItems.remove")).toBe(0);
+    expect(t.server.storageOf(OWNER)).toEqual({ usedBytes: FILE.bytes.length, reservedBytes: 0 });
+  });
+
+  it("a render output with anything outside the allow-list is refused at commit, not only location", async () => {
+    const t = setup();
+    const album = await t.sharedAlbum();
+    const photo = t.libraryPhoto(OWNER, "commented");
+    t.server.addLibraryPhoto(photo);
+    const [item] = okItems(await t.owner.addLibraryPhotos(album.id, [photo], t.signal));
+    const transport = t.server.renderTransportFor(OWNER);
+    const [claimed] = (await transport.request("renderJobs.claim", { maxJobs: 1 }, { signal: t.signal, idempotencyKey: "claim-1" })).value.jobs;
+    // A camera make in a comment block: no location, serial or path key, still not an allowed rendition field.
+    const bytes = syntheticJpeg({ width: 1200, height: 800, comment: "Synthetic Camera Co" });
+    const start = (await transport.request("renderJobs.startOutput", {
+      jobId: claimed.job.id, leaseToken: claimed.lease.leaseToken,
+      output: { kind: "rendition", sizeBytes: bytes.length, sha256: hex(bytes), contentType: "image/jpeg", width: 1200, height: 800, metadata: { capturedAt: null, capturedAtOffset: null, colorProfile: "sRGB", orientation: 1 } },
+    }, { signal: t.signal, idempotencyKey: "start-1" })).value;
+    await t.server.uploader.upload(start.ticket as never, bytes, "image/jpeg", t.signal);
+    expect(await rejection(transport.request("renderJobs.commit", { jobId: claimed.job.id, leaseToken: claimed.lease.leaseToken, uploadId: start.uploadId }, { signal: t.signal, idempotencyKey: "commit-1" }))).toBe("content_rejected");
+    expect(t.server.item((item as AlbumItem).id)).toMatchObject({ state: "preparing", rendition: null });
+    expect(t.server.storageOf(OWNER).reservedBytes).toBe(0);
+  });
+
+  it("saving hashes the bytes themselves: a stream with the right header but other bytes is not saved", async () => {
+    const t = setup();
+    const album = await t.sharedAlbum();
+    const item = await t.member.addFile(album.id, FILE, t.signal);
+    const base = t.server.clientFor(OWNER);
+    const forged = {
+      request: base.request,
+      async download(request: never, signal: AbortSignal) {
+        const content = await base.download(request, signal);
+        const bytes = new Uint8Array(await new Response(content.body).arrayBuffer());
+        bytes[bytes.length - 3] ^= 0xff; // same length, same headers, different bytes
+        return { ...content, body: new Blob([bytes]).stream() };
+      },
+    } as unknown as SharedAlbumItemsTransport;
+    const actions = createSharedAlbumItems({ client: forged, uploader: t.server.uploader, sleep: async () => undefined });
+    let kept = false;
+    const [result] = await actions.saveItems(album.id, [item], async (_item, content) => {
+      await new Response(content.body).arrayBuffer();
+      kept = true; // a sink keeps the file only once the stream closed cleanly
+    }, t.signal);
+    expect(result).toMatchObject({ ok: false, error: { code: "invalid_response" } });
+    expect(kept).toBe(false);
   });
 
   it("saves several finished photos at full size; an unfinished one is reported, not saved", async () => {

@@ -13677,7 +13677,7 @@
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/membership-mock.ts",
-      "sha256": "7450587db60587316dd168f70b36d459a9147a7ec879931590585e4368765be4",
+      "sha256": "b999e3d7da743143d0fe1128d170924e13eb3585d7a7c7d57eae8cc622c7aedb",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
@@ -13712,12 +13712,12 @@
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/album-items.ts",
-      "sha256": "1657a6489707b45d3816e4f4174750b8d388d554231c2412535817bb7876bf8f",
+      "sha256": "635fa0d9746e4002d486fcb4c6b62c715a8010090385201e007453429a78c094",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/album-wire.ts",
-      "sha256": "4cdc8bc849262c678442e7cfdd197cc1e7e220f761adb052ab2822214e02ab77",
+      "sha256": "98321de5d53501f3477b78b0732368d2e6438c04bcb9f131fa9dce76b2138ccb",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
@@ -13727,12 +13727,12 @@
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-album-client.test.ts",
-      "sha256": "0edb2ba8d70f851ba5d62d3c94be18594448ee4b90914601d502bcee6ea872ec",
+      "sha256": "c6c46d40aded3a11f80c42e8afd9841f8cf1575cc05b99480cb571eba1944f78",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-album-items.test.ts",
-      "sha256": "bc52bce3597a68d392326da00dc95a07752e496ef8935b68fefe2d3453369190",
+      "sha256": "76791e7246df2fcedb39827c4ed1d24d3546542f1199b9deda1b9afc6048ddb9",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     }
   ],

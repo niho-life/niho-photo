@@ -391,6 +391,7 @@ function validateItemMutation(operation: "albumItems.addPhoto" | "albumItems.add
   if (source) {
     if (item.kind === "fileUpload" || !isRecord(item.source) || item.source.kind !== source.kind || item.state !== "preparing") invalidResponse();
     if (source.kind === "libraryPhoto" && (item.source.kind !== "libraryPhoto" || item.source.photoId !== source.photoId || item.source.libraryId !== source.libraryId)) invalidResponse();
+    if (source.kind === "devicePhoto" && (item.source.kind !== "devicePhoto" || item.source.deviceSourceRef !== source.deviceSourceRef)) invalidResponse();
   }
   if (operation === "albumItems.replace" && item.id !== body.itemId) invalidResponse();
   // A library photo is rendered by the device holding it: no upload. Every other add or replace uploads one file.

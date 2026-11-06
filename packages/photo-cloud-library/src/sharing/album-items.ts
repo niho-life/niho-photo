@@ -126,8 +126,9 @@ export interface SharedAlbumItems {
   /** Several items at once (own items; the owner also others'). Each item reports its own result. */
   removeItems(albumId: AlbumId, itemIds: readonly AlbumItemId[], signal: AbortSignal): Promise<readonly SharedAlbumItemResult[]>;
   /**
-   * Saves several published items at full size: each stream is checked against the rendition's hash by `save`'s
-   * caller-provided sink, which must consume or cancel it. Items without a finished rendition report `not_found`.
+   * Saves several published items at full size. `save` receives a stream that is hashed as it is read and errors
+   * before it ends unless the bytes are exactly the item's rendition, so a sink that keeps a file only after the
+   * stream closed never keeps other bytes. It must consume or cancel the stream. Unfinished items report `not_found`.
    */
   saveItems(
     albumId: AlbumId,
@@ -224,8 +225,9 @@ export function createSharedAlbumItems(options: CreateSharedAlbumItemsOptions): 
     try {
       return (await send("albumItems.commitUpload", { albumId, uploadId: upload.upload.id }, signal, true)).value;
     } catch (error) {
-      // Only a definite refusal is cleaned up; a commit whose answer was lost may have published.
-      if (signal.aborted || (isSharingErrorEnvelope(error) && TERMINAL_COMMIT_CODES.has(error.error.code))) {
+      // Only a definite refusal is cleaned up. A commit whose answer was lost or abandoned (an aborted action
+      // included) may have published; it is kept, and the server releases an upload that never commits.
+      if (isSharingErrorEnvelope(error) && TERMINAL_COMMIT_CODES.has(error.error.code)) {
         await abandon(albumId, upload.upload.id, addedItemId);
       }
       throw error;
@@ -320,11 +322,32 @@ export function createSharedAlbumItems(options: CreateSharedAlbumItemsOptions): 
           await content.body.cancel().catch(() => undefined);
           throw new PersonalPhotoCloudError("invalid_response");
         }
-        await save(item, content);
+        // The bytes themselves are hashed as they pass: the stream errors before it ends if they differ.
+        await save(item, { ...content, body: content.body.pipeThrough(verifyingStream(item.rendition.asset.sha256, item.rendition.asset.sizeBytes)) });
         return item;
       }, signal);
     },
   };
+}
+
+/** Passes bytes through and errors at the end unless they are exactly `size` bytes with this SHA-256. */
+function verifyingStream(expectedSha256: string, size: number): TransformStream<Uint8Array, Uint8Array> {
+  const hash = sha256.create();
+  let seen = 0;
+  return new TransformStream({
+    transform(chunk, controller) {
+      seen += chunk.byteLength;
+      if (seen > size) {
+        controller.error(new PersonalPhotoCloudError("invalid_response"));
+        return;
+      }
+      hash.update(chunk);
+      controller.enqueue(chunk);
+    },
+    flush(controller) {
+      if (seen !== size || bytesToHex(hash.digest()) !== expectedSha256) controller.error(new PersonalPhotoCloudError("invalid_response"));
+    },
+  });
 }
 
 /**

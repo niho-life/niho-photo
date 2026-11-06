@@ -22,7 +22,7 @@ import { bytesToHex } from "@noble/hashes/utils.js";
 import { readJpegPixelSize } from "niho-photo-editing/image-bytes-metadata";
 
 import { PersonalPhotoCloudError } from "../errors";
-import { jpegMetadataRecord, stripJpegMetadata } from "../render-executor/jpeg-metadata";
+import { jpegMetadataRecord, renditionMetadataViolations, stripJpegMetadata } from "../render-executor/jpeg-metadata";
 import type { RenderExecutorTransport } from "../render-executor/render-executor";
 import type { RenderOutputUploader } from "../render-executor/ticket-upload";
 import { PHOTO_CAPTURE_HEADERS, PHOTO_CONTENT_HEADERS, PHOTO_IDEMPOTENCY_HEADER, isOpaqueWireId, isValidIdempotencyKey } from "../wire";
@@ -556,6 +556,12 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
         const item = purpose.kind === "albumItem" ? items.get(purpose.itemId) ?? null : null;
         const decoded = output?.bytes ? readJpegPixelSize(output.bytes) : null;
         const now = clock();
+        // Server re-decode: an output with anything outside the rendition allow-list (comments, camera make/model,
+        // vendor blocks, trailing bytes — not only location, serials and paths) is never published.
+        if (output?.bytes && renditionMetadataViolations(output.bytes).length > 0) {
+          output.state = "rejected";
+          capacityFreed(output.ownerId);
+        }
         decided(decideRenderCommit({
           job: record.job,
           actor: executor,

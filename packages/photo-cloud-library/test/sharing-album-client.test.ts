@@ -9,7 +9,7 @@ import {
   createSharedAlbumMockServer,
   prepareAlbumFile,
 } from "../src/sharing";
-import { syntheticJpeg } from "./render-support";
+import { bindingFor, hex, recipeFor, syntheticJpeg } from "./render-support";
 import { FakeIdentity, defaultActor } from "./support";
 
 const OWNER = "synthetic-user-owner";
@@ -110,6 +110,14 @@ describe("browser shared album client (B12)", () => {
       return { ...body, replayed: true };
     });
     expect(await local(t.clientFor(OWNER).request("albumItems.addFile", { albumId: album.id, rendition: FILE.rendition }, { signal: t.signal, idempotencyKey: "tampered-add" }))).toBe("invalid_response");
+    // A device photo answered with another device's original reference.
+    t.setTamper((body, request) => {
+      if (!new URL(request.url).pathname.endsWith("/photo-items")) return body;
+      const value = body.value as { item: Record<string, unknown> };
+      return { ...body, value: { ...value, item: { ...value.item, source: { kind: "devicePhoto", deviceSourceRef: "another-device-ref" } } } };
+    });
+    const device = { kind: "devicePhoto" as const, deviceSourceRef: "device-ref-1", binding: bindingFor(hex(FILE.bytes), recipeFor(1)), rendition: FILE.rendition };
+    expect(await local(t.clientFor(OWNER).request("albumItems.addPhoto", { albumId: album.id, source: device }, { signal: t.signal, idempotencyKey: "tampered-device" }))).toBe("invalid_response");
     t.setTamper(null);
 
     // Requests outside the closed shapes are never sent.
