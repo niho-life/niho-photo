@@ -107,6 +107,8 @@ export const SHARING_LIMITS = {
   renditionMaxPixels: PHOTO_LIMITS.maxPixels,
   thumbnailMaxEdge: PHOTO_LIMITS.thumbnailMaxEdge,
   renderLeaseMaxSeconds: 15 * 60,
+  /** Photos a claim may name as currently on screen. */
+  claimPreferMaxPhotos: 60,
   exportStagingMaxSeconds: 24 * 60 * 60,
 } as const;
 
@@ -710,6 +712,12 @@ export interface RenderJob {
   readonly createdAt: Instant;
   readonly leaseExpiresAt: Instant | null;
   readonly failure: RenderFailureCode | null;
+  /**
+   * Full-resolution size of a rendition, computed by NIHO from the source size and the recipe geometry with the
+   * engine's own rule. The commit decodes the uploaded bytes and rejects any other size (content_rejected). null for
+   * previews and when the source size is not known yet.
+   */
+  readonly expectedOutput: { readonly width: number; readonly height: number } | null;
 }
 /** One claim. leaseToken is bearer material for this claim only; memory only. */
 export interface RenderLease {
@@ -731,6 +739,11 @@ export type RenderOutputRequest =
       readonly width: number;
       readonly height: number;
     };
+/**
+ * One output upload of a claimed job, with its storage reservation. A replay of the same startOutput returns
+ * `ticket: null`: continue that upload with renderJobs.renewOutput, or start another output with a new key, which
+ * supersedes this one and releases its reservation at once. A failed job or an expired lease releases it too.
+ */
 export interface RenderOutputUploadStart {
   readonly uploadId: UploadId;
   readonly expiresAt: Instant;
@@ -1112,10 +1125,24 @@ export type SharingOperation = keyof SharingOperationMap;
 
 /** Called by the hosted Mac connector (outbound) or by a signed-in device that holds an original. */
 export interface RenderExecutorOperationMap {
-  /** purposes: only jobs this executor can run (for example, a connector without a renderer takes previews only). */
+  /**
+   * purposes: only jobs this executor can run (for example, a connector without a renderer takes previews only).
+   * prefer: photos on screen right now, served first when they have queued jobs; a hint, never authority.
+   * A claim is keyed: replaying it returns the same jobs and leases while they are still held, so a lost response
+   * does not strand jobs until their leases expire.
+   */
   readonly "renderJobs.claim": Operation<
-    { readonly maxJobs?: number; readonly purposes?: readonly RenderJobPurpose["kind"][] },
-    { readonly jobs: readonly ClaimedRenderJob[] }
+    {
+      readonly maxJobs?: number;
+      readonly purposes?: readonly RenderJobPurpose["kind"][];
+      readonly prefer?: { readonly photoIds: readonly PhotoId[] };
+    },
+    MutationReceipt<{ readonly jobs: readonly ClaimedRenderJob[] }>
+  >;
+  /** A fresh ticket for the same output upload (resume offset included); the reservation is unchanged. */
+  readonly "renderJobs.renewOutput": Operation<
+    { readonly jobId: RenderJobId; readonly leaseToken: string; readonly uploadId: UploadId },
+    { readonly uploadId: UploadId; readonly expiresAt: Instant; readonly ticket: UploadTicket }
   >;
   readonly "renderJobs.startOutput": Operation<
     { readonly jobId: RenderJobId; readonly leaseToken: string; readonly output: RenderOutputRequest },
@@ -1132,7 +1159,7 @@ export interface RenderExecutorOperationMap {
   >;
 }
 export type RenderExecutorOperation = keyof RenderExecutorOperationMap;
-export type RenderExecutorMutationOperation = Exclude<RenderExecutorOperation, "renderJobs.claim">;
+export type RenderExecutorMutationOperation = Exclude<RenderExecutorOperation, "renderJobs.renewOutput">;
 export type RenderExecutorRequestOptions<K extends RenderExecutorOperation> = { readonly signal: AbortSignal } &
   (K extends RenderExecutorMutationOperation ? { readonly idempotencyKey: string } : { readonly idempotencyKey?: never });
 
@@ -1301,6 +1328,7 @@ export const CONNECTOR_OPERATION_ACCESS = {
   "connector.completeWorkingCopyUpload": { actor: "connector", scope: "ownLibrary" },
   "renderJobs.claim": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
   "renderJobs.startOutput": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
+  "renderJobs.renewOutput": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
   "renderJobs.commit": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
   "renderJobs.fail": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
 } as const satisfies { readonly [K in ConnectorOperation]: OperationAccess };
@@ -1432,7 +1460,8 @@ export const CONNECTOR_REQUEST_SHAPES = {
     } },
   },
   "connector.completeWorkingCopyUpload": { photoId: "value", uploadId: "value" },
-  "renderJobs.claim": { maxJobs: "value", purposes: { items: "value" } },
+  "renderJobs.claim": { maxJobs: "value", purposes: { items: "value" }, prefer: { fields: { photoIds: { items: "value" } } } },
+  "renderJobs.renewOutput": { jobId: "value", leaseToken: "value", uploadId: "value" },
   "renderJobs.startOutput": {
     jobId: "value", leaseToken: "value",
     output: {

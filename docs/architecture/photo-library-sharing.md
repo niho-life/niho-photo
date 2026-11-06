@@ -87,6 +87,9 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 ## 完成写真
 
 - 元データを持つ端末が描く。所有者の常設Mac の写真は常設Mac、メンバーの写真はその人の端末、NIHO クラウドの写真は本人の端末。描いた入力は `RenderBinding` で束縛する。
+- claim は key つきで、応答を失っても同じ key の再送で同じ job と lease が返る。`prefer` に表示中の写真（最大60件）を並べると、その写真の job を先に渡す（ヒントで、権限にはならない）。
+- 出力の upload は予約を持つ。startOutput の再送は ticket を返さない（`null`）ので、`renderJobs.renewOutput` で同じ upload の ticket を取り直すか、新しい key の startOutput で置き換える。置き換えた出力・失敗した job・lease 切れの出力の予約は NIHO がすぐ返す。
+- 完成写真の job は `expectedOutput`（NIHO が元の寸法と recipe の geometry から engine と同じ規則で求めた原寸）を持つ。確定時に upload された bytes を decode し、その寸法でなければ `content_rejected` で拒否する。
 - job の確定は、呼び出した端末が job の実行端末そのもので、その job の検証済み upload を使い、metadata が許可範囲で、job の束縛が対象の現在の束縛と完全に一致し、lease と端末資格が有効で、項目が残っているときだけ。別の端末・別 job の upload・未完了の upload・古い job・同じ revision で入力が違う結果・preview を完成写真として出す結果は拒否する。
 - 端末が直接描いた写真の差し替えは、前の束縛より新しい世代のときだけ受け付ける。
 - 完成済み JPEG の直接追加は元写真への参照を持たず、自動では差し替えない。
@@ -186,12 +189,14 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | connector.getReplicaContent | GET `/replica/{entity}/{id}/content` | `Range` | 不可 |
 | connector.startWorkingCopyUpload | POST `/photos/{photoId}/working-copy-uploads` | body: `{sourceGeneration, workingCopy}` | 必須 |
 | connector.completeWorkingCopyUpload | POST `/photos/{photoId}/working-copy-uploads/{uploadId}/complete` | body: `{}` | 必須 |
-| renderJobs.claim | POST `/jobs/claim` | body: `{maxJobs, purposes}` | 不可 |
+| renderJobs.claim | POST `/jobs/claim` | body: `{maxJobs, purposes, prefer}` | 必須 |
 | renderJobs.startOutput | POST `/jobs/{jobId}/outputs` | body: `{leaseToken, output}` | 必須 |
+| renderJobs.renewOutput | POST `/jobs/{jobId}/outputs/{uploadId}/renew` | body: `{leaseToken}` | 不可 |
 | renderJobs.commit | POST `/jobs/{jobId}/commit` | body: `{leaseToken, uploadId}` | 必須 |
 | renderJobs.fail | POST `/jobs/{jobId}/fail` | body: `{leaseToken, code}` | 必須 |
-| renderJobs.claim（利用者の端末） | POST `/render-jobs/claim` | body: `{maxJobs, purposes}` | 不可 |
+| renderJobs.claim（利用者の端末） | POST `/render-jobs/claim` | body: `{maxJobs, purposes, prefer}` | 必須 |
 | renderJobs.startOutput（利用者の端末） | POST `/render-jobs/{jobId}/outputs` | body: `{leaseToken, output}` | 必須 |
+| renderJobs.renewOutput（利用者の端末） | POST `/render-jobs/{jobId}/outputs/{uploadId}/renew` | body: `{leaseToken}` | 不可 |
 | renderJobs.commit（利用者の端末） | POST `/render-jobs/{jobId}/commit` | body: `{leaseToken, uploadId}` | 必須 |
 | renderJobs.fail（利用者の端末） | POST `/render-jobs/{jobId}/fail` | body: `{leaseToken, code}` | 必須 |
 

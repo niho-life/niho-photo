@@ -343,7 +343,7 @@
       "issue": 248,
       "backend": "missing",
       "wiring": "not-connected",
-      "evidence": "元データのある端末へjobを割り当てる。"
+      "evidence": "元データのある端末へjobを割り当てる。keyつきで、応答喪失の再送では同じleaseを返す。表示中の写真を先にするヒントを受ける。"
     },
     "renderJobs.startOutput": {
       "issue": 248,
@@ -362,6 +362,12 @@
       "backend": "missing",
       "wiring": "not-connected",
       "evidence": "理由と次の操作を返す。低解像度の代替を公開しない。"
+    },
+    "renderJobs.renewOutput": {
+      "issue": 248,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "同じ出力のuploadへ新しいticketを返す。予約は変えず、再開位置を含める。"
     }
   }
 }

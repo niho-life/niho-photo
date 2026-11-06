@@ -315,6 +315,7 @@ export const renderJob: RenderJob = {
   id: IDS.job, purpose: { kind: "albumItem", albumId: IDS.album, itemId: IDS.ownerItem, itemRevision: 1 },
   executor: { kind: "hostedMac", connectorId: IDS.connector }, photo: { libraryId: IDS.hostedLibrary, photoId: IDS.photo },
   binding: nextBinding, recipe: savedRecipe, state: "claimed", attempt: 1, createdAt: TIME, leaseExpiresAt: LATER, failure: null,
+  expectedOutput: { width: 6000, height: 4000 },
 };
 export const claimedJob: ClaimedRenderJob = {
   job: renderJob, lease: { jobId: IDS.job, leaseToken: "synthetic-lease", expiresAt: LATER },
@@ -474,7 +475,8 @@ export const connectorResponses = {
     },
     replayed: false,
   },
-  "renderJobs.claim": { jobs: [claimedJob] },
+  "renderJobs.claim": { value: { jobs: [claimedJob] }, replayed: false },
+  "renderJobs.renewOutput": { uploadId: IDS.outputUpload, expiresAt: LATER, ticket: ticket("synthetic-output-renewed") },
   "renderJobs.startOutput": {
     value: { uploadId: IDS.outputUpload, expiresAt: LATER, ticket: ticket("synthetic-output") }, replayed: false,
   },

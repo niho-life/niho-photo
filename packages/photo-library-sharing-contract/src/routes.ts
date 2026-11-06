@@ -126,8 +126,9 @@ export const SHARING_ROUTES = {
 
 /** Render jobs on a signed-in device that holds originals; same suffixes as the connector, under the user prefix. */
 export const USER_RENDER_ROUTES = {
-  "renderJobs.claim": { method: "POST", path: "/render-jobs/claim", query: [], body: ["maxJobs", "purposes"], range: false, idempotencyKey: false },
+  "renderJobs.claim": post("/render-jobs/claim", ["maxJobs", "purposes", "prefer"]),
   "renderJobs.startOutput": post("/render-jobs/{jobId}/outputs", ["leaseToken", "output"]),
+  "renderJobs.renewOutput": { method: "POST", path: "/render-jobs/{jobId}/outputs/{uploadId}/renew", query: [], body: ["leaseToken"], range: false, idempotencyKey: false },
   "renderJobs.commit": post("/render-jobs/{jobId}/commit", ["leaseToken", "uploadId"]),
   "renderJobs.fail": post("/render-jobs/{jobId}/fail", ["leaseToken", "code"]),
 } as const satisfies UserRenderRouteMap;
@@ -154,8 +155,9 @@ export const CONNECTOR_ROUTES = {
   "connector.getReplicaContent": get("/replica/{entity}/{id}/content", [], true),
   "connector.startWorkingCopyUpload": post("/photos/{photoId}/working-copy-uploads", ["sourceGeneration", "workingCopy"]),
   "connector.completeWorkingCopyUpload": post("/photos/{photoId}/working-copy-uploads/{uploadId}/complete"),
-  "renderJobs.claim": { method: "POST", path: "/jobs/claim", query: [], body: ["maxJobs", "purposes"], range: false, idempotencyKey: false },
+  "renderJobs.claim": post("/jobs/claim", ["maxJobs", "purposes", "prefer"]),
   "renderJobs.startOutput": post("/jobs/{jobId}/outputs", ["leaseToken", "output"]),
+  "renderJobs.renewOutput": { method: "POST", path: "/jobs/{jobId}/outputs/{uploadId}/renew", query: [], body: ["leaseToken"], range: false, idempotencyKey: false },
   "renderJobs.commit": post("/jobs/{jobId}/commit", ["leaseToken", "uploadId"]),
   "renderJobs.fail": post("/jobs/{jobId}/fail", ["leaseToken", "code"]),
 } as const satisfies ConnectorRouteMap;
