@@ -10497,7 +10497,7 @@
     },
     {
       "path": "apps/photo-web/README.md",
-      "sha256": "48795fa49e75d5f94365bf478cfb9d61fe51b2c5cbedfe8329968eba748650f5",
+      "sha256": "5bd59af85578708cc398e4dcf85adf1bafd24a9084deca99c0d16faf0d1c7157",
       "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: Photo WebのC01 captureとC02 clientの接続・受信stream寿命、正式bootstrapの残る責務を記録する。\n変更理由: 固定Photo BFFの401だけをruntimeの世代別本人再確認へ接続し、透過fetchとbrowser graphの対象検証・責務を追加する\n変更理由: 同じ本人のBFF認証拒否をpeer通知・BFCacheの世代変更をまたいで保持し、明示retry又は本人変更だけで解除する\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持\n変更理由: C06: 本人scope失効時の下書き消去、実Node build起動手順と配布境界を記録。"
     },
     {
@@ -11857,7 +11857,7 @@
     },
     {
       "path": "packages/photo-cloud-library/README.md",
-      "sha256": "1c4ac73f0e24072d6dba0b4698812649c777a97c7a61728122b91c3a51f50853",
+      "sha256": "deb37d8722240f281abf49cbc193064bb06b6720bde47cb25347c85edd197630",
       "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: C03実HTTPと狭いprotocol共有口および編集未有効の境界を記述\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。\n変更理由: 失効時に本人scopeだけをfenceして転送journalを消去し、通常disposeの再開情報保持を分離する\n変更理由: 曖昧なconnection teardownと確定的session失効を分け、再開可能journalを保護する\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: README.md を更新\n変更理由: B12 #254 共有アルバムの項目の追加・差し替え・削除のため: README.md を更新"
     },
     {
@@ -11947,7 +11947,7 @@
     },
     {
       "path": "packages/photo-cloud-library/src/server/index.ts",
-      "sha256": "59d2dc3064a5877c5b28aa4eec37127f8f5badddbb2813ad9e5d98eb4dd90aa3",
+      "sha256": "ba1f2f90000fa755c195a4b2bad3232765c8efacd1cd62d04930a872d312da8a",
       "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。"
     },
     {
@@ -13732,12 +13732,12 @@
     },
     {
       "path": "packages/photo-cloud-library/src/server/pending-invite.ts",
-      "sha256": "392b13387f4d3e84933fbe2376b6e652c686568edc675d5269f2234fa8a59ee6",
+      "sha256": "26d5748a97ec7d13811315218798179fe0826035ca62598bd462f9b8cf875db7",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の未ログインで開いた招待（B00 の PENDING_INVITE_ROUTES）のBFF側：secretを暗号化したcookieの封入と取り出し、Photo Webへの組み込みと回帰試験。鍵と上流のprefixは非公開の運用設定から渡し、値を含まない。合成の ID・表示名・secret・鍵・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-pending-invite.test.ts",
-      "sha256": "ebb569ebdca87221584836de962a68cabbc1b1dd16db9bd9ff11a522bceb02f0",
+      "sha256": "bc05e95178ac3d5dae0c31d26f0848f744de2cee18062cf8bba0cb456a1c4a53",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の未ログインで開いた招待（B00 の PENDING_INVITE_ROUTES）のBFF側：secretを暗号化したcookieの封入と取り出し、Photo Webへの組み込みと回帰試験。鍵と上流のprefixは非公開の運用設定から渡し、値を含まない。合成の ID・表示名・secret・鍵・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {

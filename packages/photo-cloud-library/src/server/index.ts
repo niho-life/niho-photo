@@ -4,6 +4,7 @@ export {
   type CreatePersonalPhotoCloudProxyOptions,
 } from "./proxy";
 export {
+  PENDING_INVITE_BINDING_COOKIE_NAME,
   PENDING_INVITE_COOKIE_NAME,
   createPendingInviteHandler,
   type CreatePendingInviteHandlerOptions,
