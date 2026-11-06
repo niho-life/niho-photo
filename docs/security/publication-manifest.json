@@ -12321,8 +12321,8 @@
     },
     {
       "path": "package-lock.json",
-      "sha256": "c94452054f97d9e9233eecb119f8dcbc519995284f6270c27b54025d06a9887e",
-      "origin": "公開SDKのReact 19型consumer smokeだけで使う開発依存のlockfile。runtime依存を変更しない。\n変更理由: 依存追加なしでPhoto session workspace linkとpackage metadataをnpmで同期\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02・SDK profileのmain lockを保持し、検証済みPhoto Webの3 lock entryとworkspace登録だけを統合。\n変更理由: C02の公開workspaceと固定hashおよびIndexedDB試験依存をintegrityで固定する\n変更理由: 既存固定依存だけで本人補正同期workspaceを登録\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: B00 #241 の共有アルバム契約packageをroot workspace・Photo editing CI scopeへ登録。\n変更理由: B01 #242 の常設Macライブラリcore packageをroot workspace・Photo editing CI scopeへ登録。"
+      "sha256": "c3f65cfccd23a9ab3e2b458b7ccc0ad67a7c802d1e895476ab1fb65dcc07b087",
+      "origin": "公開SDKのReact 19型consumer smokeだけで使う開発依存のlockfile。runtime依存を変更しない。\n変更理由: 依存追加なしでPhoto session workspace linkとpackage metadataをnpmで同期\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02・SDK profileのmain lockを保持し、検証済みPhoto Webの3 lock entryとworkspace登録だけを統合。\n変更理由: C02の公開workspaceと固定hashおよびIndexedDB試験依存をintegrityで固定する\n変更理由: 既存固定依存だけで本人補正同期workspaceを登録\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: B00 #241 の共有アルバム契約packageをroot workspace・Photo editing CI scopeへ登録。\n変更理由: B00 #241: B05 の client が使う共有アルバム契約 package を photo-cloud-library の依存へ登録。\n変更理由: B01 #242 の常設Macライブラリcore packageをroot workspace・Photo editing CI scopeへ登録。"
     },
     {
       "path": "scripts/sdk/smoke-consumer.mjs",
@@ -12701,8 +12701,8 @@
     },
     {
       "path": "packages/photo-cloud-library/package.json",
-      "sha256": "1b4e7bea92d59e88d9fce54a7a03495684e8c51b45d7f797aa9101a607d0a440",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02の増分SHAと送信前journal試験依存、browserとserver exportを固定する\n変更理由: 同期core用の狭いprotocol共有exportを追加"
+      "sha256": "a3dddcb6f749181496b7a48518f3426c8d750fc5dd8e87f9047a57feffbac7c3",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02の増分SHAと送信前journal試験依存、browserとserver exportを固定する\n変更理由: 同期core用の狭いprotocol共有exportを追加\n変更理由: B00 #241: B05 の client が使う共有アルバム契約 package を photo-cloud-library の依存へ登録。"
     },
     {
       "path": "packages/photo-cloud-library/src/adapter.ts",
@@ -13531,7 +13531,7 @@
     },
     {
       "path": "packages/photo-library-sharing-contract/package.json",
-      "sha256": "d0abf0b40f0c56aed7fd73e167363d662bbe02bce164ad79d4d33868b2e08a7e",
+      "sha256": "9902ef24623ff394d770d2ee7afce8a963c4f53c500c1bec5b7e971151b706cd",
       "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13586,7 +13586,17 @@
     },
     {
       "path": "docs/architecture/photo-library-sharing.md",
-      "sha256": "cebf1be463b8ab9b30e64ef4c40946fd81c14506a18ab8e6ae7aa9cb8a353be4",
+      "sha256": "fa1250e6c5dd971836aa9d870c02e0980317711fd29f35b2b76cea27dda8623c",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/src/routes.ts",
+      "sha256": "3109c813a7af203382ca0c97c55e21a531eba6ae3f44d363dcdaf949edbb1962",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/test/routes.test.mjs",
+      "sha256": "6d2a60577fdb5a9cebd6a5a9b75f227c04fb1bbc7aa1ba44508950b0cb957ae3",
       "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {

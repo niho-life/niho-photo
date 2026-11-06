@@ -8,6 +8,7 @@
     ".": "./src/v1.ts",
     "./policy": "./src/policy.ts",
     "./compat-v2": "./src/compat-v2.ts",
+    "./routes": "./src/routes.ts",
     "./fixtures": "./fixtures/v1.ts",
     "./cases": "./fixtures/security-cases.json"
   },

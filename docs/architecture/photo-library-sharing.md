@@ -105,6 +105,64 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - 応答が失われたら、同じ key と payload で再送して結果を照合する。新しい key で二重に追加しない。
 - cursor は actor・範囲・条件・membership revision に束縛し、15分で失効する。役割が変わった後の cursor は `invalid_cursor` で、別の写真を返さない。アルバム一覧の cursor は actor の在籍の世代（`accessRevision`。参加・離脱・削除・役割変更で進む）に束縛する。
 
+## 利用者の経路（`/cloud/sharing/v1`）
+
+共有アルバム・項目・招待・メンバー・完成写真の upload と、常設 Mac ライブラリの利用者向けの操作は、本人クラウドの [`/cloud/v2`](personal-photo-transfers.md) と同じ Photo origin・同じ形の経路にする。定数と encode/match/decode は [`src/routes.ts`](../../packages/photo-library-sharing-contract/src/routes.ts)（`SHARING_ROUTES`）が正本で、下の表はそこから作る。BFF は既存の Photo auth で本人・親 session・epoch を検証し、同じ suffix を trusted upstream prefix へ写す。
+
+- path は `/cloud/sharing/v1` に続く。path 内の ID は単一の opaque segment（1〜512 bytes、前後の空白・`.`/`..`・`/`・`\`・制御文字を不可、正規の encode だけ受ける）。
+- query は表の項目を各1回だけ。数値は `limit`・`expectedRevision`。未知・重複の query、GET/DELETE の body、表にない body の項目、入れ子の想定外の項目は `invalid_request`。
+- capture header は `X-NIHO-Photo-Actor-Id` / `X-NIHO-Photo-Session-Id` / `X-NIHO-Photo-Session-Epoch`、key は `Idempotency-Key`（mutation は必須、読み取りは不可）。content は `Range` の単一区間と、`/cloud/v2` と同じ hash・全体 size・206 の検証を使う。
+- 招待の secret は body だけに載せ、URL・log・storage に出さない。
+- 常設 Mac（接続用ソフト）と NIHO の間は端末資格を使う別の通信で、この表に入れない（B03 #244 で決める）。
+
+| operation | method / suffix | query / body | key |
+| --- | --- | --- | --- |
+| libraries.list | GET `/libraries` | なし | 不可 |
+| libraries.get | GET `/libraries/{libraryId}` | なし | 不可 |
+| storage.get | GET `/storage` | なし | 不可 |
+| connectors.approvePairing | POST `/connectors/pairings/approve` | body: `{userCode, target}` | 必須 |
+| connectors.get | GET `/connectors/{connectorId}` | なし | 不可 |
+| connectors.revoke | POST `/connectors/{connectorId}/revoke` | body: `{}` | 必須 |
+| hostedPhotos.list | GET `/libraries/{libraryId}/photos` | query: sort、cursor、limit | 不可 |
+| hostedPhotos.get | GET `/libraries/{libraryId}/photos/{photoId}` | なし | 不可 |
+| hostedPhotos.info | GET `/libraries/{libraryId}/photos/{photoId}/info` | なし | 不可 |
+| hostedPhotos.content | GET `/libraries/{libraryId}/photos/{photoId}/assets/{assetId}/content` | `Range` | 不可 |
+| hostedPhotos.exclude | POST `/libraries/{libraryId}/photos/{photoId}/exclude` | body: `{}` | 必須 |
+| hostedMasks.startUpload | POST `/libraries/{libraryId}/photos/{photoId}/mask-uploads` | body: `{surfaceId, sizeBytes, width, height}` | 必須 |
+| hostedMasks.completeUpload | POST `/libraries/{libraryId}/photos/{photoId}/mask-uploads/{uploadId}/complete` | body: `{}` | 必須 |
+| hostedRecipes.put | PUT `/libraries/{libraryId}/photos/{photoId}/recipe` | body: `{expectedRevision, sourceGeneration, settings, baseVersion}` | 必須 |
+| hostedRecipeConflicts.list | GET `/libraries/{libraryId}/photos/{photoId}/recipe-conflicts` | query: cursor、limit | 不可 |
+| hostedRecipeConflicts.get | GET `/libraries/{libraryId}/photos/{photoId}/recipe-conflicts/{conflictId}` | なし | 不可 |
+| hostedRecipeConflicts.resolve | POST `/libraries/{libraryId}/photos/{photoId}/recipe-conflicts/{conflictId}/resolve` | body: `{expectedRevision, decision}` | 必須 |
+| exports.request | POST `/libraries/{libraryId}/photos/{photoId}/exports` | body: `{recipeRevision}` | 必須 |
+| exports.get | GET `/exports/{exportId}` | なし | 不可 |
+| exports.content | GET `/exports/{exportId}/content` | `Range` | 不可 |
+| portability.export | POST `/libraries/{libraryId}/portable-exports` | body: `{mode}` | 必須 |
+| portability.get | GET `/portable-exports/{exportId}` | なし | 不可 |
+| portability.restore | POST `/libraries/{libraryId}/restore` | body: `{manifestSha256}` | 必須 |
+| albums.list | GET `/albums` | query: cursor、limit | 不可 |
+| albums.get | GET `/albums/{albumId}` | なし | 不可 |
+| albums.create | POST `/albums` | body: `{name}` | 必須 |
+| albums.rename | POST `/albums/{albumId}/rename` | body: `{expectedRevision, name}` | 必須 |
+| albums.delete | DELETE `/albums/{albumId}` | query: expectedRevision | 必須 |
+| albumItems.list | GET `/albums/{albumId}/items` | query: cursor、limit | 不可 |
+| albumItems.get | GET `/albums/{albumId}/items/{itemId}` | なし | 不可 |
+| albumItems.addPhoto | POST `/albums/{albumId}/photo-items` | body: `{source}` | 必須 |
+| albumItems.addFile | POST `/albums/{albumId}/file-items` | body: `{rendition}` | 必須 |
+| albumItems.replace | POST `/albums/{albumId}/items/{itemId}/replace` | body: `{expectedRevision, content}` | 必須 |
+| albumItems.commitUpload | POST `/albums/{albumId}/uploads/{uploadId}/commit` | body: `{}` | 必須 |
+| albumItems.cancelUpload | POST `/albums/{albumId}/uploads/{uploadId}/cancel` | body: `{}` | 必須 |
+| albumItems.remove | DELETE `/albums/{albumId}/items/{itemId}` | なし | 必須 |
+| albumItems.download | GET `/albums/{albumId}/items/{itemId}/renditions/{renditionId}/content` | query: variant、`Range` | 不可 |
+| invites.list | GET `/albums/{albumId}/invites` | なし | 不可 |
+| invites.create | POST `/albums/{albumId}/invites` | body: `{role}` | 必須 |
+| invites.revoke | POST `/albums/{albumId}/invites/{inviteLinkId}/revoke` | body: `{}` | 必須 |
+| invites.join | POST `/invites/join` | body: `{secret}` | 必須 |
+| members.list | GET `/albums/{albumId}/members` | query: cursor、limit | 不可 |
+| members.changeRole | POST `/albums/{albumId}/members/{membershipId}/role` | body: `{expectedRevision, role}` | 必須 |
+| members.remove | DELETE `/albums/{albumId}/members/{membershipId}` | なし | 必須 |
+| members.leave | POST `/albums/{albumId}/leave` | body: `{}` | 必須 |
+
 ## エラーと再試行
 
 `SHARING_ERROR_STATUS` と `SHARING_ERROR_RECOVERY` が正本。
@@ -153,6 +211,8 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | 招待リンク・役割・解除（`invites.*`、`members.*`） | B05 #246 |
 | 完成写真・プレビュー・原寸書き出しの描画（`renderJobs.*`、`exports.*`） | B07 #248 |
 | アルバムと項目・共有容量（`albums.*`、`albumItems.*`、`storage.get`） | B12 #254 |
+| 利用者の経路の表（`src/routes.ts`、本書の表） | B00 #241。B05 の client と非公開側のサーバーはこの表に合わせる |
+| `operation-coverage.json` の `invites.*`・`members.*` に公開側の client と合成 server の記録を足す | B05 #246 の PR（client のファイルが B00 の branch に無いため） |
 | Mac・Web・iPhone の UI | B08 #249 |
 | SDK export・release set への追加、公式配備 | 既存 C08 #201 の窓口。B00 では追加しない |
 
@@ -169,4 +229,4 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 
 ## 検証
 
-`npm run test|typecheck|lint --workspace packages/photo-library-sharing-contract`。公開CIの `Photo editing` scope が実行する。test は語彙・§10 の表・全操作の担当と閉じた request の形・遷移の閉包・閲覧者ごとの射影・metadata 規則・v2 互換・確定時の照合（実行端末・upload・最新の意図）・114件の負例 vector を参照判定で照合する。型の負例（owner の偽装、ownerの付与、CAS 無しの更新、第2段階の値など）は typecheck で固定する。
+`npm run test|typecheck|lint --workspace packages/photo-library-sharing-contract`。公開CIの `Photo editing` scope が実行する。test は語彙・経路（全操作が1経路、各項目が1か所、key、曖昧さなし、往復）・§10 の表・全操作の担当と閉じた request の形・遷移の閉包・閲覧者ごとの射影・metadata 規則・v2 互換・確定時の照合（実行端末・upload・最新の意図）・114件の負例 vector を参照判定で照合する。型の負例（owner の偽装、ownerの付与、CAS 無しの更新、第2段階の値など）は typecheck で固定する。
