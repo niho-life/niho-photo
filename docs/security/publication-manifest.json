@@ -10484,7 +10484,7 @@
     },
     {
       "path": "apps/photo-web/README.md",
-      "sha256": "5bd59af85578708cc398e4dcf85adf1bafd24a9084deca99c0d16faf0d1c7157",
+      "sha256": "016c8a7f3ba88c1cf2df2e995a321b395a9470e128f8e5e32df4660c233b49b1",
       "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: Photo WebのC01 captureとC02 clientの接続・受信stream寿命、正式bootstrapの残る責務を記録する。\n変更理由: 固定Photo BFFの401だけをruntimeの世代別本人再確認へ接続し、透過fetchとbrowser graphの対象検証・責務を追加する\n変更理由: 同じ本人のBFF認証拒否をpeer通知・BFCacheの世代変更をまたいで保持し、明示retry又は本人変更だけで解除する\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持\n変更理由: C06: 本人scope失効時の下書き消去、実Node build起動手順と配布境界を記録。"
     },
     {
@@ -10609,7 +10609,7 @@
     },
     {
       "path": "apps/photo-web/src/server/entry.ts",
-      "sha256": "0d6ccc204a09e633096e5476e30abef9f73ce24aef1ea141964c32011ba87e29",
+      "sha256": "2c716afeab8f4e01aa231e445205166fcf941217d07625e6cce66213cb78df16",
       "origin": "NIHO所有のPhoto専用Web/PWA compositionと配布入口。C06 (#199) の独立browser bundle・安全なstatic build・Node host起動を追加。合成入力のみで、実credential・写真・内部URLを含まない。"
     },
     {
@@ -11844,7 +11844,7 @@
     },
     {
       "path": "packages/photo-cloud-library/README.md",
-      "sha256": "175cec8a6429551adb83a7bfcd8c4e8c5c4d62547ec8892947ca6ecd711b41bd",
+      "sha256": "0aa38aaca03da3fdab8ed35d51283d94b70ee67898f210effab03cb25027d657",
       "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: C03実HTTPと狭いprotocol共有口および編集未有効の境界を記述\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。\n変更理由: 失効時に本人scopeだけをfenceして転送journalを消去し、通常disposeの再開情報保持を分離する\n変更理由: 曖昧なconnection teardownと確定的session失効を分け、再開可能journalを保護する\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: README.md を更新"
     },
     {
@@ -11934,12 +11934,12 @@
     },
     {
       "path": "packages/photo-cloud-library/src/server/index.ts",
-      "sha256": "ba1f2f90000fa755c195a4b2bad3232765c8efacd1cd62d04930a872d312da8a",
+      "sha256": "f9200747a23fe49872df26d441165fd73da08f857780683d1340656ac4b7138f",
       "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。"
     },
     {
       "path": "packages/photo-cloud-library/src/server/proxy.ts",
-      "sha256": "a9d7456e695c7ec822a8dbd42d61ceb50a69d45b8be6185747de2bb109143065",
+      "sha256": "e415ae00b3b1caebdb45c31a8f5e1e769cf64c9de3a388d5422c427cc87a7d88",
       "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 公開CIの厳格型に合わせ、所有ArrayBufferと非同期callbackの非null snapshotを明示する\n変更理由: stored start再送のupload内Photoから所属を検証"
     },
     {
@@ -11954,7 +11954,7 @@
     },
     {
       "path": "packages/photo-cloud-library/src/wire.ts",
-      "sha256": "2a1e73a7fbc7cc3c45c0671b692f7fcff15881dd976f56c91264252e195d8c7b",
+      "sha256": "39dbf2ab27fc91d9fccf3982228fa5fad89a71741c419db681acffac3dbae444",
       "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 公開CIの厳格型に合わせ、所有ArrayBufferと非同期callbackの非null snapshotを明示する\n変更理由: 既知HTTP envelopeの5段と完全recipe文書のdepth32を分けて境界を維持\n変更理由: stored start再送の最大六段envelopeをrecipe上限から分離\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: C03完全補正のrecipe/conflict wire操作をPhoto Web consumerへ統合する\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: 未知設定のsubtree保護とmask転送再開・保存結果の照合を補強\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: wire.ts を更新"
     },
     {
@@ -13354,7 +13354,7 @@
     },
     {
       "path": "packages/photo-library-sharing-contract/operation-coverage.json",
-      "sha256": "2e2a575190279cbe605a68bf0b8ca931de6fc2052d6040edc70e8ac4acb3d22a",
+      "sha256": "7db83a3278d5eb1f40abdc334129d700332e000244c5244d5f499c744ed06501",
       "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: operation-coverage.json を更新"
     },
     {
@@ -13708,13 +13708,13 @@
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
-      "path": "apps/photo-web/src/server/pending-invite-config.ts",
-      "sha256": "45ea25d4ac4db7fb189dfea4ea8ad11437f78e53b16ebbd47ea2f2b616a76601",
+      "path": "apps/photo-web/src/server/sharing-config.ts",
+      "sha256": "984999fd2a15136fc4c68b555033a21e6552a4b9ae2d5d854b0e68bd2dcc2e6c",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の未ログインで開いた招待（B00 の PENDING_INVITE_ROUTES）のBFF側：secretを暗号化したcookieの封入と取り出し、Photo Webへの組み込みと回帰試験。鍵と上流のprefixは非公開の運用設定から渡し、値を含まない。合成の ID・表示名・secret・鍵・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
-      "path": "apps/photo-web/test/pending-invite-config.test.mjs",
-      "sha256": "69ad4157b13744224fdcb6759815bcc50bf3240ba993a3847e9d6b194dc36baf",
+      "path": "apps/photo-web/test/sharing-config.test.mjs",
+      "sha256": "917c8fdc626f12e415bf7bbdd3f4b6bdaf39d68ec1a71475bd2d43aed4c6deec",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の未ログインで開いた招待（B00 の PENDING_INVITE_ROUTES）のBFF側：secretを暗号化したcookieの封入と取り出し、Photo Webへの組み込みと回帰試験。鍵と上流のprefixは非公開の運用設定から渡し、値を含まない。合成の ID・表示名・secret・鍵・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
@@ -13726,6 +13726,21 @@
       "path": "packages/photo-cloud-library/test/sharing-pending-invite.test.ts",
       "sha256": "bc05e95178ac3d5dae0c31d26f0848f744de2cee18062cf8bba0cb456a1c4a53",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の未ログインで開いた招待（B00 の PENDING_INVITE_ROUTES）のBFF側：secretを暗号化したcookieの封入と取り出し、Photo Webへの組み込みと回帰試験。鍵と上流のprefixは非公開の運用設定から渡し、値を含まない。合成の ID・表示名・secret・鍵・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/server/sharing-proxy.ts",
+      "sha256": "a9a36adf68518bbaa5112f71737b57028f34581d37055d68eff132f541cc11d8",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムのBFF（/cloud/sharing/v1 を契約の経路の表で中継し、本人・session・epochの検証、固定の上流、byte数の上限、応答の検査、content streamとupload ticketの検査を本人v2と同じ規則で行う）と回帰試験。上流のprefixは非公開の運用設定から渡し、値を含まない。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/server/sharing-operations.ts",
+      "sha256": "7616dac80a767e64e91bd74c21a8f79cb9a3d0d7fd0c5eabe918c5d7bc79f113",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムのBFF（/cloud/sharing/v1 を契約の経路の表で中継し、本人・session・epochの検証、固定の上流、byte数の上限、応答の検査、content streamとupload ticketの検査を本人v2と同じ規則で行う）と回帰試験。上流のprefixは非公開の運用設定から渡し、値を含まない。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/sharing-proxy.test.ts",
+      "sha256": "8244ce0e76b3965b738bd4080f18ab0f2c47842a33fadfdf9adf79a02f66ba31",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムのBFF（/cloud/sharing/v1 を契約の経路の表で中継し、本人・session・epochの検証、固定の上流、byte数の上限、応答の検査、content streamとupload ticketの検査を本人v2と同じ規則で行う）と回帰試験。上流のprefixは非公開の運用設定から渡し、値を含まない。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     }
   ],
   "excludedSources": [
