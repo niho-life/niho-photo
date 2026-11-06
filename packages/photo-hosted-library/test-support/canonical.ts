@@ -9,6 +9,7 @@ import {
   compareIdempotency,
   decideHostedRecipeSave,
   decideReplicaPull,
+  idempotencyIdentity,
 } from "../../photo-library-sharing-contract/src/policy.ts";
 import type {
   HostConnectorClient,
@@ -83,7 +84,9 @@ export class SyntheticHostedCanonical {
       key,
       payloadSha256: await canonicalSha256(payload),
     };
-    const stored = this.idempotency.get(key);
+    // Replay identity is actor + scope + operation + key, not the key alone.
+    const identity = idempotencyIdentity(record);
+    const stored = this.idempotency.get(identity);
     const outcome = compareIdempotency(stored?.record ?? null, record);
     if (outcome === "conflict") throw contractError("idempotency_conflict");
     if (outcome === "replay" && stored) return { value: stored.result as T, replayed: true };
@@ -91,7 +94,7 @@ export class SyntheticHostedCanonical {
     this.nextFault = null;
     if (fault === "failBeforeCommit") throw networkError();
     const value = await commit();
-    this.idempotency.set(key, { record, result: value });
+    this.idempotency.set(identity, { record, result: value });
     if (fault === "dropResponseAfterCommit") throw networkError();
     return { value, replayed: false };
   }
@@ -262,7 +265,9 @@ export class SyntheticHostedCanonical {
       photo: (photoId) => {
         const photo = this.upsert("photo", photoId);
         const recipe = this.upsert("recipe", photoId);
-        return photo && recipe ? { sourceSha256: photo.body.source.sha256, recipeRevision: recipe.body.recipe.revision } : null;
+        return photo && recipe
+          ? { source: { sha256: photo.body.source.sha256, generation: photo.body.source.generation }, recipeRevision: recipe.body.recipe.revision }
+          : null;
       },
       album: (albumId) => {
         const album = this.upsert("albumDefinition", albumId);

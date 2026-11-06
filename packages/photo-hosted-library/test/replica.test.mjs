@@ -168,3 +168,42 @@ test("a deletion during a snapshot reaches the staged replica through its cursor
   await sync.sync({ canonicalRevision: canonical.revision, signal });
   assertMirrors(canonical, store);
 });
+
+test("a stale heartbeat never triggers a rebuild of a replica that is already ahead of it", async () => {
+  const { canonical, ids, store } = await seeded();
+  const sync = createHostedReplicaSync({ client: canonical.client(), store });
+  const staleHeartbeat = canonical.revision;
+  await canonical.putRecipe(editRequest(canonical, ids.k1, { exposure: 0.3 }), "save-1");
+  await sync.sync({ canonicalRevision: canonical.revision, signal });
+  store.applied.length = 0;
+  for (let index = 0; index < 2; index++) {
+    const result = await sync.sync({ canonicalRevision: staleHeartbeat, signal });
+    assert.equal(result.mode, "unchanged");
+    assert.equal(result.replicaRevision, canonical.revision);
+  }
+  assert.equal(store.applied.length, 0);
+  assert.deepEqual(sync.status(), { canonicalRevision: canonical.revision, replicaRevision: canonical.revision, state: "current" });
+});
+
+test("malformed pages are rejected without touching the replica", async () => {
+  const { canonical, store } = await seeded();
+  await createHostedReplicaSync({ client: canonical.client(), store }).sync({ canonicalRevision: canonical.revision, signal });
+  const durable = store.snapshot();
+  const since = durable.revision;
+  const upsert = (revision) => ({ revision, op: "upsert", entity: "exclusion", id: "synthetic-photo", body: { excludedAt: "2026-11-07T00:00:00.000Z" } });
+  const pages = {
+    wrongSince: { sinceRevision: since - 1, changes: [], nextRevision: since + 1, complete: true, cursor: null },
+    oldChange: { sinceRevision: since, changes: [upsert(since)], nextRevision: since + 1, complete: true, cursor: null },
+    reversed: { sinceRevision: since, changes: [upsert(since + 2), upsert(since + 1)], nextRevision: since + 2, complete: true, cursor: null },
+    duplicate: { sinceRevision: since, changes: [upsert(since + 1), upsert(since + 1)], nextRevision: since + 1, complete: true, cursor: null },
+    beyondNext: { sinceRevision: since, changes: [upsert(since + 3)], nextRevision: since + 2, complete: true, cursor: null },
+    stalled: { sinceRevision: since, changes: [], nextRevision: since, complete: false, cursor: null },
+    cursorOnDiff: { sinceRevision: since, changes: [], nextRevision: since + 1, complete: true, cursor: "synthetic" },
+  };
+  for (const [name, page] of Object.entries(pages)) {
+    const client = { request: async (operation) => (operation === "connector.pullReplica" ? page : { value: {}, replayed: false }) };
+    const sync = createHostedReplicaSync({ client, store });
+    await assert.rejects(sync.sync({ canonicalRevision: since + 2, signal }), { code: "invalid_response" }, name);
+    assert.deepEqual(store.snapshot(), durable, name);
+  }
+});

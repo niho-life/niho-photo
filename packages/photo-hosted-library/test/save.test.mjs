@@ -92,3 +92,14 @@ test("late index entries and saves for an excluded photo never revive it", async
   assert.deepEqual(canonical.photoOf(ids.k2), before.photo);
   await assert.rejects(canonical.putRecipe(editRequest(canonical, ids.k2, { exposure: 1 }), "op-late"), { code: "not_found" });
 });
+
+test("an operation key is scoped to its operation; another operation with the same key is a new request", async () => {
+  const { canonical, ids } = await seeded();
+  await canonical.putRecipe(editRequest(canonical, ids.k1, { exposure: 0.4 }), "shared-key");
+  const client = canonical.client();
+  const ack = await client.request("connector.ackReplica", { revision: canonical.revision }, { signal, idempotencyKey: "shared-key" });
+  assert.equal(ack.replayed, false, "the ack is not mistaken for a replay of the recipe save");
+  assert.equal(canonical.acknowledgedRevision, canonical.revision);
+  const replay = await canonical.putRecipe({ ...editRequest(canonical, ids.k1, { exposure: 0.4 }), expectedRevision: 0 }, "shared-key");
+  assert.equal(replay.replayed, true);
+});

@@ -13591,7 +13591,7 @@
     },
     {
       "path": "packages/photo-hosted-library/README.md",
-      "sha256": "e2d72c078781f753cb0778a887c861c9797535d9b8213e99a3b63756ddc3676e",
+      "sha256": "44c83025ed0f583bf0729e66406f5f7122d801e16fdd86bee396001ca9588373",
       "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13616,7 +13616,7 @@
     },
     {
       "path": "packages/photo-hosted-library/src/replica.ts",
-      "sha256": "74be287d373eb4465ed49882422dba8356eb0977e4ff65add1e63fedac259779",
+      "sha256": "613ebec307fb7307f2dd89671022c84d71e4191b38231c476e2f91fe10271b8e",
       "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13626,12 +13626,12 @@
     },
     {
       "path": "packages/photo-hosted-library/src/portability.ts",
-      "sha256": "b0ad065a3e9813276bef1de46fc654d38bc03a4ff3f0eb92ecc93b41c07ec053",
+      "sha256": "31f4d9298bda1a319a4b97ed15b25c68fd2c1d9a673308769ceb8e3313377162",
       "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/photo-hosted-library/src/index.ts",
-      "sha256": "151cf408458b5ea942adc2783d6ab371604df18db55f67b334118b83dca9aab7",
+      "sha256": "172944f1235a9ff55cf0633c6533efbda417f8ddc6fd3bbe1b9ab01bfc53d9cf",
       "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13641,7 +13641,7 @@
     },
     {
       "path": "packages/photo-hosted-library/test-support/canonical.ts",
-      "sha256": "93c08f927d8e370a3316a077477d8e140325140a28185ab509d1e0afbb78830c",
+      "sha256": "4a6fa598e445a4d7d5e0889f4808e2a60927ea9f4aa6c081b808d0b1707466fd",
       "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13651,12 +13651,12 @@
     },
     {
       "path": "packages/photo-hosted-library/test/replica.test.mjs",
-      "sha256": "759301b4e33994a2daefaa93162f4ca1d67062fc1224eb9ffa00d428aa1d71f1",
+      "sha256": "1e8e6f3f2ba1e259057dca3d7775f8b551b441af7ec67d50cb993812b9e0718b",
       "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/photo-hosted-library/test/save.test.mjs",
-      "sha256": "e2b3d648f8dc1302ccf1ddb99432b2a5076f1b170d30f81b4df00052108c64a8",
+      "sha256": "5e376a48fb158f5e18024a3d2dea7a5898319967971d829dee498ad016264430",
       "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13666,7 +13666,7 @@
     },
     {
       "path": "packages/photo-hosted-library/test/portability.test.mjs",
-      "sha256": "8ccac67cc38f8f2f2c4c8996f31fbb0db4634bf8ffe881feea09fc9c1cc9f564",
+      "sha256": "32562f2a16a2031ee33466424c9c30f0188458c17b8ce152fe304e55bf446480",
       "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     }
   ],

@@ -106,6 +106,8 @@ export function createHostedReplicaSync(options: CreateHostedReplicaSyncOptions)
   const maxPages = options.maxPages ?? 1000;
   let status: ReplicaStatus = { canonicalRevision: null, replicaRevision: 0, state: "unknown" };
   let queue: Promise<unknown> = Promise.resolve();
+  /** Highest NIHO revision ever observed; a stale heartbeat never lowers it. */
+  let observed = 0;
 
   const fetchMasks = async (changes: readonly ReplicaChange[], signal: AbortSignal): Promise<Map<string, Uint8Array>> => {
     const bytes = new Map<string, Uint8Array>();
@@ -175,14 +177,16 @@ export function createHostedReplicaSync(options: CreateHostedReplicaSyncOptions)
   const run = async (canonicalRevision: number, signal: AbortSignal): Promise<ReplicaSyncResult> => {
     if (!revisionOk(canonicalRevision)) throw new HostedLibraryError("invalid_request");
     let replica = await options.store.revision();
-    let canonical = canonicalRevision;
+    observed = Math.max(observed, canonicalRevision);
+    let canonical = observed;
     status = { canonicalRevision: canonical, replicaRevision: replica, state: "syncing" };
     let mode: ReplicaSyncResult["mode"] = "unchanged";
     let applied = 0;
 
-    // A replica ahead of NIHO did not come from NIHO; rebuild it rather than promote it.
-    let reset = replica > canonical;
-    if (!reset && replica < canonical) {
+    // NIHO decides whether the replica is usable: one ahead of NIHO (or behind its tombstones) comes back as
+    // replica_reset_required and is rebuilt, never promoted. A heartbeat alone never triggers a rebuild.
+    let reset = false;
+    if (replica !== canonical) {
       mode = "diff";
       try {
         for (let pages = 0; ; pages++) {
@@ -197,10 +201,13 @@ export function createHostedReplicaSync(options: CreateHostedReplicaSyncOptions)
             });
             applied += page.changes.length;
             replica = page.nextRevision;
-            canonical = Math.max(canonical, replica);
             status = { canonicalRevision: canonical, replicaRevision: replica, state: "syncing" };
           }
-          if (page.complete) break;
+          if (page.complete) {
+            canonical = Math.max(canonical, page.nextRevision);
+            break;
+          }
+          canonical = Math.max(canonical, replica);
         }
       } catch (error) {
         if (sharingErrorCode(error) !== "replica_reset_required") throw error;
@@ -212,8 +219,10 @@ export function createHostedReplicaSync(options: CreateHostedReplicaSyncOptions)
       const rebuilt = await rebuild(signal);
       replica = rebuilt.revision;
       applied = rebuilt.applied;
-      canonical = Math.max(canonicalRevision, replica);
+      // The completed snapshot is NIHO's current revision, which may be below a replica that was wrongly ahead.
+      canonical = replica;
     }
+    observed = Math.max(observed, canonical);
 
     let acknowledged = false;
     try {

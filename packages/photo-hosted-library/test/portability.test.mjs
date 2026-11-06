@@ -7,6 +7,7 @@ import {
   manifestSha256,
   parsePortableManifest,
   planRestore,
+  verifyFullExport,
 } from "../src/index.ts";
 import { sha256Hex } from "../src/shared.ts";
 import { LIBRARY, OWNER } from "../test-support/canonical.ts";
@@ -61,6 +62,14 @@ test("an export with access material or a member's source is rejected", async ()
   reject((copy) => { copy.photos[0].original.included = true; });
   reject((copy) => { copy.photos.push(structuredClone(copy.photos[0])); });
   reject((copy) => { copy.format = "other"; });
+  // The recipe JSON is open, but never a carrier for credentials, sessions or signed URLs.
+  reject((copy) => { copy.photos[0].recipe.settings.session = "synthetic"; });
+  reject((copy) => { copy.photos[0].recipe.settings.look = { apiKey: "synthetic" }; });
+  reject((copy) => { copy.photos[0].recipe.settings.preset = "https://download.example.test/signed"; });
+  // Missing fields in untrusted input are invalid_request, never a TypeError.
+  reject((copy) => { delete copy.albums[0].items; });
+  reject((copy) => { delete copy.photos[0].recipe; });
+  reject((copy) => { copy.photos[0].recipe.settings = null; });
 });
 
 test("a full export includes only originals and masks that match their hashes", async () => {
@@ -80,6 +89,34 @@ test("a full export includes only originals and masks that match their hashes", 
   assert.deepEqual(result.manifest.photos.map((photo) => photo.original.included), manifest.photos.map((photo) => photo.photoId === ids.k1));
   assert.deepEqual(written.map(([path]) => path.split("/")[0]), ["originals", "masks", "manifest.json"]);
   assert.deepEqual(parsePortableManifest(result.manifest), result.manifest);
+
+  // The archive is checked against its manifest before any restore.
+  const archive = new Map();
+  await buildFullExport({
+    manifest, readOriginal: async (photo) => scanner.files.get(localKeyOf[photo.photoId]) ?? null, readMask: async () => mask,
+    sink: { add: async (path, bytes) => { archive.set(path, bytes); } }, signal,
+  });
+  const full = JSON.parse(new TextDecoder().decode(archive.get("manifest.json")));
+  assert.deepEqual(await verifyFullExport({ manifest: full, read: async (path) => archive.get(path) ?? null, signal }), []);
+  const maskPath = [...archive.keys()].find((path) => path.startsWith("masks/"));
+  archive.set(maskPath, bytesOf("tampered"));
+  assert.deepEqual(await verifyFullExport({ manifest: full, read: async (path) => archive.get(path) ?? null, signal }), [maskPath]);
+});
+
+test("a full export with a missing mask writes no manifest", async () => {
+  const { manifest, scanner, ids } = await exported();
+  const written = [];
+  const localKeyOf = { [ids.k1]: "k1", [ids.k2]: "k2" };
+  const result = await buildFullExport({
+    manifest,
+    readOriginal: async (photo) => scanner.files.get(localKeyOf[photo.photoId]) ?? null,
+    readMask: async () => null,
+    sink: { add: async (path) => { written.push(path); } },
+    signal,
+  });
+  assert.equal(result.manifest, null);
+  assert.equal(result.missingMasks.length, 1);
+  assert(!written.includes("manifest.json"), "an incomplete archive is never published as a full export");
 });
 
 test("restore keeps newer NIHO data, checks hashes and masks, and never restores access", async () => {
@@ -102,7 +139,7 @@ test("restore keeps newer NIHO data, checks hashes and masks, and never restores
 
   // NIHO lost a photo and holds different bytes for another: restore the first, report the second.
   const lossy = {
-    photo: (photoId) => photoId === ids.k1 ? null : { sourceSha256: "0".repeat(64), recipeRevision: 0 },
+    photo: (photoId) => photoId === ids.k1 ? null : { source: { sha256: "0".repeat(64), generation: 1 }, recipeRevision: 0 },
     album: () => null,
   };
   const recovered = planRestore({ manifest, actorId: OWNER, target, current: lossy, newId: ids2 });
@@ -111,6 +148,19 @@ test("restore keeps newer NIHO data, checks hashes and masks, and never restores
   assert.equal(recovered.albums[0].action, "restore");
   assert.deepEqual(recovered.albums[0].items, [{ itemId: "synthetic-item-1", photoId: ids.k1 }, { itemId: "synthetic-item-2", photoId: ids.k2 }]);
   assert.equal(recovered.report.membershipsRestored, 0);
+
+  // A recipe never lands on an unverified or different-generation original.
+  const k2 = manifest.photos.find((photo) => photo.photoId === ids.k2);
+  const unhashed = { photo: () => ({ source: { sha256: null, generation: 1 }, recipeRevision: 0 }), album: () => null };
+  const regenerated = { photo: () => ({ source: { sha256: k2.source.sha256, generation: 2 }, recipeRevision: 0 }), album: () => null };
+  const edited = structuredClone(manifest);
+  for (const photo of edited.photos) photo.recipe = { ...photo.recipe, revision: 3 };
+  assert.deepEqual(planRestore({ manifest: edited, actorId: OWNER, target, current: unhashed, newId: ids2 }).report.mismatches.map((m) => m.reason), ["source_missing", "source_missing"]);
+  assert.deepEqual(planRestore({ manifest: edited, actorId: OWNER, target, current: regenerated, newId: ids2 }).report.mismatches.map((m) => m.reason), ["hash_mismatch", "hash_mismatch"]);
+  const exportUnhashed = structuredClone(manifest);
+  exportUnhashed.photos.find((photo) => photo.photoId === ids.k2).source.sha256 = null;
+  exportUnhashed.photos.find((photo) => photo.photoId === ids.k2).original.sha256 = null;
+  assert.deepEqual(planRestore({ manifest: exportUnhashed, actorId: OWNER, target, current: lossy, newId: ids2 }).report.mismatches, [{ photoId: ids.k2, reason: "source_missing" }]);
 
   const maskless = structuredClone(manifest);
   maskless.photos.find((photo) => photo.photoId === ids.k1).masks = [];
