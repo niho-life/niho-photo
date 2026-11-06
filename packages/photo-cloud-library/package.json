@@ -9,7 +9,8 @@
     "./browser": "./src/browser/index.ts",
     "./server": "./src/server/index.ts",
     "./protocol": "./src/protocol.ts",
-    "./sharing": "./src/sharing/index.ts"
+    "./sharing": "./src/sharing/index.ts",
+    "./render-executor": "./src/render-executor/index.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit -p tsconfig.json",
