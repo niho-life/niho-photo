@@ -13486,18 +13486,18 @@
     },
     {
       "path": ".github/workflows/photo-web-release.yml",
-      "sha256": "dd03ef4111dd467e18a070398bdf9d422285998cb738b88348e102018077a1e8",
-      "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定"
+      "sha256": "195c2d3724ae9e7d93504f66bc3f57fef9c9886f38a583ec9b25c0f83f957bee",
+      "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: C08: artifact uploadのbare SHA-256をrelease inputへ正規化しworkflow guardで拘束"
     },
     {
       "path": "scripts/ci/photo-web-workflow-lib.mjs",
-      "sha256": "349f03d9469ad4af3eb5db82cd004e187dccaae7ed6505014ef4934b5731e353",
-      "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定"
+      "sha256": "9b12c5671df35b189cb75792e003366c3bbd573bae6d7179c40b431aaa287b85",
+      "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: C08: artifact uploadのbare SHA-256をrelease inputへ正規化しworkflow guardで拘束"
     },
     {
       "path": "scripts/ci/photo-web-workflow.test.mjs",
-      "sha256": "94014a082f117b12d81f2a4426cf23f7b9ed8b6cba70f720be1e0fade0b677c4",
-      "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定"
+      "sha256": "8bdc4a02b48b83760d809df7ce5fa07c879cf44e3e5f792b8e30c0d10ab41fc7",
+      "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: C08: artifact uploadのbare SHA-256をrelease inputへ正規化しworkflow guardで拘束"
     },
     {
       "path": "scripts/photo-web/create-release.mjs",

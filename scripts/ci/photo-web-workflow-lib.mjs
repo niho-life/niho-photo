@@ -79,5 +79,7 @@ export function photoWebWorkflowFailures(workflow) {
   if (!release?.run?.includes("gh api --method POST repos/niho-life/niho-photo/git/refs")
     || !release.run.includes("gh release create") || !release.run.includes("--verify-tag") || !release.run.includes("--latest=false")
     || /(?:--clobber|--force|release upload)/u.test(release.run)) fail("Photo Web releaseはtagと3 assetを新規immutable releaseとして公開する必要があります");
+  const packageRelease = publish?.steps?.find((step) => step.name === "archiveとmanifestを生成して再検証");
+  if (packageRelease?.env?.PHOTO_WEB_ARTIFACT_DIGEST !== "sha256:${{ needs.build.outputs.artifact-digest }}") fail("Photo Web publisher must normalize the upload-artifact SHA-256 prefix");
   return [...new Set(failures)];
 }

@@ -141,7 +141,7 @@
             "PHOTO_WEB_RUN_ID": "${{ github.run_id }}",
             "PHOTO_WEB_RUN_ATTEMPT": "${{ github.run_attempt }}",
             "PHOTO_WEB_ARTIFACT_ID": "${{ needs.build.outputs.artifact-id }}",
-            "PHOTO_WEB_ARTIFACT_DIGEST": "${{ needs.build.outputs.artifact-digest }}",
+            "PHOTO_WEB_ARTIFACT_DIGEST": "sha256:${{ needs.build.outputs.artifact-digest }}",
             "PHOTO_WEB_ARTIFACT_NAME": "${{ needs.build.outputs.artifact-name }}"
           },
           "run": "set -euo pipefail\nnode scripts/photo-web/create-release.mjs --input-dir \"$PHOTO_WEB_INPUT_DIR\" --output-dir \"$PHOTO_WEB_RELEASE_DIR\" --source-sha \"$PHOTO_WEB_SOURCE_SHA\" --source-tree \"$PHOTO_WEB_SOURCE_TREE\" --tooling-commit \"$PHOTO_WEB_TOOLING_COMMIT\" --run-id \"$PHOTO_WEB_RUN_ID\" --run-attempt \"$PHOTO_WEB_RUN_ATTEMPT\" --artifact-id \"$PHOTO_WEB_ARTIFACT_ID\" --artifact-name \"$PHOTO_WEB_ARTIFACT_NAME\" --artifact-digest \"$PHOTO_WEB_ARTIFACT_DIGEST\"\nif [[ \"$PHOTO_WEB_SOURCE_SHA\" != \"$PHOTO_WEB_TOOLING_COMMIT\" ]]; then exit 1; fi"

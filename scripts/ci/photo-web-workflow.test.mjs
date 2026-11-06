@@ -38,4 +38,8 @@ test("Photo Web release guard rejects wrong publisher identity, unpinned actions
   const force = structuredClone(workflow);
   force.jobs.publish.steps.at(-1).run += "\ngh release upload --clobber";
   assert.ok(photoWebWorkflowFailures(force).some((message) => message.includes("immutable release")));
+
+  const unnormalizedDigest = structuredClone(workflow);
+  unnormalizedDigest.jobs.publish.steps.find((step) => step.name === "archiveとmanifestを生成して再検証").env.PHOTO_WEB_ARTIFACT_DIGEST = "${{ needs.build.outputs.artifact-digest }}";
+  assert.ok(photoWebWorkflowFailures(unnormalizedDigest).some((message) => message.includes("SHA-256 prefix")));
 });
