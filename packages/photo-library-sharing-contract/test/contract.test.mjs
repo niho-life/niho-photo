@@ -357,8 +357,12 @@ function evaluate(vector) {
       return fromDecision(decideUploadCommit(arrange), operation);
     case "revision":
       return fromDecision(arrange.expectedRevision === arrange.currentRevision ? { ok: true } : { ok: false, code: "revision_conflict" }, operation);
-    case "hostedSave":
-      return fromDecision(decideHostedRecipeSave(arrange), operation);
+    case "hostedSave": {
+      const decision = decideHostedRecipeSave(arrange);
+      return decision.ok
+        ? { ...success(operation, CREATE_OPERATIONS.has(operation)), replica: decision.replica }
+        : fromDecision(decision, operation);
+    }
     case "visibility": {
       const projected = projectAlbumItem(fixtures.snapshots[arrange.snapshot], { userId, role: arrange.role });
       return fromDecision(projected ? { ok: true } : { ok: false, code: "not_found" }, operation);
@@ -390,7 +394,10 @@ test("every conformance vector matches the reference policy", () => {
     if (vector.expected.code) assert.equal(SHARING_ERROR_STATUS[vector.expected.code], vector.expected.status, vector.id);
     if (vector.check !== "closedRequest") assert.deepEqual(unexpected(vector.operation, vector.request), [], vector.id);
     const actual = evaluate(vector);
-    assert.deepEqual(actual, vector.expected.code ? { status: vector.expected.status, code: vector.expected.code } : { status: vector.expected.status }, vector.id);
+    const expected = vector.expected.code
+      ? { status: vector.expected.status, code: vector.expected.code }
+      : { status: vector.expected.status, ...(vector.expected.replica ? { replica: vector.expected.replica } : {}) };
+    assert.deepEqual(actual, expected, vector.id);
   }
 });
 
@@ -408,7 +415,10 @@ test("B00 negative categories are all present", () => {
     closedRequests: ["owner-in-request", "path-in-add-source", "unknown-source-kind", "path-in-index-entry"],
     quotaWait: ["quota-wait-visible-to-adder", "quota-wait-hidden-from-viewer", "quota-wait-reason-hidden-from-member", "member-album-full"],
     albumNames: ["album-name-101-code-points", "album-name-100-emoji", "album-name-blank"],
-    hostedReplica: ["hosted-save-missing-mask", "replica-pull-compacted", "replica-pull-ahead-of-niho", "replica-pull-snapshot"],
+    hostedReplica: [
+      "hosted-save-missing-mask", "hosted-save-online-unacknowledged", "hosted-save-acknowledged-replay",
+      "replica-pull-compacted", "replica-pull-ahead-of-niho", "replica-pull-snapshot",
+    ],
   };
   for (const [category, list] of Object.entries(required)) for (const id of list) assert(ids.has(id), `${category}:${id}`);
 });
