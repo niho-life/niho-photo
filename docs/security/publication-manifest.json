@@ -2354,10 +2354,11 @@
         "path": "packages/photo-editing/src/image-bytes-metadata.ts",
         "sha256": "81b5d16a8fb086c09ae74f920bdb39d0c3914683ae22bf808943b45ec6b64dd2"
       },
-      "outputSha256": "93e99784bda5641402e0817d219ba5c6cb6402355c55ac87f212a4413bc3fe18",
+      "outputSha256": "7a2c1ca4e265cb6cf3b913ed9351b0725f1f4600532bb901605a3f62d62a8d3b",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "B07 #248 端末側の仕上がり写真job実行のため: JPEG header segment の読取を export"
       ]
     },
     {
@@ -12691,8 +12692,8 @@
     },
     {
       "path": "packages/photo-cloud-library/README.md",
-      "sha256": "365934ae4a59eecd05e0b9bfe48aeae17715711bfda65951f88bcef6d4f19e9b",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: C03実HTTPと狭いprotocol共有口および編集未有効の境界を記述\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。\n変更理由: 失効時に本人scopeだけをfenceして転送journalを消去し、通常disposeの再開情報保持を分離する\n変更理由: 曖昧なconnection teardownと確定的session失効を分け、再開可能journalを保護する"
+      "sha256": "1cd2b5f130e8cc64c67500e1f98fc18ff42a1747d361648954220bd51c2f3cbf",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: C03実HTTPと狭いprotocol共有口および編集未有効の境界を記述\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。\n変更理由: 失効時に本人scopeだけをfenceして転送journalを消去し、通常disposeの再開情報保持を分離する\n変更理由: 曖昧なconnection teardownと確定的session失効を分け、再開可能journalを保護する\n変更理由: B07 #248 端末側の仕上がり写真job実行のため: ./render-executor の説明を追加"
     },
     {
       "path": "packages/photo-cloud-library/eslint.config.mjs",
@@ -12701,8 +12702,8 @@
     },
     {
       "path": "packages/photo-cloud-library/package.json",
-      "sha256": "1b4e7bea92d59e88d9fce54a7a03495684e8c51b45d7f797aa9101a607d0a440",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02の増分SHAと送信前journal試験依存、browserとserver exportを固定する\n変更理由: 同期core用の狭いprotocol共有exportを追加"
+      "sha256": "72aa6e45f8801b5e50e4568ebaf061e125ba90ea7c5ffc1ffbca7b28cd4ad321",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02の増分SHAと送信前journal試験依存、browserとserver exportを固定する\n変更理由: 同期core用の狭いprotocol共有exportを追加\n変更理由: B07 #248 端末側の仕上がり写真job実行のため: ./render-executor の export を追加"
     },
     {
       "path": "packages/photo-cloud-library/src/adapter.ts",
@@ -13396,8 +13397,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/browser/resumable-upload.ts",
-      "sha256": "184f76bc4f835fae8fb0925244daef3c5fbb0fe1d8080846f292072a03444566",
-      "origin": "NIHO所有のC02/C03本人写真cloudにおける共通resumable runner、同一IDBのmask PNG永続化、および合成fixtureによる回帰試験。既存公開契約とMIT hash依存を再利用し、資格情報・内部URL・実写真・非公開履歴を含まない。\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する\n変更理由: 非同期provider callbackへ渡すURLとBlobをnonnull snapshotとして固定し公開CIの厳格型を満たす\n変更理由: マスクPNGの永続保存、writer保護とSTORED確認後のrecipe同期を接続\n変更理由: 統合reviewと実CIの指摘を修正し旧scope cache回収・明示復旧・接続寿命の回帰を追加"
+      "sha256": "08a39f2826e2f52bb45113339e4f64e05573a44acf2ecb6902028206fde3fbc8",
+      "origin": "NIHO所有のC02/C03本人写真cloudにおける共通resumable runner、同一IDBのmask PNG永続化、および合成fixtureによる回帰試験。既存公開契約とMIT hash依存を再利用し、資格情報・内部URL・実写真・非公開履歴を含まない。\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する\n変更理由: 非同期provider callbackへ渡すURLとBlobをnonnull snapshotとして固定し公開CIの厳格型を満たす\n変更理由: マスクPNGの永続保存、writer保護とSTORED確認後のrecipe同期を接続\n変更理由: 統合reviewと実CIの指摘を修正し旧scope cache回収・明示復旧・接続寿命の回帰を追加\n変更理由: B07 #248 端末側の仕上がり写真job実行のため: provider chunk の PUT を putProviderChunk として共有"
     },
     {
       "path": "packages/photo-cloud-library/test/resumable-upload.test.ts",
@@ -13588,6 +13589,66 @@
       "path": "docs/architecture/photo-library-sharing.md",
       "sha256": "cebf1be463b8ab9b30e64ef4c40946fd81c14506a18ab8e6ae7aa9cb8a353be4",
       "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/contract.ts",
+      "sha256": "706845c97c8b18ce63ef1fde59c7245558b81203ea1df062476b3e19efce76a6",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/engine-renderer.ts",
+      "sha256": "8f84da10956a05110eabe916f18b4793a2454af25539dc5b722218a43b61e3f4",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/index.ts",
+      "sha256": "1afad7ea08db62b7c6524bfd50b9103947697db48a6a8d1123f0b10826ca518c",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/jpeg-metadata.ts",
+      "sha256": "83d15e2467647071dfb08167e635299d9c319cbaadc57a918d10945aa67495ee",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/personal-cloud-source.ts",
+      "sha256": "3f27c60a756d2dd9162fe9950feea5dfe17fa683dadd34b8b111b38c639536c0",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/render-executor.ts",
+      "sha256": "fd404cd423449ed4707229787608a6005b3af06a352610d05a30cd316b7c0439",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/render-mock.ts",
+      "sha256": "924497188a27f97c4f4ba4cba56a67828d43642bac1021ee442388b99b1e7c8a",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/render-output.ts",
+      "sha256": "836fffa37e2c894d5a7140c4ba3861028f5fea92ab2b581d7754531bd1ab856f",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/ticket-upload.ts",
+      "sha256": "208168530272644af2fac07e7924059b2095dbd2758c2ea8e838f7f4b3da2002",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/render-adapters.test.ts",
+      "sha256": "732c7d47991f78669e2da16ea66ede6cf74326bf1b49b939f74eeed0cd0d20fe",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/render-executor.test.ts",
+      "sha256": "e6991db13cf320f72adb5505f5222164e0012b0e98762db41ca85106d21f6da6",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/render-support.ts",
+      "sha256": "06132e497fe747d096ac0566d2848a5e043bc52676babc9ecce917fb042c7b35",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     }
   ],
   "excludedSources": [
