@@ -80,6 +80,14 @@ describe("browser shared album client (B12)", () => {
     expect(download.headers.get("Range")).toBe("bytes=4-99");
 
     expect(t.server.storageOf(OWNER).reservedBytes).toBe(0);
+    // renewUpload: POST on the route table, no idempotency key (not a mutation, like v2 uploads.renew).
+    const ownerClient = t.clientFor(OWNER);
+    const pending = (await ownerClient.request("albumItems.addFile", { albumId: album.id, rendition: FILE.rendition }, { signal: t.signal, idempotencyKey: "renew-add" })).value;
+    const renewed = await ownerClient.request("albumItems.renewUpload", { albumId: album.id, uploadId: pending.upload?.upload.id as string }, { signal: t.signal });
+    expect(renewed.upload.id).toBe(pending.upload?.upload.id);
+    const renewal = t.seen[t.seen.length - 1] as Request;
+    expect([renewal.method, new URL(renewal.url).pathname, renewal.headers.get("Idempotency-Key")]).toEqual(["POST", `${SHARING_CLOUD_PATH_PREFIX}/albums/${album.id}/uploads/${pending.upload?.upload.id}/renew`, null]);
+    await ownerClient.request("albumItems.cancelUpload", { albumId: album.id, uploadId: pending.upload?.upload.id as string }, { signal: t.signal, idempotencyKey: "renew-cancel" });
     await owner.removeItems(album.id, [item.id], t.signal);
     const removal = t.seen[t.seen.length - 1] as Request;
     expect([removal.method, new URL(removal.url).pathname]).toEqual(["DELETE", `${SHARING_CLOUD_PATH_PREFIX}/albums/${album.id}/items/${item.id}`]);

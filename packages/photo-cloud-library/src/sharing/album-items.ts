@@ -3,9 +3,9 @@
  *
  * - Three ways to add: the adder's own library photo (`addLibraryPhotos`, rendered later on the device that holds it),
  *   a photo this device has rendered with the B07 renderer (`addDevicePhoto`), and a finished JPEG (`addFile`).
- * - One idempotency key per server call of a user action. A lost answer is replayed with the same key, so an add is
- *   never applied twice. An add or replace answer that arrives only as a replay carries no upload ticket: that upload
- *   is cancelled and the same content is started again on the same item, so no second item appears.
+ * - One idempotency key per server call of a user action. A lost response is replayed with the same key, so an add is
+ *   never applied twice. An add or replace answer that arrives only as a replay carries no upload ticket: a fresh ticket
+ *   for the same upload is asked for (`albumItems.renewUpload`), so no second item or reservation appears.
  * - Every started upload ends committed or released: an interrupted upload, a refused commit or a cancelled action
  *   cancels the upload (the album owner's reservation is released) and removes an add that never published.
  * - Direct files are cleaned on this device before upload (`prepareAlbumFile`): only capture time and its offset are
@@ -139,8 +139,6 @@ export interface SharedAlbumItems {
 }
 
 const DEFAULT_ATTEMPTS = 3;
-/** Fresh uploads started when every answer carrying the ticket was lost; each ticketless one is cancelled. */
-const MAX_TICKET_RECOVERIES = 2;
 const OFFSET_PATTERN = /^[+-]\d{2}:\d{2}$/u;
 /** Answers after which an upload can never commit, so its reservation and an unpublished add are released. */
 const TERMINAL_COMMIT_CODES: ReadonlySet<SharingErrorCode> = new Set([
@@ -195,29 +193,27 @@ export function createSharedAlbumItems(options: CreateSharedAlbumItemsOptions): 
   async function uploadAndCommit(
     albumId: AlbumId,
     start: () => Promise<AlbumItemMutation>,
-    again: (item: AlbumItem) => ReplaceContent,
     file: PreparedAlbumFile,
     adding: boolean,
     signal: AbortSignal,
   ): Promise<AlbumItem> {
-    let mutation = await start();
+    const mutation = await start();
     const addedItemId = adding ? mutation.item.id : null;
-    for (let recovery = 0; mutation.upload?.ticket === null; recovery += 1) {
-      const lost = mutation.upload;
-      // The answer that carried the bearer ticket was lost; the replay has none. Abandon that upload and start the
-      // same content on the same item (a replace), so no second item is created.
-      await abandon(albumId, lost.upload.id, null);
-      if (recovery >= MAX_TICKET_RECOVERIES) {
-        if (addedItemId !== null) await abandon(albumId, lost.upload.id, addedItemId);
-        throw new PersonalPhotoCloudError("unavailable");
-      }
-      const item = mutation.item;
-      mutation = (await send("albumItems.replace", { albumId, itemId: item.id, expectedRevision: item.revision, content: again(item) }, signal, true)).value;
-    }
     const upload = mutation.upload;
-    if (!upload || !upload.ticket) throw new PersonalPhotoCloudError("invalid_response");
+    if (!upload) throw new PersonalPhotoCloudError("invalid_response");
+    let ticket = upload.ticket;
+    if (ticket === null) {
+      // The answer that carried the bearer ticket was lost and the replay has none: a fresh ticket for the same upload
+      // and reservation (B00 `albumItems.renewUpload`), so no second item or reservation is created.
+      try {
+        ticket = (await send("albumItems.renewUpload", { albumId, uploadId: upload.upload.id }, signal, false)).ticket;
+      } catch (error) {
+        await abandon(albumId, upload.upload.id, addedItemId);
+        throw error;
+      }
+    }
     try {
-      await options.uploader.upload(upload.ticket, file.bytes, file.rendition.contentType, signal);
+      await options.uploader.upload(ticket, file.bytes, file.rendition.contentType, signal);
     } catch (error) {
       await abandon(albumId, upload.upload.id, addedItemId);
       throw error;
@@ -272,7 +268,6 @@ export function createSharedAlbumItems(options: CreateSharedAlbumItemsOptions): 
       return await uploadAndCommit(
         albumId,
         async () => (await send("albumItems.addPhoto", { albumId, source }, signal, true)).value,
-        () => ({ kind: "deviceRender", binding: input.binding, rendition: input.file.rendition }),
         input.file,
         true,
         signal,
@@ -282,7 +277,6 @@ export function createSharedAlbumItems(options: CreateSharedAlbumItemsOptions): 
       return await uploadAndCommit(
         albumId,
         async () => (await send("albumItems.addFile", { albumId, rendition: file.rendition }, signal, true)).value,
-        () => ({ kind: "file", rendition: file.rendition }),
         file,
         true,
         signal,
@@ -293,7 +287,6 @@ export function createSharedAlbumItems(options: CreateSharedAlbumItemsOptions): 
       return await uploadAndCommit(
         albumId,
         async () => (await send("albumItems.replace", { albumId, itemId: item.id, expectedRevision: item.revision, content }, signal, true)).value,
-        () => content,
         file,
         false,
         signal,
@@ -304,7 +297,6 @@ export function createSharedAlbumItems(options: CreateSharedAlbumItemsOptions): 
       return await uploadAndCommit(
         albumId,
         async () => (await send("albumItems.replace", { albumId, itemId: item.id, expectedRevision: item.revision, content }, signal, true)).value,
-        () => content,
         input.file,
         false,
         signal,
