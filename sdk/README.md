@@ -1,12 +1,13 @@
 # NIHO photo SDK release set
 
-`sdk/release-set.json` は、NIHOapp が同じ版として固定する写真編集 SDK の構成です。SDK 0.1.8では次の 7 package を 1 個の release manifest に束ねます。
+`sdk/release-set.json` は、NIHOapp が同じ版として固定する写真編集 SDK の構成です。SDK 0.1.11（release manifest schema 4）では次の 8 package を 1 個の release manifest に束ねます（0.1.8〜0.1.10 は `niho-photo-library-sharing-contract` を除く 7 package）。
 
 - `niho-photo-editing`: PhotoLibrary 境界、editor、develop-engine client と Web Worker の TypeScript source
 - `niho-photo-ui`: SDK 専用名にした editor の UI dependency。React / React DOM は peer dependency のままで、consumer と同じ実体を使う
 - `niho-photo-cloud-contract`: 既存の cloud sharing export が参照する純粋 TypeScript contract
 - `niho-photo-contract`: recipe の読取・編集可否・作業コピー接続・signed RAW 判定・neutral 生成を提供する Node ESM JavaScript と `.d.ts`
 - `niho-photo-personal-cloud-contract`: 本人クラウドv2のport・型・上限・error契約を実sourceから生成したNode ESM JavaScriptと`.d.ts`
+- `niho-photo-library-sharing-contract`: 保管場所・共有アルバム・完成写真の契約v1（型・経路・判定）を実sourceから生成したNode ESM JavaScriptと`.d.ts`
 - `niho-photo-develop-engine-source`: 同一 commit の Rust workspace source と、wasm build に必要な埋め込みデータ
 - `niho-photo-develop-engine-runtime`: `manifest-<crate version>.json` が SHA-256 で固定する wasm-bindgen glue、wasm、型定義
 
@@ -101,3 +102,12 @@ SDK 0.1.8は新しいrelease manifest schema 2で7 packageを固定する。既�
 本人クラウド契約のESMはNode 24とbrowserで利用できる。公開型の `ReadableStream` / `AbortSignal` は、Nodeでは対応する `@types/node` 24、browserではDOM libを用意する。ES2022とNode型だけのconsumer、DOM consumer、pack済みJavaScriptの実importを検証する。型定義のためにruntime polyfillや別の認証実装を追加しない。
 
 SDK 0.1.8のengineは `niho-14`、crate `0.27.0`。画素変更は無い。新しいSDK source/treeを記録する実WASM buildとimmutable公開は公式CIで行い、0.1.7のtagやassetを置換しない。private consumerは新schema対応後に、公式attestationと実hashの検証を通して選択する。
+
+## 保管場所・共有アルバム・完成写真の契約 v1（SDK 0.1.11、schema 4）
+
+非公開側のサーバーは、本人クラウド契約と同じく SDK の tarball から共有の契約を取り込む。schema 4 は schema 3 の 7 package に `niho-photo-library-sharing-contract` を加えた 8 package と、`packages/photo-library-sharing-contract` を加えた ownership 21 path を固定する。0.1.9・0.1.10 の schema 3 は 7 package / 20 path の厳密な profile のまま検証し、同じ artifact 集合や proof として混在させない。
+
+- 入口は workspace の `@niho/photo-library-sharing-contract` と同じ `.`（型・語彙・上限・閉じた request の形）、`./policy`（権限・遷移・照合の判定）、`./routes`（`SHARING_ROUTES`・`CONNECTOR_ROUTES`・`USER_RENDER_ROUTES`・`decodeSharingRequest` など）。package 名だけを置き換えて import する。
+- v1 は本人クラウド v2 の上限・型を相対 import するので、`packages` を source root にして `photo-library-sharing-contract/src/{v1,policy,routes}.ts` と `photo-library-contract/src/v2.ts` だけをコンパイルする。合成 fixture・負例・試験・v2 互換 adapter（`compat-v2`）は入れない。
+- 経路の decode は配置と想定外の項目だけを見る。必須の項目・型・権限はサーバーが operation ごとに検査する（[契約の文書](../docs/architecture/photo-library-sharing.md)）。
+- release そのもの（tag・asset・attestation）は、この構成が main に入った後に公式 workflow で行う。

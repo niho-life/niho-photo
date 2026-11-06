@@ -109,6 +109,8 @@ export const SHARING_ROUTES = {
   "albumItems.replace": post("/albums/{albumId}/items/{itemId}/replace", ["expectedRevision", "content"]),
   "albumItems.commitUpload": post("/albums/{albumId}/uploads/{uploadId}/commit"),
   "albumItems.cancelUpload": post("/albums/{albumId}/uploads/{uploadId}/cancel"),
+  // v2 `uploads.renew` と同じく key を取らない（mutation ではない）
+  "albumItems.renewUpload": { method: "POST", path: "/albums/{albumId}/uploads/{uploadId}/renew", query: [], body: [], range: false, idempotencyKey: false },
   "albumItems.remove": { method: "DELETE", path: "/albums/{albumId}/items/{itemId}", query: [], body: null, range: false, idempotencyKey: true },
   "albumItems.download": get("/albums/{albumId}/items/{itemId}/renditions/{renditionId}/content", ["variant"], true),
 

@@ -217,8 +217,8 @@ function candidateFixture(sdkManifestSchemaVersion = 1) {
     run: { id: runId, attempt: runAttempt },
     sdk: {
       mode: "published",
-      version: ({ 1: "0.1.1", 2: "0.1.8", 3: "0.1.10" })[sdkManifestSchemaVersion],
-      manifestFile: `niho-photo-sdk-${({ 1: "0.1.1", 2: "0.1.8", 3: "0.1.10" })[sdkManifestSchemaVersion]}-${"1".repeat(40)}.json`,
+      version: ({ 1: "0.1.1", 2: "0.1.8", 3: "0.1.10", 4: "0.1.11" })[sdkManifestSchemaVersion],
+      manifestFile: `niho-photo-sdk-${({ 1: "0.1.1", 2: "0.1.8", 3: "0.1.10", 4: "0.1.11" })[sdkManifestSchemaVersion]}-${"1".repeat(40)}.json`,
       manifestSha256: "c".repeat(64),
       source: { commit: "1".repeat(40), tree: "2".repeat(40) },
       packages: sdkPackages,
@@ -430,6 +430,30 @@ test("SDK schema 2 candidateは7 package・19 ownership path・明示proofだけ
     const forged = candidateFixture(2);
     if (value === undefined) delete forged.manifest.sdk.sdkManifestSchemaVersion;
     else forged.manifest.sdk.sdkManifestSchemaVersion = value;
+    writeFileSync(path.join(forged.directory, forged.manifestFile), `${JSON.stringify(forged.manifest, null, 2)}\n`);
+    assert.throws(() => verifyCandidateDirectory(forged.directory));
+  }
+});
+
+test("SDK schema 4 candidateは共有の契約を足した8 package・21 ownership pathを固定し、schema 3と混ぜない", () => {
+  const candidate = candidateFixture(4);
+  assert.equal(candidate.manifest.sdk.sdkManifestSchemaVersion, 4);
+  assert.equal(candidate.manifest.sdk.packages.length, 8);
+  assert.ok(candidate.manifest.sdk.packages.some(({ id, name }) => id === "sharing-contract" && name === "niho-photo-library-sharing-contract"));
+  assert.equal(candidate.manifest.sourceOwnership.paths.length, 21);
+  assert.equal(candidate.manifest.sourceOwnership.paths.at(-1).path, "packages/photo-library-sharing-contract");
+  assert.equal(verifyCandidateDirectory(candidate.directory).manifest.sdk.sdkManifestSchemaVersion, 4);
+  const proof = sdkProofFixture(candidate);
+  const verified = verifySdkProofDirectory({
+    directory: proof.directory,
+    candidateManifest: candidate.manifest,
+    expectedSdkVersion: candidate.manifest.sdk.version,
+    expectedSdkManifestSha256: candidate.manifest.sdk.manifestSha256,
+  });
+  assert.equal(verified.manifest.schemaVersion, 4);
+  for (const value of [3, 5]) {
+    const forged = candidateFixture(4);
+    forged.manifest.sdk.sdkManifestSchemaVersion = value;
     writeFileSync(path.join(forged.directory, forged.manifestFile), `${JSON.stringify(forged.manifest, null, 2)}\n`);
     assert.throws(() => verifyCandidateDirectory(forged.directory));
   }

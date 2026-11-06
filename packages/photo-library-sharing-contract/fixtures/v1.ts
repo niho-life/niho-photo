@@ -418,6 +418,7 @@ export const responses = {
   },
   "albumItems.commitUpload": { value: { ...ownerView.memberItem, revision: 2, rendition: { ...memberRendition, itemRevision: 2 } }, replayed: false },
   "albumItems.cancelUpload": { value: { ...renditionUpload, state: "cancelled" }, replayed: false },
+  "albumItems.renewUpload": { upload: { ...renditionUpload, state: "reserved", uploadedBytes: 1024 }, ticket: ticket("synthetic-renewed-file") },
   "albumItems.remove": { value: removedItem, replayed: false },
   "invites.list": {
     links: [inviteLink],
