@@ -44,8 +44,10 @@ import {
   decideRenderCommit,
   decideReplaceStart,
   decideUploadCommit,
+  decideUploadRenew,
   decodeSharingRequest,
   findUnexpectedRequestFields,
+  itemStateAfterAdderRevoked,
   matchSharingRoute,
   nextAlbumItemState,
   nextPendingReason,
@@ -111,6 +113,7 @@ export const SHARED_ALBUM_MOCK_OPERATIONS = [
   "albumItems.replace",
   "albumItems.commitUpload",
   "albumItems.cancelUpload",
+  "albumItems.renewUpload",
   "albumItems.remove",
 ] as const;
 export type SharedAlbumMockOperation = (typeof SHARED_ALBUM_MOCK_OPERATIONS)[number];
@@ -398,15 +401,18 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
    */
   function endUnpublishedAdds(albumId: string, userId: UserId): void {
     for (const item of items.values()) {
-      if (item.albumId !== albumId || item.addedBy.userId !== userId) continue;
-      if (item.state === "preparing") {
+      if (item.albumId !== albumId) continue;
+      // B00 `adderRevoked`: an addition in progress is dropped, a pending replacement falls back to the last rendition.
+      const next = itemStateAfterAdderRevoked(item, userId);
+      if (next === item.state) continue;
+      if (next === "removed") {
         removeItem(item);
-      } else if (item.state === "updatePending") {
-        endJobs((record) => record.job.purpose.kind === "albumItem" && record.job.purpose.itemId === item.id, "cancelled");
-        for (const record of uploads.values()) if (record.upload.itemId === item.id) releaseUpload(record, "cancelled");
-        desired.delete(item.id);
-        setItem({ ...item, state: "published", pendingReason: null, pendingUpload: null });
+        continue;
       }
+      endJobs((record) => record.job.purpose.kind === "albumItem" && record.job.purpose.itemId === item.id, "cancelled");
+      for (const record of uploads.values()) if (record.upload.itemId === item.id) releaseUpload(record, "cancelled");
+      desired.delete(item.id);
+      setItem({ ...item, state: next, pendingReason: null, pendingUpload: null });
     }
   }
   /** A rebuilt rendition: server-side re-decode of the uploaded bytes with the allowed metadata only. */
@@ -635,7 +641,8 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
     const cover = published[0]?.rendition ? { itemId: published[0].id, renditionId: published[0].rendition.id } : null;
     return {
       id: album.id, owner: personLabel(album.owner, viewer), name: album.name, revision: album.revision,
-      createdAt: album.createdAt, updatedAt: album.updatedAt, itemCount: published.length, cover,
+      createdAt: album.createdAt, updatedAt: album.updatedAt, itemCount: published.length,
+      memberCount: [...memberships.values()].filter((entry) => entry.albumId === album.id && entry.state === "active").length, cover,
       access: {
         role: membership.role, membershipRevision: membership.revision, permissions: permissionsFor(membership.role),
         preparation: preparing > 0 ? { prepared: published.length, total: visible.length } : null,
@@ -941,10 +948,11 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
         // Re-checked at commit time: removal, leaving or demotion after the upload started wins (Epic §10).
         const first = decideUploadCommit({ viewer, item, upload: record.upload, bytesMetadata: {}, now: instant() });
         if (!first.ok) {
-          releaseUpload(record, first.code === "upload_expired" ? "expired" : "cancelled");
+          // Bytes still missing is not final (continue the upload, then commit); every other refusal ends the upload.
+          if (first.code !== "upload_state_conflict") releaseUpload(record, first.code === "upload_expired" ? "expired" : "cancelled");
           return fail(first.code);
         }
-        if (!record.bytes) return fail("invalid_request");
+        if (!record.bytes) return fail("upload_state_conflict");
         // Re-decode: the stored rendition is rebuilt with the frame, tables and scans only; its size must match.
         const rebuilt = stripJpegMetadata(record.bytes);
         const decoded = rebuilt ? readJpegPixelSize(rebuilt) : null;
@@ -958,6 +966,18 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
         const published = publish(current, buildRendition(rebuilt, record.rendition.metadata, record.upload.targetItemRevision), record.binding);
         capacityFreed(album.owner.userId);
         return { value: projectItem(published, actor), replayed: false };
+      }
+      case "albumItems.renewUpload": {
+        const album = albumOr404(String(request.albumId));
+        const viewer = viewerOf(album.id, actor);
+        const record = uploads.get(String(request.uploadId));
+        if (!record || record.upload.albumId !== album.id) return fail("not_found");
+        decided(decideUploadRenew({ viewer, item: items.get(record.upload.itemId) ?? null, upload: record.upload, now: instant() }));
+        // The same upload and reservation; the provider keeps what it already holds.
+        return {
+          upload: record.upload,
+          ticket: { url: `${SHARED_ALBUM_MOCK_TICKET_PREFIX}${record.upload.id}`, method: "PUT", headers: { "Content-Type": "image/jpeg" }, expiresAt: record.upload.expiresAt, resumeOffsetBytes: record.upload.uploadedBytes },
+        };
       }
       case "albumItems.cancelUpload": {
         const album = albumOr404(String(request.albumId));

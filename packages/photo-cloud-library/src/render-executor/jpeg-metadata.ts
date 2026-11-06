@@ -165,22 +165,36 @@ export function renditionMetadataViolations(bytes: Uint8Array): readonly string[
 }
 
 /**
- * Decoded metadata as named keys, in the shape the B00 forbidden-key check (`findForbiddenMetadata`) reads. Used by
- * the synthetic server to stand in for the real server validator.
+ * Decoded metadata in the contract's terms, as the server validator reports it (B00 `findDisallowedRenditionMetadata`
+ * reads it): the allowed fields with their values (capture time, its offset and orientation from the allowed EXIF tags),
+ * and every other metadata block or tag by name, so a location, serial or path keeps its own category and anything else
+ * is "not allowed". Used by the synthetic servers to stand in for the real validator.
  */
 export function jpegMetadataRecord(bytes: Uint8Array): Readonly<Record<string, unknown>> {
   const scan = scanJpegMetadata(bytes);
   if (!scan) return { unreadable: true };
   const record: Record<string, unknown> = {};
-  if (scan.exif) {
-    for (const tag of [...scan.exif.ifd0, ...scan.exif.exif, ...scan.exif.interop]) record[tagName(tag)] = true;
-    if (scan.exif.gps.length > 0) record.GPSInfo = Object.fromEntries(scan.exif.gps.map((tag) => [`GPSTag${tag}`, true]));
+  for (const violation of renditionMetadataViolations(bytes)) {
+    if (violation.startsWith("exif:")) {
+      const name = violation.slice("exif:".length);
+      // GPS tags are reported under one location key.
+      if (/^GPS/u.test(name) || /^Tag0x000[0-9a-f]$/u.test(name)) record.GPSInfo = true;
+      else record[name] = true;
+    } else {
+      record[violation] = true;
+    }
   }
+  if (scan.exif && scan.exif.gps.length > 0) record.GPSInfo = true;
   scan.xmp.forEach((packet, index) => {
     const names = [...packet.matchAll(/<([A-Za-z][\w.-]*:[\w.-]+)|([A-Za-z][\w.-]*:[\w.-]+)\s*=/gu)].map((match) => match[1] ?? match[2]);
     record[`xmp${index}`] = Object.fromEntries(names.map((name) => [name, true]));
   });
   if (scan.segments.includes("comment")) record.comment = true;
+  // The allowed EXIF tags carry only these fields; the structural ones (version, pointers, dimensions) are no metadata.
+  const capture = readJpegCaptureFields(bytes);
+  if (capture?.capturedAt) record.capturedAt = capture.capturedAt;
+  if (capture?.capturedAtOffset) record.capturedAtOffset = capture.capturedAtOffset;
+  if (capture && capture.orientation !== null) record.orientation = capture.orientation;
   return record;
 }
 

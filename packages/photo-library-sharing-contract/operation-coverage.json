@@ -219,6 +219,12 @@
       "wiring": "not-connected",
       "evidence": "予約を一度だけ解放する。"
     },
+    "albumItems.renewUpload": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "v2 uploads.renew と同じ形で同じ予約の ticket を取り直す。追加者・最新の upload・reserved だけ。"
+    },
     "albumItems.remove": {
       "issue": 254,
       "backend": "missing",
@@ -368,6 +374,20 @@
       "backend": "missing",
       "wiring": "not-connected",
       "evidence": "同じ出力のuploadへ新しいticketを返す。予約は変えず、再開位置を含める。"
+    }
+  },
+  "bffOperations": {
+    "invites.holdPending": {
+      "issue": 246,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "BFFだけ。未ログインでも受け、secretを暗号化したhttpOnly・Secure・SameSite=Laxのcookieに15分持つ。"
+    },
+    "invites.joinPending": {
+      "issue": 246,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "BFFだけ。ログイン後にcookieを開いて上流のinvites.joinへ送り、成否に関係なくcookieを消す。"
     }
   }
 }

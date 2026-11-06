@@ -85,6 +85,8 @@ export {
   decideAddPhoto,
   decideRenderCommit,
   decideReplaceStart,
+  decideUploadRenew,
+  itemStateAfterAdderRevoked,
   nextAlbumItemState,
   nextPendingReason,
   quotaExceededError,

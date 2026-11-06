@@ -927,7 +927,9 @@
           "id": "synthetic-rendition-upload",
           "targetItemRevision": 1,
           "expiresAt": "2026-11-07T00:10:00.000Z",
-          "state": "reserved"
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -981,7 +983,9 @@
           "id": "synthetic-rendition-upload",
           "targetItemRevision": 1,
           "expiresAt": "2026-11-07T00:10:00.000Z",
-          "state": "reserved"
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -2266,8 +2270,8 @@
         "now": "2026-11-07T00:05:00.000Z"
       },
       "expected": {
-        "status": 400,
-        "code": "invalid_request",
+        "status": 409,
+        "code": "upload_state_conflict",
         "invariants": [
           "verified_bytes_only"
         ]
@@ -2599,7 +2603,9 @@
           "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
-          "state": "reserved"
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -2672,7 +2678,9 @@
           "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
-          "state": "reserved"
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -2745,7 +2753,9 @@
           "id": "synthetic-rendition-upload",
           "targetItemRevision": 2,
           "expiresAt": "2026-11-07T00:10:00.000Z",
-          "state": "reserved"
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -2818,7 +2828,9 @@
           "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
-          "state": "reserved"
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -2891,7 +2903,9 @@
           "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
-          "state": "reserved"
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -2965,7 +2979,9 @@
           "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
-          "state": "reserved"
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -4632,7 +4648,9 @@
           "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
-          "state": "reserved"
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -4708,7 +4726,9 @@
           "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
-          "state": "reserved"
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -4782,7 +4802,9 @@
           "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
-          "state": "reserved"
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -5540,6 +5562,1157 @@
         "invariants": [
           "same_jobs_and_leases",
           "no_stranded_jobs"
+        ]
+      }
+    },
+    {
+      "id": "commit-before-bytes",
+      "operation": "albumItems.commitUpload",
+      "actor": "contributor",
+      "check": "uploadCommit",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "uploadId": "synthetic-rendition-upload"
+      },
+      "arrange": {
+        "viewer": {
+          "userId": "synthetic-user-contributor",
+          "membership": {
+            "role": "contributor",
+            "state": "active",
+            "revision": 3
+          }
+        },
+        "item": {
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          },
+          "state": "published",
+          "revision": 2,
+          "renditionBinding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
+          }
+        },
+        "upload": {
+          "id": "synthetic-rendition-upload",
+          "targetItemRevision": 3,
+          "expiresAt": "2026-11-07T00:10:00.000Z",
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 4194304
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
+        },
+        "now": "2026-11-07T00:00:00.000Z"
+      },
+      "expected": {
+        "status": 409,
+        "code": "upload_state_conflict",
+        "invariants": [
+          "no_commit_before_bytes",
+          "resume_then_commit"
+        ]
+      }
+    },
+    {
+      "id": "job-commit-before-bytes",
+      "operation": "renderJobs.commit",
+      "actor": "connector",
+      "check": "renderCommit",
+      "request": {
+        "jobId": "synthetic-render-job",
+        "leaseToken": "synthetic-lease",
+        "uploadId": "synthetic-output-upload"
+      },
+      "arrange": {
+        "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
+          "binding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "state": "claimed",
+          "leaseExpiresAt": "2026-11-07T00:10:00.000Z",
+          "purpose": {
+            "kind": "albumItem",
+            "albumId": "synthetic-album-a",
+            "itemId": "synthetic-item-owner-photo",
+            "itemRevision": 1
+          }
+        },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
+        "claimedGeneration": 1,
+        "executor": {
+          "lifecycle": "active",
+          "credentialGeneration": 1
+        },
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "reserved"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
+        },
+        "desired": {
+          "sourceGeneration": 1,
+          "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipeRevision": 2,
+          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+          "engine": "niho-14",
+          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+          "maskSurfaceIds": [
+            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          ]
+        },
+        "item": {
+          "state": "updatePending",
+          "revision": 1,
+          "adder": {
+            "userId": "synthetic-user-a",
+            "membership": {
+              "role": "owner",
+              "state": "active",
+              "revision": 1
+            }
+          }
+        },
+        "now": "2026-11-07T00:05:00.000Z"
+      },
+      "expected": {
+        "status": 409,
+        "code": "upload_state_conflict",
+        "invariants": [
+          "no_commit_before_bytes"
+        ]
+      }
+    },
+    {
+      "id": "rendition-with-camera-model",
+      "operation": "albumItems.commitUpload",
+      "actor": "contributor",
+      "check": "uploadCommit",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "uploadId": "synthetic-rendition-upload"
+      },
+      "arrange": {
+        "viewer": {
+          "userId": "synthetic-user-contributor",
+          "membership": {
+            "role": "contributor",
+            "state": "active",
+            "revision": 3
+          }
+        },
+        "item": {
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          },
+          "state": "published",
+          "revision": 2,
+          "renditionBinding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
+          }
+        },
+        "upload": {
+          "id": "synthetic-rendition-upload",
+          "targetItemRevision": 3,
+          "expiresAt": "2026-11-07T00:10:00.000Z",
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1,
+          "Make": "Synthetic",
+          "Model": "Synthetic Camera"
+        },
+        "now": "2026-11-07T00:00:00.000Z"
+      },
+      "expected": {
+        "status": 422,
+        "code": "content_rejected",
+        "invariants": [
+          "metadata_allow_list_only"
+        ]
+      }
+    },
+    {
+      "id": "rendition-with-software",
+      "operation": "albumItems.commitUpload",
+      "actor": "contributor",
+      "check": "uploadCommit",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "uploadId": "synthetic-rendition-upload"
+      },
+      "arrange": {
+        "viewer": {
+          "userId": "synthetic-user-contributor",
+          "membership": {
+            "role": "contributor",
+            "state": "active",
+            "revision": 3
+          }
+        },
+        "item": {
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          },
+          "state": "published",
+          "revision": 2,
+          "renditionBinding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
+          }
+        },
+        "upload": {
+          "id": "synthetic-rendition-upload",
+          "targetItemRevision": 3,
+          "expiresAt": "2026-11-07T00:10:00.000Z",
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1,
+          "Software": "Synthetic Editor"
+        },
+        "now": "2026-11-07T00:00:00.000Z"
+      },
+      "expected": {
+        "status": 422,
+        "code": "content_rejected",
+        "invariants": [
+          "metadata_allow_list_only"
+        ]
+      }
+    },
+    {
+      "id": "rendition-with-rotated-orientation",
+      "operation": "albumItems.commitUpload",
+      "actor": "contributor",
+      "check": "uploadCommit",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "uploadId": "synthetic-rendition-upload"
+      },
+      "arrange": {
+        "viewer": {
+          "userId": "synthetic-user-contributor",
+          "membership": {
+            "role": "contributor",
+            "state": "active",
+            "revision": 3
+          }
+        },
+        "item": {
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          },
+          "state": "published",
+          "revision": 2,
+          "renditionBinding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
+          }
+        },
+        "upload": {
+          "id": "synthetic-rendition-upload",
+          "targetItemRevision": 3,
+          "expiresAt": "2026-11-07T00:10:00.000Z",
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 6
+        },
+        "now": "2026-11-07T00:00:00.000Z"
+      },
+      "expected": {
+        "status": 422,
+        "code": "content_rejected",
+        "invariants": [
+          "metadata_allow_list_only",
+          "rendered_upright"
+        ]
+      }
+    },
+    {
+      "id": "job-output-with-lens",
+      "operation": "renderJobs.commit",
+      "actor": "connector",
+      "check": "renderCommit",
+      "request": {
+        "jobId": "synthetic-render-job",
+        "leaseToken": "synthetic-lease",
+        "uploadId": "synthetic-output-upload"
+      },
+      "arrange": {
+        "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
+          "binding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "state": "claimed",
+          "leaseExpiresAt": "2026-11-07T00:10:00.000Z",
+          "purpose": {
+            "kind": "albumItem",
+            "albumId": "synthetic-album-a",
+            "itemId": "synthetic-item-owner-photo",
+            "itemRevision": 1
+          }
+        },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
+        "claimedGeneration": 1,
+        "executor": {
+          "lifecycle": "active",
+          "credentialGeneration": 1
+        },
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1,
+          "LensModel": "Synthetic Lens"
+        },
+        "desired": {
+          "sourceGeneration": 1,
+          "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipeRevision": 2,
+          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+          "engine": "niho-14",
+          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+          "maskSurfaceIds": [
+            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          ]
+        },
+        "item": {
+          "state": "updatePending",
+          "revision": 1,
+          "adder": {
+            "userId": "synthetic-user-a",
+            "membership": {
+              "role": "owner",
+              "state": "active",
+              "revision": 1
+            }
+          }
+        },
+        "now": "2026-11-07T00:05:00.000Z"
+      },
+      "expected": {
+        "status": 422,
+        "code": "content_rejected",
+        "invariants": [
+          "metadata_allow_list_only"
+        ]
+      }
+    },
+    {
+      "id": "rendition-allowed-only",
+      "operation": "albumItems.commitUpload",
+      "actor": "contributor",
+      "check": "uploadCommit",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "uploadId": "synthetic-rendition-upload"
+      },
+      "arrange": {
+        "viewer": {
+          "userId": "synthetic-user-contributor",
+          "membership": {
+            "role": "contributor",
+            "state": "active",
+            "revision": 3
+          }
+        },
+        "item": {
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          },
+          "state": "published",
+          "revision": 2,
+          "renditionBinding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
+          }
+        },
+        "upload": {
+          "id": "synthetic-rendition-upload",
+          "targetItemRevision": 3,
+          "expiresAt": "2026-11-07T00:10:00.000Z",
+          "state": "reserved",
+          "sizeBytes": 8388608,
+          "uploadedBytes": 8388608
+        },
+        "bytesMetadata": {
+          "capturedAt": null,
+          "capturedAtOffset": null,
+          "colorProfile": "displayP3",
+          "orientation": 1
+        },
+        "now": "2026-11-07T00:00:00.000Z"
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "metadata_allow_list_only",
+          "item_published_next_revision"
+        ]
+      }
+    },
+    {
+      "id": "renew-reserved-upload",
+      "operation": "albumItems.renewUpload",
+      "actor": "contributor",
+      "check": "uploadRenew",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "uploadId": "synthetic-rendition-upload"
+      },
+      "arrange": {
+        "viewer": {
+          "userId": "synthetic-user-contributor",
+          "membership": {
+            "role": "contributor",
+            "state": "active",
+            "revision": 3
+          }
+        },
+        "item": {
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          },
+          "state": "published",
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
+          }
+        },
+        "upload": {
+          "id": "synthetic-rendition-upload",
+          "expiresAt": "2026-11-07T00:10:00.000Z",
+          "state": "reserved"
+        },
+        "now": "2026-11-07T00:00:00.000Z"
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "same_reservation_new_ticket",
+          "no_cancel_and_reupload"
+        ]
+      }
+    },
+    {
+      "id": "renew-committed-upload",
+      "operation": "albumItems.renewUpload",
+      "actor": "contributor",
+      "check": "uploadRenew",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "uploadId": "synthetic-rendition-upload"
+      },
+      "arrange": {
+        "viewer": {
+          "userId": "synthetic-user-contributor",
+          "membership": {
+            "role": "contributor",
+            "state": "active",
+            "revision": 3
+          }
+        },
+        "item": {
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          },
+          "state": "published",
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
+          }
+        },
+        "upload": {
+          "id": "synthetic-rendition-upload",
+          "expiresAt": "2026-11-07T00:10:00.000Z",
+          "state": "committed"
+        },
+        "now": "2026-11-07T00:00:00.000Z"
+      },
+      "expected": {
+        "status": 409,
+        "code": "upload_state_conflict",
+        "invariants": [
+          "no_ticket_for_finished_upload"
+        ]
+      }
+    },
+    {
+      "id": "renew-expired-upload",
+      "operation": "albumItems.renewUpload",
+      "actor": "contributor",
+      "check": "uploadRenew",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "uploadId": "synthetic-rendition-upload"
+      },
+      "arrange": {
+        "viewer": {
+          "userId": "synthetic-user-contributor",
+          "membership": {
+            "role": "contributor",
+            "state": "active",
+            "revision": 3
+          }
+        },
+        "item": {
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          },
+          "state": "published",
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
+          }
+        },
+        "upload": {
+          "id": "synthetic-rendition-upload",
+          "expiresAt": "2026-11-06T23:00:00.000Z",
+          "state": "reserved"
+        },
+        "now": "2026-11-07T00:00:00.000Z"
+      },
+      "expected": {
+        "status": 410,
+        "code": "upload_expired",
+        "invariants": [
+          "no_ticket_for_expired_upload"
+        ]
+      }
+    },
+    {
+      "id": "renew-older-upload",
+      "operation": "albumItems.renewUpload",
+      "actor": "contributor",
+      "check": "uploadRenew",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "uploadId": "synthetic-rendition-upload"
+      },
+      "arrange": {
+        "viewer": {
+          "userId": "synthetic-user-contributor",
+          "membership": {
+            "role": "contributor",
+            "state": "active",
+            "revision": 3
+          }
+        },
+        "item": {
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          },
+          "state": "published",
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
+          }
+        },
+        "upload": {
+          "id": "synthetic-older-upload",
+          "expiresAt": "2026-11-07T00:10:00.000Z",
+          "state": "reserved"
+        },
+        "now": "2026-11-07T00:00:00.000Z"
+      },
+      "expected": {
+        "status": 409,
+        "code": "stale_render",
+        "invariants": [
+          "only_latest_intent"
+        ]
+      }
+    },
+    {
+      "id": "renew-after-removal",
+      "operation": "albumItems.renewUpload",
+      "actor": "removed-member",
+      "check": "uploadRenew",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "uploadId": "synthetic-rendition-upload"
+      },
+      "arrange": {
+        "viewer": {
+          "userId": "synthetic-user-contributor",
+          "membership": {
+            "role": "contributor",
+            "state": "removed",
+            "revision": 4
+          }
+        },
+        "item": {
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          },
+          "state": "preparing",
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": null
+          }
+        },
+        "upload": {
+          "id": "synthetic-rendition-upload",
+          "expiresAt": "2026-11-07T00:10:00.000Z",
+          "state": "reserved"
+        },
+        "now": "2026-11-07T00:00:00.000Z"
+      },
+      "expected": {
+        "status": 404,
+        "code": "not_found",
+        "invariants": [
+          "no_ticket_after_revocation"
+        ]
+      }
+    },
+    {
+      "id": "renew-after-demotion",
+      "operation": "albumItems.renewUpload",
+      "actor": "contributor",
+      "check": "uploadRenew",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "uploadId": "synthetic-rendition-upload"
+      },
+      "arrange": {
+        "viewer": {
+          "userId": "synthetic-user-contributor",
+          "membership": {
+            "role": "viewer",
+            "state": "active",
+            "revision": 4
+          }
+        },
+        "item": {
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          },
+          "state": "preparing",
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": null
+          }
+        },
+        "upload": {
+          "id": "synthetic-rendition-upload",
+          "expiresAt": "2026-11-07T00:10:00.000Z",
+          "state": "reserved"
+        },
+        "now": "2026-11-07T00:00:00.000Z"
+      },
+      "expected": {
+        "status": 403,
+        "code": "role_forbidden",
+        "invariants": [
+          "no_ticket_after_revocation"
+        ]
+      }
+    },
+    {
+      "id": "removed-adder-preparing-dropped",
+      "operation": "members.remove",
+      "actor": "owner",
+      "check": "adderRevoked",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "membershipId": "synthetic-membership-contributor"
+      },
+      "arrange": {
+        "item": {
+          "state": "preparing",
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          }
+        },
+        "revoked": "contributor"
+      },
+      "expected": {
+        "status": 200,
+        "itemState": "removed",
+        "invariants": [
+          "drop_additions_in_progress",
+          "cancel_uploads_and_jobs"
+        ]
+      }
+    },
+    {
+      "id": "demoted-adder-pending-replace-reverts",
+      "operation": "members.changeRole",
+      "actor": "owner",
+      "check": "adderRevoked",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "membershipId": "synthetic-membership-contributor",
+        "expectedRevision": 3,
+        "role": "viewer"
+      },
+      "arrange": {
+        "item": {
+          "state": "updatePending",
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          }
+        },
+        "revoked": "contributor"
+      },
+      "expected": {
+        "status": 200,
+        "itemState": "published",
+        "invariants": [
+          "previous_rendition_restored",
+          "cancel_uploads_and_jobs"
+        ]
+      }
+    },
+    {
+      "id": "left-adder-published-stays",
+      "operation": "members.leave",
+      "actor": "contributor",
+      "check": "adderRevoked",
+      "request": {
+        "albumId": "synthetic-album-a"
+      },
+      "arrange": {
+        "item": {
+          "state": "published",
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          }
+        },
+        "revoked": "contributor"
+      },
+      "expected": {
+        "status": 200,
+        "itemState": "published",
+        "invariants": [
+          "published_items_stay"
+        ]
+      }
+    },
+    {
+      "id": "revoked-adder-other-item-unchanged",
+      "operation": "members.remove",
+      "actor": "owner",
+      "check": "adderRevoked",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "membershipId": "synthetic-membership-contributor"
+      },
+      "arrange": {
+        "item": {
+          "state": "preparing",
+          "addedBy": {
+            "userId": "synthetic-user-a",
+            "displayName": "Synthetic Owner"
+          }
+        },
+        "revoked": "contributor"
+      },
+      "expected": {
+        "status": 200,
+        "itemState": "preparing",
+        "invariants": [
+          "other_people_items_unchanged"
+        ]
+      }
+    },
+    {
+      "id": "pending-join-after-sign-in",
+      "operation": "invites.joinPending",
+      "actor": "contributor",
+      "check": "pendingInviteJoin",
+      "request": {},
+      "arrange": {
+        "pending": {
+          "id": "synthetic-pending-invite",
+          "secret": "synthetic-invite-secret",
+          "heldBy": null,
+          "expiresAt": "2026-11-07T00:15:00.000Z"
+        },
+        "consumed": false,
+        "now": "2026-11-07T00:05:00.000Z",
+        "expectCookieCleared": true
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "upstream_join_unchanged",
+          "cookie_cleared_after_attempt",
+          "secret_never_readable_by_page"
+        ]
+      }
+    },
+    {
+      "id": "pending-join-expired",
+      "operation": "invites.joinPending",
+      "actor": "contributor",
+      "check": "pendingInviteJoin",
+      "request": {},
+      "arrange": {
+        "pending": {
+          "id": "synthetic-pending-invite",
+          "secret": "synthetic-invite-secret",
+          "heldBy": null,
+          "expiresAt": "2026-11-07T00:04:00.000Z"
+        },
+        "consumed": false,
+        "now": "2026-11-07T00:05:00.000Z",
+        "expectCookieCleared": true
+      },
+      "expected": {
+        "status": 410,
+        "code": "invite_unavailable",
+        "invariants": [
+          "pending_expires_after_15_minutes",
+          "cookie_cleared_after_attempt"
+        ]
+      }
+    },
+    {
+      "id": "pending-join-used",
+      "operation": "invites.joinPending",
+      "actor": "contributor",
+      "check": "pendingInviteJoin",
+      "request": {},
+      "arrange": {
+        "pending": {
+          "id": "synthetic-pending-invite",
+          "secret": "synthetic-invite-secret",
+          "heldBy": null,
+          "expiresAt": "2026-11-07T00:15:00.000Z"
+        },
+        "consumed": true,
+        "now": "2026-11-07T00:05:00.000Z",
+        "expectCookieCleared": true
+      },
+      "expected": {
+        "status": 410,
+        "code": "invite_unavailable",
+        "invariants": [
+          "pending_used_once",
+          "cookie_cleared_after_attempt"
+        ]
+      }
+    },
+    {
+      "id": "pending-join-other-user",
+      "operation": "invites.joinPending",
+      "actor": "contributor",
+      "check": "pendingInviteJoin",
+      "request": {},
+      "arrange": {
+        "pending": {
+          "id": "synthetic-pending-invite",
+          "secret": "synthetic-invite-secret",
+          "heldBy": "synthetic-user-viewer",
+          "expiresAt": "2026-11-07T00:15:00.000Z"
+        },
+        "consumed": false,
+        "now": "2026-11-07T00:05:00.000Z",
+        "expectCookieCleared": true
+      },
+      "expected": {
+        "status": 410,
+        "code": "invite_unavailable",
+        "invariants": [
+          "pending_bound_to_holder",
+          "cookie_cleared_after_attempt"
+        ]
+      }
+    },
+    {
+      "id": "pending-join-no-cookie",
+      "operation": "invites.joinPending",
+      "actor": "contributor",
+      "check": "pendingInviteJoin",
+      "request": {},
+      "arrange": {
+        "pending": null,
+        "consumed": false,
+        "now": "2026-11-07T00:05:00.000Z",
+        "expectCookieCleared": true
+      },
+      "expected": {
+        "status": 410,
+        "code": "invite_unavailable",
+        "invariants": [
+          "no_pending_no_join"
+        ]
+      }
+    },
+    {
+      "id": "pending-join-before-sign-in",
+      "operation": "invites.joinPending",
+      "actor": "none",
+      "check": "pendingInviteJoin",
+      "request": {},
+      "arrange": {
+        "pending": {
+          "id": "synthetic-pending-invite",
+          "secret": "synthetic-invite-secret",
+          "heldBy": null,
+          "expiresAt": "2026-11-07T00:15:00.000Z"
+        },
+        "consumed": false,
+        "now": "2026-11-07T00:05:00.000Z",
+        "expectCookieCleared": false
+      },
+      "expected": {
+        "status": 401,
+        "code": "unauthenticated",
+        "invariants": [
+          "pending_kept_until_sign_in",
+          "no_upstream_join"
+        ]
+      }
+    },
+    {
+      "id": "pending-join-held-by-same-user",
+      "operation": "invites.joinPending",
+      "actor": "contributor",
+      "check": "pendingInviteJoin",
+      "request": {},
+      "arrange": {
+        "pending": {
+          "id": "synthetic-pending-invite",
+          "secret": "synthetic-invite-secret",
+          "heldBy": "synthetic-user-contributor",
+          "expiresAt": "2026-11-07T00:15:00.000Z"
+        },
+        "consumed": false,
+        "now": "2026-11-07T00:05:00.000Z",
+        "expectCookieCleared": true
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "pending_bound_to_holder",
+          "cookie_cleared_after_attempt"
         ]
       }
     }

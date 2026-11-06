@@ -1,20 +1,20 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import { test } from "node:test";
-import { PHOTO_LIBRARY_CONTRACT_VERSION, PHOTO_LIMITS } from "../../photo-library-contract/src/v2.ts";
+import { PHOTO_ERROR_STATUS, PHOTO_LIBRARY_CONTRACT_VERSION, PHOTO_LIMITS } from "../../photo-library-contract/src/v2.ts";
 import { library as personalLibrary, maskedPhoto } from "../../photo-library-contract/fixtures/v2.ts";
 import {
   ALBUM_ACTIONS, ALBUM_ITEM_KINDS, ALBUM_ITEM_PENDING_REASONS, ALBUM_ITEM_PENDING_TRANSITIONS, ALBUM_ITEM_STATES,
   ALBUM_ITEM_TRANSITIONS, ALBUM_PERMISSIONS, ALBUM_ROLES,
   CONNECTOR_OPERATION_ACCESS, CONNECTOR_REQUEST_SHAPES, DEFAULT_LIBRARY_KIND, FULL_RESOLUTION_EXPORT_TRANSITIONS, HOST_CONNECTOR_STATES,
-  HOST_CONNECTOR_TRANSITIONS, LIBRARY_KINDS, MEMBERSHIP_TRANSITIONS, MEMBER_ROLES, PHOTO_LIBRARY_SHARING_CONTRACT_VERSION,
+  HOST_CONNECTOR_TRANSITIONS, LIBRARY_KINDS, MEMBERSHIP_TRANSITIONS, MEMBER_ROLES, PENDING_INVITE_COOKIE, PHOTO_LIBRARY_SHARING_CONTRACT_VERSION,
   RENDER_JOB_TRANSITIONS, RENDITION_METADATA_FIELDS, SHARING_ERROR_RECOVERY, SHARING_ERROR_STATUS, SHARING_LIMITS,
   SHARING_OPERATION_ACCESS, SHARING_REQUEST_SHAPES,
 } from "../src/v1.ts";
 import {
   checkAlbumName, checkCursor, compareIdempotency, decideReplicaPull, compareRenderBinding, decideAddPhoto, decideAlbumAction, decideHostedRecipeSave,
   decideJoin, decideLibraryAccess, decideMembershipChange, decidePairingApproval, decideRenderCommit, decideReplaceStart,
-  decideUploadCommit, findForbiddenMetadata, findUnexpectedConnectorFields, findUnexpectedRequestFields, inviteLinkStatus,
+  decidePendingInviteJoin, decideUploadCommit, decideUploadRenew, findUnexpectedPendingInviteFields, holdPendingInvite, findDisallowedRenditionMetadata, findForbiddenMetadata, itemStateAfterAdderRevoked, findUnexpectedConnectorFields, findUnexpectedRequestFields, inviteLinkStatus,
   nextAlbumItemState, nextPendingReason, nextRenderJobState,
   projectAlbumItem, quotaExceededError, sanitizeRenditionMetadata,
 } from "../src/policy.ts";
@@ -86,6 +86,13 @@ test("every operation has one access rule, closed request keys, an owner Issue a
     assert(row.evidence.length > 10, operation);
   }
   assert.deepEqual(Object.keys(SHARING_REQUEST_SHAPES).sort(), [...userOperations].sort());
+  // BFF だけの経路（未ログインで開いた招待）は上流の操作表に入れない
+  assert.deepEqual(Object.keys(coverage.bffOperations).sort(), ["invites.holdPending", "invites.joinPending"]);
+  for (const [operation, row] of Object.entries(coverage.bffOperations)) {
+    assert(!(operation in SHARING_OPERATION_ACCESS) && !(operation in coverage.operations), operation);
+    assert.equal(row.backend, "missing", operation);
+  }
+  assert.deepEqual(Object.keys(fixtures.pendingInviteResponses).sort(), Object.keys(coverage.bffOperations).sort());
   assert.deepEqual(Object.keys(CONNECTOR_REQUEST_SHAPES).sort(), [...connectorOperations].sort());
   assert.equal(SHARING_OPERATION_ACCESS["albumItems.addPhoto"].requiresOwnSource, true);
   assert.deepEqual(Object.keys(fixtures.responses).sort(), userOperations.filter((op) => !STREAM_OPERATIONS.includes(op)).sort());
@@ -188,6 +195,60 @@ test("renditions carry only the metadata allow-list", () => {
     capturedAt: null, capturedAtOffset: null, colorProfile: "sRGB", orientation: 1,
   });
   assert.deepEqual(findForbiddenMetadata(sanitizeRenditionMetadata(decoded)), []);
+  // 確定は許可した項目だけ: 位置・シリアル・パス以外の項目も拒否し、作り直した metadata は通す
+  const disallowed = findDisallowedRenditionMetadata(decoded).map((hit) => `${hit.category}:${hit.key}`).sort();
+  assert.deepEqual(disallowed, [
+    "location:GPSLatitude", "notAllowed:Make", "notAllowed:Model", "path:DocumentName", "path:nested.xmpMM.DerivedFrom",
+    "serial:BodySerialNumber", "serial:CameraOwnerName", "serial:LensSerialNumber",
+  ]);
+  assert.deepEqual(findDisallowedRenditionMetadata(sanitizeRenditionMetadata(decoded)), []);
+  assert.deepEqual(findDisallowedRenditionMetadata(fixtures.renditionMetadata), []);
+  for (const bad of [{ orientation: 6 }, { colorProfile: "AdobeRGB" }, { capturedAt: "2026:11:01 09:30:00" }, { Software: "synthetic" }, { capturedAt: { nested: true } }]) {
+    assert.equal(findDisallowedRenditionMetadata(bad).length, 1, JSON.stringify(bad));
+  }
+});
+
+test("a link opened before signing in is held for 15 minutes in a cookie the page cannot read, then used once", () => {
+  assert.deepEqual(PENDING_INVITE_COOKIE, {
+    httpOnly: true, secure: true, sameSite: "Lax", path: "/cloud/sharing/v1/invites/pending", maxAgeSeconds: 15 * 60,
+  });
+  assert.equal(SHARING_LIMITS.pendingInviteLifetimeSeconds, PENDING_INVITE_COOKIE.maxAgeSeconds);
+  const held = holdPendingInvite({ id: "p1", secret: "synthetic-invite-secret", actorId: null, now: fixtures.TIME });
+  assert.deepEqual(held, { id: "p1", secret: "synthetic-invite-secret", heldBy: null, expiresAt: "2026-11-07T00:15:00.000Z" });
+  const join = (overrides) => decidePendingInviteJoin({ actorId: fixtures.USERS.contributor, pending: held, consumed: false, now: fixtures.TIME, ...overrides });
+  assert.deepEqual(join({}), { ok: true, clearCookie: true });
+  assert.deepEqual(join({ actorId: null }), { ok: false, code: "unauthenticated", clearCookie: false }, "kept for after sign-in");
+  assert.deepEqual(join({ now: held.expiresAt }), { ok: false, code: "invite_unavailable", clearCookie: true });
+  assert.deepEqual(join({ consumed: true }), { ok: false, code: "invite_unavailable", clearCookie: true });
+  assert.deepEqual(join({ pending: null }), { ok: false, code: "invite_unavailable", clearCookie: true });
+  const signedIn = holdPendingInvite({ id: "p2", secret: "s", actorId: fixtures.USERS.viewer, now: fixtures.TIME });
+  assert.deepEqual(join({ pending: signedIn }), { ok: false, code: "invite_unavailable", clearCookie: true }, "someone else signed in");
+  assert.deepEqual(join({ pending: signedIn, actorId: fixtures.USERS.viewer }), { ok: true, clearCookie: true });
+  // 上流の join の形は変えない。保留の経路は BFF だけ
+  assert.deepEqual(SHARING_REQUEST_SHAPES["invites.join"], { secret: "value" });
+  assert.deepEqual(findUnexpectedPendingInviteFields("invites.joinPending", { secret: "x" }), ["secret"], "the page never sends the secret again");
+  assert.deepEqual(findUnexpectedPendingInviteFields("invites.holdPending", { secret: "x", albumId: "a" }), ["albumId"]);
+  assert(!("invites.preview" in SHARING_OPERATION_ACCESS), "no preview operation: joining notifies the owner");
+});
+
+test("albums carry the member count every member may see", () => {
+  for (const album of [fixtures.albumForOwner, fixtures.albumForContributor, fixtures.albumForViewer]) {
+    assert.equal(album.memberCount, 3);
+  }
+  assert.equal(fixtures.responses["albums.create"].value.memberCount, 1);
+});
+
+test("an adder who loses the right to add drops additions in progress and reverts pending replacements", () => {
+  const item = (state, adder) => ({ state, addedBy: fixtures.PEOPLE[adder] });
+  const revoked = fixtures.USERS.contributor;
+  assert.equal(itemStateAfterAdderRevoked(item("preparing", "contributor"), revoked), "removed");
+  assert.equal(itemStateAfterAdderRevoked(item("updatePending", "contributor"), revoked), "published");
+  assert.equal(itemStateAfterAdderRevoked(item("published", "contributor"), revoked), "published");
+  assert.equal(itemStateAfterAdderRevoked(item("removed", "contributor"), revoked), "removed");
+  assert.equal(itemStateAfterAdderRevoked(item("preparing", "owner"), revoked), "preparing", "other people's items do not change");
+  for (const [state, next] of Object.entries(ALBUM_ITEM_TRANSITIONS)) {
+    if (state !== "removed") assert.ok("adderRevoked" in next, state);
+  }
 });
 
 test("the personal v2 contract stays unchanged and only maps one way", () => {
@@ -296,7 +357,7 @@ test("commit decisions bind the executor, the job's verified upload and the late
   assert.deepEqual(decideReplaceStart(viewer, pending, { expectedRevision: 1, content: content(newer) }), { ok: false, code: "stale_render" });
   const commit = (uploadId) => decideUploadCommit({
     viewer, item: { ...fixtures.snapshots.memberItem, pendingUpload: { uploadId: "u-newest", binding: newest } },
-    upload: { id: uploadId, targetItemRevision: 2, expiresAt: fixtures.LATER, state: "reserved" }, bytesMetadata: {}, now: fixtures.TIME,
+    upload: { id: uploadId, targetItemRevision: 2, expiresAt: fixtures.LATER, state: "reserved", sizeBytes: 8, uploadedBytes: 8 }, bytesMetadata: {}, now: fixtures.TIME,
   });
   assert.deepEqual(commit("u-older"), { ok: false, code: "stale_render" });
   assert.deepEqual(commit("u-newest"), { ok: true });
@@ -312,6 +373,9 @@ test("error codes have one status and one recovery each", () => {
   for (const code of ["not_found", "item_removed", "invite_unavailable"]) assert.notEqual(SHARING_ERROR_RECOVERY[code], "retrySameKey");
   assert.equal(SHARING_ERROR_RECOVERY.stale_render, "discardResult");
   assert.equal(SHARING_ERROR_RECOVERY.temporarily_unavailable, "retrySameKey");
+  // v2 と同じ意味のコードは同じ名前・同じ status
+  assert.equal(SHARING_ERROR_STATUS.upload_state_conflict, PHOTO_ERROR_STATUS.upload_state_conflict);
+  assert.equal(SHARING_ERROR_STATUS.upload_expired, PHOTO_ERROR_STATUS.upload_expired);
 });
 
 // ---------------------------------------------------------------------------------------------------------
@@ -320,7 +384,9 @@ test("error codes have one status and one recovery each", () => {
 const actorId = (label) => vectors.actors[label] ?? null;
 const unexpected = (operation, request) => operation in SHARING_REQUEST_SHAPES
   ? findUnexpectedRequestFields(operation, request)
-  : findUnexpectedConnectorFields(operation, request);
+  : operation in coverage.bffOperations
+    ? findUnexpectedPendingInviteFields(operation, request)
+    : findUnexpectedConnectorFields(operation, request);
 const success = (operation, created) => ({ status: created ? 201 : 200 });
 const fromDecision = (decision, operation) => decision.ok ? success(operation, CREATE_OPERATIONS.has(operation)) : { status: SHARING_ERROR_STATUS[decision.code], code: decision.code };
 
@@ -359,6 +425,15 @@ function evaluate(vector) {
       return fromDecision(decideRenderCommit(arrange), operation);
     case "uploadCommit":
       return fromDecision(decideUploadCommit(arrange), operation);
+    case "uploadRenew":
+      return fromDecision(decideUploadRenew(arrange), operation);
+    case "pendingInviteJoin": {
+      const decision = decidePendingInviteJoin({ actorId: userId, pending: arrange.pending, consumed: arrange.consumed, now: arrange.now });
+      assert.equal(decision.clearCookie, arrange.expectCookieCleared, vector.id);
+      return decision.ok ? success(operation, false) : fromDecision(decision, operation);
+    }
+    case "adderRevoked":
+      return { status: 200, itemState: itemStateAfterAdderRevoked(arrange.item, actorId(arrange.revoked)) };
     case "revision":
       return fromDecision(arrange.expectedRevision === arrange.currentRevision ? { ok: true } : { ok: false, code: "revision_conflict" }, operation);
     case "hostedSave": {
@@ -393,14 +468,18 @@ test("every conformance vector matches the reference policy", () => {
   const ids = vectors.cases.map((item) => item.id);
   assert.equal(new Set(ids).size, ids.length);
   for (const vector of vectors.cases) {
-    assert(vector.operation in coverage.operations, vector.id);
+    assert(vector.operation in coverage.operations || vector.operation in coverage.bffOperations, vector.id);
     assert(vector.expected.invariants.length > 0, vector.id);
     if (vector.expected.code) assert.equal(SHARING_ERROR_STATUS[vector.expected.code], vector.expected.status, vector.id);
     if (vector.check !== "closedRequest") assert.deepEqual(unexpected(vector.operation, vector.request), [], vector.id);
     const actual = evaluate(vector);
     const expected = vector.expected.code
       ? { status: vector.expected.status, code: vector.expected.code }
-      : { status: vector.expected.status, ...(vector.expected.replica ? { replica: vector.expected.replica } : {}) };
+      : {
+        status: vector.expected.status,
+        ...(vector.expected.replica ? { replica: vector.expected.replica } : {}),
+        ...(vector.expected.itemState ? { itemState: vector.expected.itemState } : {}),
+      };
     assert.deepEqual(actual, expected, vector.id);
   }
 });
@@ -424,6 +503,16 @@ test("B00 negative categories are all present", () => {
       "replica-pull-compacted", "replica-pull-ahead-of-niho", "replica-pull-snapshot",
     ],
     renderOutputs: ["job-full-resolution-output", "job-downscaled-output", "job-superseded-output", "claim-unknown-result-replay"],
+    adderRevoked: [
+      "removed-adder-preparing-dropped", "demoted-adder-pending-replace-reverts", "left-adder-published-stays", "revoked-adder-other-item-unchanged",
+      "renew-after-removal", "renew-after-demotion",
+    ],
+    metadataAllowList: ["rendition-with-camera-model", "rendition-with-software", "rendition-with-rotated-orientation", "job-output-with-lens", "rendition-allowed-only"],
+    pendingInvite: [
+      "pending-join-after-sign-in", "pending-join-expired", "pending-join-used", "pending-join-other-user", "pending-join-no-cookie",
+      "pending-join-before-sign-in", "pending-join-held-by-same-user",
+    ],
+    uploadState: ["commit-before-bytes", "job-commit-before-bytes", "renew-reserved-upload", "renew-committed-upload", "renew-expired-upload", "renew-older-upload"],
   };
   for (const [category, list] of Object.entries(required)) for (const id of list) assert(ids.has(id), `${category}:${id}`);
 });

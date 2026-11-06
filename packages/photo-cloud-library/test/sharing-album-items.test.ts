@@ -206,15 +206,16 @@ describe("shared album items (B12)", () => {
     expect(t.server.storageOf(OWNER).reservedBytes).toBe(0);
   });
 
-  it("a lost answer adds once; a lost upload ticket restarts the upload on the same item", async () => {
+  it("a lost answer adds once; a lost upload ticket is renewed for the same upload", async () => {
     const t = setup();
     const album = await t.sharedAlbum();
     t.server.loseNextResponse();
     const item = await t.member.addFile(album.id, FILE, t.signal);
-    // addFile (answer lost) → replay without ticket → cancel → replace on the same item → upload → commit.
+    // addFile (answer lost) → replay without ticket → a fresh ticket for the same upload → upload → commit.
     expect(t.server.calls("albumItems.addFile")).toBe(2);
-    expect(t.server.calls("albumItems.cancelUpload")).toBe(1);
-    expect(t.server.calls("albumItems.replace")).toBe(1);
+    expect(t.server.calls("albumItems.renewUpload")).toBe(1);
+    expect(t.server.calls("albumItems.cancelUpload")).toBe(0);
+    expect(t.server.calls("albumItems.replace")).toBe(0);
     expect(item).toMatchObject({ state: "published", revision: 1 });
     expect(ids((await t.owner.listItems(album.id, {}, t.signal)).items)).toEqual([item.id]);
     expect(t.server.storageOf(OWNER)).toEqual({ usedBytes: FILE.bytes.length, reservedBytes: 0 });
@@ -224,6 +225,22 @@ describe("shared album items (B12)", () => {
     t.server.loseNextResponse();
     expect(okItems(await t.member.addLibraryPhotos(album.id, [t.libraryPhoto(MEMBER, "once")], t.signal))).toHaveLength(1);
     expect((await t.member.listItems(album.id, {}, t.signal)).items.filter((entry) => entry.kind === "memberEdit")).toHaveLength(1);
+  });
+
+  it("renews the ticket of the adder's own reserved upload only (B00 albumItems.renewUpload)", async () => {
+    const t = setup();
+    const album = await t.sharedAlbum();
+    const memberClient = t.server.clientFor(MEMBER);
+    const added = (await memberClient.request("albumItems.addFile", { albumId: album.id, rendition: FILE.rendition }, { signal: t.signal, idempotencyKey: "add-1" })).value;
+    const uploadId = added.upload?.upload.id as string;
+    const renewed = await memberClient.request("albumItems.renewUpload", { albumId: album.id, uploadId }, { signal: t.signal });
+    expect(renewed).toMatchObject({ upload: { id: uploadId, state: "reserved" }, ticket: { resumeOffsetBytes: 0 } });
+    // Someone else's upload is indistinguishable from a missing one, even for the owner.
+    expect(await rejection(t.server.clientFor(OWNER).request("albumItems.renewUpload", { albumId: album.id, uploadId }, { signal: t.signal }))).toBe("not_found");
+    await t.server.uploader.upload(renewed.ticket as never, FILE.bytes, "image/jpeg", t.signal);
+    await memberClient.request("albumItems.commitUpload", { albumId: album.id, uploadId }, { signal: t.signal, idempotencyKey: "commit-1" });
+    // A committed upload is no longer the item's pending one (B00 decideUploadRenew).
+    expect(await rejection(memberClient.request("albumItems.renewUpload", { albumId: album.id, uploadId }, { signal: t.signal }))).toBe("stale_render");
   });
 
   it("an interrupted upload or a cancelled add releases the reservation and leaves no unfinished item", async () => {

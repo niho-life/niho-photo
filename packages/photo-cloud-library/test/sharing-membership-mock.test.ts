@@ -235,6 +235,15 @@ describe("shared album membership mock (B05)", () => {
     expect((await t.owner.request("albumItems.remove", { albumId: album.id, itemId: staffAdd.item.id }, t.key())).value.state).toBe("removed");
   });
 
+  it("does not commit an addition before every byte arrived (B00 upload_state_conflict)", async () => {
+    const t = setup();
+    const { album } = await albumWithLinks(t);
+    const added = (await t.owner.request("albumItems.addFile", { albumId: album.id, rendition: RENDITION }, t.key())).value;
+    expect(await rejection(t.owner.request("albumItems.commitUpload", { albumId: album.id, uploadId: added.upload?.upload.id as string }, t.key()))).toBe("upload_state_conflict");
+    await t.server.uploader.upload(added.upload?.ticket as never, FILE, "image/jpeg", t.signal);
+    expect((await t.owner.request("albumItems.commitUpload", { albumId: album.id, uploadId: added.upload?.upload.id as string }, t.key())).value.state).toBe("published");
+  });
+
   it("direct IDs and old cursors never reach photos outside the viewer's shared scope", async () => {
     const t = setup();
     const { album, contributorLink } = await albumWithLinks(t);

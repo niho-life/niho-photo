@@ -233,6 +233,19 @@ describe("source-device render executor (B07)", () => {
       .rejects.toMatchObject({ error: { code: "content_rejected" } });
   });
 
+  it("the server does not commit an output before every byte arrived (B00 upload_state_conflict)", async () => {
+    const t = setup({ photos: ["photo-early"] });
+    t.add("item-early", "photo-early");
+    const [claimed] = (await t.server.transport.request("renderJobs.claim", { maxJobs: 1 }, { signal: t.signal, idempotencyKey: "manual-claim" })).value.jobs;
+    const bytes = syntheticJpeg({ width: 1200, height: 800 });
+    const start = await t.server.transport.request("renderJobs.startOutput", {
+      jobId: claimed.job.id, leaseToken: claimed.lease.leaseToken,
+      output: { kind: "rendition", sizeBytes: bytes.length, sha256: hex(bytes), contentType: "image/jpeg", width: 1200, height: 800, metadata: { capturedAt: null, capturedAtOffset: null, colorProfile: "sRGB", orientation: 1 } },
+    }, { signal: t.signal, idempotencyKey: "manual-start" });
+    await expect(t.server.transport.request("renderJobs.commit", { jobId: claimed.job.id, leaseToken: claimed.lease.leaseToken, uploadId: start.value.uploadId }, { signal: t.signal, idempotencyKey: "manual-commit" }))
+      .rejects.toMatchObject({ error: { code: "upload_state_conflict" } });
+  });
+
   it("the server also refuses an output whose only extra is a comment or camera field, not just location", async () => {
     const t = setup({ photos: ["photo-comment"] });
     t.add("item-comment", "photo-comment");

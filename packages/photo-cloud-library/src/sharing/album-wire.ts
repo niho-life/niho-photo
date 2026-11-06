@@ -48,6 +48,7 @@ export const SHARED_ALBUM_ITEM_OPERATIONS = [
   "albumItems.replace",
   "albumItems.commitUpload",
   "albumItems.cancelUpload",
+  "albumItems.renewUpload",
   "albumItems.remove",
 ] as const;
 export type SharedAlbumItemOperation = (typeof SHARED_ALBUM_ITEM_OPERATIONS)[number];
@@ -163,6 +164,7 @@ export function validateAlbumItemRequest(operation: SharedAlbumItemOperation, re
     }
     case "albumItems.commitUpload":
     case "albumItems.cancelUpload":
+    case "albumItems.renewUpload":
       if (!isOpaqueWireId(required("uploadId"))) invalidRequest();
       return;
   }
@@ -233,6 +235,14 @@ export function validateAlbumItemResponse<K extends SharedAlbumItemOperation>(
       const item = validateAlbumItem(validateReceipt(raw).value, albumId);
       if (item.state !== "published" && item.state !== "updatePending") invalidResponse();
       if (!item.addedBy.isSelf) invalidResponse();
+      return done;
+    }
+    case "albumItems.renewUpload": {
+      // Not a mutation (like v2 `uploads.renew`): a fresh ticket for the same reserved upload.
+      const renewed = exactRecord(raw, ["upload", "ticket"], ["upload", "ticket"]);
+      const upload = validateUpload(renewed.upload, albumId);
+      if (upload.id !== (request as SharingOperationMap["albumItems.renewUpload"]["request"]).uploadId || upload.state !== "reserved") invalidResponse();
+      validateTicketShape(renewed.ticket);
       return done;
     }
     case "albumItems.cancelUpload": {
