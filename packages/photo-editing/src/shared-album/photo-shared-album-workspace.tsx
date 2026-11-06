@@ -41,9 +41,12 @@ type Screen =
   | { readonly kind: "list" }
   | { readonly kind: "album"; readonly albumId: string }
   | { readonly kind: "joining" }
-  | { readonly kind: "inviteUnavailable" };
+  | { readonly kind: "inviteUnavailable" }
+  /** The join could not be completed now (lost answer, rate limit); the same link can be tried again. */
+  | { readonly kind: "joinFailed" };
 
-type Pending = { readonly upload: PhotoSharedAlbumUpload; readonly file: File };
+/** An addition belongs to the album it was started in: it is shown and retried there only. */
+type Pending = { readonly albumId: string; readonly upload: PhotoSharedAlbumUpload; readonly file: File };
 
 /**
  * 「共有アルバム」の画面（一覧・アルバム・共有シート・招待）を口につなぐ（B08 #249）。部品は通信を持たないので、読み込み・追加の
@@ -63,6 +66,8 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
   const [people, setPeople] = useState<PhotoSharedAlbumPeople | null>(null);
   const [peopleToken, setPeopleToken] = useState(0);
   const [uploads, setUploads] = useState<readonly Pending[]>([]);
+  const [saveFailure, setSaveFailure] = useState<{ readonly albumId: string; readonly itemIds: readonly string[] } | null>(null);
+  const [joinAttempt, setJoinAttempt] = useState(0);
   const [originalsNote, setOriginalsNote] = useState(() => !port.originalsNoteShown());
   const lifetime = useRef(new AbortController());
   const queueRef = useRef<Promise<void>>(Promise.resolve());
@@ -81,23 +86,27 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
   const inviteSecret = props.inviteSecret ?? null;
   const onInviteHandledRef = useRef(props.onInviteHandled);
   onInviteHandledRef.current = props.onInviteHandled;
-  const joinedSecretRef = useRef<string | null>(null);
+  const settledSecretRef = useRef<string | null>(null);
   useEffect(() => {
-    // One join per secret, even when the parent re-renders or the effect runs twice in development.
-    if (!inviteSecret || joinedSecretRef.current === inviteSecret) return;
-    joinedSecretRef.current = inviteSecret;
-    const signal = lifetime.current.signal;
+    // One settled join per secret. An effect that is cleaned up before its answer (a re-render or a development
+    // remount) aborts and the next run joins again; the secret is handed back only after a definite answer.
+    if (!inviteSecret || settledSecretRef.current === inviteSecret) return;
+    const controller = new AbortController();
     setScreen({ kind: "joining" });
-    port.join(inviteSecret, signal).then(
+    port.join(inviteSecret, controller.signal).then(
       (result) => {
-        if (signal.aborted) return;
+        if (controller.signal.aborted) return;
+        settledSecretRef.current = inviteSecret;
         setScreen(result.kind === "joined" ? { kind: "album", albumId: result.albumId } : { kind: "inviteUnavailable" });
+        onInviteHandledRef.current?.();
       },
       () => {
-        if (!signal.aborted) setScreen({ kind: "inviteUnavailable" });
+        // Not definite: keep the secret so the same link can be tried again.
+        if (!controller.signal.aborted) setScreen({ kind: "joinFailed" });
       },
-    ).finally(() => onInviteHandledRef.current?.());
-  }, [inviteSecret, port]);
+    );
+    return () => controller.abort();
+  }, [inviteSecret, port, joinAttempt]);
 
   // 一覧
   useEffect(() => {
@@ -191,12 +200,25 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
     }
   }, [openAlbum, port]);
 
+  const runSave = useCallback((target: string, itemIds: readonly string[]) => {
+    setSaveFailure(null);
+    port.save(target, itemIds, lifetime.current.signal).then(
+      (result) => {
+        if (result.failed > 0 && !lifetime.current.signal.aborted) setSaveFailure({ albumId: target, itemIds });
+      },
+      () => {
+        if (!lifetime.current.signal.aborted) setSaveFailure({ albumId: target, itemIds });
+      },
+    );
+  }, [port]);
+
   const setUpload = useCallback((uploadId: string, change: Partial<PhotoSharedAlbumUpload>) => {
     setUploads((current) => current.map((pending) => (pending.upload.uploadId === uploadId ? { ...pending, upload: { ...pending.upload, ...change } } : pending)));
   }, []);
 
   /** 1 枚ずつ順に足す（同じアルバムへの追加の順序を保ち、端末の帯域を分け合わない）。 */
-  const runUpload = useCallback((target: string, pending: Pending) => {
+  const runUpload = useCallback((pending: Pending) => {
+    const target = pending.albumId;
     queueRef.current = queueRef.current.then(async () => {
       const signal = lifetime.current.signal;
       if (signal.aborted) return;
@@ -220,6 +242,7 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
     const target = albumIdRef.current;
     if (target === null || files.length === 0) return;
     const added = files.map((file, index): Pending => ({
+      albumId: target,
       file,
       upload: {
         uploadId: `upload-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`,
@@ -231,20 +254,22 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
       },
     }));
     setUploads((current) => [...current, ...added]);
-    for (const pending of added) runUpload(target, pending);
+    for (const pending of added) runUpload(pending);
   }, [runUpload]);
 
   const retryUpload = useCallback((uploadId: string) => {
-    const target = albumIdRef.current;
-    const pending = uploadsRef.current.find((entry) => entry.upload.uploadId === uploadId);
-    if (target === null || !pending) return;
+    // Retried in the album it was started in, whichever album is open now.
+    const pending = uploadsRef.current.find((entry) => entry.upload.uploadId === uploadId && entry.albumId === albumIdRef.current);
+    if (!pending) return;
     setUpload(uploadId, { phase: "waiting", reason: null });
-    runUpload(target, pending);
+    runUpload(pending);
   }, [runUpload, setUpload]);
 
   const dismissUploads = useCallback(() => {
+    const target = albumIdRef.current;
     setUploads((current) => {
-      const keep = current.filter((pending) => pending.upload.phase === "waiting" || pending.upload.phase === "sending" || pending.upload.phase === "checking");
+      const keep = current.filter((pending) => pending.albumId !== target
+        || pending.upload.phase === "waiting" || pending.upload.phase === "sending" || pending.upload.phase === "checking");
       for (const pending of current) if (!keep.includes(pending) && pending.upload.previewUrl) URL.revokeObjectURL(pending.upload.previewUrl);
       return keep;
     });
@@ -267,6 +292,16 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
   if (screen.kind === "inviteUnavailable") {
     return <PhotoSharedAlbumInvite phase="unavailable" onGoToAlbums={backToList} />;
   }
+  if (screen.kind === "joinFailed") {
+    return (
+      <section className="flex h-full min-h-0 flex-col items-center justify-center gap-4 p-6 text-center">
+        <p role="alert" className="text-body font-bold text-niho-text">{PHOTO_SHARED_ALBUM_INVITE_COPY.joinFailed}</p>
+        <button type="button" onClick={() => setJoinAttempt((attempt) => attempt + 1)} className={`${PHOTO_EDITING_SECONDARY_BUTTON_CLASS_NAME} h-11 px-5`}>
+          {PHOTO_SHARED_ALBUM_INVITE_COPY.join}
+        </button>
+      </section>
+    );
+  }
   if (screen.kind === "list") {
     return (
       <div className="flex h-full min-h-0 flex-col">
@@ -286,22 +321,23 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
   const canRemove = !album.accessEnded && (permissions.removeOwnItem || permissions.removeOthersItem);
   const target = album.albumId;
   const sheetRole = album.role;
+  const failedSave = saveFailure && saveFailure.albumId === target ? saveFailure : null;
   return (
     <div className="flex h-full min-h-0 flex-col">
       {albumFailed ? <RetryLine onRetry={() => setAlbumToken((token) => token + 1)} /> : null}
+      {failedSave ? <RetryLine onRetry={() => runSave(failedSave.albumId, failedSave.itemIds)} /> : null}
       <div className="min-h-0 flex-1">
         <PhotoSharedAlbumView
           album={album}
           items={opened?.items ?? []}
-          uploads={uploads.map((pending) => pending.upload)}
+          uploads={uploads.filter((pending) => pending.albumId === target).map((pending) => pending.upload)}
           showOriginalsNote={originalsNote}
           {...(props.saveLabel ? { saveLabel: props.saveLabel } : {})}
           onBack={backToList}
           onOpenShare={() => setShareOpen(true)}
           onAddFiles={permissions.addItem && !album.accessEnded ? addFiles : () => undefined}
           onSave={(itemIds) => {
-            if (!permissions.download) return;
-            void port.save(target, itemIds, signal()).catch(() => undefined);
+            if (permissions.download) runSave(target, itemIds);
           }}
           {...(canRemove
             ? {

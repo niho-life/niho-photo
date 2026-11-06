@@ -190,7 +190,7 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
   const sourceSwitchRef = useRef(false);
   const sourceSwitchGenerationRef = useRef(0);
   const [screen, setScreen] = useState<{ readonly current: PhotoLibraryScreen; readonly visited: boolean }>({ current: "photos", visited: false });
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [settingsScope, setSettingsScope] = useState<string | null>(null);
   const resetForCloudOwnerChange = useCallback(() => {
     sourceSwitchGenerationRef.current += 1;
     sourceSwitchRef.current = false;
@@ -199,7 +199,7 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
     setOpenCloudPhotoId(null);
     // Another owner's albums never stay on screen.
     setScreen({ current: "photos", visited: false });
-    setSettingsOpen(false);
+    setSettingsScope(null);
   }, []);
   const cloudBindingTransition = useGuardedCloudBinding({
     incoming: incomingCloud,
@@ -253,6 +253,10 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
       },
     } : undefined, [cloud, cloudBindingTransition.failed, cloudBindingTransition.switching, selectSource]);
   const sharedAlbums = cloud?.sharedAlbums ?? null;
+  // The settings belong to the cloud scope they were opened in; another scope never sees them (even for one render).
+  const sharedScope = sharedAlbums && cloud ? `${cloud.actorId}:${cloud.scopeKey ?? ""}` : null;
+  const settingsOpen = sharedScope !== null && settingsScope === sharedScope;
+  const setSettingsOpen = useCallback((open: boolean) => setSettingsScope(open ? sharedScope : null), [sharedScope]);
   const activeScreen: PhotoLibraryScreen = sharedAlbums ? screen.current : "photos";
   const sharedAlbumsMounted = sharedAlbums !== null && (screen.visited || activeScreen === "sharedAlbums");
   const loadStorageLocations = useCallback(async (signal: AbortSignal) => [
@@ -375,6 +379,7 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
           </div>
           {sharedAlbums ? (
             <PhotoStorageSettingsDialog
+              key={sharedScope ?? ""}
               open={settingsOpen}
               onOpenChange={setSettingsOpen}
               loadLocations={loadStorageLocations}

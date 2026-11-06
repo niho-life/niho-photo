@@ -584,6 +584,28 @@ describe("createPhotoWebRuntime", () => {
     invalid.runtime.dispose();
   });
 
+  it("passes a complete shared-album port through and refuses an incomplete one (fail closed)", async () => {
+    const methods = ["listAlbums", "createAlbum", "openAlbum", "people", "copyInviteLink", "revokeInviteLink", "changeRole", "removeMember",
+      "leave", "addFile", "save", "remove", "join", "storageLocations", "originalsNoteShown", "markOriginalsNoteShown", "dispose"];
+    const sharedAlbums = Object.fromEntries(methods.map((method) => [method, () => undefined]));
+    const complete = harness({ connect: async () => new FakeConnection(binding("owner-a", { sharedAlbums })) });
+    await complete.runtime.start();
+    assert.equal(complete.runtime.getSnapshot().binding?.sharedAlbums, sharedAlbums);
+    complete.runtime.dispose();
+
+    const absent = harness({ connect: async () => new FakeConnection(binding("owner-a")) });
+    await absent.runtime.start();
+    assert.equal("sharedAlbums" in absent.runtime.getSnapshot().binding, false);
+    absent.runtime.dispose();
+
+    const { originalsNoteShown: _missing, ...incomplete } = sharedAlbums;
+    const invalidHandle = new FakeConnection(binding("owner-a", { sharedAlbums: incomplete }));
+    const invalid = harness({ connect: async () => invalidHandle });
+    await invalid.runtime.start();
+    assert.equal(invalid.runtime.getSnapshot().binding, null);
+    invalid.runtime.dispose();
+  });
+
   it("accepts and normalizes case-insensitive C02 file extensions", async () => {
     const transfer = transferDescriptor({ formats: [{ format: "jpeg", extensions: ["JPG", "JpEg"], ingest: true, workingCopy: true }] });
     const test = harness({ connect: async () => new FakeConnection(binding("owner-a", { transfer })) });

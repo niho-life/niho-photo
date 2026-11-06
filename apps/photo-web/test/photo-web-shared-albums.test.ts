@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { photoWebInviteUrl, photoWebOriginalsNote, takePhotoWebInviteSecret } from "../src/browser/shared-albums";
+import { clearPhotoWebInviteFragment, photoWebInviteUrl, photoWebOriginalsNote, readPhotoWebInviteSecret } from "../src/browser/shared-albums";
 
 function at(url: string) {
   const location = new URL(url) as unknown as Location;
@@ -17,16 +17,21 @@ describe("Photo Web invite links (B08)", () => {
     expect(new URL(url).search).toBe("");
   });
 
-  it("reads the secret once and removes it from the address bar", () => {
+  it("reads the secret without removing it, and removes it once the join has a definite answer", () => {
     const { target, calls } = at("https://photo.example.test/#invite=synthetic-invite-secret-value");
-    expect(takePhotoWebInviteSecret(target)).toBe("synthetic-invite-secret-value");
+    expect(readPhotoWebInviteSecret(target)).toBe("synthetic-invite-secret-value");
+    // Still in the address bar: a failed attempt or a reload can use the same link.
+    expect(calls).toEqual([]);
+    clearPhotoWebInviteFragment(target);
     expect(calls).toEqual(["/"]);
   });
 
   it("ignores other fragments and refuses malformed secrets (still removing them)", () => {
-    expect(takePhotoWebInviteSecret(at("https://photo.example.test/#photos").target)).toBeNull();
+    const other = at("https://photo.example.test/#photos");
+    expect(readPhotoWebInviteSecret(other.target)).toBeNull();
+    expect(other.calls).toEqual([]);
     const bad = at("https://photo.example.test/#invite=%3Cscript%3E");
-    expect(takePhotoWebInviteSecret(bad.target)).toBeNull();
+    expect(readPhotoWebInviteSecret(bad.target)).toBeNull();
     expect(bad.calls).toEqual(["/"]);
   });
 

@@ -3,8 +3,9 @@
  * a photo as a download, and the per-actor "originals stay on this device" note.
  *
  * The invite secret travels in the URL fragment: a browser never sends a fragment to the server, so it is absent from
- * requests and server logs. It is read once, removed from the address bar and kept in memory only; the join request
- * carries it in its body.
+ * requests and server logs. It is read into memory (never storage) and left in the address bar until the join has a
+ * definite answer, so a failed attempt or a reload can use the same link again; then it is removed. The join request
+ * carries it in its body. Signing in leaves the page and drops the fragment: the member opens the link again.
  */
 const INVITE_PREFIX = "#invite=";
 const SECRET_PATTERN = /^[A-Za-z0-9_-]{16,512}$/u;
@@ -14,22 +15,29 @@ export function photoWebInviteUrl(origin: string, secret: string): string {
   return `${origin}/${INVITE_PREFIX}${encodeURIComponent(secret)}`;
 }
 
-/** The invite secret in the address bar, if any. The fragment is removed either way. */
-export function takePhotoWebInviteSecret(target: { readonly location: Location; readonly history: History }): string | null {
+/** The invite secret in the address bar, if any (read only; a malformed one is removed). */
+export function readPhotoWebInviteSecret(target: { readonly location: Location; readonly history: History }): string | null {
   const hash = target.location.hash;
   if (!hash.startsWith(INVITE_PREFIX)) return null;
-  try {
-    target.history.replaceState(target.history.state, "", `${target.location.pathname}${target.location.search}`);
-  } catch {
-    // The secret is still used once and never stored.
-  }
-  let secret: string;
+  let secret: string | null = null;
   try {
     secret = decodeURIComponent(hash.slice(INVITE_PREFIX.length));
   } catch {
-    return null;
+    secret = null;
   }
-  return SECRET_PATTERN.test(secret) ? secret : null;
+  if (secret !== null && SECRET_PATTERN.test(secret)) return secret;
+  clearPhotoWebInviteFragment(target);
+  return null;
+}
+
+/** Removes the invite from the address bar once it has a definite answer. */
+export function clearPhotoWebInviteFragment(target: { readonly location: Location; readonly history: History }): void {
+  if (!target.location.hash.startsWith(INVITE_PREFIX)) return;
+  try {
+    target.history.replaceState(target.history.state, "", `${target.location.pathname}${target.location.search}`);
+  } catch {
+    // Still used once from memory.
+  }
 }
 
 /** Saves one photo as a browser download (iPhone Safari offers it to Photos from the download). */

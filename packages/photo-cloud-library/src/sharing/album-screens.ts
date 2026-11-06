@@ -43,6 +43,7 @@ import {
   type SharedAlbumItemsTransport,
 } from "./album-items";
 import {
+  SHARING_ERROR_RECOVERY,
   SHARING_LIMITS,
   sanitizeRenditionMetadata,
   type Album,
@@ -91,11 +92,14 @@ export interface CreateSharedAlbumScreensPortOptions {
   /** Whether the "originals stay on this device" note was shown (default: this session only). */
   readonly originalsNote?: { readonly shown: () => boolean; readonly markShown: () => void };
   readonly objectUrls?: { readonly create: (blob: Blob) => string; readonly revoke: (url: string) => void };
+  readonly now?: () => number;
 }
 
 const MAX_THUMBNAILS = 400;
+/** A member only learns "full" from a refused add; it is shown for a while and cleared by the next accepted add. */
+const MEMBER_FULL_NOTICE_MS = 60_000;
+const MAX_LIST_PAGES = 20;
 const THUMBNAIL_CONCURRENCY = 6;
-const MAX_ITEM_PAGES = 20;
 
 // ---------------------------------------------------------------------------------------------------------
 // Contract → view-model
@@ -168,8 +172,9 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
   const newMarks = new Map<string, Set<string>>();
   const loadedItems = new Map<string, readonly AlbumItem[]>();
   const memberRevisions = new Map<string, number>();
-  /** Albums this member was told are full (members get no numbers; Epic §3). */
-  const fullAlbums = new Set<string>();
+  const now = options.now ?? Date.now;
+  /** When this member was last told an album is full (members get no numbers; Epic §3). */
+  const fullAlbums = new Map<string, number>();
   // Older Safari has no AbortSignal.any; there the browser clients' own dispose ends in-flight calls with the port.
   const live = (signal: AbortSignal): AbortSignal =>
     typeof AbortSignal.any === "function" ? AbortSignal.any([signal, lifetime.signal]) : signal;
@@ -197,13 +202,39 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
     return loading;
   }
 
+  /** Every page of the album's members (the cursor is bound to the same limit). */
+  async function allMembers(albumId: string, signal: AbortSignal): Promise<Membership[]> {
+    const members: Membership[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < MAX_LIST_PAGES; page += 1) {
+      const limit = SHARING_LIMITS.memberListMaxCount;
+      const result = await options.membership.listMembers(albumId, cursor === undefined ? { limit } : { cursor, limit }, live(signal));
+      members.push(...result.items);
+      if (result.nextCursor === null) break;
+      cursor = result.nextCursor;
+    }
+    return members;
+  }
+
   async function memberCount(albumId: string, signal: AbortSignal): Promise<number> {
     try {
-      const page = await options.membership.listMembers(albumId, { limit: SHARING_LIMITS.memberListMaxCount }, live(signal));
-      return page.items.length;
+      return (await allMembers(albumId, signal)).length;
     } catch {
       return 0;
     }
+  }
+
+  async function allAlbums(signal: AbortSignal): Promise<Album[]> {
+    const albums: Album[] = [];
+    let cursor: string | undefined;
+    for (let page = 0; page < MAX_LIST_PAGES; page += 1) {
+      const limit = SHARING_LIMITS.listMaxCount;
+      const result = await options.items.listAlbums(cursor === undefined ? { limit } : { cursor, limit }, live(signal));
+      albums.push(...result.items);
+      if (result.nextCursor === null) break;
+      cursor = result.nextCursor;
+    }
+    return albums;
   }
 
   async function capacityOf(album: Album, signal: AbortSignal): Promise<PhotoSharedAlbumCapacity> {
@@ -216,13 +247,16 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
       }
       return { state: "available" };
     }
-    return fullAlbums.has(album.id) ? { state: "full", ownerUsage: null } : { state: "available" };
+    const toldFullAt = fullAlbums.get(album.id);
+    if (toldFullAt !== undefined && now() - toldFullAt < MEMBER_FULL_NOTICE_MS) return { state: "full", ownerUsage: null };
+    fullAlbums.delete(album.id);
+    return { state: "available" };
   }
 
   async function allItems(albumId: string, signal: AbortSignal): Promise<AlbumItem[]> {
     const items: AlbumItem[] = [];
     let cursor: string | undefined;
-    for (let page = 0; page < MAX_ITEM_PAGES; page += 1) {
+    for (let page = 0; page < MAX_LIST_PAGES; page += 1) {
       const result = await options.items.listItems(albumId, cursor === undefined ? {} : { cursor }, live(signal));
       items.push(...result.items);
       if (result.nextCursor === null) break;
@@ -247,8 +281,8 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
 
   return {
     async listAlbums(signal) {
-      const page = await options.items.listAlbums({ limit: SHARING_LIMITS.listMaxCount }, live(signal));
-      return await Promise.all(page.items.map(async (album) => {
+      const albums = await allAlbums(signal);
+      return await Promise.all(albums.map(async (album) => {
         const [count, cover] = await Promise.all([
           memberCount(album.id, signal),
           album.cover ? thumbnail(album.id, album.cover.itemId, album.cover.renditionId, signal) : Promise.resolve(null),
@@ -292,11 +326,11 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
       };
     },
     async people(albumId, signal) {
-      const page = await options.membership.listMembers(albumId, { limit: SHARING_LIMITS.memberListMaxCount }, live(signal));
-      for (const membership of page.items) memberRevisions.set(membership.id, membership.revision);
-      const owner = page.items.some((membership) => membership.member.isSelf && membership.role === "owner");
+      const members = await allMembers(albumId, signal);
+      for (const membership of members) memberRevisions.set(membership.id, membership.revision);
+      const owner = members.some((membership) => membership.member.isSelf && membership.role === "owner");
       const links = owner ? (await options.membership.listInvites(albumId, live(signal))).links : [];
-      return { members: page.items.map(sharedAlbumMemberView), inviteLinks: links.map(sharedAlbumInviteLinkView) };
+      return { members: members.map(sharedAlbumMemberView), inviteLinks: links.map(sharedAlbumInviteLinkView) };
     },
     async copyInviteLink(albumId, role, signal) {
       return options.inviteUrl((await options.membership.ensureInvite(albumId, role, live(signal))).secret);
@@ -306,10 +340,7 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
     },
     async changeRole(albumId, memberId, role, signal) {
       let revision = memberRevisions.get(memberId);
-      if (revision === undefined) {
-        const page = await options.membership.listMembers(albumId, { limit: SHARING_LIMITS.memberListMaxCount }, live(signal));
-        revision = page.items.find((membership) => membership.id === memberId)?.revision;
-      }
+      if (revision === undefined) revision = (await allMembers(albumId, signal)).find((membership) => membership.id === memberId)?.revision;
       if (revision === undefined) throw new Error("member not found");
       const changed = await options.membership.changeRole(albumId, memberId, revision, role, live(signal));
       memberRevisions.set(changed.id, changed.revision);
@@ -330,12 +361,13 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
       }
       try {
         await options.items.addFile(albumId, prepared, live(signal));
+        fullAlbums.delete(albumId);
         return { ok: true };
       } catch (error) {
         if (!isSharingErrorEnvelope(error)) return { ok: false, reason: null };
         const code = error.error.code;
         if (code === "quota_exceeded") {
-          fullAlbums.add(albumId);
+          fullAlbums.set(albumId, now());
           return { ok: false, reason: "albumFull" };
         }
         if (code === "not_found" || code === "role_forbidden" || code === "item_removed") return { ok: false, reason: "accessEnded" };
@@ -361,7 +393,11 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
         const result = await options.membership.join(secret, live(signal));
         return { kind: "joined", albumId: result.album.id };
       } catch (error) {
-        if (isSharingErrorEnvelope(error)) return { kind: "unavailable" };
+        // Only a definite refusal ends the invite; a lost answer, a rate limit or a short outage is retried by the user
+        // with the same link.
+        if (isSharingErrorEnvelope(error) && !error.error.retryable && SHARING_ERROR_RECOVERY[error.error.code] !== "retrySameKey") {
+          return { kind: "unavailable" };
+        }
         throw error;
       }
     },

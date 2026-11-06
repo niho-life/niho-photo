@@ -8,7 +8,7 @@ import type {
   PhotoWebRuntimeSnapshot,
 } from "../runtime/types.ts";
 import { PhotoWebView } from "../view/PhotoWebView.tsx";
-import { takePhotoWebInviteSecret } from "./shared-albums.ts";
+import { clearPhotoWebInviteFragment, readPhotoWebInviteSecret } from "./shared-albums.ts";
 import type { PhotoWebViewCopy } from "../view/types.ts";
 
 export interface MountPhotoWebOptions {
@@ -76,8 +76,9 @@ export function mountPhotoWeb(options: MountPhotoWebOptions): MountedPhotoWeb {
 
   let runtime: PhotoWebRuntime | null = null;
   let root: Root | null = null;
-  // Read once and removed from the address bar; held in memory until a shared-album session uses it.
-  let inviteSecret = rootElement.ownerDocument.defaultView ? takePhotoWebInviteSecret(rootElement.ownerDocument.defaultView) : null;
+  // Held in memory (never storage) and left in the address bar until the join has a definite answer.
+  const view = rootElement.ownerDocument.defaultView;
+  let inviteSecret = view ? readPhotoWebInviteSecret(view) : null;
   let unsubscribe: (() => void) | null = null;
   let disposed = false;
 
@@ -114,6 +115,7 @@ export function mountPhotoWeb(options: MountPhotoWebOptions): MountedPhotoWeb {
             onInviteHandled={() => {
               if (inviteSecret === null) return;
               inviteSecret = null;
+              if (view) clearPhotoWebInviteFragment(view);
               if (runtime !== null) render(runtime.getSnapshot());
             }}
             onRetry={() => runtime?.retry() ?? Promise.resolve()}

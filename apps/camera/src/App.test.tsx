@@ -243,6 +243,18 @@ describe("App", () => {
     expect(container.textContent).toContain("共有アルバムはまだありません");
     // The local/cloud source switch belongs to 写真 only.
     expect(container.querySelector('[role="group"][aria-label="写真の保存先"]')).toBeNull();
+
+    // Settings opened for one cloud scope are never shown for another, not even for one render.
+    await act(async () => (container.querySelector('button[aria-label="設定"]') as HTMLButtonElement).click());
+    await settle();
+    expect(document.body.querySelector('[role="dialog"]')).not.toBeNull();
+    const nextLibrary = cloudLibrary(commands);
+    // Same person, another logical scope (e.g. a new session epoch).
+    const nextShared = { ...sharedAlbums, storageLocations: vi.fn(async () => []) } as typeof sharedAlbums;
+    await render({ ...base, library: nextLibrary, scopeKey: "scope-2", sharedAlbums: nextShared });
+    expect(document.body.querySelector('[role="dialog"]')).toBeNull();
+    // The dialog was never open for the new scope, not even for the render before the reset.
+    expect(nextShared.storageLocations).not.toHaveBeenCalled();
   });
 
   it("copies only the selected local photo, blocks duplicates, and offers the returned cloud photo", async () => {

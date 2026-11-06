@@ -179,7 +179,10 @@ export function PhotoWebView(props: PhotoWebViewProps) {
   const screen: PhotoLibraryScreen = sharedAlbums && (current.screen === "sharedAlbums" || inviteSecret) ? "sharedAlbums" : "photos";
   const visited = sharedAlbums !== null && (current.visited || screen === "sharedAlbums");
   const selectScreen = (next: PhotoLibraryScreen) => setScreenState({ scope: sharedScope, screen: next, visited: visited || next === "sharedAlbums" });
-  const [settingsOpen, setSettingsOpen] = useState(false);
+  // The settings belong to the scope they were opened in; another scope never sees them (even for one render).
+  const [settingsScope, setSettingsScope] = useState<string | null>(null);
+  const settingsOpen = sharedScope !== null && settingsScope === sharedScope;
+  const setSettingsOpen = (open: boolean) => setSettingsScope(open ? sharedScope : null);
   const retry = useScopedAction({
     scope,
     action: props.onRetry,
@@ -327,6 +330,7 @@ export function PhotoWebView(props: PhotoWebViewProps) {
             </PhotoLibraryProvider>
             {sharedAlbums ? (
               <PhotoStorageSettingsDialog
+                key={sharedScope ?? ""}
                 open={settingsOpen}
                 onOpenChange={setSettingsOpen}
                 loadLocations={(signal) => sharedAlbums.storageLocations(signal)}

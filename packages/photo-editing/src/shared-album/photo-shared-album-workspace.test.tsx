@@ -1,6 +1,6 @@
 // @vitest-environment jsdom
 
-import { act } from "react";
+import { StrictMode, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -204,5 +204,86 @@ describe("PhotoSharedAlbumWorkspace", () => {
     await act(async () => buttonByText("リンクをコピー")?.click());
     await flush();
     expect(port.copyInviteLink).toHaveBeenCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, expect.any(String), expect.any(AbortSignal));
+  });
+
+  it("keeps the invite after a failed join so the same link can be tried again", async () => {
+    const onInviteHandled = vi.fn();
+    let attempts = 0;
+    const port = fakePort({
+      join: vi.fn(async () => {
+        attempts += 1;
+        if (attempts === 1) throw { error: { code: "rate_limited", requestId: "synthetic", retryable: true } };
+        return { kind: "joined" as const, albumId: PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId };
+      }),
+    });
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} inviteSecret="synthetic-secret" onInviteHandled={onInviteHandled} />));
+    await flush();
+    expect(container.querySelector("[role=alert]")?.textContent).toBe("参加できませんでした。もう一度お試しください。");
+    expect(onInviteHandled).not.toHaveBeenCalled();
+    await act(async () => buttonByText("参加する", container)?.click());
+    await flush();
+    expect(port.join).toHaveBeenCalledTimes(2);
+    expect(onInviteHandled).toHaveBeenCalledTimes(1);
+    expect(port.openAlbum).toHaveBeenCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, expect.any(AbortSignal));
+  });
+
+  it("joins and opens the album under development double effects without losing the invite", async () => {
+    const onInviteHandled = vi.fn();
+    const port = fakePort();
+    await act(async () => root.render(<StrictMode><PhotoSharedAlbumWorkspace port={port} inviteSecret="synthetic-secret" onInviteHandled={onInviteHandled} /></StrictMode>));
+    await flush();
+    expect(onInviteHandled).toHaveBeenCalledTimes(1);
+    expect(port.openAlbum).toHaveBeenCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, expect.any(AbortSignal));
+    expect(container.textContent).toContain(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.name);
+  });
+
+  it("keeps additions with the album they were started in, and retries them there", async () => {
+    const other = { ...PHOTO_SHARED_ALBUM_FIXTURE_ALBUM, albumId: "fixture-album-other", name: "別のアルバム" };
+    const port = fakePort({
+      openAlbum: vi.fn(async (albumId: string) => opened(albumId === other.albumId ? { album: other, items: [] } : {})),
+      listAlbums: vi.fn(async () => [PHOTO_SHARED_ALBUM_FIXTURE_ALBUM, other]),
+      addFile: vi.fn(async () => ({ ok: false as const, reason: null })),
+    });
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} />));
+    await flush();
+    await act(async () => (Array.from(container.querySelectorAll("ul button"))[0] as HTMLButtonElement).click());
+    await flush();
+    await pickFiles([new File(["a"], "a.jpg", { type: "image/jpeg" })]);
+    expect(container.textContent).toContain("1枚を追加できませんでした");
+    await act(async () => (container.querySelector("button[aria-label='共有アルバムに戻る']") as HTMLButtonElement).click());
+    await flush();
+    await act(async () => (Array.from(container.querySelectorAll("ul button"))[1] as HTMLButtonElement).click());
+    await flush();
+    expect(container.textContent).toContain("別のアルバム");
+    expect(container.textContent).not.toContain("追加できませんでした");
+    expect(buttonByText("再試行", container)).toBeUndefined();
+    await act(async () => (container.querySelector("button[aria-label='共有アルバムに戻る']") as HTMLButtonElement).click());
+    await flush();
+    await act(async () => (Array.from(container.querySelectorAll("ul button"))[0] as HTMLButtonElement).click());
+    await flush();
+    await act(async () => buttonByText("再試行", container)?.click());
+    await flush();
+    expect((port.addFile as ReturnType<typeof vi.fn>).mock.calls.map((call) => call[0])).toEqual([PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId]);
+  });
+
+  it("tells when photos could not be saved and saves them again on retry", async () => {
+    let calls = 0;
+    const port = fakePort({ save: vi.fn(async () => ({ failed: calls++ === 0 ? 1 : 0 })) });
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} />));
+    await flush();
+    await act(async () => (Array.from(container.querySelectorAll("ul button"))[0] as HTMLButtonElement).click());
+    await flush();
+    await act(async () => buttonByText("選択", container)?.click());
+    const tile = container.querySelector("[aria-pressed]") as HTMLElement | null;
+    await act(async () => tile?.click());
+    await act(async () => buttonByText("保存", container)?.click());
+    await flush();
+    expect(port.save).toHaveBeenCalledTimes(1);
+    expect(container.querySelector("[role=alert]")?.textContent).toContain("できませんでした。もう一度お試しください。");
+    await act(async () => buttonByText("再試行", container)?.click());
+    await flush();
+    expect(port.save).toHaveBeenCalledTimes(2);
+    expect((port.save as ReturnType<typeof vi.fn>).mock.calls[1]?.[1]).toEqual((port.save as ReturnType<typeof vi.fn>).mock.calls[0]?.[1]);
+    expect(container.querySelector("[role=alert]")).toBeNull();
   });
 });

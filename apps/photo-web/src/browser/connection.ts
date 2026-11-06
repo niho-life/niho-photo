@@ -715,6 +715,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
       } catch (error) {
         try { transferController?.dispose(); } catch { /* Best effort for partial construction. */ }
         try { previewLibrary?.dispose(); } catch { /* Best effort for partial construction. */ }
+        try { sharedAlbums?.dispose(); } catch { /* Best effort for partial construction. */ }
         try { maskSurfaceValidator?.dispose(); } catch { /* Best effort for partial construction. */ }
         try { handle?.releasePreviewResources(); } catch { /* Best effort for partial construction. */ }
         try { handle?.dispose(); } catch { /* Best effort for partial construction. */ }

@@ -213,6 +213,12 @@ function snapshotDownloadBudget(value: unknown): Readonly<CreatePhotoWebRuntimeO
   }
 }
 
+/** Every operation the shared-album screens call (B08 #249). */
+const SHARED_ALBUM_PORT_METHODS = [
+  "listAlbums", "createAlbum", "openAlbum", "people", "copyInviteLink", "revokeInviteLink", "changeRole", "removeMember",
+  "leave", "addFile", "save", "remove", "join", "storageLocations", "originalsNoteShown", "markOriginalsNoteShown", "dispose",
+] as const;
+
 export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): PhotoWebRuntime {
   const configuredEnvironment = options.environment ?? defaultEnvironment();
   const windowTarget = configuredEnvironment.window;
@@ -517,8 +523,9 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
         }
       }
       const sharedAlbums = candidate.sharedAlbums;
+      // Fail closed: a port missing any operation the screens call is not accepted.
       if (sharedAlbums !== undefined && (typeof sharedAlbums !== "object" || sharedAlbums === null
-        || typeof sharedAlbums.listAlbums !== "function" || typeof sharedAlbums.dispose !== "function")) return null;
+        || SHARED_ALBUM_PORT_METHODS.some((method) => typeof (sharedAlbums as unknown as Record<string, unknown>)[method] !== "function"))) return null;
       if (expected !== null && (
         candidate.actorId !== expected.actorId
         || candidate.key !== expected.key

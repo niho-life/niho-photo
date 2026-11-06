@@ -13,16 +13,18 @@ const MEMBER = "synthetic-user-member";
 const VIEWER = "synthetic-user-viewer";
 const START = Date.parse("2026-11-07T00:00:00.000Z");
 
-function setup() {
+function setup(options: { extraUsers?: number } = {}) {
   let keys = 0;
   let secrets = 0;
+  let clock = START;
   const server = createSharedAlbumMockServer({
     users: [
       { userId: OWNER, displayName: "Synthetic Owner" },
       { userId: MEMBER, displayName: "Synthetic Member" },
       { userId: VIEWER, displayName: "Synthetic Viewer" },
+      ...Array.from({ length: options.extraUsers ?? 0 }, (_, index) => ({ userId: `synthetic-user-extra-${index}`, displayName: `Synthetic Extra ${index}` })),
     ],
-    now: () => START,
+    now: () => clock,
     newSecret: () => `synthetic-secret-${++secrets}-${"x".repeat(22)}`,
   });
   const created: string[] = [];
@@ -35,6 +37,7 @@ function setup() {
       items: createSharedAlbumItems({ client, uploader: server.uploader, newIdempotencyKey: key, sleep: async () => undefined }),
       membership: createSharedAlbumMembership({ client, newIdempotencyKey: key, sleep: async () => undefined }),
       download: (request, signal) => client.download(request, signal),
+      now: () => clock,
       inviteUrl: (secret) => `https://photo.example.test/#invite=${secret}`,
       saveFile: async (name, file) => { saved.push({ name, bytes: new Uint8Array(await file.arrayBuffer()) }); },
       objectUrls: {
@@ -50,7 +53,7 @@ function setup() {
   const signal = new AbortController().signal;
   const file = (seed: number, options: Parameters<typeof syntheticJpeg>[0] = { width: 1200, height: 800 }) =>
     new File([syntheticJpeg({ ...options, seed }).slice()], `IMG_${seed}.JPG`, { type: "image/jpeg" });
-  return { server, portFor, signal, file, created, revoked, saved };
+  return { server, portFor, signal, file, created, revoked, saved, advance: (ms: number) => { clock += ms; } };
 }
 
 async function sharedAlbum(t: ReturnType<typeof setup>) {
@@ -191,5 +194,56 @@ describe("shared album screens port (B08 on B05/B12)", () => {
     owner.dispose();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(new Set(t.revoked)).toEqual(new Set(t.created));
+  });
+
+  it("ends an invite only on a definite refusal; a rate limit is thrown so the same link can be retried", async () => {
+    const t = setup();
+    const { albumId, join } = await sharedAlbum(t);
+    const outsider = t.portFor(VIEWER);
+    // Ten wrong secrets trip the join rate limit: not a definite answer about the link.
+    for (let index = 0; index < 10; index += 1) {
+      expect(await outsider.join(`wrong-secret-${index}-${"x".repeat(20)}`, t.signal)).toEqual({ kind: "unavailable" });
+    }
+    await expect(join(VIEWER, "viewer")).rejects.toMatchObject({ error: { code: "rate_limited" } });
+    t.advance(11 * 60 * 1000);
+    expect(await join(VIEWER, "viewer")).toEqual({ kind: "joined", albumId });
+  });
+
+  it("shows a member the album as full for a while after a refused add, and clears it on the next accepted add", async () => {
+    const t = setup();
+    const { albumId, join } = await sharedAlbum(t);
+    await join(MEMBER, "contributor");
+    const member = t.portFor(MEMBER);
+    t.server.setQuotaBytes(OWNER, 100);
+    expect(await member.addFile(albumId, t.file(1), t.signal)).toEqual({ ok: false, reason: "albumFull" });
+    expect((await member.openAlbum(albumId, t.signal))?.album.capacity.state).toBe("full");
+    // The owner frees space; once the notice expires the member can try again.
+    t.server.setQuotaBytes(OWNER, 1024 ** 3);
+    t.advance(61_000);
+    expect((await member.openAlbum(albumId, t.signal))?.album.capacity.state).toBe("available");
+    t.server.setQuotaBytes(OWNER, 100);
+    expect(await member.addFile(albumId, t.file(2), t.signal)).toEqual({ ok: false, reason: "albumFull" });
+    t.server.setQuotaBytes(OWNER, 1024 ** 3);
+    expect(await member.addFile(albumId, t.file(3), t.signal)).toEqual({ ok: true });
+    expect((await member.openAlbum(albumId, t.signal))?.album.capacity.state).toBe("available");
+  });
+
+  it("reads every page: more albums than one page, more members than one page", async () => {
+    const t = setup({ extraUsers: 101 });
+    const owner = t.portFor(OWNER);
+    for (let index = 0; index < 61; index += 1) await owner.createAlbum(`Synthetic album ${index}`, t.signal);
+    expect(await owner.listAlbums(t.signal)).toHaveLength(61);
+
+    const albumId = await owner.createAlbum("Synthetic crowded album", t.signal);
+    const url = await owner.copyInviteLink(albumId, "contributor", t.signal);
+    const secret = url.slice(url.indexOf("#invite=") + "#invite=".length);
+    for (let index = 0; index < 101; index += 1) await t.portFor(`synthetic-user-extra-${index}`).join(secret, t.signal);
+    const people = await owner.people(albumId, t.signal);
+    expect(people.members).toHaveLength(102);
+    // The 102nd member can still be managed.
+    const last = people.members.at(-1);
+    await owner.changeRole(albumId, last?.userId as string, "viewer", t.signal);
+    expect((await owner.people(albumId, t.signal)).members.find((member) => member.userId === last?.userId)?.role).toBe("viewer");
+    expect((await owner.listAlbums(t.signal)).find((album) => album.albumId === albumId)?.memberCount).toBe(102);
   });
 });

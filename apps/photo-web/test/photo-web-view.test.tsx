@@ -486,6 +486,17 @@ describe("PhotoWebView", () => {
       expect(container.querySelector("[data-testid=shared-workspace]")?.parentElement?.hidden).toBe(true);
     });
 
+    it("開いた設定は別のscopeへ持ち越さない（1回の描画でも前の保存先を出さない）", () => {
+      const sharedAlbums = port();
+      act(() => root.render(<PhotoWebView {...props({ binding: binding({ sharedAlbums }) })} />));
+      act(() => byText(container, "button", "設定").click());
+      expect(mockState.settingsProps.at(-1)?.open).toBe(true);
+      const next = port();
+      act(() => root.render(<PhotoWebView {...props({ binding: binding({ scopeKey: "範囲不透明値乙", sharedAlbums: next }) })} />));
+      expect(mockState.settingsProps.at(-1)?.open).toBe(false);
+      expect(container.querySelector("[data-testid=settings-dialog]")).toBeNull();
+    });
+
     it("招待のsecretは開いた拠点で共有アルバムへ渡し、使い終えたら共有アルバムに留まる", () => {
       const onInviteHandled = vi.fn();
       const sharedAlbums = port();
