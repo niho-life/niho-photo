@@ -87,6 +87,17 @@ describe("browser shared album membership client (B05)", () => {
     expect(join.url).not.toContain("synthetic-invite-secret");
     expect(await join.json()).toEqual({ secret: "synthetic-invite-secret-value" });
 
+    // Active members including the owner (B00 memberCount).
+    expect(joined.value.album.memberCount).toBe(2);
+    t.setTamper(async (response, request) => {
+      if (new URL(request.url).pathname !== `${SHARING_CLOUD_PATH_PREFIX}/invites/join`) return response;
+      const body = await response.json() as { value: { album: { memberCount: number } } };
+      body.value.album.memberCount = 0;
+      return json(body);
+    });
+    expect(((await caught(t.clientFor(STAFF).request("invites.join", { secret: created.value.secret as string }, t.key()))) as PersonalPhotoCloudError).code).toBe("invalid_response");
+    t.setTamper(null);
+
     const members = await owner.request("members.list", { albumId: album.id }, { signal: t.signal });
     expect(members.items.map((member) => member.member)).toEqual([
       { displayName: "Synthetic Owner", isSelf: true },

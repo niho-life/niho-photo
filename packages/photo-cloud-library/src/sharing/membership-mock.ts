@@ -641,7 +641,8 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
     const cover = published[0]?.rendition ? { itemId: published[0].id, renditionId: published[0].rendition.id } : null;
     return {
       id: album.id, owner: personLabel(album.owner, viewer), name: album.name, revision: album.revision,
-      createdAt: album.createdAt, updatedAt: album.updatedAt, itemCount: published.length, cover,
+      createdAt: album.createdAt, updatedAt: album.updatedAt, itemCount: published.length,
+      memberCount: [...memberships.values()].filter((entry) => entry.albumId === album.id && entry.state === "active").length, cover,
       access: {
         role: membership.role, membershipRevision: membership.revision, permissions: permissionsFor(membership.role),
         preparation: preparing > 0 ? { prepared: published.length, total: visible.length } : null,
