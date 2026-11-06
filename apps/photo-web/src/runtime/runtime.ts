@@ -516,6 +516,9 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
           transferProjections.set(source, transfer);
         }
       }
+      const sharedAlbums = candidate.sharedAlbums;
+      if (sharedAlbums !== undefined && (typeof sharedAlbums !== "object" || sharedAlbums === null
+        || typeof sharedAlbums.listAlbums !== "function" || typeof sharedAlbums.dispose !== "function")) return null;
       if (expected !== null && (
         candidate.actorId !== expected.actorId
         || candidate.key !== expected.key
@@ -533,6 +536,7 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
         disableCloudDelete: candidate.disableCloudDelete,
         usage,
         ...(transfer === undefined ? {} : { transfer }),
+        ...(sharedAlbums === undefined ? {} : { sharedAlbums }),
       });
     } catch {
       return null;

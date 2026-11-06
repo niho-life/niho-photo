@@ -215,6 +215,36 @@ describe("App", () => {
     expect(container.querySelector('nav[aria-label="表示中の場所"]')?.textContent).toContain("クラウド");
   });
 
+  it("shows 写真 / 共有アルバム and 設定 only when the trusted binding carries an open shared-album port", async () => {
+    const { commands } = fakeCommands({ photoBenchEdits: false });
+    const library = cloudLibrary(commands);
+    const base = { library, host: createLocalPhotoEditingHost(commands), actorId: "personal-user-1" };
+    const render = async (cloudBinding: Parameters<typeof App>[0]["cloudBinding"]) => {
+      await act(async () => {
+        root.render(<App commands={commands} loadAppInfo={async () => null} watchUpdate={async () => () => undefined} cloudBinding={cloudBinding} />);
+      });
+      await settle();
+    };
+    const screens = () => Array.from(container.querySelectorAll("nav button")).map((button) => button.textContent).filter((text) => text === "写真" || text === "共有アルバム");
+    await render(base);
+    expect(screens()).toEqual([]);
+    expect(container.querySelector('button[aria-label="設定"]')).toBeNull();
+
+    const sharedAlbums = {
+      listAlbums: vi.fn(async () => []), storageLocations: vi.fn(async () => []), originalsNoteShown: () => false, markOriginalsNoteShown: vi.fn(), dispose: vi.fn(),
+    } as unknown as NonNullable<NonNullable<Parameters<typeof App>[0]["cloudBinding"]>["sharedAlbums"]>;
+    await render({ ...base, sharedAlbums });
+    expect(screens()).toEqual(["写真", "共有アルバム"]);
+    expect(container.querySelector('button[aria-label="設定"]')).not.toBeNull();
+    const shared = Array.from(container.querySelectorAll<HTMLButtonElement>("nav button")).find((button) => button.textContent === "共有アルバム");
+    await act(async () => shared?.click());
+    await settle();
+    expect(sharedAlbums.listAlbums).toHaveBeenCalled();
+    expect(container.textContent).toContain("共有アルバムはまだありません");
+    // The local/cloud source switch belongs to 写真 only.
+    expect(container.querySelector('[role="group"][aria-label="写真の保存先"]')).toBeNull();
+  });
+
   it("copies only the selected local photo, blocks duplicates, and offers the returned cloud photo", async () => {
     const { commands } = fakeCommands({ photoBenchEdits: false, rememberedFolder: true, rememberedPhoto: true });
     const progress: Array<(fraction: number | null) => void> = [];

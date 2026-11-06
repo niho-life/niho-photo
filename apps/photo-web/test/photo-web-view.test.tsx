@@ -15,6 +15,22 @@ const mockState = vi.hoisted(() => ({
   workbenchQueryClients: [] as Array<unknown>,
   providerProps: [] as Array<Record<string, unknown>>,
   transferPanelProps: [] as Array<Record<string, unknown>>,
+  workspaceProps: [] as Array<Record<string, unknown>>,
+  settingsProps: [] as Array<Record<string, unknown>>,
+}));
+
+vi.mock("niho-photo-editing/shared-album/photo-shared-album-workspace", () => ({
+  PhotoSharedAlbumWorkspace: (props: Record<string, unknown>) => {
+    mockState.workspaceProps.push(props);
+    return <div data-testid="shared-workspace" />;
+  },
+}));
+
+vi.mock("niho-photo-editing/shared-album/photo-storage-settings-dialog", () => ({
+  PhotoStorageSettingsDialog: (props: Record<string, unknown>) => {
+    mockState.settingsProps.push(props);
+    return props.open ? <div data-testid="settings-dialog" /> : null;
+  },
 }));
 
 vi.mock("niho-photo-editing/editor/browser-photo-editing-workbench", async () => {
@@ -436,5 +452,50 @@ describe("PhotoWebView", () => {
     render(props({ online: false, pwa: { snapshot: { phase: "failed" }, requestUpdate } }));
     expect(container.textContent).toContain(copy.pwaFailed);
     expect(byText(container, "button", copy.pwaApply).hasAttribute("disabled")).toBe(false);
+  });
+
+  describe("shared albums (B08)", () => {
+    const port = () => ({ listAlbums: vi.fn(), storageLocations: vi.fn(async () => []), dispose: vi.fn() }) as unknown as NonNullable<PhotoWebViewBinding["sharedAlbums"]>;
+
+    it("出さない: rolloutが閉じた拠点では切替・設定・共有アルバムを出さず、招待のsecretも使わない", () => {
+      act(() => root.render(<PhotoWebView {...props({ inviteSecret: "synthetic-invite-secret-value" })} />));
+      expect(container.querySelector("nav")).toBeNull();
+      expect(Array.from(container.querySelectorAll("button")).some((button) => button.textContent === "設定")).toBe(false);
+      expect(container.querySelector("[data-testid=shared-workspace]")).toBeNull();
+      expect(mockState.workspaceProps).toEqual([]);
+      expect(mockState.workbenchProps.at(-1)?.active).toBe(true);
+    });
+
+    it("開いた拠点では「写真 / 共有アルバム」と設定を出し、切り替えても写真の編集面を保つ", () => {
+      const sharedAlbums = port();
+      act(() => root.render(<PhotoWebView {...props({ binding: binding({ sharedAlbums }) })} />));
+      const tabs = Array.from(container.querySelectorAll("nav button"));
+      expect(tabs.map((tab) => tab.textContent)).toEqual(["写真", "共有アルバム"]);
+      expect(container.querySelector("[data-testid=shared-workspace]")).toBeNull();
+      act(() => (tabs[1] as HTMLButtonElement).click());
+      expect(container.querySelector("[data-testid=shared-workspace]")).not.toBeNull();
+      expect(mockState.workspaceProps.at(-1)?.port).toBe(sharedAlbums);
+      // The workbench stays mounted (drafts kept) but inactive and hidden.
+      expect(mockState.workbenchProps.at(-1)?.active).toBe(false);
+      expect(container.querySelector("[data-testid=workbench]")?.parentElement?.hidden).toBe(true);
+      act(() => byText(container, "button", "設定").click());
+      expect(container.querySelector("[data-testid=settings-dialog]")).not.toBeNull();
+      act(() => (Array.from(container.querySelectorAll("nav button"))[0] as HTMLButtonElement).click());
+      expect(mockState.workbenchProps.at(-1)?.active).toBe(true);
+      // Still mounted so additions keep going.
+      expect(container.querySelector("[data-testid=shared-workspace]")?.parentElement?.hidden).toBe(true);
+    });
+
+    it("招待のsecretは開いた拠点で共有アルバムへ渡し、使い終えたら共有アルバムに留まる", () => {
+      const onInviteHandled = vi.fn();
+      const sharedAlbums = port();
+      act(() => root.render(<PhotoWebView {...props({ binding: binding({ sharedAlbums }), inviteSecret: "synthetic-invite-secret-value", onInviteHandled })} />));
+      expect(mockState.workspaceProps.at(-1)?.inviteSecret).toBe("synthetic-invite-secret-value");
+      act(() => (mockState.workspaceProps.at(-1)?.onInviteHandled as () => void)());
+      expect(onInviteHandled).toHaveBeenCalledTimes(1);
+      act(() => root.render(<PhotoWebView {...props({ binding: binding({ sharedAlbums }), inviteSecret: null, onInviteHandled })} />));
+      expect(container.querySelector("[data-testid=shared-workspace]")?.parentElement?.hidden).toBe(false);
+      expect(mockState.workspaceProps.at(-1)?.inviteSecret).toBeNull();
+    });
   });
 });

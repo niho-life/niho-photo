@@ -3,6 +3,10 @@ import { QueryClientProvider } from "@tanstack/react-query";
 
 import { BrowserPhotoEditingWorkbench } from "niho-photo-editing/editor/browser-photo-editing-workbench";
 import { PhotoLibraryProvider } from "niho-photo-editing/library/photo-library-context";
+import { PHOTO_STORAGE_LOCATION_COPY } from "niho-photo-editing/photo-editing-copy";
+import { PhotoLibraryScreenTabs, type PhotoLibraryScreen } from "niho-photo-editing/shared-album/photo-shared-album-list";
+import { PhotoSharedAlbumWorkspace } from "niho-photo-editing/shared-album/photo-shared-album-workspace";
+import { PhotoStorageSettingsDialog } from "niho-photo-editing/shared-album/photo-storage-settings-dialog";
 import { AppDialogHost } from "niho-ui/components/app-dialog-host";
 
 import { PhotoWebTransferPanel, type PhotoWebTransferHost } from "./PhotoWebTransferPanel";
@@ -166,6 +170,16 @@ export function PhotoWebView(props: PhotoWebViewProps) {
   const [treeHidden, setTreeHidden] = useState(false);
   const binding = acceptedBinding(props);
   const scope = actionScope(props);
+  const sharedAlbums = binding?.sharedAlbums ?? null;
+  const sharedScope = binding && sharedAlbums ? binding.scopeKey : null;
+  // The screen and its first visit belong to one scope; another actor or library starts again on 写真.
+  const [screenState, setScreenState] = useState<{ readonly scope: string | null; readonly screen: PhotoLibraryScreen; readonly visited: boolean }>({ scope: null, screen: "photos", visited: false });
+  const inviteSecret = sharedAlbums ? props.inviteSecret ?? null : null;
+  const current = screenState.scope === sharedScope ? screenState : { scope: sharedScope, screen: "photos" as PhotoLibraryScreen, visited: false };
+  const screen: PhotoLibraryScreen = sharedAlbums && (current.screen === "sharedAlbums" || inviteSecret) ? "sharedAlbums" : "photos";
+  const visited = sharedAlbums !== null && (current.visited || screen === "sharedAlbums");
+  const selectScreen = (next: PhotoLibraryScreen) => setScreenState({ scope: sharedScope, screen: next, visited: visited || next === "sharedAlbums" });
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const retry = useScopedAction({
     scope,
     action: props.onRetry,
@@ -217,13 +231,18 @@ export function PhotoWebView(props: PhotoWebViewProps) {
           <div className="photo-web-header-actions">
             <span className="photo-web-cloud">{props.copy.cloud}</span>
             {binding?.usage ? <span className="photo-web-usage">{props.copy.usage(binding.usage)}</span> : null}
-            {binding ? (
+            {binding && screen === "photos" ? (
               <button
                 type="button"
                 aria-pressed={treeHidden}
                 onClick={() => setTreeHidden((hidden) => !hidden)}
               >
                 {props.copy.toggleTree}
+              </button>
+            ) : null}
+            {sharedAlbums ? (
+              <button type="button" onClick={() => setSettingsOpen(true)}>
+                {PHOTO_STORAGE_LOCATION_COPY.settings}
               </button>
             ) : null}
             {canLogout ? (
@@ -248,6 +267,12 @@ export function PhotoWebView(props: PhotoWebViewProps) {
           </div>
         ) : null}
 
+        {binding && sharedAlbums ? (
+          <div className="photo-web-screens">
+            <PhotoLibraryScreenTabs current={screen} onChange={selectScreen} />
+          </div>
+        ) : null}
+
         {binding ? (
           <main className="photo-web-workspace">
             <PhotoLibraryProvider key={binding.key} library={binding.library} host={binding.host}>
@@ -263,7 +288,7 @@ export function PhotoWebView(props: PhotoWebViewProps) {
                       mutationEnabled={props.session.phase === "ready" && props.online && binding.canEdit && binding.cloudOriginalsAllowed}
                     />
                   ) : null}
-                <div className="photo-web-workbench">
+                <div className="photo-web-workbench" hidden={screen !== "photos"}>
                   <BrowserPhotoEditingWorkbench
                     key={binding.key}
                     spotId={binding.key}
@@ -274,7 +299,7 @@ export function PhotoWebView(props: PhotoWebViewProps) {
                     mobileEditingAllowed={binding.mobileEditingAllowed}
                     disableCloudDelete={binding.disableCloudDelete}
                     appearance="fill"
-                    active
+                    active={screen === "photos"}
                     openCloudPhotoId={null}
                     onOpenCloudPhotoHandled={() => undefined}
                     registerRouteLeaveGuard={props.registerRouteLeaveGuard}
@@ -282,8 +307,31 @@ export function PhotoWebView(props: PhotoWebViewProps) {
                     treeFooter={<span>{props.copy.version}</span>}
                   />
                 </div>
+                {sharedAlbums && visited ? (
+                  // Kept mounted after the first visit so additions keep going while 写真 is shown.
+                  <div className="photo-web-shared-albums" hidden={screen !== "sharedAlbums"}>
+                    <PhotoSharedAlbumWorkspace
+                      key={`${binding.key}:${binding.scopeKey}`}
+                      port={sharedAlbums}
+                      inviteSecret={inviteSecret}
+                      onInviteHandled={() => {
+                        // The joined album stays on screen after the secret is dropped.
+                        selectScreen("sharedAlbums");
+                        props.onInviteHandled?.();
+                      }}
+                      onOpenStorage={() => setSettingsOpen(true)}
+                    />
+                  </div>
+                ) : null}
               </div>
             </PhotoLibraryProvider>
+            {sharedAlbums ? (
+              <PhotoStorageSettingsDialog
+                open={settingsOpen}
+                onOpenChange={setSettingsOpen}
+                loadLocations={(signal) => sharedAlbums.storageLocations(signal)}
+              />
+            ) : null}
           </main>
         ) : (
           <EmptySession view={props} retryPending={retry.pending} onRetry={retry.run} />

@@ -44,6 +44,8 @@
     "./shared-album/photo-shared-album-share-sheet": "./src/shared-album/photo-shared-album-share-sheet.tsx",
     "./shared-album/photo-shared-album-view": "./src/shared-album/photo-shared-album-view.tsx",
     "./shared-album/photo-storage-location-settings": "./src/shared-album/photo-storage-location-settings.tsx",
+    "./shared-album/photo-storage-settings-dialog": "./src/shared-album/photo-storage-settings-dialog.tsx",
+    "./shared-album/photo-shared-album-workspace": "./src/shared-album/photo-shared-album-workspace.tsx",
     "./editor/photo-editing-slider": "./src/editor/photo-editing-slider.tsx",
     "./package.json": "./package.json"
   },
