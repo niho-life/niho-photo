@@ -168,7 +168,9 @@ export class SyntheticHostedCanonical {
         currentSourceGeneration: photo.body.source.generation,
         referencedMaskSurfaceIds: masks,
         storedMaskSurfaceIds: stored,
-        connectorState: this.connectorState,
+        // The replica is current only once the Mac acknowledged the revision this save creates.
+        metadataRevisionAfterSave: this.revision + 1,
+        acknowledgedRevision: this.acknowledgedRevision,
       });
       if (!decision.ok) throw contractError(decision.code);
       const recipe: RecipeDocument = {
