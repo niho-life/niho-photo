@@ -45,7 +45,29 @@ function surface(bytes: Uint8Array, photoId = "photo", withUpload = true): MaskS
   return { id: hash, width: 2, height: 2, sha256: hash, bytes, uploadState: withUpload ? uploadState(photoId, hash, bytes.byteLength) : null };
 }
 
-describe("IndexedDB v2 mask journal", () => {
+describe("IndexedDB v3 mask journal", () => {
+  it("atomically fences and purges one revoked scope while preserving another session", async () => {
+    const journal = new IndexedDbRecipeSyncJournal(new IDBFactory(), "mask-revoked-scope-purge");
+    const revoked = scope({ sessionId: "revoked-session", sessionEpoch: "revoked-epoch" });
+    const current = scope({ sessionId: "current-session", sessionEpoch: "current-epoch" });
+    const revokedWriter = binding(revoked);
+    const currentWriter = binding(current);
+    const input = surface(new Uint8Array([11, 12, 13]), "photo", false);
+    await journal.putMaskSurface(revoked, "photo", input, undefined, null);
+    await journal.stage(revokedWriter, stage([input.sha256]));
+    await journal.putMaskSurface(current, "photo", input, undefined, null);
+    await journal.stage(currentWriter, stage([input.sha256]));
+
+    await expect(journal.purgeScope(revoked)).resolves.toBe(2);
+    await expect(journal.purgeScope(revoked)).resolves.toBe(0);
+    await expect(journal.list(revoked)).rejects.toThrow();
+    await expect(journal.getMaskSurface(revoked, "photo", input.sha256)).rejects.toThrow();
+    await expect(journal.stage(revokedWriter, stage())).rejects.toThrow();
+    await expect(journal.list(current)).resolves.toMatchObject({ writers: [{ photoId: "photo" }], nextCursor: null });
+    await expect(journal.getMaskSurface(current, "photo", input.sha256)).resolves.not.toBeNull();
+    journal.dispose();
+  });
+
   it("explicitly discards old-scope saves by writer token without deleting another scope", async () => {
     const journal = new IndexedDbRecipeSyncJournal(new IDBFactory(), "mask-old-scope-discard");
     const oldScope = scope({ sessionId: "old-session", sessionEpoch: "old-epoch" });

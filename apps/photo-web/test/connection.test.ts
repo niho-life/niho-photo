@@ -6,6 +6,9 @@ import type { PhotoLibraryPresets } from "niho-photo-editing/library/photo-libra
 import { PhotoSessionController, type PhotoIdentity, type PhotoSessionHostBridge } from "@niho/photo-cloud-session";
 import { PHOTO_CAPTURE_HEADERS, PHOTO_CONTENT_HEADERS } from "../../../packages/photo-cloud-library/src/wire.ts";
 import { syntheticPng } from "../../../packages/photo-cloud-media/test/synthetic-png.mjs";
+import { IndexedDbRecipeSyncJournal } from "@niho/photo-cloud-sync/browser";
+import type { RecipeJournalScope } from "@niho/photo-cloud-sync";
+import { IndexedDbTransferJournal, PERSONAL_PHOTO_TRANSFER_DATABASE_NAME } from "@niho/photo-cloud-library/browser";
 import type { PhotoWebTransferBinding } from "../src/view/types.ts";
 import { describe, expect, it, vi } from "vitest";
 
@@ -275,6 +278,7 @@ describe("Photo Web product composition", () => {
       rendererProof: {
         sdkVersion: fixtureLibrary.capabilities.renderer.sdkVersion,
         crateVersion: fixtureLibrary.capabilities.renderer.crateVersion,
+        sourceCommit: "a".repeat(40),
         manifestSha256: fixtureLibrary.capabilities.renderer.manifestSha256,
         manifestUrl: `/develop-engine/${fixtureLibrary.capabilities.renderer.manifestSha256}/manifest-${fixtureLibrary.capabilities.renderer.crateVersion}.json`,
       },
@@ -420,12 +424,59 @@ describe("Photo Web product composition", () => {
       expect(cloudRequests).toContain(`GET /photos/${IDS.photo}/assets/${currentPhoto.original.id}/content`);
       expect(cloudRequests).toContain(`PUT /photos/${IDS.photo}/recipe`);
       expect(cloudRequests).toContain(`DELETE /photos/${IDS.photo}`);
+
+      const recipeScope: RecipeJournalScope = {
+        actorId: actor.userId,
+        libraryId: fixtureLibrary.id,
+        sessionId: actor.sessionId,
+        sessionEpoch: actor.sessionEpoch,
+        transport: actor.transport,
+      };
+      const revokedDraft = drafts.open({ photoId: IDS.photo, sourceSha256: digest, expectedRevision: 1 });
+      const revokedStage = revokedDraft.stage(structuredClone(responses["photos.get"].recipe.settings) as never);
+      await expect(revokedStage.committed).resolves.toBe("committed");
+      const recipeJournal = new IndexedDbRecipeSyncJournal(indexedDB);
+      await expect(recipeJournal.list(recipeScope)).resolves.toMatchObject({ writers: [{ photoId: IDS.photo }] });
+
+      const transferScope = {
+        actorId: actor.userId,
+        libraryId: fixtureLibrary.id,
+        sessionId: actor.sessionId,
+        sessionEpoch: actor.sessionEpoch,
+      };
+      const otherScope = { ...transferScope, sessionId: "another-session", sessionEpoch: "another-epoch" };
+      const journal = new IndexedDbTransferJournal(indexedDB, PERSONAL_PHOTO_TRANSFER_DATABASE_NAME);
+      const completed = await journal.get(transferScope, added.intentId);
+      expect(completed).not.toBeNull();
+      await journal.compareAndSet(completed!, { ...completed!, revision: completed!.revision + 1, phase: "complete-pending" });
+      await journal.add({
+        ...completed!,
+        ...otherScope,
+        id: JSON.stringify([otherScope.actorId, otherScope.libraryId, otherScope.sessionId, otherScope.sessionEpoch, "other-intent"]),
+        revision: 0,
+        intentId: "other-intent",
+        phase: "complete-pending",
+        startKey: "other-start",
+        completeKey: "other-complete",
+        cancelKey: "other-cancel",
+      });
+      await expect(composition.guards.canLeave(actor, { release: false, signal: scope.signal })).resolves.toBe(false);
       scope.abort();
       connection.dispose();
       expect(maskValidatorFixture.dispose).toHaveBeenCalledOnce();
       connection = null;
       await composition.guards.onScopeRevoked(actor, "revoked");
       expect(purged).toEqual([actor]);
+      await expect(journal.get(transferScope, added.intentId)).rejects.toMatchObject({ code: "scope_changed" });
+      expect(await journal.get(otherScope, "other-intent")).not.toBeNull();
+      await expect(recipeJournal.list(recipeScope)).rejects.toThrow();
+      await expect(recipeJournal.listPrevious({
+        ...recipeScope,
+        sessionId: "new-session",
+        sessionEpoch: "new-epoch",
+      })).resolves.toMatchObject({ writers: [], nextCursor: null });
+      recipeJournal.dispose();
+      journal.dispose();
     } finally {
       releaseProvider();
       connection?.dispose();

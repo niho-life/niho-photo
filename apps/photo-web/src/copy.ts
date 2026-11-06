@@ -1,4 +1,9 @@
-import { PHOTO_EDITING_PERSONAL_CLOUD_TRANSFER_COPY, PHOTO_WEB_COPY, photoWebUsageLabel } from "niho-photo-editing/photo-editing-copy";
+import {
+  PHOTO_EDITING_PERSONAL_CLOUD_TRANSFER_COPY,
+  PHOTO_WEB_AUTH_COPY,
+  PHOTO_WEB_COPY,
+  photoWebUsageLabel,
+} from "niho-photo-editing/photo-editing-copy";
 import type { PhotoWebTransferCopy, PhotoWebViewCopy } from "./view/types";
 
 /** Shared product copy mapped to each host boundary; no private or identity metadata. */
@@ -15,3 +20,4 @@ export const PHOTO_WEB_NAVIGATION_ERROR_COPY = Object.freeze({
   message: PHOTO_WEB_COPY.unavailable,
   homeLabel: PHOTO_WEB_COPY.homeLabel,
 });
+export const PHOTO_WEB_SERVER_AUTH_COPY = PHOTO_WEB_AUTH_COPY;

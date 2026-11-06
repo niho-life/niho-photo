@@ -279,6 +279,8 @@ export interface JournalPreviousPendingWriterPage {
 }
 
 export interface RecipeSyncJournal {
+  /** Atomically fence and remove only one exact actor/library/session/epoch/transport scope. */
+  purgeScope(scope: RecipeJournalScope, signal?: AbortSignal): Promise<number>;
   /** 同canonical user/libraryの旧tupleを最大16件/4MiBで返す。通常listのscope条件は変えない。 */
   listPrevious?(scope: RecipeJournalScope, options?: { readonly cursor?: string; readonly limit?: number }, signal?: AbortSignal): Promise<JournalPreviousPendingWriterPage>;
   stage(binding: RecipeWriterBinding, stage: JournalStage, signal?: AbortSignal, releaseMaskLeases?: readonly MaskSurfacePinLease[]): Promise<void>;

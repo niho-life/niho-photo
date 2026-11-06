@@ -16,6 +16,7 @@ const MAX_PAGE_LIMIT = 16;
 const MAX_PAGE_BYTES = 4 * 1024 ** 2;
 const IDB_WAIT_TIMEOUT_MS = 120_000;
 const NEVER_ABORTS = new AbortController().signal;
+export const PERSONAL_PHOTO_TRANSFER_DATABASE_NAME = "niho-personal-photo-transfers-v1";
 
 export type TransferPhase =
   | "start-pending" | "uploading" | "complete-pending" | "verifying" | "pending-recipe"

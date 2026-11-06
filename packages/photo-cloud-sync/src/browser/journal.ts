@@ -24,10 +24,11 @@ import type {
   ReopenedJournalWriter,
 } from "../types";
 
-const DATABASE_VERSION = 2;
+const DATABASE_VERSION = 3;
 const WRITERS = "writers";
 const META = "meta";
 const MASKS = "masks";
+const SCOPE_FENCES = "scopeFences";
 const SCOPE_TOKEN = "scopeToken";
 const MASK_SCOPE = "maskScope";
 const IDB_TIMEOUT_MS = 15_000;
@@ -110,9 +111,10 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
       return;
     }
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [WRITERS, MASKS, META], "readwrite");
+    const transaction = strictTransaction(database, [WRITERS, MASKS, META, SCOPE_FENCES], "readwrite");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(SCOPE_FENCES), binding, transaction, signal);
     const writers = transaction.objectStore(WRITERS);
     const raw = await transactionWait(requestResult(writers.get(recordId(binding))), transaction, signal);
     const current = raw === undefined ? initialRecord(binding, stage.generation) : validateRecord(raw);
@@ -408,9 +410,10 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     if (!Number.isSafeInteger(limit) || limit < 1 || limit > MAX_LIST_COUNT) unavailable();
     if (options.cursor !== undefined) validateOpaque(options.cursor);
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [WRITERS], "readonly");
+    const transaction = strictTransaction(database, [WRITERS, SCOPE_FENCES], "readonly");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(SCOPE_FENCES), scope, transaction, signal);
     const prefix = scopeKey(scope);
     const range = options.cursor === undefined
       ? IDBKeyRange.bound(prefix, [...prefix, []])
@@ -458,9 +461,10 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     const prefix: [string, string] = [scope.actorId, scope.libraryId];
     const after = options.cursor === undefined ? null : parsePreviousCursor(options.cursor, scope);
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [WRITERS], "readonly");
+    const transaction = strictTransaction(database, [WRITERS, SCOPE_FENCES], "readonly");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(SCOPE_FENCES), scope, transaction, signal);
     const range = after === null
       ? IDBKeyRange.bound(prefix, [...prefix, []])
       : IDBKeyRange.bound(after, [...prefix, []], true, false);
@@ -503,9 +507,10 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     validateScope(scope);
     validateOpaque(token);
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [WRITERS], "readonly");
+    const transaction = strictTransaction(database, [WRITERS, SCOPE_FENCES], "readonly");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(SCOPE_FENCES), scope, transaction, signal);
     const request = transaction.objectStore(WRITERS).index(SCOPE_TOKEN).get([...scopeKey(scope), token]);
     const raw = await transactionWait(requestResult(request), transaction, signal);
     await transactionWait(barrier, transaction, signal);
@@ -528,9 +533,10 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
   async discard(binding: RecipeWriterBinding, signal?: AbortSignal): Promise<void> {
     validateBinding(binding);
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [WRITERS, MASKS, META], "readwrite");
+    const transaction = strictTransaction(database, [WRITERS, MASKS, META, SCOPE_FENCES], "readwrite");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(SCOPE_FENCES), binding, transaction, signal);
     const store = transaction.objectStore(WRITERS);
     const currentRaw = await transactionWait(requestResult(store.get(recordId(binding))), transaction, signal);
     const maskKeys = new Set<string>();
@@ -567,9 +573,10 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     validateBinding(binding);
     let released = false;
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [WRITERS, META], "readwrite");
+    const transaction = strictTransaction(database, [WRITERS, META, SCOPE_FENCES], "readwrite");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(SCOPE_FENCES), binding, transaction, signal);
     const store = transaction.objectStore(WRITERS);
     const currentRaw = await transactionWait(requestResult(store.get(recordId(binding))), transaction, signal);
     if (currentRaw !== undefined) {
@@ -615,9 +622,10 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     };
     validateMaskRecord(record);
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [MASKS, WRITERS, META], "readwrite");
+    const transaction = strictTransaction(database, [MASKS, WRITERS, META, SCOPE_FENCES], "readwrite");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(SCOPE_FENCES), scope, transaction, signal);
     const store = transaction.objectStore(MASKS);
     const raw = await transactionWait(requestResult(store.get(record.key)), transaction, signal);
     if (raw !== undefined) {
@@ -656,9 +664,10 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     validateOpaque(photoId);
     validateSha(sha);
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [MASKS], "readonly");
+    const transaction = strictTransaction(database, [MASKS, SCOPE_FENCES], "readonly");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(SCOPE_FENCES), scope, transaction, signal);
     const raw = await transactionWait(requestResult(transaction.objectStore(MASKS).get(maskKey(scope, photoId, sha))), transaction, signal);
     await transactionWait(barrier, transaction, signal);
     if (raw === undefined) return null;
@@ -681,9 +690,10 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     validateMaskUploadState(expected, photoId, sha);
     validateMaskUploadState(next, photoId, sha);
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [MASKS, META], "readwrite");
+    const transaction = strictTransaction(database, [MASKS, META, SCOPE_FENCES], "readwrite");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(SCOPE_FENCES), scope, transaction, signal);
     const store = transaction.objectStore(MASKS);
     const raw = await transactionWait(requestResult(store.get(maskKey(scope, photoId, sha))), transaction, signal);
     if (raw === undefined) { abort(transaction); unavailable(); }
@@ -711,9 +721,10 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     validateSha(sha);
     if (typeof pinned !== "boolean") unavailable();
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [MASKS, META], "readwrite");
+    const transaction = strictTransaction(database, [MASKS, META, SCOPE_FENCES], "readwrite");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(SCOPE_FENCES), scope, transaction, signal);
     const store = transaction.objectStore(MASKS);
     const raw = await transactionWait(requestResult(store.get(maskKey(scope, photoId, sha))), transaction, signal);
     if (raw === undefined) { abort(transaction); unavailable(); }
@@ -737,9 +748,10 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     validateOpaque(writerId);
     if (leases !== undefined) validateLeaseList(leases, writerId);
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [MASKS, META], "readwrite");
+    const transaction = strictTransaction(database, [MASKS, META, SCOPE_FENCES], "readwrite");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(SCOPE_FENCES), scope, transaction, signal);
     await releaseLeasesInTransaction(transaction, scope, leases ?? [{ writerId, pinToken: "*" }], signal, leases === undefined ? writerId : undefined);
     await transactionWait(barrier, transaction, signal);
   }
@@ -754,9 +766,10 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     validateOpaque(photoId);
     validateSha(sha);
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [MASKS, WRITERS, META], "readwrite");
+    const transaction = strictTransaction(database, [MASKS, WRITERS, META, SCOPE_FENCES], "readwrite");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(SCOPE_FENCES), scope, transaction, signal);
     const masks = transaction.objectStore(MASKS);
     const raw = await transactionWait(requestResult(masks.get(maskKey(scope, photoId, sha))), transaction, signal);
     if (raw === undefined) { await transactionWait(barrier, transaction, signal); return false; }
@@ -772,6 +785,62 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     return true;
   }
 
+  async purgeScope(scope: RecipeJournalScope, signal?: AbortSignal): Promise<number> {
+    validateScope(scope);
+    const database = await this.database(signal);
+    const transaction = strictTransaction(database, [WRITERS, MASKS, META, SCOPE_FENCES], "readwrite");
+    const barrier = transactionBarrier(transaction);
+    void barrier.catch(() => undefined);
+    transaction.objectStore(SCOPE_FENCES).put({ key: scopeFenceKey(scope), revoked: true });
+
+    let writersRemoved = 0;
+    let masksRemoved = 0;
+    let bytesRemoved = 0;
+    const writerPrefix = scopeKey(scope);
+    const writerRange = IDBKeyRange.bound(writerPrefix, [...writerPrefix, []]);
+    const writerDeletion = new Promise<void>((resolve, reject) => {
+      const request = transaction.objectStore(WRITERS).index(SCOPE_TOKEN).openCursor(writerRange, "next");
+      request.onerror = () => reject(idbError(request.error));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor === null) { resolve(); return; }
+        try {
+          const record = validateRecord(cursor.value);
+          if (!sameScope(record, scope)) unavailable();
+          bytesRemoved += jsonBytes(record);
+          writersRemoved += 1;
+          cursor.delete();
+          cursor.continue();
+        } catch (error) { abort(transaction); reject(error); }
+      };
+    });
+    await transactionWait(writerDeletion, transaction, signal);
+
+    const maskRange = IDBKeyRange.bound(writerPrefix, [...writerPrefix, []]);
+    const maskDeletion = new Promise<void>((resolve, reject) => {
+      const request = transaction.objectStore(MASKS).index(MASK_SCOPE).openCursor(maskRange, "next");
+      request.onerror = () => reject(idbError(request.error));
+      request.onsuccess = () => {
+        const cursor = request.result;
+        if (cursor === null) { resolve(); return; }
+        try {
+          const record = validateMaskRecord(cursor.value);
+          if (!sameMaskScope(record, scope)) unavailable();
+          bytesRemoved += maskBytes(record);
+          masksRemoved += 1;
+          cursor.delete();
+          cursor.continue();
+        } catch (error) { abort(transaction); reject(error); }
+      };
+    });
+    await transactionWait(maskDeletion, transaction, signal);
+    await updateCombinedBudgets(
+      transaction.objectStore(META), scope, -writersRemoved, -masksRemoved, -bytesRemoved, signal, transaction,
+    );
+    await transactionWait(barrier, transaction, signal);
+    return writersRemoved + masksRemoved;
+  }
+
   dispose(): void {
     this.disposed = true;
     if (this.databasePromise !== null) void this.databasePromise.then((database) => database.close(), () => undefined);
@@ -784,9 +853,10 @@ export class IndexedDbRecipeSyncJournal implements RecipeSyncJournal {
     initialGeneration = 0,
   ): Promise<void> {
     const database = await this.database(signal);
-    const transaction = strictTransaction(database, [WRITERS, META], "readwrite");
+    const transaction = strictTransaction(database, [WRITERS, META, SCOPE_FENCES], "readwrite");
     const barrier = transactionBarrier(transaction);
     void barrier.catch(() => undefined);
+    await assertScopeNotRevoked(transaction.objectStore(SCOPE_FENCES), binding, transaction, signal);
     const store = transaction.objectStore(WRITERS);
     const raw = await transactionWait(requestResult(store.get(recordId(binding))), transaction, signal);
     const current = raw === undefined ? initialRecord(binding, initialGeneration) : validateRecord(raw);
@@ -1291,9 +1361,12 @@ function openDatabase(factory: IDBFactory, name: string): Promise<IDBDatabase> {
         const writers = request.result.createObjectStore(WRITERS, { keyPath: "id" });
         writers.createIndex(SCOPE_TOKEN, ["actorId", "libraryId", "sessionId", "sessionEpoch", "transport", "token"], { unique: true });
         request.result.createObjectStore(META, { keyPath: "key" });
-      } else if (oldVersion !== 1) { request.transaction?.abort(); return; }
-      const masks = request.result.createObjectStore(MASKS, { keyPath: "key" });
-      masks.createIndex(MASK_SCOPE, ["actorId", "libraryId", "sessionId", "sessionEpoch", "transport", "photoId", "sha256"], { unique: true });
+      } else if (oldVersion !== 1 && oldVersion !== 2) { request.transaction?.abort(); return; }
+      if (oldVersion < 2) {
+        const masks = request.result.createObjectStore(MASKS, { keyPath: "key" });
+        masks.createIndex(MASK_SCOPE, ["actorId", "libraryId", "sessionId", "sessionEpoch", "transport", "photoId", "sha256"], { unique: true });
+      }
+      if (oldVersion < 3) request.result.createObjectStore(SCOPE_FENCES, { keyPath: "key" });
     };
     request.onsuccess = () => {
       const database = request.result;
@@ -1336,6 +1409,27 @@ async function transactionWait<T>(promise: Promise<T>, transaction: IDBTransacti
 
 function scopeKey(scope: RecipeJournalScope): [string, string, string, string, string] {
   return [scope.actorId, scope.libraryId, scope.sessionId, scope.sessionEpoch, scope.transport];
+}
+
+function scopeFenceKey(scope: RecipeJournalScope): string {
+  return JSON.stringify(["niho-photo-recipe-scope-fence-v1", ...scopeKey(scope)]);
+}
+
+async function assertScopeNotRevoked(
+  fences: IDBObjectStore,
+  scope: RecipeJournalScope,
+  transaction: IDBTransaction,
+  signal?: AbortSignal,
+): Promise<void> {
+  const key = scopeFenceKey(scope);
+  const value = await transactionWait(requestResult(fences.get(key)), transaction, signal);
+  if (value === undefined) return;
+  if (!isRecord(value) || !exactKeys(value, ["key", "revoked"]) || value.key !== key || value.revoked !== true) {
+    abort(transaction);
+    unavailable();
+  }
+  abort(transaction);
+  unavailable();
 }
 
 type PreviousIndexKey = [string, string, string, string, string, string];
