@@ -135,6 +135,12 @@
       "wiring": "not-connected",
       "evidence": "export manifestの状態。"
     },
+    "portability.content": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "owner限定でreadyなportable exportのmanifestを含むarchiveをrange付きstreamとして取得する。"
+    },
     "portability.restore": {
       "issue": 242,
       "backend": "missing",
@@ -320,6 +326,18 @@
       "backend": "missing",
       "wiring": "not-connected",
       "evidence": "控えにmaskの中身を取り込む。surfaceのSHA-256で照合し、元データは運ばない。"
+    },
+    "connector.startWorkingCopyUpload": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "常設Macからsource generation・SDK metadata・asset hashに束縛したcanonical working copyを予約する。"
+    },
+    "connector.completeWorkingCopyUpload": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "アップロード後にsource generationを再確認してworking copyを正本へ確定する。"
     },
     "renderJobs.claim": {
       "issue": 248,

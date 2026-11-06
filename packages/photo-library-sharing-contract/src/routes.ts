@@ -93,6 +93,7 @@ export const SHARING_ROUTES = {
   "exports.content": get("/exports/{exportId}/content", [], true),
   "portability.export": post("/libraries/{libraryId}/portable-exports", ["mode"]),
   "portability.get": get("/portable-exports/{exportId}"),
+  "portability.content": get("/portable-exports/{exportId}/content", [], true),
   "portability.restore": post("/libraries/{libraryId}/restore", ["manifestSha256"]),
 
   "albums.list": get("/albums", PAGE),
@@ -151,6 +152,8 @@ export const CONNECTOR_ROUTES = {
   "connector.pullReplica": get("/replica", ["sinceRevision", "limit", "cursor"]),
   "connector.ackReplica": post("/replica/ack", ["revision"]),
   "connector.getReplicaContent": get("/replica/{entity}/{id}/content", [], true),
+  "connector.startWorkingCopyUpload": post("/photos/{photoId}/working-copy-uploads", ["sourceGeneration", "workingCopy"]),
+  "connector.completeWorkingCopyUpload": post("/photos/{photoId}/working-copy-uploads/{uploadId}/complete"),
   "renderJobs.claim": { method: "POST", path: "/jobs/claim", query: [], body: ["maxJobs", "purposes"], range: false, idempotencyKey: false },
   "renderJobs.startOutput": post("/jobs/{jobId}/outputs", ["leaseToken", "output"]),
   "renderJobs.commit": post("/jobs/{jobId}/commit", ["leaseToken", "uploadId"]),

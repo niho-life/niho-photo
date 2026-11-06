@@ -29,7 +29,7 @@ const vectors = await load("fixtures/security-cases.json");
 const coverage = await load("operation-coverage.json");
 const userOperations = Object.keys(SHARING_OPERATION_ACCESS);
 const connectorOperations = Object.keys(CONNECTOR_OPERATION_ACCESS);
-const STREAM_OPERATIONS = ["hostedPhotos.content", "exports.content", "albumItems.download", "connector.getReplicaContent"];
+const STREAM_OPERATIONS = ["hostedPhotos.content", "exports.content", "portability.content", "albumItems.download", "connector.getReplicaContent"];
 const CREATE_OPERATIONS = new Set(["albums.create", "albumItems.addPhoto", "albumItems.addFile", "invites.create", "connectors.approvePairing"]);
 
 test("UI vocabulary is exactly the identifiers agreed with the B08 session", () => {

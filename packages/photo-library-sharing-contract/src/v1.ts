@@ -13,6 +13,7 @@ import type {
   JsonObject,
   LibraryId,
   MutationReceipt,
+  PhotoAsset,
   PhotoByteRange,
   PhotoContent,
   PhotoFormat,
@@ -38,6 +39,7 @@ export type {
   JsonObject,
   LibraryId,
   MutationReceipt,
+  PhotoAsset,
   PhotoByteRange,
   PhotoContent,
   PhotoFormat,
@@ -826,6 +828,24 @@ export interface HostedMaskUpload {
   readonly state: "reserved" | "verifying" | "stored" | "cancelled" | "expired" | "rejected";
 }
 
+/** Metadata sent before the connector uploads canonical working-copy bytes. The server assigns the asset ID/kind. */
+export type HostedWorkingCopyInput = Omit<WorkingCopy, "asset"> & { readonly asset: Omit<PhotoAsset, "id" | "kind"> };
+export interface HostedWorkingCopyUpload {
+  readonly id: UploadId;
+  readonly photoId: PhotoId;
+  readonly sourceGeneration: number;
+  readonly sha256: Sha256;
+  readonly sizeBytes: number;
+  readonly contentType: string;
+  readonly expiresAt: Instant;
+  readonly state: "reserved" | "verifying" | "stored" | "cancelled" | "expired" | "rejected";
+}
+export interface HostedWorkingCopyCommit {
+  readonly photoId: PhotoId;
+  readonly sourceGeneration: number;
+  readonly workingCopy: WorkingCopy;
+}
+
 // ---------------------------------------------------------------------------------------------------------
 // Portability (owner-only, B01)
 
@@ -1036,6 +1056,8 @@ export interface SharingOperationMap {
     MutationReceipt<PortableExport>
   >;
   readonly "portability.get": Operation<{ readonly exportId: PortableExportId }, PortableExport>;
+  /** Owner-only byte stream for the ready portable archive, including its manifest. */
+  readonly "portability.content": Operation<{ readonly exportId: PortableExportId; readonly range?: PhotoByteRange }, PhotoContent>;
   readonly "portability.restore": Operation<
     { readonly libraryId: LibraryId; readonly manifestSha256: Sha256 },
     MutationReceipt<RestoreReport>
@@ -1147,6 +1169,16 @@ export interface ConnectorOperationMap extends RenderExecutorOperationMap {
     { readonly entity: "mask"; readonly id: string; readonly range?: PhotoByteRange },
     PhotoContent
   >;
+  /** Upload the SDK's canonical working-copy bytes and opening metadata for the exact source generation. */
+  readonly "connector.startWorkingCopyUpload": Operation<
+    { readonly photoId: PhotoId; readonly sourceGeneration: number; readonly workingCopy: HostedWorkingCopyInput },
+    MutationReceipt<{ readonly upload: HostedWorkingCopyUpload; readonly ticket: UploadTicket | null }>
+  >;
+  /** Publishes the uploaded copy only if its source generation still matches the hosted photo. */
+  readonly "connector.completeWorkingCopyUpload": Operation<
+    { readonly photoId: PhotoId; readonly uploadId: UploadId },
+    MutationReceipt<HostedWorkingCopyCommit>
+  >;
 }
 export type ConnectorOperation = keyof ConnectorOperationMap;
 
@@ -1230,6 +1262,7 @@ export const SHARING_OPERATION_ACCESS = {
   "exports.content": { actor: "user", scope: "libraryOwner" },
   "portability.export": { actor: "user", scope: "libraryOwner" },
   "portability.get": { actor: "user", scope: "libraryOwner" },
+  "portability.content": { actor: "user", scope: "libraryOwner" },
   "portability.restore": { actor: "user", scope: "libraryOwner" },
   "albums.list": { actor: "user", scope: "self" },
   "albums.get": { actor: "user", scope: "album", action: "view" },
@@ -1264,6 +1297,8 @@ export const CONNECTOR_OPERATION_ACCESS = {
   "connector.pullReplica": { actor: "connector", scope: "ownLibrary" },
   "connector.ackReplica": { actor: "connector", scope: "ownLibrary" },
   "connector.getReplicaContent": { actor: "connector", scope: "ownLibrary" },
+  "connector.startWorkingCopyUpload": { actor: "connector", scope: "ownLibrary" },
+  "connector.completeWorkingCopyUpload": { actor: "connector", scope: "ownLibrary" },
   "renderJobs.claim": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
   "renderJobs.startOutput": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
   "renderJobs.commit": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
@@ -1336,6 +1371,7 @@ export const SHARING_REQUEST_SHAPES = {
   "exports.content": { exportId: "value", range: RANGE_SHAPE },
   "portability.export": { libraryId: "value", mode: "value" },
   "portability.get": { exportId: "value" },
+  "portability.content": { exportId: "value", range: RANGE_SHAPE },
   "portability.restore": { libraryId: "value", manifestSha256: "value" },
   "albums.list": PAGE_FIELDS,
   "albums.get": { albumId: "value" },
@@ -1388,6 +1424,14 @@ export const CONNECTOR_REQUEST_SHAPES = {
   "connector.pullReplica": { sinceRevision: "value", limit: "value", cursor: "value" },
   "connector.ackReplica": { revision: "value" },
   "connector.getReplicaContent": { entity: "value", id: "value", range: RANGE_SHAPE },
+  "connector.startWorkingCopyUpload": {
+    photoId: "value", sourceGeneration: "value",
+    workingCopy: { fields: {
+      baseVersion: "value", encoding: "value", meta: "open",
+      asset: { fields: { sha256: "value", sizeBytes: "value", contentType: "value", width: "value", height: "value" } },
+    } },
+  },
+  "connector.completeWorkingCopyUpload": { photoId: "value", uploadId: "value" },
   "renderJobs.claim": { maxJobs: "value", purposes: { items: "value" } },
   "renderJobs.startOutput": {
     jobId: "value", leaseToken: "value",

@@ -45,6 +45,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - metadata（補正・mask・アルバム定義・索引）の正本は NIHO。常設Macは元データと控え（replica）を持ち、控えで正本を上書きしない（`connector.pullReplica`/`ackReplica`）。
 - 控えの変更は revision 順の型付き upsert/delete（`ReplicaChange`。写真の索引記録・完全 recipe・mask・アルバム定義・除外）。mask の中身は `connector.getReplicaContent` で取り込み、surface の SHA-256 で照合する。削除は tombstone で届く。`sinceRevision: 0` は現在の状態の snapshot で、返る `cursor` で最後まで続ける（途中で圧縮されたら `replica_reset_required` で snapshot をやり直す）。tombstone を捨てた範囲より前の revision や NIHO より先の revision は `replica_reset_required` で、控えを snapshot から作り直す（控えを正本へ昇格させない）。
 - 常設Mac library の mask は `hostedMasks.startUpload`/`completeUpload` で先に NIHO へ置く。参照する mask が全部そろうまで補正の保存は `missing_mask_surface` で拒否し、一部だけ保存しない。
+- canonical working copy は connector が `connector.startWorkingCopyUpload`/`completeWorkingCopyUpload` で送る。request には source generation・base version・encoding・SDK metadata・asset hash と寸法を含め、確定時にも同じ source generation が現行か確認する。元写真やpreviewを代用しない。
 - 常設Macが休止中でも補正の保存は完了する。`hostedRecipes.put` は `durability: "niho"` を返し、控えの状態だけが `pendingHost` になる。待つのは `HOST_DEFERRED_WORK` の原寸書き出しと所有者の写真の完成写真だけ。
 - 通信は常設Macからの外向きだけ（登録・heartbeat・索引・控え・描画job）。NIHO から Mac へ入る経路はない。
 - 登録は接続用ソフトが始め、owner が NIHO で承認する短期・一回限りの手順。接続用ソフトは乱数の poll secret と端末資格を作り、その SHA-256 だけを送る。開始・照会・回転は冪等で、応答が失われても再送でき、NIHO から bearer を返さない。端末資格は NIHO のログイン token と別。回転・失効・再登録で `credentialGeneration` が進み、古い資格の確定を拒否する。
@@ -139,6 +140,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | exports.content | GET `/exports/{exportId}/content` | `Range` | 不可 |
 | portability.export | POST `/libraries/{libraryId}/portable-exports` | body: `{mode}` | 必須 |
 | portability.get | GET `/portable-exports/{exportId}` | なし | 不可 |
+| portability.content | GET `/portable-exports/{exportId}/content` | `Range` | 不可 |
 | portability.restore | POST `/libraries/{libraryId}/restore` | body: `{manifestSha256}` | 必須 |
 | albums.list | GET `/albums` | query: cursor、limit | 不可 |
 | albums.get | GET `/albums/{albumId}` | なし | 不可 |
@@ -182,6 +184,8 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | connector.pullReplica | GET `/replica` | query: sinceRevision、limit、cursor | 不可 |
 | connector.ackReplica | POST `/replica/ack` | body: `{revision}` | 必須 |
 | connector.getReplicaContent | GET `/replica/{entity}/{id}/content` | `Range` | 不可 |
+| connector.startWorkingCopyUpload | POST `/photos/{photoId}/working-copy-uploads` | body: `{sourceGeneration, workingCopy}` | 必須 |
+| connector.completeWorkingCopyUpload | POST `/photos/{photoId}/working-copy-uploads/{uploadId}/complete` | body: `{}` | 必須 |
 | renderJobs.claim | POST `/jobs/claim` | body: `{maxJobs, purposes}` | 不可 |
 | renderJobs.startOutput | POST `/jobs/{jobId}/outputs` | body: `{leaseToken, output}` | 必須 |
 | renderJobs.commit | POST `/jobs/{jobId}/commit` | body: `{leaseToken, uploadId}` | 必須 |
@@ -213,7 +217,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 
 ## export と restore
 
-- B01 の範囲。schema/engine・完全 recipe・mask・アルバム定義・photo/album ID・元 asset の identity・hash を持ち、参照だけの `metadata` と元データ込みの `full` を分ける。
+- B01 の範囲。schema/engine・完全 recipe・mask・アルバム定義・photo/album ID・元 asset の identity・hash を持ち、参照だけの `metadata` と元データ込みの `full` を分ける。`portability.content` はownerだけにmanifestを含む完成archiveをrange付きstreamで返す。
 - 鍵・ticket・session・招待の secret・在籍は含めない（`PORTABLE_EXPORT_EXCLUDES`）。メンバーが追加した項目と直接追加の項目の `source` は型で `null` に固定し、owner へメンバーの元写真への参照を渡さない。
 - restore は現在の台帳で権限を照合し、snapshot から在籍を戻さない（`membershipsRestored: 0`）。NIHO の方が新しい補正・アルバムは残し（`keptNewer`）、古い snapshot で戻さない。
 

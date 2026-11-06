@@ -25,7 +25,7 @@ import { CONNECTOR_OPERATION_ACCESS, CONNECTOR_REQUEST_SHAPES, SHARING_OPERATION
 import { connectorResponses, responses } from "../fixtures/v1.ts";
 
 const operations = Object.keys(SHARING_OPERATION_ACCESS);
-const STREAMS = new Set(["hostedPhotos.content", "exports.content", "albumItems.download"]);
+const STREAMS = new Set(["hostedPhotos.content", "exports.content", "portability.content", "albumItems.download"]);
 
 test("every user operation has exactly one route and connector traffic has none", () => {
   assert.equal(SHARING_CLOUD_PATH_PREFIX, "/cloud/sharing/v1");
@@ -181,6 +181,14 @@ test("connector and user render routes place each field once, key mutations, and
     "connector.pullReplica": { sinceRevision: 0, limit: 100, cursor: "1:5" },
     "connector.ackReplica": { revision: 5 },
     "connector.getReplicaContent": { entity: "mask", id: "photo:surface", range: { start: 0, endInclusive: 9 } },
+    "connector.startWorkingCopyUpload": {
+      photoId: "photo-1", sourceGeneration: 2,
+      workingCopy: {
+        baseVersion: "niho-sdk-197", encoding: "png16", meta: { sdkVersion: "synthetic" },
+        asset: { sha256: "a".repeat(64), sizeBytes: 8192, contentType: "image/png", width: 6000, height: 4000 },
+      },
+    },
+    "connector.completeWorkingCopyUpload": { photoId: "photo-1", uploadId: "working-copy-upload" },
     "renderJobs.claim": { maxJobs: 2, purposes: ["preview"] },
     "renderJobs.startOutput": { jobId: "synthetic job", leaseToken: "lease", output: { kind: "preview", sizeBytes: 1, sha256: "a", contentType: "image/jpeg", width: 1, height: 1 } },
     "renderJobs.commit": { jobId: "synthetic job", leaseToken: "lease", uploadId: "upload" },
