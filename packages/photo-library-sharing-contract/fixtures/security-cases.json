@@ -3287,7 +3287,15 @@
         "currentRevision": 2,
         "sourceGeneration": 1,
         "currentSourceGeneration": 2,
-        "connectorState": "online"
+        "referencedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "storedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "connectorState": "online",
+        "metadataRevisionAfterSave": 13,
+        "acknowledgedRevision": 12
       },
       "expected": {
         "status": 409,
@@ -3318,7 +3326,15 @@
         "currentRevision": 3,
         "sourceGeneration": 1,
         "currentSourceGeneration": 1,
-        "connectorState": "online"
+        "referencedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "storedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "connectorState": "online",
+        "metadataRevisionAfterSave": 13,
+        "acknowledgedRevision": 12
       },
       "expected": {
         "status": 409,
@@ -3349,13 +3365,222 @@
         "currentRevision": 2,
         "sourceGeneration": 1,
         "currentSourceGeneration": 1,
-        "connectorState": "sleeping"
+        "referencedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "storedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "connectorState": "sleeping",
+        "metadataRevisionAfterSave": 13,
+        "acknowledgedRevision": 12
       },
       "expected": {
         "status": 200,
         "invariants": [
           "durable_in_niho",
           "replica_pending_host"
+        ],
+        "replica": "pendingHost"
+      }
+    },
+    {
+      "id": "hosted-save-online-unacknowledged",
+      "operation": "hostedRecipes.put",
+      "actor": "owner",
+      "check": "hostedSave",
+      "request": {
+        "libraryId": "synthetic-library-hosted",
+        "photoId": "synthetic-hosted-photo",
+        "expectedRevision": 2,
+        "sourceGeneration": 1,
+        "settings": {
+          "v": 5,
+          "engine": "niho-14"
+        },
+        "baseVersion": null
+      },
+      "arrange": {
+        "expectedRevision": 2,
+        "currentRevision": 2,
+        "sourceGeneration": 1,
+        "currentSourceGeneration": 1,
+        "referencedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "storedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "connectorState": "online",
+        "metadataRevisionAfterSave": 13,
+        "acknowledgedRevision": 12
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "durable_in_niho",
+          "replica_pending_until_acknowledged"
+        ],
+        "replica": "pendingHost"
+      }
+    },
+    {
+      "id": "hosted-save-acknowledged-replay",
+      "operation": "hostedRecipes.put",
+      "actor": "owner",
+      "check": "hostedSave",
+      "request": {
+        "libraryId": "synthetic-library-hosted",
+        "photoId": "synthetic-hosted-photo",
+        "expectedRevision": 2,
+        "sourceGeneration": 1,
+        "settings": {
+          "v": 5,
+          "engine": "niho-14"
+        },
+        "baseVersion": null
+      },
+      "arrange": {
+        "expectedRevision": 2,
+        "currentRevision": 2,
+        "sourceGeneration": 1,
+        "currentSourceGeneration": 1,
+        "referencedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "storedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "connectorState": "sleeping",
+        "metadataRevisionAfterSave": 13,
+        "acknowledgedRevision": 13
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "durable_in_niho",
+          "replica_current_only_after_acknowledgement"
+        ],
+        "replica": "current"
+      }
+    },
+    {
+      "id": "hosted-save-missing-mask",
+      "operation": "hostedRecipes.put",
+      "actor": "owner",
+      "check": "hostedSave",
+      "request": {
+        "libraryId": "synthetic-library-hosted",
+        "photoId": "synthetic-hosted-photo",
+        "expectedRevision": 2,
+        "sourceGeneration": 1,
+        "settings": {
+          "v": 5,
+          "engine": "niho-14"
+        },
+        "baseVersion": null
+      },
+      "arrange": {
+        "expectedRevision": 2,
+        "currentRevision": 2,
+        "sourceGeneration": 1,
+        "currentSourceGeneration": 1,
+        "referencedMaskSurfaceIds": [
+          "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+        ],
+        "storedMaskSurfaceIds": [],
+        "connectorState": "online",
+        "metadataRevisionAfterSave": 13,
+        "acknowledgedRevision": 12
+      },
+      "expected": {
+        "status": 422,
+        "code": "missing_mask_surface",
+        "invariants": [
+          "no_partial_save",
+          "saved_only_after_all_references"
+        ]
+      }
+    },
+    {
+      "id": "replica-pull-compacted",
+      "operation": "connector.pullReplica",
+      "actor": "connector",
+      "check": "replicaPull",
+      "request": {
+        "sinceRevision": 3,
+        "limit": 100
+      },
+      "arrange": {
+        "retainedFromRevision": 10,
+        "canonicalRevision": 20
+      },
+      "expected": {
+        "status": 410,
+        "code": "replica_reset_required",
+        "invariants": [
+          "rebuild_from_snapshot"
+        ]
+      }
+    },
+    {
+      "id": "replica-pull-ahead-of-niho",
+      "operation": "connector.pullReplica",
+      "actor": "connector",
+      "check": "replicaPull",
+      "request": {
+        "sinceRevision": 25,
+        "limit": 100
+      },
+      "arrange": {
+        "retainedFromRevision": 10,
+        "canonicalRevision": 20
+      },
+      "expected": {
+        "status": 410,
+        "code": "replica_reset_required",
+        "invariants": [
+          "replica_never_promoted"
+        ]
+      }
+    },
+    {
+      "id": "replica-pull-snapshot",
+      "operation": "connector.pullReplica",
+      "actor": "connector",
+      "check": "replicaPull",
+      "request": {
+        "sinceRevision": 0,
+        "limit": 100
+      },
+      "arrange": {
+        "retainedFromRevision": 10,
+        "canonicalRevision": 20
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "current_state_as_snapshot"
+        ]
+      }
+    },
+    {
+      "id": "replica-pull-diff",
+      "operation": "connector.pullReplica",
+      "actor": "connector",
+      "check": "replicaPull",
+      "request": {
+        "sinceRevision": 15,
+        "limit": 100
+      },
+      "arrange": {
+        "retainedFromRevision": 10,
+        "canonicalRevision": 20
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "diff_only_after_resume"
         ]
       }
     },
@@ -3681,7 +3906,8 @@
       "request": {
         "platform": "macos",
         "displayName": "Synthetic Mac",
-        "pollSecretSha256": "8888888888888888888888888888888888888888888888888888888888888888"
+        "pollSecretSha256": "8888888888888888888888888888888888888888888888888888888888888888",
+        "credentialSha256": "6666666666666666666666666666666666666666666666666666666666666666"
       },
       "arrange": {
         "stored": {

@@ -27,7 +27,6 @@ import type {
   ConnectorPairingTarget,
   CursorBinding,
   ForbiddenMetadataCategory,
-  HostConnectorState,
   IdempotencyRecord,
   Instant,
   InviteLink,
@@ -146,12 +145,39 @@ export function decideHostedRecipeSave(input: {
   readonly currentRevision: number;
   readonly sourceGeneration: number;
   readonly currentSourceGeneration: number;
-  readonly connectorState: HostConnectorState | null;
+  /** Mask surfaces the new recipe references, and those already stored for this photo in NIHO. */
+  readonly referencedMaskSurfaceIds: readonly string[];
+  readonly storedMaskSurfaceIds: readonly string[];
+  /** Library metadata revision after this save; distinct from the photo's recipe revision. */
+  readonly metadataRevisionAfterSave: number;
+  /** Revision the hosted Mac has durably acknowledged. Heartbeat state does not prove the replica is current. */
+  readonly acknowledgedRevision: number;
 }): { readonly ok: true; readonly replica: "current" | "pendingHost" } | { readonly ok: false; readonly code: SharingErrorCode } {
   if (input.expectedRevision !== input.currentRevision || input.sourceGeneration !== input.currentSourceGeneration) {
     return { ok: false, code: "revision_conflict" };
   }
-  return { ok: true, replica: input.connectorState === "online" ? "current" : "pendingHost" };
+  // Nothing is saved until every reference is durable; a partial save never reports success.
+  if (input.referencedMaskSurfaceIds.some((id) => !input.storedMaskSurfaceIds.includes(id))) return { ok: false, code: "missing_mask_surface" };
+  return {
+    ok: true,
+    replica: input.acknowledgedRevision === input.metadataRevisionAfterSave ? "current" : "pendingHost",
+  };
+}
+
+/**
+ * A replica pull continues from the connector's own revision. 0 is a snapshot of the current state (its cursor is
+ * validated by the server against compaction). A revision older than the retained tombstones, or ahead of NIHO,
+ * means the replica must be rebuilt; it is never promoted.
+ */
+export function decideReplicaPull(input: {
+  readonly sinceRevision: number;
+  readonly retainedFromRevision: number;
+  readonly canonicalRevision: number;
+}): Decision {
+  if (!Number.isSafeInteger(input.sinceRevision) || input.sinceRevision < 0) return deny("invalid_request");
+  if (input.sinceRevision === 0) return allow;
+  if (input.sinceRevision < input.retainedFromRevision || input.sinceRevision > input.canonicalRevision) return deny("replica_reset_required");
+  return allow;
 }
 
 /** One-time, short-lived pairing bound to the approving owner. Another owner's library is indistinguishable from missing. */
