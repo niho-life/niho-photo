@@ -19,9 +19,10 @@ export interface StartPhotoWebApplicationOptions {
   readonly enabled: boolean;
   /** Verified metadata returned by the static build factory used for this exact page. */
   readonly build: Pick<PhotoStaticBuildResult, "sdk">;
-  /** The C00 preset owner and C08 scope purge port are mandatory runtime dependencies. */
+  /** The C00 preset owner is a mandatory runtime dependency. */
   readonly presets: PhotoLibraryPresets;
-  readonly clearRevokedScope: (identity: PhotoIdentity, reason: PhotoWebRevocationReason) => void | Promise<void>;
+  /** Optional additional application cleanup; the shared durable journals are purged by the connection factory. */
+  readonly clearRevokedScope?: (identity: PhotoIdentity, reason: PhotoWebRevocationReason) => void | Promise<void>;
   readonly memoryBudgets: PersonalPhotoCloudMemoryBudgets;
   readonly downloadBudget: CreatePhotoWebRuntimeOptions["downloadBudget"];
   /** Transfer controls stay hidden until the complete shared C00 copy is supplied. */
@@ -43,12 +44,13 @@ export function startPhotoWebApplication(options: StartPhotoWebApplicationOption
     rendererProof: {
       sdkVersion: options.build.sdk.sdkVersion,
       crateVersion: options.build.sdk.crateVersion,
+      sourceCommit: options.build.sdk.sourceCommit,
       manifestSha256: options.build.sdk.manifestSha256,
       manifestUrl: options.build.sdk.manifestUrl,
     },
     presets: options.presets,
     memoryBudgets: options.memoryBudgets,
-    clearRevokedScope: options.clearRevokedScope,
+    ...(options.clearRevokedScope === undefined ? {} : { clearRevokedScope: options.clearRevokedScope }),
     ...(options.transferCopy === undefined ? {} : { transferCopy: options.transferCopy }),
     ...(options.fetch === undefined ? {} : { cloudFetch: options.fetch }),
     ...(options.providerFetch === undefined ? {} : { providerFetch: options.providerFetch }),

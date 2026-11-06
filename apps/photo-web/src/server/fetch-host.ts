@@ -14,6 +14,7 @@ type PortWaitState<T> = {
 };
 type Configuration = {
   readonly origin: string;
+  readonly cloudEnabled: boolean;
   readonly staticGet: (path: string, head?: boolean) => Response | null;
   readonly auth: ReadonlyMap<string, Handler>;
   readonly cloud: ((request: Request) => Promise<Response | null>) | null;
@@ -95,6 +96,7 @@ function configuration(options: PhotoWebFetchHostOptions): Configuration | null 
     }
     return Object.freeze({
       origin: origin.origin,
+      cloudEnabled: options.cloudEnabled === true,
       staticGet,
       auth,
       cloud: cloudValue === undefined ? null : cloudValue,
@@ -104,6 +106,29 @@ function configuration(options: PhotoWebFetchHostOptions): Configuration | null 
   } catch {
     return null;
   }
+}
+
+function fixedPublicResponse(pathname: string, head: boolean, cloudEnabled: boolean): Response | null {
+  let bytes: Uint8Array;
+  let contentType: string;
+  if (pathname === "/healthz") {
+    bytes = new TextEncoder().encode("ready\n");
+    contentType = "text/plain; charset=utf-8";
+  } else if (pathname === "/photo-runtime.json") {
+    bytes = new TextEncoder().encode(`${JSON.stringify({ cloudEnabled })}\n`);
+    contentType = "application/json; charset=utf-8";
+  } else return null;
+  const body = bytes.buffer.slice(bytes.byteOffset, bytes.byteOffset + bytes.byteLength) as ArrayBuffer;
+  return new Response(head ? null : body, {
+    status: 200,
+    headers: {
+      "Cache-Control": "no-store",
+      "Content-Length": String(bytes.byteLength),
+      "Content-Type": contentType,
+      "Referrer-Policy": "no-referrer",
+      "X-Content-Type-Options": "nosniff",
+    },
+  });
 }
 
 function copyHeaders(source: Headers): Headers {
@@ -262,6 +287,15 @@ export function createPhotoWebFetchHost(options: PhotoWebFetchHostOptions): (req
       return failure(400, "bad_request");
     }
     if (url.origin !== config.origin || url.hash !== "") return failure(400, "bad_request");
+
+    const fixed = fixedPublicResponse(url.pathname, request.method === "HEAD", config.cloudEnabled);
+    if (fixed !== null) {
+      if (url.search !== "") return failure(400, "bad_request");
+      if (request.method !== "GET" && request.method !== "HEAD") {
+        return failure(405, "method_not_allowed", { Allow: "GET, HEAD" });
+      }
+      return fixed;
+    }
 
     let staticResponse: Response | null;
     try {

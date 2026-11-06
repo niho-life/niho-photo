@@ -5,7 +5,11 @@ import path from "node:path";
 
 import type { PhotoStaticAsset } from "../pwa/types.ts";
 import type { PhotoPublicNotice, PhotoStaticBuildResult } from "../build/types.ts";
-import type { LoadPhotoWebStaticStoreOptions, PhotoWebStaticStore } from "./types.ts";
+import type {
+  LoadPhotoWebStaticStoreOptions,
+  LoadRetainedPhotoWebStaticStoreOptions,
+  PhotoWebStaticStore,
+} from "./types.ts";
 
 const MAX_DOCUMENT_BYTES = 256 * 1024;
 const MAX_FILE_BYTES = 8 * 1024 * 1024;
@@ -359,6 +363,105 @@ export async function loadPhotoWebStaticStore(options: LoadPhotoWebStaticStoreOp
     return Object.freeze({ build: input.build, get });
   } catch (error) {
     for (const bytes of buffers) bytes.fill(0);
+    const code = error instanceof StoreFailure ? error.code : "io_failure";
+    throw new PhotoWebStaticStoreError(code);
+  }
+}
+
+const RETAINED_KINDS = new Set<Descriptor["kind"]>(["script", "style", "font", "icon", "engine", "notice"]);
+
+type RetainedEntry = {
+  readonly sha256: string;
+  readonly sizeBytes: number;
+  readonly contentType: string;
+  readonly headers: readonly (readonly [string, string])[];
+  readonly blob: Blob;
+};
+
+function storeRoutes(build: PhotoStaticBuildResult, prior: boolean): readonly string[] {
+  const files = build.files.filter((file) => !prior || RETAINED_KINDS.has(file.kind)).map((file) => file.path);
+  return prior ? files : ["/", ...files, build.worker.path, build.webManifest.path, "/photo-build.json"];
+}
+
+async function retainStore(
+  store: PhotoWebStaticStore,
+  prior: boolean,
+  entries: Map<string, RetainedEntry>,
+  blobs: Map<string, { readonly blob: Blob; readonly sizeBytes: number; readonly bytes: Uint8Array }>,
+  budget: { files: number; bytes: number },
+): Promise<void> {
+  for (const route of storeRoutes(store.build, prior)) {
+    const response = store.get(route);
+    if (response === null || response.status !== 200 || response.body === null) fail("invalid_artifact");
+    const contentType = response.headers.get("content-type");
+    const contentLength = response.headers.get("content-length");
+    if (contentType === null || contentLength === null || !/^\d+$/.test(contentLength)) fail("invalid_artifact");
+    const declared = Number(contentLength);
+    if (!Number.isSafeInteger(declared) || declared <= 0 || declared > MAX_FILE_BYTES) fail("budget_exceeded");
+    const bytes = new Uint8Array(await response.arrayBuffer());
+    if (bytes.byteLength !== declared) fail("invalid_artifact");
+    const sha256 = digest(bytes);
+    const existing = entries.get(route);
+    if (existing !== undefined) {
+      if (existing.sha256 !== sha256 || existing.sizeBytes !== bytes.byteLength || existing.contentType !== contentType) {
+        fail("invalid_artifact");
+      }
+      continue;
+    }
+    if (budget.files + 1 > MAX_PUBLIC_FILES) fail("budget_exceeded");
+    let pooled = blobs.get(sha256);
+    if (pooled !== undefined) {
+      if (pooled.sizeBytes !== bytes.byteLength || !Buffer.from(pooled.bytes).equals(Buffer.from(bytes))) fail("invalid_artifact");
+    } else {
+      if (budget.bytes + bytes.byteLength > MAX_STATIC_BYTES) fail("budget_exceeded");
+      const owned = bytes.slice();
+      pooled = Object.freeze({ blob: new Blob([owned]), sizeBytes: owned.byteLength, bytes: owned });
+      blobs.set(sha256, pooled);
+      budget.bytes += owned.byteLength;
+    }
+    const headers = new Headers(response.headers);
+    if (prior) headers.set("Cache-Control", CACHE_IMMUTABLE);
+    const frozenHeaders = Object.freeze([...headers].map((item) => Object.freeze(item))) as readonly (readonly [string, string])[];
+    entries.set(route, Object.freeze({
+      sha256,
+      sizeBytes: bytes.byteLength,
+      contentType,
+      headers: frozenHeaders,
+      blob: pooled.blob,
+    }));
+    budget.files += 1;
+  }
+}
+
+/**
+ * Verifies every C06 store independently, then copies only public bytes into one SHA-addressed pool.
+ * No prior store closure is retained and mutable routes always come from the current build.
+ */
+export async function loadRetainedPhotoWebStaticStore(
+  options: LoadRetainedPhotoWebStaticStoreOptions,
+): Promise<PhotoWebStaticStore> {
+  try {
+    if (!isRecord(options) || !isRecord(options.current)
+      || options.acceptedPrior !== undefined && !Array.isArray(options.acceptedPrior)) fail("invalid_input");
+    const entries = new Map<string, RetainedEntry>();
+    const blobs = new Map<string, { readonly blob: Blob; readonly sizeBytes: number; readonly bytes: Uint8Array }>();
+    const budget = { files: 0, bytes: 0 };
+    const current = await loadPhotoWebStaticStore(options.current);
+    await retainStore(current, false, entries, blobs, budget);
+    for (const accepted of options.acceptedPrior ?? []) {
+      const prior = await loadPhotoWebStaticStore(accepted);
+      await retainStore(prior, true, entries, blobs, budget);
+    }
+    const get = (route: string, head = false): Response | null => {
+      const entry = entries.get(route);
+      if (entry === undefined) return null;
+      const headers = new Headers();
+      for (const [name, value] of entry.headers) headers.append(name, value);
+      return new Response(head ? null : entry.blob.stream(), { status: 200, headers });
+    };
+    return Object.freeze({ build: current.build, get });
+  } catch (error) {
+    if (error instanceof PhotoWebStaticStoreError) throw error;
     const code = error instanceof StoreFailure ? error.code : "io_failure";
     throw new PhotoWebStaticStoreError(code);
   }

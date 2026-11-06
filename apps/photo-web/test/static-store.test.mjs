@@ -9,7 +9,11 @@ import { after, before, describe, it } from "node:test";
 import { fileURLToPath, pathToFileURL } from "node:url";
 
 import { preparePhotoStaticBundle } from "../src/build/static-bundle.ts";
-import { loadPhotoWebStaticStore, PhotoWebStaticStoreError } from "../src/server/static-store.ts";
+import {
+  loadPhotoWebStaticStore,
+  loadRetainedPhotoWebStaticStore,
+  PhotoWebStaticStoreError,
+} from "../src/server/static-store.ts";
 
 const resolveSdk = createRequire(new URL("../../../packages/photo-cloud-media/package.json", import.meta.url));
 const SDK = path.dirname(path.dirname(path.dirname(resolveSdk.resolve("niho-photo-develop-engine-runtime/manifest"))));
@@ -40,6 +44,23 @@ async function copiedOutput(name) {
   const target = path.join(root, name);
   await cp(output, target, { recursive: true });
   return target;
+}
+
+async function generation(name, scriptName, source) {
+  const web = path.join(root, `web-${name}`);
+  await mkdir(path.join(web, "assets"), { recursive: true });
+  await writeFile(path.join(web, "index.html"), `<!doctype html><html><body>${name}</body></html>`);
+  await writeFile(path.join(web, "assets", scriptName), source);
+  await writeFile(path.join(web, "assets", `theme-${name}.css`), `body{--generation:${JSON.stringify(name)}}`);
+  const directory = path.join(root, `bundle-${name}`);
+  const result = await preparePhotoStaticBundle({
+    builtWebDirectory: web,
+    outputDirectory: directory,
+    sdkPackageDirectory: SDK,
+    offlineCopy: { title: "オフライン", message: `接続を確認してください。${name}` },
+    applicationCopy: { name: "NIHO photo", shortName: "Photo", description: "写真を編集する" },
+  });
+  return { directory, build: result };
 }
 
 function target(directory, route) {
@@ -217,5 +238,28 @@ describe("loadPhotoWebStaticStore", () => {
       if (pwaManifest !== manifest) pwaManifest.sha256 = "0".repeat(64);
       await rejected(loadPhotoWebStaticStore({ directory: output, build: candidate }), "invalid_artifact");
     });
+  });
+});
+
+describe("loadRetainedPhotoWebStaticStore", () => {
+  it("keeps all prior immutable generations, excludes prior mutable routes, and deduplicates shared SDK bytes", async () => {
+    const first = await generation("first", "app-first.js", "globalThis.generation='first'");
+    const second = await generation("second", "app-second.js", "globalThis.generation='second'");
+    const current = await generation("current", "app-current.js", "globalThis.generation='current'");
+    const store = await loadRetainedPhotoWebStaticStore({ current, acceptedPrior: [first, second] });
+    for (const route of ["/assets/app-first.js", "/assets/app-second.js", "/assets/app-current.js"]) {
+      assert.equal(store.get(route)?.status, 200);
+    }
+    assert.equal(await store.get("/").text(), "<!doctype html><html><body>current</body></html>");
+    assert.equal(store.get(first.build.pwa.offlinePath), null);
+    assert.equal(store.get(second.build.pwa.offlinePath), null);
+    assert.equal(store.get("/photo-sw.js")?.headers.get("etag"), `"${current.build.worker.sha256}"`);
+    assert.equal(store.get("/manifest.webmanifest")?.headers.get("etag"), `"${current.build.webManifest.sha256}"`);
+  });
+
+  it("rejects an immutable path collision across accepted generations", async () => {
+    const prior = await generation("collision-prior", "same.js", "globalThis.value='prior'");
+    const current = await generation("collision-current", "same.js", "globalThis.value='current'");
+    await rejected(loadRetainedPhotoWebStaticStore({ current, acceptedPrior: [prior] }), "invalid_artifact");
   });
 });

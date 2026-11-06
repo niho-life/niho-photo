@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { createPhotoWebMaskSurfaceValidator, probePhotoWebRenderer } from "../src/browser/renderer.ts";
 const sha = "a".repeat(64);
-const proof = {sdkVersion:"fixture",crateVersion:"0.27.0",manifestSha256:sha,manifestUrl:`/develop-engine/${sha}/manifest-0.27.0.json`};
+const proof = {sdkVersion:"fixture",crateVersion:"0.27.0",sourceCommit:"b".repeat(40),manifestSha256:sha,manifestUrl:`/develop-engine/${sha}/manifest-0.27.0.json`};
 const caps = {schemaVersion:1 as const,crateVersion:"0.27.0",settingsVersions:[9],engines:["niho-14"],features:["geometry" as const],maskKinds:["linear" as const],maskSurfaces:false};
 function fixture() { return {ready:vi.fn(async()=>true),renderCapabilities:vi.fn(async()=>caps),dispose:vi.fn()}; }
 function deferred<T>() {let resolve!:(v:T)=>void;const promise=new Promise<T>(r=>{resolve=r});return {promise,resolve};}

@@ -42,30 +42,30 @@
     {
       "name": "niho-photo-contract",
       "consumer": "packages/photo-cloud-media/package.json",
-      "version": "0.1.7",
-      "url": "https://github.com/niho-life/niho-photo/releases/download/photo-sdk-v0.1.7/niho-photo-contract-0.1.7.tgz",
-      "integrity": "sha512-GZ/dlkrtNxj0djV4JCU6KUP61o6FEHLzJM+vp9spWZIz06lI8+WhEkxf9pr61RG6471MrrnQNEKzSZvN1Xraxg==",
-      "sha256": "0958a5cb74693b479a2817734809f93ece66eae380e59ad96197530b2987066f",
-      "sizeBytes": 104752,
-      "sourceCommit": "5ff21a28ae5f7a0e3a64a98b1ef31a7ca523b2a6",
+      "version": "0.1.9",
+      "url": "https://github.com/niho-life/niho-photo/releases/download/photo-sdk-v0.1.9/niho-photo-contract-0.1.9.tgz",
+      "integrity": "sha512-goAp2utzaeIxlJHnyOTKcxYVf5NfGz4plj1a3djiEPMCT9JdW4ju+dSSRu2ua1y7OllUXzm8MGw89ZM0Qm6Yzg==",
+      "sha256": "08b69f4e04b1e69388672dcace92764fd170304d06a5e51e63a49d0ded33e231",
+      "sizeBytes": 106786,
+      "sourceCommit": "86ca0749c6b738e7f6b59dcff5ebe2f5cafa2804",
       "proofPath": "packages/photo-cloud-media/sdk-baseline.json",
-      "proofSha256": "35f1f68ad0b57cdc7e40f98f9a6958387743d5c3403071531e5620a48112f78d"
+      "proofSha256": "604d9a6a6238cb6c21f78b9cefc34651c258c389abd48383949bb6e03ffd2f4d"
     },
     {
       "name": "niho-photo-develop-engine-runtime",
       "consumer": "packages/photo-cloud-media/package.json",
-      "version": "0.1.7",
-      "url": "https://github.com/niho-life/niho-photo/releases/download/photo-sdk-v0.1.7/niho-photo-develop-engine-runtime-0.1.7.tgz",
-      "integrity": "sha512-wKsYI8ZkcQ+jCqi4MUC4yLBgHpz9kIBJOZzeBxQFG8WMx77vMdyyjFyNOFBDInrsL81czY8hE7WgBdlrCEkPtg==",
-      "sha256": "253ca897350578d73c764684d8516e6532c72f6fb4e7d779c4a0139a0dcf433d",
-      "sizeBytes": 8865193,
-      "sourceCommit": "5ff21a28ae5f7a0e3a64a98b1ef31a7ca523b2a6",
+      "version": "0.1.9",
+      "url": "https://github.com/niho-life/niho-photo/releases/download/photo-sdk-v0.1.9/niho-photo-develop-engine-runtime-0.1.9.tgz",
+      "integrity": "sha512-t1XTor6J37Na0rkDRFwKufkbN4Pkrkg3AmgTWUv9IyRIvJmRTNshAVjW10cXji4DccxEXWDkoa5ZwpqKTvTjmg==",
+      "sha256": "b3b36f8cf83d8fa5934d1795136a8e9ef1a458119585ad6fed00aa0a15c87688",
+      "sizeBytes": 8867592,
+      "sourceCommit": "86ca0749c6b738e7f6b59dcff5ebe2f5cafa2804",
       "proofPath": "packages/photo-cloud-media/sdk-baseline.json",
-      "proofSha256": "35f1f68ad0b57cdc7e40f98f9a6958387743d5c3403071531e5620a48112f78d"
+      "proofSha256": "604d9a6a6238cb6c21f78b9cefc34651c258c389abd48383949bb6e03ffd2f4d"
     }
   ],
   "publicSdkDependencyReceipt": {
     "path": "docs/security/public-sdk-dependency-receipt.json",
-    "sha256": "f497917b6e6564bd11d1614c9f1bb9ceb0d61f0a487564c7881123a48573b0c4"
+    "sha256": "b52b71c592ee56b3369944617f2e7c1f73a89764f9281ef9b4af06bf12a21a86"
   }
 }

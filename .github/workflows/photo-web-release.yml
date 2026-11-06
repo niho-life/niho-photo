@@ -1,0 +1,180 @@
+{
+  "name": "Photo Web release",
+  "on": {
+    "workflow_dispatch": {}
+  },
+  "permissions": {
+    "contents": "read",
+    "attestations": "read"
+  },
+  "concurrency": {
+    "group": "photo-web-${{ github.workflow }}-${{ github.run_id }}",
+    "cancel-in-progress": false
+  },
+  "jobs": {
+    "build": {
+      "name": "Build and verify Photo Web release",
+      "runs-on": "ubuntu-24.04",
+      "timeout-minutes": 60,
+      "outputs": {
+        "artifact-id": "${{ steps.upload.outputs.artifact-id }}",
+        "artifact-digest": "${{ steps.upload.outputs.artifact-digest }}",
+        "artifact-name": "${{ steps.names.outputs.artifact-name }}",
+        "source-sha": "${{ steps.source.outputs.source-sha }}",
+        "source-tree": "${{ steps.source.outputs.source-tree }}"
+      },
+      "steps": [
+        {
+          "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "with": {
+            "persist-credentials": false,
+            "fetch-depth": 0
+          }
+        },
+        {
+          "uses": "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+          "with": {
+            "node-version": "24.15.0"
+          }
+        },
+        {
+          "id": "source",
+          "name": "sourceを公式main SHAへ固定",
+          "env": {
+            "PHOTO_WEB_WORKFLOW_REF": "${{ github.ref }}",
+            "PHOTO_WEB_WORKFLOW_SHA": "${{ github.sha }}",
+            "PHOTO_WEB_REPOSITORY": "${{ github.repository }}"
+          },
+          "run": "set -euo pipefail\nif [[ \"$PHOTO_WEB_WORKFLOW_REF\" != \"refs/heads/main\" || \"$PHOTO_WEB_REPOSITORY\" != \"niho-life/niho-photo\" || \"$(git rev-parse HEAD)\" != \"$PHOTO_WEB_WORKFLOW_SHA\" ]]; then exit 1; fi\nif ! [[ \"$PHOTO_WEB_WORKFLOW_SHA\" =~ ^[a-f0-9]{40}$ ]]; then exit 1; fi\ngit fetch --no-tags origin main:refs/remotes/origin/main\ngit merge-base --is-ancestor \"$PHOTO_WEB_WORKFLOW_SHA\" refs/remotes/origin/main\nsource_tree=$(git rev-parse \"$PHOTO_WEB_WORKFLOW_SHA^{tree}\")\nif ! [[ \"$source_tree\" =~ ^[a-f0-9]{40}$ ]]; then exit 1; fi\nprintf 'source-sha=%s\\nsource-tree=%s\\n' \"$PHOTO_WEB_WORKFLOW_SHA\" \"$source_tree\" >> \"$GITHUB_OUTPUT\""
+        },
+        {
+          "name": "lock済みNode依存を準備",
+          "run": "npm ci --ignore-scripts --no-audit --no-fund"
+        },
+        {
+          "name": "Photo Webを検証してproduction bundleをbuild",
+          "run": "set -euo pipefail\nnpm -C apps/photo-web run typecheck\nnpm -C apps/photo-web run lint\nnpm -C apps/photo-web test\nnpm -C apps/photo-web run build"
+        },
+        {
+          "name": "公開SDK releaseとSigstore証跡を検証",
+          "env": {
+            "GH_TOKEN": "${{ github.token }}",
+            "PHOTO_WEB_SDK_RELEASE_DIR": "${{ runner.temp }}/photo-web-sdk-release",
+            "PHOTO_WEB_SDK_PROOF_DIR": "${{ runner.temp }}/photo-web-sdk-proof",
+            "PHOTO_WEB_PAYLOAD_DIR": "${{ runner.temp }}/photo-web-build"
+          },
+          "run": "set -euo pipefail\nreadarray -t sdk_pin < <(node -e 'const value = require(\"node:fs\").readFileSync(\"packages/photo-cloud-media/sdk-baseline.json\", \"utf8\"); const baseline = JSON.parse(value); process.stdout.write([baseline.releaseTag, baseline.sourceCommit, baseline.manifest.sha256].join(\"\\n\") + \"\\n\")')\nif [[ \"${#sdk_pin[@]}\" != 3 ]]; then exit 1; fi\ntag=\"${sdk_pin[0]}\"\nsdk_source=\"${sdk_pin[1]}\"\nsdk_manifest_sha=\"${sdk_pin[2]}\"\nif ! [[ \"$tag\" =~ ^photo-sdk-v[0-9]+\\.[0-9]+\\.[0-9]+$ && \"$sdk_source\" =~ ^[a-f0-9]{40}$ && \"$sdk_manifest_sha\" =~ ^[a-f0-9]{64}$ ]]; then exit 1; fi\nmkdir \"$PHOTO_WEB_SDK_RELEASE_DIR\"\nif [[ -e \"$PHOTO_WEB_SDK_PROOF_DIR\" ]]; then exit 1; fi\ngh api \"repos/niho-life/niho-photo/releases/tags/$tag\" > \"$RUNNER_TEMP/photo-web-sdk-release.json\"\ngh release download \"$tag\" --repo niho-life/niho-photo --dir \"$PHOTO_WEB_SDK_RELEASE_DIR\" --pattern '*.tgz' --pattern \"niho-photo-sdk-*.json\"\ngh release download \"$tag\" --repo niho-life/niho-photo --dir \"$RUNNER_TEMP\" --pattern photo-sdk-artifact-receipt.json\ngit fetch --no-tags origin \"refs/tags/$tag:refs/tags/$tag\"\ntag_sha=$(git rev-parse \"$tag^{commit}\")\nif [[ \"$tag_sha\" != \"$sdk_source\" ]]; then exit 1; fi\nnode scripts/candidate/prepare-published-sdk.mjs --sdk-directory \"$PHOTO_WEB_SDK_RELEASE_DIR\" --sdk-receipt \"$RUNNER_TEMP/photo-sdk-artifact-receipt.json\" --release-json \"$RUNNER_TEMP/photo-web-sdk-release.json\" --tag-sha \"$tag_sha\" --expected-version \"${tag#photo-sdk-v}\" --expected-manifest-sha256 \"$sdk_manifest_sha\" --output \"$PHOTO_WEB_SDK_PROOF_DIR\" --github-output \"$GITHUB_OUTPUT\"\nmanifest_file=\"$PHOTO_WEB_SDK_PROOF_DIR/niho-photo-sdk-${tag#photo-sdk-v}-$tag_sha.json\"\nif [[ ! -f \"$manifest_file\" ]]; then exit 1; fi\nmkdir \"$PHOTO_WEB_PAYLOAD_DIR\" \"$PHOTO_WEB_PAYLOAD_DIR/server\" \"$PHOTO_WEB_PAYLOAD_DIR/static\" \"$PHOTO_WEB_PAYLOAD_DIR/provenance\"\ncp apps/photo-web/dist/server/entry.mjs \"$PHOTO_WEB_PAYLOAD_DIR/server/photo-web.mjs\"\ncp -R apps/photo-web/dist/static/. \"$PHOTO_WEB_PAYLOAD_DIR/static/\"\nnode scripts/photo-web/prepare-sdk-attestation.mjs --manifest \"$manifest_file\" --receipt \"$PHOTO_WEB_SDK_PROOF_DIR/photo-sdk-artifact-receipt.json\" --output \"$RUNNER_TEMP/photo-web-sdk-attestation.json\"\ncp \"$manifest_file\" \"$PHOTO_WEB_PAYLOAD_DIR/provenance/sdk-manifest.json\"\ncp \"$PHOTO_WEB_SDK_PROOF_DIR/photo-sdk-artifact-receipt.json\" \"$PHOTO_WEB_PAYLOAD_DIR/provenance/sdk-receipt.json\"\ncp \"$RUNNER_TEMP/photo-web-sdk-attestation.json\" \"$PHOTO_WEB_PAYLOAD_DIR/provenance/sdk-attestation.json\""
+        },
+        {
+          "id": "names",
+          "name": "immutable artifact identityを固定",
+          "env": {
+            "PHOTO_WEB_SOURCE_SHA": "${{ steps.source.outputs.source-sha }}",
+            "PHOTO_WEB_RUN_ID": "${{ github.run_id }}",
+            "PHOTO_WEB_RUN_ATTEMPT": "${{ github.run_attempt }}"
+          },
+          "run": "set -euo pipefail\nif ! [[ \"$PHOTO_WEB_SOURCE_SHA\" =~ ^[a-f0-9]{40}$ && \"$PHOTO_WEB_RUN_ID\" =~ ^[1-9][0-9]*$ && \"$PHOTO_WEB_RUN_ATTEMPT\" =~ ^[1-9][0-9]*$ ]]; then exit 1; fi\nprintf 'artifact-name=niho-photo-web-%s-run-%s-attempt-%s\\n' \"$PHOTO_WEB_SOURCE_SHA\" \"$PHOTO_WEB_RUN_ID\" \"$PHOTO_WEB_RUN_ATTEMPT\" >> \"$GITHUB_OUTPUT\""
+        },
+        {
+          "id": "upload",
+          "name": "検証済みbuild payloadを一時保存",
+          "if": "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'niho-life/niho-photo'",
+          "uses": "actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9",
+          "with": {
+            "name": "${{ steps.names.outputs.artifact-name }}",
+            "path": "${{ runner.temp }}/photo-web-build/",
+            "if-no-files-found": "error",
+            "retention-days": 30,
+            "compression-level": 0,
+            "include-hidden-files": false
+          }
+        }
+      ]
+    },
+    "publish": {
+      "name": "Publish immutable Photo Web release",
+      "needs": [
+        "build"
+      ],
+      "if": "github.event_name == 'workflow_dispatch' && github.ref == 'refs/heads/main' && github.repository == 'niho-life/niho-photo'",
+      "runs-on": "ubuntu-24.04",
+      "timeout-minutes": 15,
+      "permissions": {
+        "actions": "read",
+        "contents": "write",
+        "id-token": "write",
+        "attestations": "write"
+      },
+      "steps": [
+        {
+          "uses": "actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683",
+          "with": {
+            "persist-credentials": false,
+            "fetch-depth": 1,
+            "ref": "${{ github.sha }}"
+          }
+        },
+        {
+          "uses": "actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020",
+          "with": {
+            "node-version": "24.15.0"
+          }
+        },
+        {
+          "name": "upload済みpayloadをartifact IDで取得",
+          "uses": "actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093",
+          "with": {
+            "artifact-ids": "${{ needs.build.outputs.artifact-id }}",
+            "path": "${{ runner.temp }}/photo-web-build",
+            "merge-multiple": true
+          }
+        },
+        {
+          "id": "release",
+          "name": "archiveとmanifestを生成して再検証",
+          "env": {
+            "PHOTO_WEB_INPUT_DIR": "${{ runner.temp }}/photo-web-build",
+            "PHOTO_WEB_RELEASE_DIR": "${{ runner.temp }}/photo-web-release",
+            "PHOTO_WEB_SOURCE_SHA": "${{ needs.build.outputs.source-sha }}",
+            "PHOTO_WEB_SOURCE_TREE": "${{ needs.build.outputs.source-tree }}",
+            "PHOTO_WEB_TOOLING_COMMIT": "${{ github.sha }}",
+            "PHOTO_WEB_RUN_ID": "${{ github.run_id }}",
+            "PHOTO_WEB_RUN_ATTEMPT": "${{ github.run_attempt }}",
+            "PHOTO_WEB_ARTIFACT_ID": "${{ needs.build.outputs.artifact-id }}",
+            "PHOTO_WEB_ARTIFACT_DIGEST": "sha256:${{ needs.build.outputs.artifact-digest }}",
+            "PHOTO_WEB_ARTIFACT_NAME": "${{ needs.build.outputs.artifact-name }}"
+          },
+          "run": "set -euo pipefail\nnode scripts/photo-web/create-release.mjs --input-dir \"$PHOTO_WEB_INPUT_DIR\" --output-dir \"$PHOTO_WEB_RELEASE_DIR\" --source-sha \"$PHOTO_WEB_SOURCE_SHA\" --source-tree \"$PHOTO_WEB_SOURCE_TREE\" --tooling-commit \"$PHOTO_WEB_TOOLING_COMMIT\" --run-id \"$PHOTO_WEB_RUN_ID\" --run-attempt \"$PHOTO_WEB_RUN_ATTEMPT\" --artifact-id \"$PHOTO_WEB_ARTIFACT_ID\" --artifact-name \"$PHOTO_WEB_ARTIFACT_NAME\" --artifact-digest \"$PHOTO_WEB_ARTIFACT_DIGEST\"\nif [[ \"$PHOTO_WEB_SOURCE_SHA\" != \"$PHOTO_WEB_TOOLING_COMMIT\" ]]; then exit 1; fi"
+        },
+        {
+          "id": "attest",
+          "name": "Web manifestを公式workflowでSigstore署名",
+          "uses": "actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6",
+          "with": {
+            "subject-path": "${{ runner.temp }}/photo-web-release/niho-photo-web-${{ needs.build.outputs.source-sha }}.json",
+            "create-storage-record": false
+          }
+        },
+        {
+          "name": "Sigstore bundleを取得して署名を再検証",
+          "env": {
+            "GH_TOKEN": "${{ github.token }}",
+            "PHOTO_WEB_RELEASE_DIR": "${{ runner.temp }}/photo-web-release",
+            "PHOTO_WEB_SOURCE_SHA": "${{ needs.build.outputs.source-sha }}",
+            "PHOTO_WEB_TOOLING_COMMIT": "${{ github.sha }}"
+          },
+          "run": "set -euo pipefail\nmanifest=\"$PHOTO_WEB_RELEASE_DIR/niho-photo-web-$PHOTO_WEB_SOURCE_SHA.json\"\nmanifest_sha=$(sha256sum \"$manifest\" | cut -d ' ' -f 1)\nsigstore_dir=\"$RUNNER_TEMP/photo-web-sigstore\"\nmkdir \"$sigstore_dir\"\n(cd \"$sigstore_dir\" && gh attestation download \"$manifest\" --repo niho-life/niho-photo --predicate-type https://slsa.dev/provenance/v1)\nbundle=\"$sigstore_dir/sha256:$manifest_sha.jsonl\"\nif [[ ! -f \"$bundle\" ]]; then bundle=\"$sigstore_dir/sha256-$manifest_sha.jsonl\"; fi\nif [[ ! -f \"$bundle\" || $(stat -c %s \"$bundle\") -gt 4194304 ]]; then exit 1; fi\ncp \"$bundle\" \"$PHOTO_WEB_RELEASE_DIR/niho-photo-web-$PHOTO_WEB_SOURCE_SHA.sigstore.json\"\ngh attestation verify \"$manifest\" --bundle \"$PHOTO_WEB_RELEASE_DIR/niho-photo-web-$PHOTO_WEB_SOURCE_SHA.sigstore.json\" --repo niho-life/niho-photo --signer-workflow niho-life/niho-photo/.github/workflows/photo-web-release.yml --signer-digest \"$PHOTO_WEB_TOOLING_COMMIT\" --source-digest \"$PHOTO_WEB_TOOLING_COMMIT\" --source-ref refs/heads/main --cert-oidc-issuer https://token.actions.githubusercontent.com --deny-self-hosted-runners --predicate-type https://slsa.dev/provenance/v1 --format json > \"$RUNNER_TEMP/photo-web-attestation-verified.json\""
+        },
+        {
+          "name": "immutable tagと3 assetだけを公開",
+          "env": {
+            "GH_TOKEN": "${{ github.token }}",
+            "PHOTO_WEB_RELEASE_DIR": "${{ runner.temp }}/photo-web-release",
+            "PHOTO_WEB_SOURCE_SHA": "${{ needs.build.outputs.source-sha }}"
+          },
+          "run": "set -euo pipefail\nif ! [[ \"$PHOTO_WEB_SOURCE_SHA\" =~ ^[a-f0-9]{40}$ ]]; then exit 1; fi\ntag=\"photo-web-$PHOTO_WEB_SOURCE_SHA\"\ngh api --method POST repos/niho-life/niho-photo/git/refs -f ref=\"refs/tags/$tag\" -f sha=\"$PHOTO_WEB_SOURCE_SHA\" >/dev/null\ngh release create \"$tag\" --verify-tag --target \"$PHOTO_WEB_SOURCE_SHA\" --latest=false --title \"NIHO photo Web $PHOTO_WEB_SOURCE_SHA\" --notes \"source $PHOTO_WEB_SOURCE_SHA から生成したPhoto Webのdata-only immutable releaseです。\" \"$PHOTO_WEB_RELEASE_DIR/niho-photo-web-$PHOTO_WEB_SOURCE_SHA.json\" \"$PHOTO_WEB_RELEASE_DIR/niho-photo-web-$PHOTO_WEB_SOURCE_SHA.tgz\" \"$PHOTO_WEB_RELEASE_DIR/niho-photo-web-$PHOTO_WEB_SOURCE_SHA.sigstore.json\""
+        }
+      ]
+    }
+  }
+}

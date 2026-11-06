@@ -76,6 +76,7 @@ const LIMIT_CEILINGS: Limits = Object.freeze({
 
 const ERROR_DETAILS: Readonly<Record<number, readonly [string, string]>> = Object.freeze({
   400: ["Bad Request", "bad_request"],
+  403: ["Forbidden", "forbidden"],
   405: ["Method Not Allowed", "method_not_allowed"],
   413: ["Payload Too Large", "payload_too_large"],
   503: ["Service Unavailable", "temporarily_unavailable"],
@@ -254,6 +255,14 @@ function requestMetadata(request: IncomingMessage, expectedHost: string): Reques
     return null;
   }
   return { headers, contentLength, hasTransferEncoding: transferEncodingCount > 0 };
+}
+
+function hasSingleWrongHost(request: IncomingMessage, expectedHost: string): boolean {
+  const hosts: string[] = [];
+  for (let index = 0; index < request.rawHeaders.length; index += 2) {
+    if (request.rawHeaders[index]?.toLowerCase() === "host") hosts.push(request.rawHeaders[index + 1] ?? "");
+  }
+  return hosts.length === 1 && hosts[0]!.toLowerCase() !== expectedHost.toLowerCase();
 }
 
 function cancelRequestBody(request: Request): void {
@@ -645,6 +654,11 @@ export function createPhotoWebNodeServer(options: CreatePhotoWebNodeServerOption
     const target = incoming.url;
     if (target === undefined || !validTarget(target)) {
       sendFailure(outgoing, 400, head, true);
+      stopIncoming(incoming);
+      return;
+    }
+    if (hasSingleWrongHost(incoming, config.host)) {
+      sendFailure(outgoing, 403, head, true);
       stopIncoming(incoming);
       return;
     }

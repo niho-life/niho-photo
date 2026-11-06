@@ -243,7 +243,7 @@ describe("preparePhotoStaticBundle", () => {
       ["manifest", ENGINE_MANIFEST, "{}"],
       ["runtime", "develop-engine/niho-14/niho_develop_wasm-0.27.0.js", "tampered"],
       ["notice", "LICENSE.md", "tampered"],
-      ["package", "package.json", JSON.stringify({ name: "other", version: "0.1.7" })],
+      ["package", "package.json", JSON.stringify({ name: "other", version: "0.1.9" })],
     ]) {
       await context.test(name, async (child) => {
         const root = await temporary(child, "photo-static-sdk-");
@@ -256,7 +256,7 @@ describe("preparePhotoStaticBundle", () => {
       });
     }
     const originalManifest = await readFile(path.join(SDK, ENGINE_MANIFEST));
-    assert.equal(digest(originalManifest), "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e");
+    assert.equal(digest(originalManifest), "fb27a86b9e2b4119e6abb7302900b4d9b6bf2a36bd7ef0c3e182f72827062e92");
   });
 
   it("protects an existing output and rejects input/output containment", async (context) => {
