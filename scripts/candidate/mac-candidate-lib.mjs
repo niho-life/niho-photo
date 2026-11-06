@@ -162,7 +162,7 @@ function ownershipDigest(records) {
 
 function candidateSdkManifestSchemaVersion(sdk) {
   if (sdk?.sdkManifestSchemaVersion === undefined) return 1;
-  if (![2, 3].includes(sdk.sdkManifestSchemaVersion)) throw new CandidateError("candidate SDK manifest schema profileが不正です");
+  if (![2, 3, 4].includes(sdk.sdkManifestSchemaVersion)) throw new CandidateError("candidate SDK manifest schema profileが不正です");
   return sdk.sdkManifestSchemaVersion;
 }
 

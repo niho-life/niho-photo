@@ -4,6 +4,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 
 ## 位置づけ
 
+- 非公開側のサーバーは、この契約を photo-sdk の `niho-photo-library-sharing-contract`（SDK 0.1.11 以降、release manifest schema 4。入口は `.`・`./policy`・`./routes`）から取り込む（[SDK の構成](../../sdk/README.md)）。
 - 本人専用の [`@niho/photo-personal-cloud-contract` v2](personal-photo-cloud.md) は変更しない。v2 は本人専用・5GiB・`albums: false` のまま動く。共有は v2 の owner の読み替えや `false` の置換ではなく、追加契約 v1 で扱う。
 - v1 は v2 の型を再利用する。#195 の `UploadTicket`・`PhotoContent`、#196 の `RecipeDocument`・`RecipeConflict`、#197 の `RenderCapability` を別に定義しない。
 - 公開契約に実HTTP route・DB schema・内部locator・資格情報を入れない。request は入れ子まで閉じた形で、想定外の key は無視せず `invalid_request` にする（`SHARING_REQUEST_SHAPES`・`CONNECTOR_REQUEST_SHAPES`）。body の owner・role・revision・path を認可の証明にしない。recipe の settings だけは #196 の validator が検査する open JSON。
