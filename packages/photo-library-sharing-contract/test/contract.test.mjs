@@ -4,17 +4,18 @@ import { test } from "node:test";
 import { PHOTO_LIBRARY_CONTRACT_VERSION, PHOTO_LIMITS } from "../../photo-library-contract/src/v2.ts";
 import { library as personalLibrary, maskedPhoto } from "../../photo-library-contract/fixtures/v2.ts";
 import {
-  ALBUM_ACTIONS, ALBUM_ITEM_KINDS, ALBUM_ITEM_STATES, ALBUM_ITEM_TRANSITIONS, ALBUM_PERMISSIONS, ALBUM_ROLES,
+  ALBUM_ACTIONS, ALBUM_ITEM_KINDS, ALBUM_ITEM_PENDING_REASONS, ALBUM_ITEM_PENDING_TRANSITIONS, ALBUM_ITEM_STATES,
+  ALBUM_ITEM_TRANSITIONS, ALBUM_PERMISSIONS, ALBUM_ROLES,
   CONNECTOR_OPERATION_ACCESS, CONNECTOR_REQUEST_SHAPES, DEFAULT_LIBRARY_KIND, FULL_RESOLUTION_EXPORT_TRANSITIONS, HOST_CONNECTOR_STATES,
   HOST_CONNECTOR_TRANSITIONS, LIBRARY_KINDS, MEMBERSHIP_TRANSITIONS, MEMBER_ROLES, PHOTO_LIBRARY_SHARING_CONTRACT_VERSION,
   RENDER_JOB_TRANSITIONS, RENDITION_METADATA_FIELDS, SHARING_ERROR_RECOVERY, SHARING_ERROR_STATUS, SHARING_LIMITS,
   SHARING_OPERATION_ACCESS, SHARING_REQUEST_SHAPES,
 } from "../src/v1.ts";
 import {
-  checkCursor, compareIdempotency, compareRenderBinding, decideAddPhoto, decideAlbumAction, decideHostedRecipeSave,
+  checkAlbumName, checkCursor, compareIdempotency, compareRenderBinding, decideAddPhoto, decideAlbumAction, decideHostedRecipeSave,
   decideJoin, decideLibraryAccess, decideMembershipChange, decidePairingApproval, decideRenderCommit, decideReplaceStart,
   decideUploadCommit, findForbiddenMetadata, findUnexpectedConnectorFields, findUnexpectedRequestFields, inviteLinkStatus,
-  nextAlbumItemState, nextRenderJobState,
+  nextAlbumItemState, nextPendingReason, nextRenderJobState,
   projectAlbumItem, quotaExceededError, sanitizeRenditionMetadata,
 } from "../src/policy.ts";
 import {
@@ -40,6 +41,9 @@ test("UI vocabulary is exactly the identifiers agreed with the B08 session", () 
   assert.deepEqual(ALBUM_ITEM_KINDS, ["ownerPhoto", "memberEdit", "fileUpload"]);
   assert.deepEqual(ALBUM_ITEM_STATES, ["preparing", "published", "updatePending", "removed"]);
   assert.deepEqual(HOST_CONNECTOR_STATES, ["online", "sleeping", "unreachable"]);
+  assert.deepEqual(ALBUM_ITEM_PENDING_REASONS, ["rendering", "waitingForHost", "waitingForDevice", "sourceChanged", "quotaExceeded"]);
+  assert.equal(SHARING_LIMITS.albumNameMaxCodePoints, 100);
+  assert.deepEqual(Object.keys(fixtures.albumForViewer.owner).sort(), ["displayName", "isSelf"]);
   for (const key of ["role", "expiresAt", "revoked"]) assert(key in fixtures.inviteLink, key);
   assert.equal(SHARING_LIMITS.inviteLinkLifetimeSeconds, 7 * 24 * 60 * 60);
   assert.equal(Date.parse(fixtures.inviteLink.expiresAt) - Date.parse(fixtures.inviteLink.createdAt), SHARING_LIMITS.inviteLinkLifetimeSeconds * 1000);
@@ -99,6 +103,7 @@ test("state machines are closed, removed items and finished jobs are terminal", 
     [MEMBERSHIP_TRANSITIONS, ["active", "left", "removed"]],
     [HOST_CONNECTOR_TRANSITIONS, HOST_CONNECTOR_STATES],
     [FULL_RESOLUTION_EXPORT_TRANSITIONS, ["waitingForHost", "rendering", "ready", "failed", "expired"]],
+    [ALBUM_ITEM_PENDING_TRANSITIONS, ALBUM_ITEM_PENDING_REASONS],
   ];
   for (const [table, states] of tables) {
     assert.deepEqual(Object.keys(table).sort(), [...states].sort());
@@ -112,6 +117,13 @@ test("state machines are closed, removed items and finished jobs are terminal", 
   assert.equal(nextRenderJobState("superseded", "commit"), null);
   assert.equal(nextRenderJobState("claimed", "leaseExpired"), "queued");
   assert.equal(MEMBERSHIP_TRANSITIONS.active.leave, "left");
+  // 準備中（容量不足）: only freed capacity (or a changed source) ends the wait.
+  assert.equal(nextPendingReason("rendering", "quotaExceeded"), "quotaExceeded");
+  assert.equal(nextPendingReason("quotaExceeded", "quotaFreed"), "rendering");
+  assert.equal(nextPendingReason("quotaExceeded", "hostOnline"), null);
+  assert.equal(nextPendingReason("quotaExceeded", "deviceOnline"), null);
+  assert.equal(nextPendingReason("quotaExceeded", "sourceChanged"), "sourceChanged");
+  assert.equal(nextPendingReason("waitingForHost", "quotaFreed"), null);
 });
 
 test("per-viewer projection hides preparing items, sources and storage state", () => {
@@ -122,10 +134,14 @@ test("per-viewer projection hides preparing items, sources and storage state", (
     [{ userId: USERS.viewer, role: "viewer" }, viewerView],
   ];
   for (const [viewer, expected] of views) {
-    for (const key of ["ownerItem", "memberItem", "preparingItem"]) {
+    assert.deepEqual(Object.keys(expected).sort(), ["memberItem", "ownerItem", "preparingItem", "quotaPreparingItem", "quotaUpdateItem"]);
+    for (const key of Object.keys(expected)) {
       assert.deepEqual(projectAlbumItem(snapshots[key], viewer), expected[key], `${viewer.role}:${key}`);
     }
   }
+  assert.equal(ownerView.ownerItem.addedBy.isSelf, true);
+  assert.equal(ownerView.memberItem.addedBy.isSelf, false);
+  assert.equal(contributorView.memberItem.addedBy.isSelf, true);
   const forbidden = ["renditionBinding", "recipe", "libraryKind", "storage", "connector", "fileName", "path"];
   for (const view of [contributorView, viewerView]) {
     const json = JSON.stringify(view);
@@ -133,6 +149,15 @@ test("per-viewer projection hides preparing items, sources and storage state", (
   }
   assert(!JSON.stringify(viewerView).includes(fixtures.IDS.hostedLibrary));
   assert(!JSON.stringify(fixtures.albumForViewer).includes(fixtures.IDS.hostedLibrary));
+  // No response carries a user ID of another member; people are display names, isSelf and membership IDs.
+  const memberFacing = JSON.stringify([
+    ownerView, contributorView, viewerView, fixtures.albumForOwner, fixtures.albumForViewer, fixtures.albumForContributor,
+    fixtures.removedItem, fixtures.responses["albums.list"], fixtures.responses["albumItems.list"], fixtures.responses["members.list"],
+    fixtures.responses["invites.list"], fixtures.responses["invites.join"], fixtures.responses["members.changeRole"],
+    fixtures.responses["members.remove"], fixtures.responses["members.leave"], fixtures.responses["invites.create"],
+  ]);
+  for (const userId of Object.values(USERS)) assert(!memberFacing.includes(userId), userId);
+  assert(!memberFacing.includes('"userId"'));
 });
 
 test("renditions carry only the metadata allow-list", () => {
@@ -338,6 +363,8 @@ function evaluate(vector) {
       const projected = projectAlbumItem(fixtures.snapshots[arrange.snapshot], { userId, role: arrange.role });
       return fromDecision(projected ? { ok: true } : { ok: false, code: "not_found" }, operation);
     }
+    case "albumName":
+      return fromDecision(checkAlbumName(request.name), operation);
     case "closedRequest":
       return fromDecision(unexpected(operation, request).length ? { ok: false, code: "invalid_request" } : { ok: true }, operation);
     case "quota": {
@@ -377,6 +404,8 @@ test("B00 negative categories are all present", () => {
     inviteLinks: ["join-expired-link", "join-revoked-link", "join-unknown-secret", "join-unauthenticated", "join-removed-old-link", "join-old-link-after-rejoin-and-leave"],
     metadata: ["rendition-with-location", "rendition-with-serial", "rendition-with-path", "job-output-with-location", "location-in-rendition-request"],
     closedRequests: ["owner-in-request", "path-in-add-source", "unknown-source-kind", "path-in-index-entry"],
+    quotaWait: ["quota-wait-visible-to-adder", "quota-wait-hidden-from-viewer", "quota-wait-reason-hidden-from-member", "member-album-full"],
+    albumNames: ["album-name-101-code-points", "album-name-100-emoji", "album-name-blank"],
   };
   for (const [category, list] of Object.entries(required)) for (const id of list) assert(ids.has(id), `${category}:${id}`);
 });

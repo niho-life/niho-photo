@@ -578,7 +578,7 @@
       "check": "membershipChange",
       "request": {
         "albumId": "synthetic-album-a",
-        "userId": "synthetic-user-viewer",
+        "membershipId": "synthetic-membership-viewer",
         "expectedRevision": 2,
         "role": "contributor"
       },
@@ -644,7 +644,7 @@
       "check": "membershipChange",
       "request": {
         "albumId": "synthetic-album-a",
-        "userId": "synthetic-user-a",
+        "membershipId": "synthetic-membership-owner",
         "expectedRevision": 1,
         "role": "viewer"
       },
@@ -679,7 +679,7 @@
       "check": "membershipChange",
       "request": {
         "albumId": "synthetic-album-a",
-        "userId": "synthetic-user-contributor",
+        "membershipId": "synthetic-membership-contributor",
         "expectedRevision": 3,
         "role": "viewer"
       },
@@ -714,7 +714,7 @@
       "check": "membershipChange",
       "request": {
         "albumId": "synthetic-album-a",
-        "userId": "synthetic-user-contributor"
+        "membershipId": "synthetic-membership-contributor"
       },
       "arrange": {
         "membership": {
@@ -4269,6 +4269,69 @@
       }
     },
     {
+      "id": "quota-wait-visible-to-adder",
+      "operation": "albumItems.get",
+      "actor": "contributor",
+      "check": "visibility",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "itemId": "synthetic-item-quota-preparing"
+      },
+      "arrange": {
+        "snapshot": "quotaPreparingItem",
+        "role": "contributor"
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "pending_reason_owner_and_adder_only"
+        ]
+      }
+    },
+    {
+      "id": "quota-wait-hidden-from-viewer",
+      "operation": "albumItems.get",
+      "actor": "viewer",
+      "check": "visibility",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "itemId": "synthetic-item-quota-preparing"
+      },
+      "arrange": {
+        "snapshot": "quotaPreparingItem",
+        "role": "viewer"
+      },
+      "expected": {
+        "status": 404,
+        "code": "not_found",
+        "invariants": [
+          "same_as_missing",
+          "no_storage_state_for_members"
+        ]
+      }
+    },
+    {
+      "id": "quota-wait-reason-hidden-from-member",
+      "operation": "albumItems.get",
+      "actor": "contributor",
+      "check": "visibility",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "itemId": "synthetic-item-quota-update"
+      },
+      "arrange": {
+        "snapshot": "quotaUpdateItem",
+        "role": "contributor"
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "previous_rendition_shown",
+          "no_storage_state_for_members"
+        ]
+      }
+    },
+    {
       "id": "source-adder-only",
       "operation": "albumItems.get",
       "actor": "owner",
@@ -4709,6 +4772,58 @@
         "code": "invalid_request",
         "invariants": [
           "no_path_leaves_the_mac"
+        ]
+      }
+    },
+    {
+      "id": "album-name-101-code-points",
+      "operation": "albums.create",
+      "actor": "owner",
+      "check": "albumName",
+      "request": {
+        "name": "写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写写"
+      },
+      "arrange": {},
+      "expected": {
+        "status": 400,
+        "code": "invalid_request",
+        "invariants": [
+          "code_point_limit"
+        ]
+      }
+    },
+    {
+      "id": "album-name-100-emoji",
+      "operation": "albums.create",
+      "actor": "owner",
+      "check": "albumName",
+      "request": {
+        "name": "📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷📷"
+      },
+      "arrange": {},
+      "expected": {
+        "status": 201,
+        "invariants": [
+          "code_points_not_utf16_units"
+        ]
+      }
+    },
+    {
+      "id": "album-name-blank",
+      "operation": "albums.rename",
+      "actor": "owner",
+      "check": "albumName",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "expectedRevision": 4,
+        "name": "   "
+      },
+      "arrange": {},
+      "expected": {
+        "status": 400,
+        "code": "invalid_request",
+        "invariants": [
+          "blank_rejected"
         ]
       }
     },

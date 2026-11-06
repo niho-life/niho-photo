@@ -16,6 +16,8 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | 役割 | `owner` / `contributor`（写真を追加できる）/ `viewer`（見るだけ）。招待と役割変更で付与できるのは後ろの2つ |
 | AlbumItem の種類 | `ownerPhoto` / `memberEdit` / `fileUpload` |
 | AlbumItem の状態 | `preparing` / `published` / `updatePending` / `removed` |
+| 待機理由（`pendingReason`） | `rendering` / `waitingForHost`（Mac の起動後に更新）/ `waitingForDevice`（追加した端末の起動後に更新）/ `sourceChanged` / `quotaExceeded`（準備中（容量不足）） |
+| 人の表示（`PersonLabel`） | `displayName`・`isSelf`。他のメンバーの user ID は返さず、メンバー行は `membershipId` で操作する |
 | 常設Macの状態 | `online` / `sleeping` / `unreachable` |
 | InviteLink | `role`・`expiresAt`（7日）・`revoked` |
 
@@ -29,10 +31,10 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | HostConnector | `connectorId`、owner、library、`credentialGeneration`、状態、renderer 能力、`transport: "outboundOnly"` | owner |
 | HostedPhoto | `photoId`、`source.generation`/`sha256`（遅延hash）、recipe revision、recipe を保存した source 世代、preview | owner |
 | RenderBinding | source 世代・hash、recipe revision・settings hash、engine、renderer manifest、mask surface hash | 追加者と server |
-| Album | `albumId`、owner、名前、`revision`、閲覧者ごとの `access`（役割・membership revision・表示用権限・準備中の進捗） | 在籍者 |
-| AlbumItem | `itemId`、追加者（離脱後も名前を保持）、kind、`revision`、状態、完成写真、元写真への参照（追加者だけ） | 在籍者（準備中は owner と追加者） |
+| Album | `albumId`、owner（表示名と本人かどうか）、名前（1〜100 code point）、`revision`、閲覧者ごとの `access`（役割・membership revision・表示用権限・準備中の進捗） | 在籍者 |
+| AlbumItem | `itemId`、追加者（表示名と本人かどうか。離脱後も表示名を保持）、kind、`revision`、状態、待機理由、完成写真、元写真への参照（追加者だけ） | 在籍者（準備中と待機理由は owner と追加者） |
 | Rendition | 原寸JPEG（`fullResolution: true`）、サムネイル、許可した metadata だけ。item revision ごとに1つ | 在籍者 |
-| Membership | album、member、役割、`state`（active/left/removed）、`revision` | 在籍者 |
+| Membership | `membershipId`（album ごとの不透明な ID）、member（表示名と本人かどうか）、役割、`state`（active/left/removed）、`revision` | 在籍者 |
 | InviteLink | 付与する役割、期限、無効化、参加数。secret は作成時の応答だけ | owner |
 | RenderJob | 目的（item/preview/export）、実行端末、対象の束縛、完全recipe、lease | 実行端末 |
 
@@ -53,6 +55,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 
 - AlbumItem: `preparing → published`（完成写真の確定）、`published → updatePending`（元データを持つ人の補正保存）、`updatePending → published`、どこからでも `removed`。`removed` は終端で、遅れた upload・job で復活しない。revision は準備中が0で、完成写真を確定するたびに1つ進む。
 - RenderJob: `queued → claimed → committed`、`queued ⇄ waitingForHost`、`claimed → queued`（lease切れ）、`failed → queued`（再試行）、非終端から `superseded`/`cancelled`。`committed`・`superseded`・`cancelled` は終端。
+- 待機理由（`ALBUM_ITEM_PENDING_TRANSITIONS`）: `rendering` から Mac・端末の休止で `waitingForHost`/`waitingForDevice`、元データの変更で `sourceChanged`、完成写真の予約が owner の容量で断られたら `quotaExceeded`。`quotaExceeded` は容量が空いたとき（または元データが変わったとき）だけ抜け、`rendering` に戻って描き直す。Mac が起動しても容量不足は解けない。
 - Membership: `active → left`（本人）/ `removed`（owner）。`left` は有効なリンクで再参加できる。`removed` は削除より後に作られたリンクでだけ再参加できる（古いリンクで削除を回避させない）。
 - HostConnector: heartbeat で `online`、休止の申告で `sleeping`、期限超過で `unreachable`。
 - 原寸書き出し: `waitingForHost → rendering → ready → expired`。`ready` の一時領域は期限で消す。
@@ -73,6 +76,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - 在籍していない・離脱した・削除された・別アルバムの項目・見えない項目は、存在しないのと同じ 404（`not_found`）。在籍者で役割が足りないときだけ 403（`role_forbidden`）。
 - 他人の項目は owner でも差し替えられない（削除だけ）。役割は現在の値で判定するため、viewer に変更されたメンバーは自分の項目も外せない。
 - 所有者の写真・メンバーの補正写真を library から追加するときは、その library が追加者本人のものに限る（`decideAddPhoto`）。アルバムの役割で他人の library には届かない。
+- 人は表示名と `isSelf` だけで返し、他のメンバーの user ID を出さない。役割変更とメンバー削除は `membershipId` で指定する。
 - 準備中の項目と `pendingReason` は owner と追加者だけに見せる。他のメンバーには直前の完成写真を `published` として見せ、保管場所や Mac の状態を返さない。元写真への参照（`source`）は追加者だけ。件数・表紙も閲覧者に見える項目だけで作る。
 - 追加・差し替えは確定時（`albumItems.commitUpload`・`renderJobs.commit`）に現在の在籍・役割・項目・revision・世代・metadata を照合する。削除・離脱・降格が先なら確定しない。
 - 差し替えは最後に受け付けた意図（`AlbumItemSnapshot.pendingUpload`）だけが確定できる。新しい差し替えを始めると前の upload は置き換わり、先に始めた古い差し替えが後から届いても確定しない。端末が描いた差し替えの開始は、公開中と待機中の両方より新しい世代のときだけ受け付ける（`decideReplaceStart`）。
@@ -84,7 +88,8 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - 端末が直接描いた写真の差し替えは、前の束縛より新しい世代のときだけ受け付ける。
 - 完成済み JPEG の直接追加は元写真への参照を持たず、自動では差し替えない。
 - metadata は許可した `capturedAt`・`capturedAtOffset`・`colorProfile` と、画素へ反映した向きだけ。位置情報・機材シリアル・元のパスを含むものは公開しない（`sanitizeRenditionMetadata`、`findForbiddenMetadata`、`content_rejected`）。download のファイル名に元のファイル名やパスを使わない。
-- 共有人数で完成写真を複製しない。容量はアルバムの owner の共有容量（`SharedStorageUsage`）に算入する。
+- 共有人数で完成写真を複製しない。容量はアルバムの owner の共有容量（`SharedStorageUsage`）に算入する。追加のときに容量が足りなければ `quota_exceeded`、描いた後の予約で足りなければ項目を `quotaExceeded` で待たせる。
+- アルバム名は 1〜100 文字（Unicode の code point で数える。空白だけは不可。サーバーと同じ規則）。
 
 ## 招待リンク
 
@@ -160,4 +165,4 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 
 ## 検証
 
-`npm run test|typecheck|lint --workspace packages/photo-library-sharing-contract`。公開CIの `Photo editing` scope が実行する。test は語彙・§10 の表・全操作の担当と閉じた request の形・遷移の閉包・閲覧者ごとの射影・metadata 規則・v2 互換・確定時の照合（実行端末・upload・最新の意図）・103件の負例 vector を参照判定で照合する。型の負例（owner の偽装、ownerの付与、CAS 無しの更新、第2段階の値など）は typecheck で固定する。
+`npm run test|typecheck|lint --workspace packages/photo-library-sharing-contract`。公開CIの `Photo editing` scope が実行する。test は語彙・§10 の表・全操作の担当と閉じた request の形・遷移の閉包・閲覧者ごとの射影・metadata 規則・v2 互換・確定時の照合（実行端末・upload・最新の意図）・109件の負例 vector を参照判定で照合する。型の負例（owner の偽装、ownerの付与、CAS 無しの更新、第2段階の値など）は typecheck で固定する。

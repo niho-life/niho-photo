@@ -21,6 +21,7 @@ import type {
   HostedMacLibrary,
   HostedPhoto,
   InviteLink,
+  LedgerPerson,
   Membership,
   PersonLabel,
   PreviewAsset,
@@ -35,6 +36,7 @@ import type {
   SharingOperationMap,
   SourceIdentity,
   UploadTicket,
+  UserId,
 } from "../src/v1.ts";
 
 /** Synthetic metadata only. Not decoder fixtures, live API evidence or production authorization. */
@@ -48,11 +50,16 @@ export const USERS = {
   viewer: "synthetic-user-viewer",
   outsider: V2_IDS.userB,
 } as const;
+/** Server-held identities. Responses carry only `label(person, viewer)`. */
 export const PEOPLE = {
   owner: { userId: USERS.owner, displayName: "Synthetic Owner" },
   contributor: { userId: USERS.contributor, displayName: "Synthetic Contributor" },
   viewer: { userId: USERS.viewer, displayName: "Synthetic Viewer" },
-} as const satisfies Record<string, PersonLabel>;
+} as const satisfies Record<string, LedgerPerson>;
+/** How `person` appears to `viewer`: display name and isSelf, never the user ID. */
+export const label = (person: LedgerPerson, viewer: UserId): PersonLabel => ({
+  displayName: person.displayName, isSelf: person.userId === viewer,
+});
 
 export const IDS = {
   nihoLibrary: V2_IDS.library,
@@ -66,6 +73,12 @@ export const IDS = {
   memberItem: "synthetic-item-member-edit",
   fileItem: "synthetic-item-file",
   preparingItem: "synthetic-item-preparing",
+  quotaPreparingItem: "synthetic-item-quota-preparing",
+  quotaUpdateItem: "synthetic-item-quota-update",
+  quotaRendition: "synthetic-rendition-4",
+  ownerMembership: "synthetic-membership-owner",
+  contributorMembership: "synthetic-membership-contributor",
+  viewerMembership: "synthetic-membership-viewer",
   rendition: "synthetic-rendition-1",
   memberRendition: "synthetic-rendition-2",
   fileRendition: "synthetic-rendition-3",
@@ -86,6 +99,7 @@ export const HASH = {
   rendition: "e".repeat(64),
   memberRendition: "1".repeat(64),
   fileRendition: "2".repeat(64),
+  quotaRendition: "9".repeat(64),
   thumbnail: "f".repeat(64),
   query: "3".repeat(64),
   payload: "4".repeat(64),
@@ -166,18 +180,23 @@ export const rendition = renditionOf(IDS.rendition, HASH.rendition, 1);
 export const memberRendition = renditionOf(IDS.memberRendition, HASH.memberRendition, 1);
 export const fileRendition = renditionOf(IDS.fileRendition, HASH.fileRendition, 1);
 
+export const quotaRendition = renditionOf(IDS.quotaRendition, HASH.quotaRendition, 1);
+
+const ownerSource = { kind: "libraryPhoto", libraryId: IDS.hostedLibrary, photoId: IDS.photo } as const;
+const deviceSource = { kind: "devicePhoto", deviceSourceRef: IDS.deviceSource } as const;
+const deviceBinding: RenderBinding = { ...binding, sourceSha256: HASH.deviceSource };
+
 /** Server-held items (never returned directly). */
 export const snapshots = {
   ownerItem: {
     id: IDS.ownerItem, albumId: IDS.album, kind: "ownerPhoto", addedBy: PEOPLE.owner, addedAt: TIME, revision: 1,
-    state: "updatePending", source: { kind: "libraryPhoto", libraryId: IDS.hostedLibrary, photoId: IDS.photo },
+    state: "updatePending", source: ownerSource,
     rendition, renditionBinding: binding, pendingReason: "waitingForHost", removedAt: null, pendingUpload: null,
   },
   memberItem: {
     id: IDS.memberItem, albumId: IDS.album, kind: "memberEdit", addedBy: PEOPLE.contributor, addedAt: TIME, revision: 1,
-    state: "published", source: { kind: "devicePhoto", deviceSourceRef: IDS.deviceSource },
-    rendition: memberRendition, renditionBinding: { ...binding, sourceSha256: HASH.deviceSource }, pendingReason: null, removedAt: null,
-    pendingUpload: null,
+    state: "published", source: deviceSource,
+    rendition: memberRendition, renditionBinding: deviceBinding, pendingReason: null, removedAt: null, pendingUpload: null,
   },
   fileItem: {
     id: IDS.fileItem, albumId: IDS.album, kind: "fileUpload", addedBy: PEOPLE.contributor, addedAt: TIME, revision: 1,
@@ -186,41 +205,63 @@ export const snapshots = {
   },
   preparingItem: {
     id: IDS.preparingItem, albumId: IDS.album, kind: "memberEdit", addedBy: PEOPLE.contributor, addedAt: TIME, revision: 0,
-    state: "preparing", source: { kind: "devicePhoto", deviceSourceRef: IDS.deviceSource },
-    rendition: null, renditionBinding: null, pendingReason: "rendering", removedAt: null,
-    pendingUpload: { uploadId: "synthetic-initial-upload", binding: { ...binding, sourceSha256: HASH.deviceSource } },
+    state: "preparing", source: deviceSource, rendition: null, renditionBinding: null, pendingReason: "rendering", removedAt: null,
+    pendingUpload: { uploadId: "synthetic-initial-upload", binding: deviceBinding },
+  },
+  /** 準備中（容量不足）: the first rendition could not be reserved in the album owner's storage. */
+  quotaPreparingItem: {
+    id: IDS.quotaPreparingItem, albumId: IDS.album, kind: "memberEdit", addedBy: PEOPLE.contributor, addedAt: TIME, revision: 0,
+    state: "preparing", source: deviceSource, rendition: null, renditionBinding: null, pendingReason: "quotaExceeded", removedAt: null,
+    pendingUpload: { uploadId: "synthetic-quota-upload", binding: deviceBinding },
+  },
+  /** A replacement waits for capacity; members keep seeing the previous rendition. */
+  quotaUpdateItem: {
+    id: IDS.quotaUpdateItem, albumId: IDS.album, kind: "ownerPhoto", addedBy: PEOPLE.owner, addedAt: TIME, revision: 1,
+    state: "updatePending", source: ownerSource, rendition: quotaRendition, renditionBinding: binding,
+    pendingReason: "quotaExceeded", removedAt: null, pendingUpload: null,
   },
 } as const satisfies Record<string, AlbumItemSnapshot>;
 
-/** Expected per-viewer projections of `snapshots`. */
+const common = (snapshot: AlbumItemSnapshot, viewer: UserId) => ({
+  id: snapshot.id, albumId: snapshot.albumId, kind: snapshot.kind, addedBy: label(snapshot.addedBy, viewer),
+  addedAt: snapshot.addedAt, revision: snapshot.revision,
+});
+
+/** Expected projections of `snapshots` for the album owner. */
 export const ownerView = {
   ownerItem: {
-    id: IDS.ownerItem, albumId: IDS.album, kind: "ownerPhoto", addedBy: PEOPLE.owner, addedAt: TIME, revision: 1,
-    source: snapshots.ownerItem.source, state: "updatePending", rendition, pendingReason: "waitingForHost",
+    ...common(snapshots.ownerItem, USERS.owner), source: ownerSource, state: "updatePending", rendition, pendingReason: "waitingForHost",
   },
-  memberItem: {
-    id: IDS.memberItem, albumId: IDS.album, kind: "memberEdit", addedBy: PEOPLE.contributor, addedAt: TIME, revision: 1,
-    source: null, state: "published", rendition: memberRendition,
+  memberItem: { ...common(snapshots.memberItem, USERS.owner), source: null, state: "published", rendition: memberRendition },
+  preparingItem: { ...common(snapshots.preparingItem, USERS.owner), source: null, state: "preparing", rendition: null, pendingReason: "rendering" },
+  quotaPreparingItem: {
+    ...common(snapshots.quotaPreparingItem, USERS.owner), source: null, state: "preparing", rendition: null, pendingReason: "quotaExceeded",
   },
-  preparingItem: {
-    id: IDS.preparingItem, albumId: IDS.album, kind: "memberEdit", addedBy: PEOPLE.contributor, addedAt: TIME, revision: 0,
-    source: null, state: "preparing", rendition: null, pendingReason: "rendering",
+  quotaUpdateItem: {
+    ...common(snapshots.quotaUpdateItem, USERS.owner), source: ownerSource, state: "updatePending", rendition: quotaRendition,
+    pendingReason: "quotaExceeded",
   },
 } as const satisfies Record<string, AlbumItem>;
+/** A viewer never sees preparing items, pending reasons or sources. */
 export const viewerView = {
-  ownerItem: {
-    id: IDS.ownerItem, albumId: IDS.album, kind: "ownerPhoto", addedBy: PEOPLE.owner, addedAt: TIME, revision: 1,
-    source: null, state: "published", rendition,
-  },
-  memberItem: ownerView.memberItem,
-  /** Preparing items of other members are invisible. */
+  ownerItem: { ...common(snapshots.ownerItem, USERS.viewer), source: null, state: "published", rendition },
+  memberItem: { ...common(snapshots.memberItem, USERS.viewer), source: null, state: "published", rendition: memberRendition },
   preparingItem: null,
+  quotaPreparingItem: null,
+  quotaUpdateItem: { ...common(snapshots.quotaUpdateItem, USERS.viewer), source: null, state: "published", rendition: quotaRendition },
 } as const satisfies Record<string, AlbumItem | null>;
-/** The adder sees its own source; another member's pending update looks published. */
+/** The adder sees its own source and waiting reason; another member's pending update looks published. */
 export const contributorView = {
-  ownerItem: viewerView.ownerItem,
-  memberItem: { ...ownerView.memberItem, source: snapshots.memberItem.source },
-  preparingItem: { ...ownerView.preparingItem, source: snapshots.preparingItem.source },
+  ownerItem: { ...common(snapshots.ownerItem, USERS.contributor), source: null, state: "published", rendition },
+  memberItem: { ...common(snapshots.memberItem, USERS.contributor), source: deviceSource, state: "published", rendition: memberRendition },
+  preparingItem: {
+    ...common(snapshots.preparingItem, USERS.contributor), source: deviceSource, state: "preparing", rendition: null, pendingReason: "rendering",
+  },
+  quotaPreparingItem: {
+    ...common(snapshots.quotaPreparingItem, USERS.contributor), source: deviceSource, state: "preparing", rendition: null,
+    pendingReason: "quotaExceeded",
+  },
+  quotaUpdateItem: { ...common(snapshots.quotaUpdateItem, USERS.contributor), source: null, state: "published", rendition: quotaRendition },
 } as const satisfies Record<string, AlbumItem>;
 export const removedItem: AlbumItem = {
   ...ownerView.memberItem, state: "removed", rendition: null, removedAt: LATER,
@@ -229,30 +270,35 @@ export const removedItem: AlbumItem = {
 // --- Albums and membership --------------------------------------------------------------------------------
 
 export const albumForOwner: Album = {
-  id: IDS.album, owner: PEOPLE.owner, name: "Synthetic shared album", revision: 4, createdAt: TIME, updatedAt: TIME,
-  itemCount: 3, cover: { itemId: IDS.ownerItem, renditionId: IDS.rendition },
-  access: { role: "owner", membershipRevision: 1, permissions: ALBUM_PERMISSIONS.owner, preparation: { prepared: 3, total: 4 } },
+  id: IDS.album, owner: label(PEOPLE.owner, USERS.owner), name: "Synthetic shared album", revision: 4, createdAt: TIME, updatedAt: TIME,
+  itemCount: 4, cover: { itemId: IDS.ownerItem, renditionId: IDS.rendition },
+  access: { role: "owner", membershipRevision: 1, permissions: ALBUM_PERMISSIONS.owner, preparation: { prepared: 4, total: 6 } },
 };
 export const albumForViewer: Album = {
-  ...albumForOwner, access: { role: "viewer", membershipRevision: 2, permissions: ALBUM_PERMISSIONS.viewer, preparation: null },
+  ...albumForOwner, owner: label(PEOPLE.owner, USERS.viewer),
+  access: { role: "viewer", membershipRevision: 2, permissions: ALBUM_PERMISSIONS.viewer, preparation: null },
 };
 export const albumForContributor: Album = {
-  ...albumForOwner,
-  access: { role: "contributor", membershipRevision: 3, permissions: ALBUM_PERMISSIONS.contributor, preparation: { prepared: 2, total: 3 } },
+  ...albumForOwner, owner: label(PEOPLE.owner, USERS.contributor),
+  access: { role: "contributor", membershipRevision: 3, permissions: ALBUM_PERMISSIONS.contributor, preparation: { prepared: 2, total: 4 } },
 };
-const membership = (member: PersonLabel, role: Membership["role"], revision: number): Membership => ({
-  albumId: IDS.album, member, role, state: "active", revision, joinedAt: TIME, endedAt: null,
+const membership = (id: string, person: LedgerPerson, role: Membership["role"], revision: number, viewer: UserId): Membership => ({
+  id, albumId: IDS.album, member: label(person, viewer), role, state: "active", revision, joinedAt: TIME, endedAt: null,
   joinedVia: role === "owner" ? null : IDS.invite,
 });
+/** As listed to the album owner. Rows are addressed by membership ID. */
 export const memberships = {
-  owner: membership(PEOPLE.owner, "owner", 1),
-  contributor: membership(PEOPLE.contributor, "contributor", 3),
-  viewer: membership(PEOPLE.viewer, "viewer", 2),
+  owner: membership(IDS.ownerMembership, PEOPLE.owner, "owner", 1, USERS.owner),
+  contributor: membership(IDS.contributorMembership, PEOPLE.contributor, "contributor", 3, USERS.owner),
+  viewer: membership(IDS.viewerMembership, PEOPLE.viewer, "viewer", 2, USERS.owner),
 } as const;
 export const removedMembership: Membership = { ...memberships.contributor, state: "removed", revision: 4, endedAt: LATER };
-export const leftMembership: Membership = { ...memberships.viewer, state: "left", revision: 3, endedAt: LATER };
+/** The viewer's own membership after leaving. */
+export const leftMembership: Membership = {
+  ...membership(IDS.viewerMembership, PEOPLE.viewer, "viewer", 3, USERS.viewer), state: "left", endedAt: LATER,
+};
 export const inviteLink: InviteLink = {
-  id: IDS.invite, albumId: IDS.album, role: "contributor", createdBy: USERS.owner, createdAt: TIME,
+  id: IDS.invite, albumId: IDS.album, role: "contributor", createdBy: label(PEOPLE.owner, USERS.owner), createdAt: TIME,
   expiresAt: INVITE_EXPIRES, revoked: false, revokedAt: null, joinCount: 2,
 };
 export const revokedInviteLink: InviteLink = { ...inviteLink, revoked: true, revokedAt: LATER };
@@ -355,10 +401,20 @@ export const responses = {
   "albumItems.commitUpload": { value: { ...ownerView.memberItem, revision: 2, rendition: { ...memberRendition, itemRevision: 2 } }, replayed: false },
   "albumItems.cancelUpload": { value: { ...renditionUpload, state: "cancelled" }, replayed: false },
   "albumItems.remove": { value: removedItem, replayed: false },
-  "invites.list": { links: [inviteLink], joins: [{ inviteLinkId: IDS.invite, member: PEOPLE.contributor, joinedAt: TIME }] },
+  "invites.list": {
+    links: [inviteLink],
+    joins: [{ inviteLinkId: IDS.invite, membershipId: IDS.contributorMembership, member: label(PEOPLE.contributor, USERS.owner), joinedAt: TIME }],
+  },
   "invites.create": { value: { link: { ...inviteLink, joinCount: 0 }, secret: "synthetic-invite-secret" }, replayed: false },
   "invites.revoke": { value: revokedInviteLink, replayed: false },
-  "invites.join": { value: { album: albumForContributor, membership: memberships.contributor, joined: true }, replayed: false },
+  "invites.join": {
+    value: {
+      album: albumForContributor,
+      membership: membership(IDS.contributorMembership, PEOPLE.contributor, "contributor", 3, USERS.contributor),
+      joined: true,
+    },
+    replayed: false,
+  },
   "members.list": { items: [memberships.owner, memberships.contributor, memberships.viewer], nextCursor: null },
   "members.changeRole": { value: { ...memberships.contributor, role: "viewer", revision: 4 }, replayed: false },
   "members.remove": { value: removedMembership, replayed: false },

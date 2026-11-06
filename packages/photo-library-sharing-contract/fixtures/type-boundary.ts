@@ -1,15 +1,16 @@
 import type {
   AlbumItem,
-  ConnectorRequestOptions,
   AlbumRole,
+  ConnectorRequestOptions,
   HostConnector,
   HostConnectorState,
   InviteLink,
   LibraryKind,
+  PersonLabel,
+  PortableAlbumItem,
   RenditionMetadata,
   RenditionUploadRequest,
   RestoreReport,
-  PortableAlbumItem,
   SharingOperationMap,
   SharingRequestOptions,
 } from "../src/v1.ts";
@@ -31,6 +32,12 @@ const unconditionalRename: SharingOperationMap["albums.rename"]["request"] = { a
 const generationless: SharingOperationMap["hostedRecipes.put"]["request"] = { libraryId: "l", photoId: "p", expectedRevision: 1, settings: { v: 1, engine: "niho-14" }, baseVersion: null };
 // @ts-expect-error A storage locator or path is never part of the public contract.
 const locator: SharingOperationMap["libraries.get"]["request"] = { libraryId: "synthetic", path: "synthetic-root" };
+// @ts-expect-error Member rows are addressed by membership ID, never by another member's user ID.
+const byUserId: SharingOperationMap["members.remove"]["request"] = { albumId: "synthetic-album-a", userId: "synthetic-user-v" };
+// @ts-expect-error Responses never carry another member's user ID.
+const leakedUser: PersonLabel = { displayName: "Synthetic", isSelf: false, userId: "synthetic-user-v" };
+void byUserId;
+void leakedUser;
 void forgedOwner;
 void forgedRole;
 void grantOwner;

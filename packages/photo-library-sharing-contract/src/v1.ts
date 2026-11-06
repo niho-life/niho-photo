@@ -93,7 +93,8 @@ export const SHARING_LIMITS = {
   inviteLinkLifetimeSeconds: 7 * 24 * 60 * 60,
   inviteSecretMinBits: 128,
   pairingLifetimeSeconds: 10 * 60,
-  albumNameMaxBytes: 255,
+  /** Counted in Unicode code points, the same rule as the server. Blank names are rejected. */
+  albumNameMaxCodePoints: 100,
   listMaxCount: PHOTO_LIMITS.listMaxCount,
   memberListMaxCount: 100,
   cursorLifetimeSeconds: PHOTO_LIMITS.cursorLifetimeSeconds,
@@ -131,8 +132,17 @@ export interface UserRef {
   readonly type: "user";
   readonly userId: UserId;
 }
-/** Display snapshot kept on items and memberships after a member leaves (Epic §3). Never an email or spot ID. */
+export type MembershipId = string;
+/**
+ * Person as shown in responses: a display name kept after the member leaves (Epic §3) and whether it is the
+ * viewer. Never another member's user ID, email or spot ID; member rows are addressed by MembershipId.
+ */
 export interface PersonLabel {
+  readonly displayName: string;
+  readonly isSelf: boolean;
+}
+/** Server-held identity behind a PersonLabel. Never returned in a response. */
+export interface LedgerPerson {
   readonly userId: UserId;
   readonly displayName: string;
 }
@@ -466,8 +476,13 @@ export interface Rendition {
 export type AlbumItemSource =
   | { readonly kind: "libraryPhoto"; readonly libraryId: LibraryId; readonly photoId: PhotoId }
   | { readonly kind: "devicePhoto"; readonly deviceSourceRef: DeviceSourceRef };
-/** Shown to the album owner and the adder only. Other members see the previous rendition as published. */
-export type AlbumItemPendingReason = "rendering" | "waitingForHost" | "waitingForDevice" | "sourceChanged";
+/**
+ * Why an item is preparing or waiting for an update. Shown to the album owner and the adder only; other members see
+ * the previous rendition as published. quotaExceeded is 準備中（容量不足）: the rendition could not be reserved in the
+ * album owner's storage, and rendering resumes when capacity frees.
+ */
+export const ALBUM_ITEM_PENDING_REASONS = ["rendering", "waitingForHost", "waitingForDevice", "sourceChanged", "quotaExceeded"] as const;
+export type AlbumItemPendingReason = (typeof ALBUM_ITEM_PENDING_REASONS)[number];
 
 interface AlbumItemCommon {
   readonly id: AlbumItemId;
@@ -503,7 +518,7 @@ export interface AlbumItemSnapshot {
   readonly id: AlbumItemId;
   readonly albumId: AlbumId;
   readonly kind: AlbumItemKind;
-  readonly addedBy: PersonLabel;
+  readonly addedBy: LedgerPerson;
   readonly addedAt: Instant;
   readonly revision: number;
   readonly state: AlbumItemState;
@@ -571,6 +586,8 @@ export interface AlbumItemMutation {
 
 export type MembershipState = "active" | "left" | "removed";
 export interface Membership {
+  /** Opaque per-album ID used to change or remove this member. Not derived from the user ID. */
+  readonly id: MembershipId;
   readonly albumId: AlbumId;
   readonly member: PersonLabel;
   readonly role: AlbumRole;
@@ -590,7 +607,7 @@ export interface InviteLink {
   readonly id: InviteLinkId;
   readonly albumId: AlbumId;
   readonly role: MemberRole;
-  readonly createdBy: UserId;
+  readonly createdBy: PersonLabel;
   readonly createdAt: Instant;
   readonly expiresAt: Instant;
   readonly revoked: boolean;
@@ -600,6 +617,7 @@ export interface InviteLink {
 export type InviteLinkStatus = "usable" | "expired" | "revoked";
 export interface InviteJoinRecord {
   readonly inviteLinkId: InviteLinkId;
+  readonly membershipId: MembershipId;
   readonly member: PersonLabel;
   readonly joinedAt: Instant;
 }
@@ -618,6 +636,7 @@ export interface InviteJoinResult {
 export interface MemberJoinedEvent {
   readonly kind: "memberJoined";
   readonly albumId: AlbumId;
+  readonly membershipId: MembershipId;
   readonly member: PersonLabel;
   readonly role: MemberRole;
   readonly inviteLinkId: InviteLinkId;
@@ -978,10 +997,10 @@ export interface SharingOperationMap {
   readonly "invites.join": Operation<{ readonly secret: InviteSecret }, MutationReceipt<InviteJoinResult>>;
   readonly "members.list": Operation<AlbumRef & Page, MembershipPage>;
   readonly "members.changeRole": Operation<
-    AlbumRef & { readonly userId: UserId; readonly expectedRevision: number; readonly role: MemberRole },
+    AlbumRef & { readonly membershipId: MembershipId; readonly expectedRevision: number; readonly role: MemberRole },
     MutationReceipt<Membership>
   >;
-  readonly "members.remove": Operation<AlbumRef & { readonly userId: UserId }, MutationReceipt<Membership>>;
+  readonly "members.remove": Operation<AlbumRef & { readonly membershipId: MembershipId }, MutationReceipt<Membership>>;
   readonly "members.leave": Operation<AlbumRef, MutationReceipt<Membership>>;
 }
 export type SharingOperation = keyof SharingOperationMap;
@@ -1248,8 +1267,8 @@ export const SHARING_REQUEST_SHAPES = {
   "invites.revoke": { albumId: "value", inviteLinkId: "value" },
   "invites.join": { secret: "value" },
   "members.list": { albumId: "value", ...PAGE_FIELDS },
-  "members.changeRole": { albumId: "value", userId: "value", expectedRevision: "value", role: "value" },
-  "members.remove": { albumId: "value", userId: "value" },
+  "members.changeRole": { albumId: "value", membershipId: "value", expectedRevision: "value", role: "value" },
+  "members.remove": { albumId: "value", membershipId: "value" },
   "members.leave": { albumId: "value" },
 } as const satisfies ShapeMap<SharingOperationMap>;
 
@@ -1287,6 +1306,29 @@ export const ALBUM_ITEM_TRANSITIONS = {
   updatePending: { renditionCommitted: "published", sourceUpdated: "updatePending", remove: "removed" },
   removed: {},
 } as const satisfies { readonly [S in AlbumItemState]: { readonly [E in AlbumItemEvent]?: AlbumItemState } };
+
+/**
+ * Why a preparing/updatePending item waits. Missing entries are rejected; quotaExceeded only clears when capacity
+ * frees (or the source changes), never because a host came online.
+ */
+export type AlbumItemPendingEvent =
+  | "hostOffline"
+  | "hostOnline"
+  | "deviceOffline"
+  | "deviceOnline"
+  | "sourceChanged"
+  | "recipeSaved"
+  | "quotaExceeded"
+  | "quotaFreed";
+export const ALBUM_ITEM_PENDING_TRANSITIONS = {
+  rendering: { hostOffline: "waitingForHost", deviceOffline: "waitingForDevice", sourceChanged: "sourceChanged", quotaExceeded: "quotaExceeded" },
+  waitingForHost: { hostOnline: "rendering", sourceChanged: "sourceChanged" },
+  waitingForDevice: { deviceOnline: "rendering", sourceChanged: "sourceChanged" },
+  sourceChanged: { recipeSaved: "rendering" },
+  quotaExceeded: { quotaFreed: "rendering", sourceChanged: "sourceChanged" },
+} as const satisfies {
+  readonly [R in AlbumItemPendingReason]: { readonly [E in AlbumItemPendingEvent]?: AlbumItemPendingReason };
+};
 
 export type RenderJobEvent =
   | "claim"

@@ -3,6 +3,7 @@
  * Hosts may use them to decide what to show; only the server ledger grants access.
  */
 import {
+  ALBUM_ITEM_PENDING_TRANSITIONS,
   ALBUM_ITEM_TRANSITIONS,
   ALBUM_PERMISSIONS,
   FORBIDDEN_RENDITION_METADATA,
@@ -16,6 +17,8 @@ import type {
   AlbumAction,
   AlbumItem,
   AlbumItemEvent,
+  AlbumItemPendingEvent,
+  AlbumItemPendingReason,
   AlbumItemSnapshot,
   AlbumItemState,
   AlbumPermissionSet,
@@ -29,7 +32,9 @@ import type {
   Instant,
   InviteLink,
   InviteLinkStatus,
+  LedgerPerson,
   Membership,
+  PersonLabel,
   RenderBinding,
   RenderExecutor,
   RenderJob,
@@ -107,6 +112,12 @@ export function findUnexpectedFields(fields: RequestFields, request: unknown): r
   };
   walkFields(fields, request, "", 0);
   return found;
+}
+
+/** Album names: 1..100 Unicode code points (the server's rule), not blank. */
+export function checkAlbumName(name: string): Decision {
+  const length = [...name].length;
+  return name.trim().length > 0 && length <= SHARING_LIMITS.albumNameMaxCodePoints ? allow : deny("invalid_request");
 }
 
 export function findUnexpectedRequestFields(operation: SharingOperation, request: unknown): readonly string[] {
@@ -273,9 +284,15 @@ export function decideReplaceStart(
   return allow;
 }
 
+/** The only person shape a response carries: display name and whether it is the viewer. */
+export function personLabel(person: LedgerPerson, viewerId: UserId): PersonLabel {
+  return { displayName: person.displayName, isSelf: person.userId === viewerId };
+}
+
 /**
  * Per-viewer projection of a server item. Returns null when the viewer must not see it.
- * - source: adder only. - pendingReason: owner and adder only; others see the previous rendition as published.
+ * - addedBy: display name and isSelf only. - source: adder only.
+ * - pendingReason: owner and adder only; others see the previous rendition as published.
  */
 export function projectAlbumItem(snapshot: AlbumItemSnapshot, viewer: { readonly userId: UserId; readonly role: AlbumRole }): AlbumItem | null {
   const adder = snapshot.addedBy.userId === viewer.userId;
@@ -284,7 +301,7 @@ export function projectAlbumItem(snapshot: AlbumItemSnapshot, viewer: { readonly
     id: snapshot.id,
     albumId: snapshot.albumId,
     kind: snapshot.kind,
-    addedBy: snapshot.addedBy,
+    addedBy: personLabel(snapshot.addedBy, viewer.userId),
     addedAt: snapshot.addedAt,
     revision: snapshot.revision,
     source: adder ? snapshot.source : null,
@@ -388,6 +405,11 @@ export function compareRenderBinding(candidate: RenderBinding, current: RenderBi
 
 export function nextAlbumItemState(state: AlbumItemState, event: AlbumItemEvent): AlbumItemState | null {
   const row: { readonly [E in AlbumItemEvent]?: AlbumItemState } = ALBUM_ITEM_TRANSITIONS[state];
+  return row[event] ?? null;
+}
+
+export function nextPendingReason(reason: AlbumItemPendingReason, event: AlbumItemPendingEvent): AlbumItemPendingReason | null {
+  const row: { readonly [E in AlbumItemPendingEvent]?: AlbumItemPendingReason } = ALBUM_ITEM_PENDING_TRANSITIONS[reason];
   return row[event] ?? null;
 }
 
