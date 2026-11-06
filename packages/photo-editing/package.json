@@ -39,6 +39,11 @@
     "./editor/photo-editing-preset-thumbnail": "./src/editor/photo-editing-preset-thumbnail.tsx",
     "./editor/photo-editing-presets-panel": "./src/editor/photo-editing-presets-panel.tsx",
     "./editor/photo-editing-ruler": "./src/editor/photo-editing-ruler.tsx",
+    "./shared-album/photo-shared-album-invite": "./src/shared-album/photo-shared-album-invite.tsx",
+    "./shared-album/photo-shared-album-list": "./src/shared-album/photo-shared-album-list.tsx",
+    "./shared-album/photo-shared-album-share-sheet": "./src/shared-album/photo-shared-album-share-sheet.tsx",
+    "./shared-album/photo-shared-album-view": "./src/shared-album/photo-shared-album-view.tsx",
+    "./shared-album/photo-storage-location-settings": "./src/shared-album/photo-storage-location-settings.tsx",
     "./editor/photo-editing-slider": "./src/editor/photo-editing-slider.tsx",
     "./package.json": "./package.json"
   },

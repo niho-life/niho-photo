@@ -32,11 +32,12 @@
         "path": "packages/photo-editing/package.json",
         "sha256": "515f9303d52be7ff4ae82fac2d73b370427516721073d422a0e6b9d17fa0b3ad"
       },
-      "outputSha256": "e2f36affd6c84b0a2b97b9a6b10dfb8985bd3815295fbb0e9aa88ea17b4b766d",
+      "outputSha256": "4eaf561099cea57d9b529fae13930f803a7097fd89c7446ce3bcf5800f9a6ecb",
       "modifications": [
         "公開workspace向け説明・依存解決・公開export範囲を調整。npm publishはprivate設定で禁止。",
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
-        "写真編集の型検査とテストをMac miniで開始前に停止する。"
+        "写真編集の型検査とテストをMac miniで開始前に停止する。",
+        "共有アルバムUI部品の公開exportを追加。"
       ]
     },
     {
@@ -2640,9 +2641,10 @@
         "以前の補正が現在の写真や端末で保存不可の場合の日本語説明を追加",
         "native検証済み原本保存の状態欄copy formatterを追加する",
         "独立Photoの読み取り専用プリセット管理と共有転送表示を接続",
-        "C06: Photo Web offline/production buildに使う共通日本語copyを追加。"
+        "C06: Photo Web offline/production buildに使う共通日本語copyを追加。",
+        "共有アルバムUIの日本語文言を追加。"
       ],
-      "outputSha256": "d101be28f25094fd5255ac34d72179ed95cb6424e71f6e0fc46abb69e94dc09c"
+      "outputSha256": "3d3d59786b1ab7d7c10f0e66c56f66f626741a087007a8b580d27b062c5948bd"
     },
     {
       "path": "packages/photo-editing/src/photo-editing-crop.test.ts",
@@ -3404,10 +3406,11 @@
         "path": "packages/photo-editing/src/use-photo-file-drop-zone.ts",
         "sha256": "3898356a88c8b0a5d4a48f4d0d9bd9b953af172a590946f8d6dbcea1d7756776"
       },
-      "outputSha256": "bb2552cf41e78ad4bf97ffe80e8fdf2e8c2d1fc69a42c6b6624de12f6b4e0c9c",
+      "outputSha256": "bc79f334a38bc10b0b666efca18e422b3e8586f4ef38bf1c59f9b14f1ffef3a4",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "ドロップ開始時の宛先を保持し、アルバム切替後の誤追加を防止。"
       ]
     },
     {
@@ -10821,11 +10824,6 @@
       "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 期限後の結果照合と取消復旧およびupload応答bindingを明文化\n変更理由: 文書rootとHTTP envelopeの深さ境界を実C00構造に合わせて明文化\n変更理由: stored start再送の最大六段envelopeを接続契約へ反映"
     },
     {
-      "path": "docs/architecture/photo-library-sharing.md",
-      "sha256": "47c28282a33929d3346593f06a8978a7f1733f01b5a9ba7c265137f2e0e7ab47",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 経路decodeの検査範囲とBFF・serverの責務を明確化。\n変更理由: Portable exportの取得経路とworking copy送信契約を追記。"
-    },
-    {
       "path": "docs/ci/public-ci.md",
       "sha256": "7494f56fa41fe3bcdc46f2fd4ac510f2469a15c89ac7119818862b85421362c8",
       "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #113のcandidate proof selectorとvalidation-only成果物との差を追記。\n変更理由: 現行Issue URLをniho-lifeへ移管\n変更理由: Mac miniの重処理ガードとStudioでの先行検証手順を記録する。\n変更理由: mainのC02・SDK profile説明とPhoto Web検証説明を両方保持して通常mergeを解消。\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。"
@@ -13206,6 +13204,66 @@
       "origin": "niho-photo#37 のため新規作成。トーンカーブ（ポイントカーブ・RGB 別）の developSettings.toneCurves の読み書き、点の追加・移動・削除、曲線の値（crate の DngSpline と同じ式）、グラフの背後の輝度の度数の純関数。外部コード・実データを含まない。"
     },
     {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-fixtures.ts",
+      "sha256": "97b81fea8b8f06cce626ca7bef561bfd50d250b9e627e6f2caff7b06cd837ed0",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 共有アルバムの項目の待機理由（追加した端末の起動待ち・容量不足で止めた項目）を状態の表示に追加（B08 #249）"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-invite.tsx",
+      "sha256": "1bfbf3470a6b3c59f70d3172615e90038ea74e4c12e880ffbcdea19225c8be89",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-list.tsx",
+      "sha256": "ebcb447ce9fbb5dd9c846e56fa29d01402378a2f33e6c4a2e7fe739a861a9ef3",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-model.test.ts",
+      "sha256": "31514b911caf5da6eae78be4956a36c666e86d6357ce0e89c019e1f744de393c",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 共有アルバムの項目の待機理由（追加した端末の起動待ち・容量不足で止めた項目）を状態の表示に追加（B08 #249）"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-model.ts",
+      "sha256": "27ea666e718893939c1a4449bfada68e746bc8e6f502d92b9dc91147b3768dd5",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 共有アルバムの項目の待機理由（追加した端末の起動待ち・容量不足で止めた項目）を状態の表示に追加（B08 #249）"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-screens.test.tsx",
+      "sha256": "67a08bd04c73a6a94f2e1426170ba1b04ccd00c12de57dce5ff0b9adb7e47054",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-share-sheet.test.tsx",
+      "sha256": "275d62f91493bb53023faa22376836e078c3665fa9e8c4069e54a859478150e1",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-share-sheet.tsx",
+      "sha256": "b8aab29f319b8905dd88c49f91fb44facb29d715f42e0f577341565db5e3b751",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-upload-panel.tsx",
+      "sha256": "856cd3f0850eb153ea5bc57fe81a78bd2800c50d38c7e789325a34b99898f982",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-view.test.tsx",
+      "sha256": "4d0faab1c1df605061e550dddb96f579c8165e12e5f8379fb495ab819ff9fa34",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 共有アルバムの項目の待機理由（追加した端末の起動待ち・容量不足で止めた項目）を状態の表示に追加（B08 #249）\n変更理由: 非同期フォルダ読込中のアルバム切替で誤追加しない回帰試験。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-shared-album-view.tsx",
+      "sha256": "a0c5d1398240feca57e77189dee8ab8841bdeb4e8bb9bda85f5b6518806da6bb",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 共有アルバムの項目の待機理由（追加した端末の起動待ち・容量不足で止めた項目）を状態の表示に追加（B08 #249）\n変更理由: 非同期フォルダ読込後に宛先アルバムを照合。"
+    },
+    {
+      "path": "packages/photo-editing/src/shared-album/photo-storage-location-settings.tsx",
+      "sha256": "3675a1b632140a478af0e830a826fcc97e440e5eeb5e98bf1b0a25d0c99232c2",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の保管場所と共有アルバムの、通信を持たないUI部品（B00と同じ語彙のview-model、権限による操作の出し分け、写真グリッドと追加・保存、共有シート、招待リンクの画面、保存先の設定）と回帰試験。合成データ（SVGのグラデーション・架空の表示名・example.invalid）だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
       "path": "packages/photo-editing/src/use-photo-library-flags.test.tsx",
       "sha256": "d1a8de3da332d531172532dcd5940c3b3c53b607aec3356feb914f06d778c32c",
       "origin": "niho-photo#47 のため新規作成。選別のフラグの hook の test（偽の写真の出どころだけを使用）。\n変更理由: PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。\n変更理由: Add backwards-compatible personal photo library scope key\n変更理由: Add backwards-compatible personal photo library scope key"
@@ -13264,76 +13322,6 @@
       "path": "packages/photo-library-contract/tsconfig.json",
       "sha256": "b8514042cec4c0493cd61cce2c9e1ecaae878c563586ea53873459471536eb2c",
       "origin": "Photo #193 / C00 の契約確定に伴い監査。既存backendの即時purgeとPhoto製品未接続の区別、抽出した合成fixtureの権利・出典または対象型検査を記録。内部URL・実写真・資格情報を含まない。\n変更理由: client portのAbortSignalをDOM型定義で検査する"
-    },
-    {
-      "path": "packages/photo-library-sharing-contract/eslint.config.mjs",
-      "sha256": "453b778645cb9b6572c968b04ec05d505a2abd1dbf7d606e2ccaac8e8fbb6bf3",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-library-sharing-contract/fixtures/security-cases.json",
-      "sha256": "cb532c22d0f0d7ea0193c29f1d30f515114bbd936a12833344a0820cd283df8d",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 控えackが未到達の場合と一致後のfixtureを追加。"
-    },
-    {
-      "path": "packages/photo-library-sharing-contract/fixtures/type-boundary.ts",
-      "sha256": "29f0f6005c4d2bc1d81b2ac123dc03a874515dc63e4fe53fdde7e7ab9eeeb32a",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-library-sharing-contract/fixtures/v1.ts",
-      "sha256": "060e471d55fe1c69b6d158a5891c04ad36eaf2cd4f22447b3fdee3ec7c10078e",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 追加したupload operationの合成応答を登録。"
-    },
-    {
-      "path": "packages/photo-library-sharing-contract/operation-coverage.json",
-      "sha256": "f1c86f465939357e79e7d7ff34d785350be89a5b8a3a968b0427a623426fdf98",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: operation-coverage.json を更新"
-    },
-    {
-      "path": "packages/photo-library-sharing-contract/package.json",
-      "sha256": "9902ef24623ff394d770d2ee7afce8a963c4f53c500c1bec5b7e971151b706cd",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-library-sharing-contract/README.md",
-      "sha256": "432dcb87ea4f8cb9eb388ecd6a8c41c17f7daeb60f583b3fc2e872c0bbebce45",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-library-sharing-contract/src/compat-v2.ts",
-      "sha256": "209d32c5cea249b3722bc99316b26e31335ce75c78bb64f7ab7699b362364828",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-library-sharing-contract/src/policy.ts",
-      "sha256": "9f8828d5adda157011b8a236de682800a606b206c73fb8bc0dd2e346b3d0c021",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 控えの現在性をheartbeatでなくacknowledgedRevisionで判定。\n変更理由: 控えの現在性をheartbeatでなくacknowledgedRevisionで判定。"
-    },
-    {
-      "path": "packages/photo-library-sharing-contract/src/routes.ts",
-      "sha256": "d31c30323b2e65cc25e84895c59ab07dc764002fd482187ad34fa23230f200cc",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 経路decodeが配置と余分なfieldのみを検査する旨を明記。\n変更理由: portable export取得とworking copy uploadのrouteを追加。"
-    },
-    {
-      "path": "packages/photo-library-sharing-contract/src/v1.ts",
-      "sha256": "f53b0cc833c7333a6bf3d159b99ced813f2cd1132fcff695fb5a4309a4c63859",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: portable content streamと世代束縛uploadを追加。"
-    },
-    {
-      "path": "packages/photo-library-sharing-contract/test/contract.test.mjs",
-      "sha256": "8fb9b0a7a784e15c00d3e8b330becb263a171ccd65c3a4d0677611a3624e21ce",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: レシピ保存のreplica状態をacknowledgedRevisionで照合。\n変更理由: レシピ保存のreplica状態をacknowledgedRevisionで照合。\n変更理由: portable export streamを契約fixture検査から除外。"
-    },
-    {
-      "path": "packages/photo-library-sharing-contract/test/routes.test.mjs",
-      "sha256": "181a282e59e3df3233bfe34fcda3afa573510d82d80f9f8ef752182ef5e2f923",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 追加routeの閉じたrequest roundtripを検証。"
-    },
-    {
-      "path": "packages/photo-library-sharing-contract/tsconfig.json",
-      "sha256": "b8514042cec4c0493cd61cce2c9e1ecaae878c563586ea53873459471536eb2c",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/ui/src/app-dialog.test.ts",
@@ -13599,6 +13587,81 @@
       "path": "sdk/release-set.json",
       "sha256": "3a6bfc8a566f9f88404e68eded455421bd26de4cccb89b696ab274b18af0260d",
       "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: 最新の共有マスク・初期proof・readonly presetを不変な新しい正式SDK 0.1.10として発行する。\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加"
+    },
+    {
+      "path": "docs/architecture/photo-library-sharing.md",
+      "sha256": "47c28282a33929d3346593f06a8978a7f1733f01b5a9ba7c265137f2e0e7ab47",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 経路decodeの検査範囲とBFF・serverの責務を明確化。\n変更理由: Portable exportの取得経路とworking copy送信契約を追記。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/eslint.config.mjs",
+      "sha256": "453b778645cb9b6572c968b04ec05d505a2abd1dbf7d606e2ccaac8e8fbb6bf3",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/fixtures/security-cases.json",
+      "sha256": "cb532c22d0f0d7ea0193c29f1d30f515114bbd936a12833344a0820cd283df8d",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 控えackが未到達の場合と一致後のfixtureを追加。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/fixtures/type-boundary.ts",
+      "sha256": "29f0f6005c4d2bc1d81b2ac123dc03a874515dc63e4fe53fdde7e7ab9eeeb32a",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/fixtures/v1.ts",
+      "sha256": "060e471d55fe1c69b6d158a5891c04ad36eaf2cd4f22447b3fdee3ec7c10078e",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 追加したupload operationの合成応答を登録。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/operation-coverage.json",
+      "sha256": "f1c86f465939357e79e7d7ff34d785350be89a5b8a3a968b0427a623426fdf98",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: operation-coverage.json を更新"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/package.json",
+      "sha256": "9902ef24623ff394d770d2ee7afce8a963c4f53c500c1bec5b7e971151b706cd",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/README.md",
+      "sha256": "432dcb87ea4f8cb9eb388ecd6a8c41c17f7daeb60f583b3fc2e872c0bbebce45",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/src/compat-v2.ts",
+      "sha256": "209d32c5cea249b3722bc99316b26e31335ce75c78bb64f7ab7699b362364828",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/src/policy.ts",
+      "sha256": "9f8828d5adda157011b8a236de682800a606b206c73fb8bc0dd2e346b3d0c021",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 控えの現在性をheartbeatでなくacknowledgedRevisionで判定。\n変更理由: 控えの現在性をheartbeatでなくacknowledgedRevisionで判定。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/src/routes.ts",
+      "sha256": "d31c30323b2e65cc25e84895c59ab07dc764002fd482187ad34fa23230f200cc",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 経路decodeが配置と余分なfieldのみを検査する旨を明記。\n変更理由: portable export取得とworking copy uploadのrouteを追加。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/src/v1.ts",
+      "sha256": "f53b0cc833c7333a6bf3d159b99ced813f2cd1132fcff695fb5a4309a4c63859",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: portable content streamと世代束縛uploadを追加。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/test/contract.test.mjs",
+      "sha256": "8fb9b0a7a784e15c00d3e8b330becb263a171ccd65c3a4d0677611a3624e21ce",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: レシピ保存のreplica状態をacknowledgedRevisionで照合。\n変更理由: レシピ保存のreplica状態をacknowledgedRevisionで照合。\n変更理由: portable export streamを契約fixture検査から除外。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/test/routes.test.mjs",
+      "sha256": "181a282e59e3df3233bfe34fcda3afa573510d82d80f9f8ef752182ef5e2f923",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 追加routeの閉じたrequest roundtripを検証。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/tsconfig.json",
+      "sha256": "b8514042cec4c0493cd61cce2c9e1ecaae878c563586ea53873459471536eb2c",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/photo-cloud-library/src/render-executor/contract.ts",
