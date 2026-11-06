@@ -218,7 +218,10 @@ export function PhotoSharedAlbumView(props: PhotoSharedAlbumViewProps) {
   const { overlay, zoneProps } = usePhotoFileDropZone({
     enabled: true,
     zone: dropZone,
-    onDropFiles: (dropped) => {
+    captureDropContext: () => albumIdRef.current,
+    onDropFiles: (dropped, droppedAlbumId) => {
+      // Directory enumeration is async. Discard a drop if the user opened a different album while it was being read.
+      if (droppedAlbumId !== albumIdRef.current) return;
       if (dropped.photos.length > 0) props.onAddFiles(dropped.photos);
     },
   });

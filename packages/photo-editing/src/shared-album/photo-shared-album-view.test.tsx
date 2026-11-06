@@ -135,6 +135,54 @@ describe("PhotoSharedAlbumView", () => {
     expect(mocks.confirm).not.toHaveBeenCalled();
   });
 
+  it("フォルダを落としたあと別アルバムへ移ったら、遅れて読めた写真を追加しない", async () => {
+    const pendingRead: { release?: (entries: Array<{ isFile: boolean; isDirectory: boolean; name: string }>) => void } = {};
+    let readCount = 0;
+    const file = new File([new Uint8Array([1, 2, 3])], "IMG_0002.JPG", { type: "image/jpeg" });
+    const fileEntry = {
+      isFile: true,
+      isDirectory: false,
+      name: file.name,
+      file: (onFile: (value: File) => void) => onFile(file),
+    };
+    const directory = {
+      isFile: false,
+      isDirectory: true,
+      name: "photos",
+      createReader: () => ({
+        readEntries: (onEntries: (entries: Array<{ isFile: boolean; isDirectory: boolean; name: string }>) => void) => {
+          if (readCount++ === 0) pendingRead.release = onEntries;
+          else onEntries([]);
+        },
+      }),
+    };
+    const onAddFiles = vi.fn();
+    const firstAlbum = album({ albumId: "album-a" });
+    const viewProps = props({ album: firstAlbum, onAddFiles });
+    render(viewProps);
+
+    const section = container.querySelector("section");
+    if (!section) throw new Error("section not found");
+    const drop = new Event("drop", { bubbles: true, cancelable: true });
+    Object.defineProperty(drop, "dataTransfer", {
+      value: {
+        types: ["Files"],
+        items: [{ kind: "file", webkitGetAsEntry: () => directory }],
+        files: [],
+      },
+    });
+    act(() => section.dispatchEvent(drop));
+    if (!pendingRead.release) throw new Error("directory enumeration did not start");
+
+    render({ ...viewProps, album: album({ albumId: "album-b" }) });
+    const release = pendingRead.release;
+    await act(async () => {
+      release([fileEntry]);
+      await new Promise((resolve) => setTimeout(resolve, 0));
+    });
+    expect(onAddFiles).not.toHaveBeenCalled();
+  });
+
   it("本人の「写真」から選べるときは、写真とファイルの 2 つの出どころを出す", () => {
     const onAddFromLibrary = vi.fn();
     render(props({ onAddFromLibrary }));

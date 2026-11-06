@@ -28,16 +28,19 @@ export type PhotoFileDropZoneProps = {
  *
  * - 受けるのは `Files` を運ぶドラッグだけ（記事制作の画像ライブラリのタイルなど、ページ内のドラッグには反応しない）
  * - 面の中の要素をまたぐ dragenter / dragleave で幕がちらつかないよう、入った深さを数える
- * - 落としたら、ハンドラの中で項目を取り出してからフォルダの中身を辿り、形式でふるって `onDropFiles` に渡す
+ * - 落としたら、ハンドラの中で項目と `captureDropContext` を同期的に取り出してからフォルダの中身を辿り、形式でふるって
+ *   `onDropFiles` に渡す。非同期の読み取り中に表示先が替わった場合の判定に使う
  * - 面が有効な間（`enabled`）は、面の外に落としてもページがファイルを開いて離れないよう、window で `Files` のドラッグを
  *   止める（面の外では `dropEffect = "none"`）。面や他の落とし口が先に止めたイベント（`defaultPrevented`）には触らない
  *
  * `zone` が null のとき（閲覧のみ）は幕を出さず受けないが、ページを離れないようにだけする。
  */
-export function usePhotoFileDropZone(options: {
+export function usePhotoFileDropZone<TDropContext = undefined>(options: {
   enabled: boolean;
   zone: PhotoFileDropZoneState | null;
-  onDropFiles: (dropped: SortedPhotoDrop) => void;
+  /** `drop` イベント中に同期して保存する宛先などの文脈 */
+  captureDropContext?: () => TDropContext;
+  onDropFiles: (dropped: SortedPhotoDrop, context: TDropContext) => void;
 }): { overlay: PhotoFileDropZoneState | null; zoneProps: PhotoFileDropZoneProps } {
   const { enabled, zone } = options;
   const [dragging, setDragging] = useState(false);
@@ -48,6 +51,8 @@ export function usePhotoFileDropZone(options: {
   zoneRef.current = zone;
   const onDropFilesRef = useRef(options.onDropFiles);
   onDropFilesRef.current = options.onDropFiles;
+  const captureDropContextRef = useRef(options.captureDropContext);
+  captureDropContextRef.current = options.captureDropContext;
   const mountedRef = useRef(false);
 
   useEffect(() => {
@@ -129,9 +134,10 @@ export function usePhotoFileDropZone(options: {
         if (zoneRef.current?.kind !== "accept") return;
         // ハンドラを抜けると dataTransfer は読めなくなるので、項目はここで取り出す
         const captured = capturePhotoDrop(event.dataTransfer);
+        const context = captureDropContextRef.current?.() as TDropContext;
         void collectPhotoDropFiles(captured).then((files) => {
           if (!mountedRef.current || !enabledRef.current) return;
-          onDropFilesRef.current(sortPhotoDropFiles(files));
+          onDropFilesRef.current(sortPhotoDropFiles(files), context);
         });
       },
     };
