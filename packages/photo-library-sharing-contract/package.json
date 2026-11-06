@@ -1,0 +1,22 @@
+{
+  "name": "@niho/photo-library-sharing-contract",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "NIHO photoの保管場所・共有アルバム・完成写真の公開port契約。v2本人クラウド契約への互換adapterを含み、backend接続・本番有効化を含まない",
+  "exports": {
+    ".": "./src/v1.ts",
+    "./policy": "./src/policy.ts",
+    "./compat-v2": "./src/compat-v2.ts",
+    "./fixtures": "./fixtures/v1.ts",
+    "./cases": "./fixtures/security-cases.json"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint ."
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}
