@@ -2,7 +2,7 @@ import type { CapturedPhotoActor, PhotoAuthService } from "@niho/photo-cloud-ses
 import { NIHO_PRODUCTION_ORIGIN, PhotoAuthorizationError } from "@niho/photo-cloud-session/server";
 import { describe, expect, it } from "vitest";
 
-import { PENDING_INVITE_COOKIE_NAME, createPendingInviteHandler } from "../src/server";
+import { PENDING_INVITE_BINDING_COOKIE_NAME, PENDING_INVITE_COOKIE_NAME, createPendingInviteHandler } from "../src/server";
 import { createBrowserSharedAlbumMembershipClient, createSharedAlbumMockServer } from "../src/sharing";
 import { FakeIdentity, defaultActor } from "./support";
 
@@ -18,10 +18,12 @@ function key(seed: number): Uint8Array {
   return new Uint8Array(32).fill(seed);
 }
 
-function setup(options: { keys?: readonly Uint8Array[]; upstream?: (request: Request) => Promise<Response> } = {}) {
+type MockServer = ReturnType<typeof createSharedAlbumMockServer>;
+
+function setup(options: { keys?: readonly Uint8Array[]; upstream?: (request: Request) => Promise<Response>; server?: MockServer } = {}) {
   let clock = START;
   let secrets = 0;
-  const server = createSharedAlbumMockServer({
+  const server = options.server ?? createSharedAlbumMockServer({
     users: [
       { userId: OWNER, displayName: "Synthetic Owner" },
       { userId: MEMBER, displayName: "Synthetic Member" },
@@ -68,7 +70,7 @@ function setup(options: { keys?: readonly Uint8Array[]; upstream?: (request: Req
     const request = new Request(url, init);
     const headers = new Headers(request.headers);
     if (!headers.has("Origin")) headers.set("Origin", PHOTO_ORIGIN);
-    const cookies = [...jar.entries()].filter(([, cookie]) => url.pathname === cookie.path || url.pathname.startsWith(`${cookie.path}/`));
+    const cookies = [...jar.entries()].filter(([, cookie]) => cookie.path === "/" || url.pathname === cookie.path || url.pathname.startsWith(`${cookie.path}/`));
     // An explicit Cookie header stands for a copied or forged cookie and replaces the jar.
     if (cookies.length > 0 && !headers.has("Cookie")) headers.set("Cookie", cookies.map(([name, cookie]) => `${name}=${cookie.value}`).join("; "));
     const response = await handler(new Request(url, { method: request.method, headers, body: request.body, duplex: "half" } as RequestInit));
@@ -95,8 +97,11 @@ function setup(options: { keys?: readonly Uint8Array[]; upstream?: (request: Req
     const created = (await owner.request("invites.create", { albumId: album.id, role }, { signal: new AbortController().signal, idempotencyKey: `invite-${Math.random()}` })).value;
     return { album, secret: created.secret as string, link: created.link };
   };
+  /** The Cookie header this browser would send to the pending path (to copy, forge or plant cookies). */
+  const cookieHeader = (pending = jar.get(PENDING_INVITE_COOKIE_NAME)?.value, binding = jar.get(PENDING_INVITE_BINDING_COOKIE_NAME)?.value): string =>
+    [pending === undefined ? null : `${PENDING_INVITE_COOKIE_NAME}=${pending}`, binding === undefined ? null : `${PENDING_INVITE_BINDING_COOKIE_NAME}=${binding}`].filter(Boolean).join("; ");
   return {
-    server, handler, jar, setCookies, upstreamRequests, hold, joinPending, post, browserFetch, createInvite,
+    server, handler, jar, setCookies, upstreamRequests, hold, joinPending, post, browserFetch, createInvite, cookieHeader,
     signIn: (user: string | null) => { signedIn = user; },
     advance: (ms: number) => { clock += ms; },
   };
@@ -118,6 +123,8 @@ describe("pending invite in the BFF (B00 PENDING_INVITE_ROUTES, B05 #246)", () =
     const cookie = t.setCookies[0] as string;
     expect(cookie.startsWith(`${PENDING_INVITE_COOKIE_NAME}=`)).toBe(true);
     expect(cookie).toContain("; Max-Age=900; Path=/cloud/sharing/v1/invites/pending; HttpOnly; Secure; SameSite=Lax");
+    // The host-only binding carries the pending ID only.
+    expect(t.setCookies[1]).toMatch(new RegExp(`^${PENDING_INVITE_BINDING_COOKIE_NAME}=[A-Za-z0-9_-]{22}; Max-Age=900; Path=/; HttpOnly; Secure; SameSite=Lax$`, "u"));
     // Neither the secret nor any encoding of it is readable in the cookie.
     const value = t.jar.get(PENDING_INVITE_COOKIE_NAME)?.value as string;
     expect(cookie).not.toContain(secret);
@@ -129,8 +136,11 @@ describe("pending invite in the BFF (B00 PENDING_INVITE_ROUTES, B05 #246)", () =
     const client = createBrowserSharedAlbumMembershipClient({ identity: new FakeIdentity(), fetch: t.browserFetch, now: () => START });
     const joined = await client.joinPending(new AbortController().signal);
     expect(joined).toMatchObject({ joined: true, album: { id: album.id, memberCount: 2 }, membership: { role: "contributor", member: { isSelf: true } } });
-    expect(t.jar.has(PENDING_INVITE_COOKIE_NAME)).toBe(false);
-    expect(t.setCookies.at(-1)).toBe(`${PENDING_INVITE_COOKIE_NAME}=; Max-Age=0; Path=/cloud/sharing/v1/invites/pending; HttpOnly; Secure; SameSite=Lax`);
+    expect(t.jar.size).toBe(0);
+    expect(t.setCookies.slice(-2)).toEqual([
+      `${PENDING_INVITE_COOKIE_NAME}=; Max-Age=0; Path=/cloud/sharing/v1/invites/pending; HttpOnly; Secure; SameSite=Lax`,
+      `${PENDING_INVITE_BINDING_COOKIE_NAME}=; Max-Age=0; Path=/; HttpOnly; Secure; SameSite=Lax`,
+    ]);
 
     // Upstream got the normal invites.join under the verified session, keyed by the pending ID, with the secret in the body.
     expect(t.upstreamRequests).toHaveLength(1);
@@ -165,11 +175,11 @@ describe("pending invite in the BFF (B00 PENDING_INVITE_ROUTES, B05 #246)", () =
     const { secret } = await t.createInvite();
     t.signIn(MEMBER);
 
-    // Copied: the same cookie value used twice.
+    // Copied: the same cookies used twice.
     await t.hold(secret);
-    const copy = t.jar.get(PENDING_INVITE_COOKIE_NAME)?.value as string;
+    const copy = t.cookieHeader();
     expect((await t.joinPending()).status).toBe(200);
-    const replayed = await t.joinPending({ Cookie: `${PENDING_INVITE_COOKIE_NAME}=${copy}` });
+    const replayed = await t.joinPending({ Cookie: copy });
     expect(replayed.status).toBe(410);
     expect((await body(replayed)).error).toMatchObject({ code: "invite_unavailable", retryable: false });
     expect(replayed.headers.getSetCookie()[0]).toContain("Max-Age=0");
@@ -205,27 +215,72 @@ describe("pending invite in the BFF (B00 PENDING_INVITE_ROUTES, B05 #246)", () =
     const rotated = setup({ keys: [key(3), key(2)] });
     const invite = await rotated.createInvite();
     await old.hold(invite.secret);
-    const sealedWithOld = old.jar.get(PENDING_INVITE_COOKIE_NAME)?.value as string;
+    const sealedWithOld = old.cookieHeader();
     rotated.signIn(MEMBER);
-    const previous = await rotated.joinPending({ Cookie: `${PENDING_INVITE_COOKIE_NAME}=${sealedWithOld}` });
+    const previous = await rotated.joinPending({ Cookie: sealedWithOld });
     expect(previous.status).toBe(200);
     expect(rotated.upstreamRequests).toHaveLength(1);
 
     await rotated.hold(invite.secret);
     const sealedWithNew = rotated.jar.get(PENDING_INVITE_COOKIE_NAME)?.value as string;
+    const binding = rotated.jar.get(PENDING_INVITE_BINDING_COOKIE_NAME)?.value as string;
 
     const flipped = Buffer.from(sealedWithNew, "base64url");
     flipped[flipped.length - 1] = (flipped[flipped.length - 1] as number) ^ 1;
     for (const forged of [Buffer.from(flipped).toString("base64url"), "not-a-sealed-value", `${sealedWithNew}x`]) {
-      const response = await rotated.joinPending({ Cookie: `${PENDING_INVITE_COOKIE_NAME}=${forged}` });
+      const response = await rotated.joinPending({ Cookie: rotated.cookieHeader(forged, binding) });
       expect(response.status).toBe(410);
     }
     // Only the current key seals: a handler with key 2 alone cannot open a cookie sealed with key 3.
     old.signIn(MEMBER);
-    expect((await old.joinPending({ Cookie: `${PENDING_INVITE_COOKIE_NAME}=${sealedWithNew}` })).status).toBe(410);
-    // Two copies of the cookie are not trusted either.
-    expect((await rotated.joinPending({ Cookie: `${PENDING_INVITE_COOKIE_NAME}=${sealedWithNew}; ${PENDING_INVITE_COOKIE_NAME}=${sealedWithNew}` })).status).toBe(410);
+    expect((await old.joinPending({ Cookie: old.cookieHeader(sealedWithNew, binding) })).status).toBe(410);
+    // Without the host-only binding, or with one that matches no sealed cookie, nothing is opened.
+    expect((await rotated.joinPending({ Cookie: `${PENDING_INVITE_COOKIE_NAME}=${sealedWithNew}` })).status).toBe(410);
+    expect((await rotated.joinPending({ Cookie: rotated.cookieHeader(sealedWithNew, "A".repeat(22)) })).status).toBe(410);
     expect(rotated.upstreamRequests).toHaveLength(1);
+  });
+
+  it("ignores a same-named cookie planted from another host: only the one bound to this browser is used", async () => {
+    const t = setup();
+    const victimInvite = await t.createInvite("viewer");
+    const attackerInvite = await t.createInvite("contributor");
+    // The attacker holds their own invite (a validly sealed cookie) and plants it under the parent domain.
+    await t.hold(attackerInvite.secret);
+    const planted = t.jar.get(PENDING_INVITE_COOKIE_NAME)?.value as string;
+    t.jar.clear();
+    // The victim opens their link signed out, then signs in. The browser sends both same-named cookies.
+    await t.hold(victimInvite.secret);
+    const own = t.jar.get(PENDING_INVITE_COOKIE_NAME)?.value as string;
+    const binding = t.jar.get(PENDING_INVITE_BINDING_COOKIE_NAME)?.value as string;
+    t.signIn(MEMBER);
+    const joined = await t.joinPending({ Cookie: `${PENDING_INVITE_COOKIE_NAME}=${planted}; ${t.cookieHeader(own, binding)}` });
+    expect(joined.status).toBe(200);
+    expect(await body(joined)).toMatchObject({ album: { id: victimInvite.album.id }, membership: { role: "viewer" } });
+    expect(JSON.parse(t.upstreamRequests[0]?.body as string)).toEqual({ secret: victimInvite.secret });
+
+    // A planted cookie alone (with the victim's binding) is not used, and cannot be made to look bound.
+    await t.hold(victimInvite.secret);
+    const nextBinding = t.jar.get(PENDING_INVITE_BINDING_COOKIE_NAME)?.value as string;
+    expect((await t.joinPending({ Cookie: t.cookieHeader(planted, nextBinding) })).status).toBe(410);
+    expect(t.upstreamRequests).toHaveLength(1);
+  });
+
+  it("refuses the same cookies used on another instance (the upstream replays the pending ID's key)", async () => {
+    const first = setup();
+    const second = setup({ server: first.server });
+    const { secret } = await first.createInvite();
+    await first.hold(secret);
+    const copy = first.cookieHeader();
+    first.signIn(MEMBER);
+    second.signIn(MEMBER);
+    expect((await first.joinPending()).status).toBe(200);
+    // The second instance has not seen this pending ID, so it asks upstream with the same key and gets a replay.
+    const replayed = await second.joinPending({ Cookie: copy });
+    expect(replayed.status).toBe(410);
+    expect((await body(replayed)).error).toMatchObject({ code: "invite_unavailable" });
+    expect(second.upstreamRequests).toHaveLength(1);
+    expect(second.upstreamRequests[0]?.headers.get("Idempotency-Key")).toBe(first.upstreamRequests[0]?.headers.get("Idempotency-Key"));
+    expect(first.server.memberJoinedEvents(OWNER)).toHaveLength(1);
   });
 
   it("refuses cross-site and malformed requests without setting a cookie", async () => {
