@@ -184,6 +184,77 @@ export function jpegMetadataRecord(bytes: Uint8Array): Readonly<Record<string, u
   return record;
 }
 
+/** The capture fields a finished JPEG may keep. null fields are absent. */
+export interface JpegCaptureFields {
+  /** EXIF orientation (1 = pixels already upright). */
+  readonly orientation: number | null;
+  /** Local capture time from DateTimeOriginal, as YYYY-MM-DDTHH:MM:SS. */
+  readonly capturedAt: string | null;
+  /** OffsetTimeOriginal, e.g. +09:00. */
+  readonly capturedAtOffset: string | null;
+}
+
+const ORIENTATION_TAG = 0x0112;
+const DATE_TIME_ORIGINAL_TAG = 0x9003;
+const OFFSET_TIME_ORIGINAL_TAG = 0x9011;
+const EXIF_DATE_TIME = /^(\d{4}):(\d{2}):(\d{2}) (\d{2}):(\d{2}):(\d{2})$/u;
+const EXIF_OFFSET = /^[+-]\d{2}:\d{2}$/u;
+
+/**
+ * Reads orientation, capture time and its offset from the first EXIF block (nothing else). null when the JPEG or its
+ * EXIF block cannot be read, so a caller never treats an unreadable orientation as upright.
+ */
+export function readJpegCaptureFields(bytes: Uint8Array): JpegCaptureFields | null {
+  const walked = walkJpeg(bytes);
+  if (!walked) return null;
+  const exif = walked.parts.find((part) => part.kind === "segment" && part.marker === APP1 && startsWith(bytes, part.dataStart, EXIF_HEADER));
+  if (!exif || exif.kind !== "segment") return { orientation: null, capturedAt: null, capturedAtOffset: null };
+  try {
+    return readCaptureFieldsUnchecked(bytes.subarray(exif.dataStart + EXIF_HEADER.length, exif.end));
+  } catch {
+    return null;
+  }
+}
+
+function readCaptureFieldsUnchecked(tiff: Uint8Array): JpegCaptureFields | null {
+  if (tiff.length < 8) return null;
+  const little = tiff[0] === 0x49 && tiff[1] === 0x49;
+  if (!little && !(tiff[0] === 0x4d && tiff[1] === 0x4d)) return null;
+  const view = new DataView(tiff.buffer, tiff.byteOffset, tiff.byteLength);
+  const u16 = (offset: number): number => view.getUint16(offset, little);
+  const u32 = (offset: number): number => view.getUint32(offset, little);
+  if (u16(2) !== 42) return null;
+  type Entry = { readonly tag: number; readonly type: number; readonly count: number; readonly field: number };
+  const entries = (offset: number): Entry[] => {
+    const count = u16(offset);
+    if (count > 512 || offset + 2 + count * 12 > tiff.length) throw new RangeError("ifd");
+    return Array.from({ length: count }, (_, index) => {
+      const entry = offset + 2 + index * 12;
+      return { tag: u16(entry), type: u16(entry + 2), count: u32(entry + 4), field: entry + 8 };
+    });
+  };
+  const ascii = (entry: Entry | undefined): string | null => {
+    if (!entry || entry.type !== 2 || entry.count === 0 || entry.count > 64) return null;
+    const start = entry.count <= 4 ? entry.field : u32(entry.field);
+    if (start + entry.count > tiff.length) throw new RangeError("ascii");
+    let text = "";
+    for (let index = 0; index < entry.count && tiff[start + index] !== 0; index += 1) text += String.fromCharCode(tiff[start + index] as number);
+    return text;
+  };
+  const ifd0 = entries(u32(4));
+  const orientationEntry = ifd0.find((entry) => entry.tag === ORIENTATION_TAG);
+  const orientation = orientationEntry && orientationEntry.type === 3 && orientationEntry.count === 1 ? u16(orientationEntry.field) : null;
+  const pointer = ifd0.find((entry) => entry.tag === EXIF_IFD_POINTER);
+  const exif = pointer ? entries(u32(pointer.field)) : [];
+  const dateTime = EXIF_DATE_TIME.exec(ascii(exif.find((entry) => entry.tag === DATE_TIME_ORIGINAL_TAG)) ?? "");
+  const offset = ascii(exif.find((entry) => entry.tag === OFFSET_TIME_ORIGINAL_TAG));
+  return {
+    orientation,
+    capturedAt: dateTime ? `${dateTime[1]}-${dateTime[2]}-${dateTime[3]}T${dateTime[4]}:${dateTime[5]}:${dateTime[6]}` : null,
+    capturedAtOffset: offset !== null && EXIF_OFFSET.test(offset) ? offset : null,
+  };
+}
+
 // ---------------------------------------------------------------------------------------------------------
 
 function isMetadataMarker(marker: number): boolean {

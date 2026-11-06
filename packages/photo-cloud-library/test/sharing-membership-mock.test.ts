@@ -5,6 +5,7 @@ import { createPhotoCloudSharingPreviewClient } from "niho-photo-editing/cloud-s
 import { PersonalPhotoCloudError } from "../src/errors";
 import { createSharedAlbumMockServer, type SharedAlbumMockClient } from "../src/sharing";
 import type { RenditionUploadRequest, SharingErrorCode } from "../src/sharing/contract";
+import { hex, syntheticJpeg } from "./render-support";
 
 const OWNER = "synthetic-user-owner";
 const STAFF1 = "synthetic-user-staff-1";
@@ -12,8 +13,10 @@ const STAFF2 = "synthetic-user-staff-2";
 const OUTSIDER = "synthetic-user-outsider";
 const START = Date.parse("2026-11-07T00:00:00.000Z");
 const DAY = 24 * 60 * 60 * 1000;
+/** A synthetic finished JPEG; the server re-decodes it at commit. */
+const FILE = syntheticJpeg({ width: 1200, height: 800 });
 const RENDITION: RenditionUploadRequest = {
-  sizeBytes: 4096, sha256: "a".repeat(64), contentType: "image/jpeg", width: 1200, height: 800,
+  sizeBytes: FILE.length, sha256: hex(FILE), contentType: "image/jpeg", width: 1200, height: 800,
   metadata: { capturedAt: null, capturedAtOffset: null, colorProfile: "sRGB", orientation: 1 },
 };
 
@@ -36,8 +39,15 @@ function setup(options: { joinFailures?: number } = {}) {
   const key = (): { signal: AbortSignal; idempotencyKey: string } => ({ signal, idempotencyKey: `key-${++keys}` });
   const read = { signal };
   const as = (actor: string | null): SharedAlbumMockClient => server.clientFor(actor);
+  /** Adds the synthetic file, uploads its bytes and commits it. */
+  const addCommitted = async (client: SharedAlbumMockClient, albumId: string) => {
+    const added = (await client.request("albumItems.addFile", { albumId, rendition: RENDITION }, key())).value;
+    await server.uploader.upload(added.upload?.ticket as never, FILE, "image/jpeg", signal);
+    await client.request("albumItems.commitUpload", { albumId, uploadId: added.upload?.upload.id as string }, key());
+    return added;
+  };
   return {
-    server, signal, key, read, as,
+    server, signal, key, read, as, addCommitted,
     advance: (ms: number) => { now += ms; },
     owner: as(OWNER), staff1: as(STAFF1), staff2: as(STAFF2), outsider: as(OUTSIDER),
   };
@@ -217,10 +227,8 @@ describe("shared album membership mock (B05)", () => {
     await t.staff2.request("invites.join", { secret: viewerLink.secret as string }, t.key());
 
     expect(await rejection(t.staff2.request("albumItems.addFile", { albumId: album.id, rendition: RENDITION }, t.key()))).toBe("role_forbidden");
-    const ownerAdd = (await t.owner.request("albumItems.addFile", { albumId: album.id, rendition: RENDITION }, t.key())).value;
-    await t.owner.request("albumItems.commitUpload", { albumId: album.id, uploadId: ownerAdd.upload?.upload.id as string }, t.key());
-    const staffAdd = (await t.staff1.request("albumItems.addFile", { albumId: album.id, rendition: RENDITION }, t.key())).value;
-    await t.staff1.request("albumItems.commitUpload", { albumId: album.id, uploadId: staffAdd.upload?.upload.id as string }, t.key());
+    const ownerAdd = await t.addCommitted(t.owner, album.id);
+    const staffAdd = await t.addCommitted(t.staff1, album.id);
 
     expect(await rejection(t.staff1.request("albumItems.remove", { albumId: album.id, itemId: ownerAdd.item.id }, t.key()))).toBe("role_forbidden");
     expect(await rejection(t.staff2.request("albumItems.remove", { albumId: album.id, itemId: staffAdd.item.id }, t.key()))).toBe("role_forbidden");
@@ -231,12 +239,8 @@ describe("shared album membership mock (B05)", () => {
     const t = setup();
     const { album, contributorLink } = await albumWithLinks(t);
     const other = (await t.owner.request("albums.create", { name: "Synthetic unshared album" }, t.key())).value;
-    const hidden = (await t.owner.request("albumItems.addFile", { albumId: other.id, rendition: RENDITION }, t.key())).value;
-    await t.owner.request("albumItems.commitUpload", { albumId: other.id, uploadId: hidden.upload?.upload.id as string }, t.key());
-    for (let index = 0; index < 2; index += 1) {
-      const added = (await t.owner.request("albumItems.addFile", { albumId: album.id, rendition: RENDITION }, t.key())).value;
-      await t.owner.request("albumItems.commitUpload", { albumId: album.id, uploadId: added.upload?.upload.id as string }, t.key());
-    }
+    const hidden = await t.addCommitted(t.owner, other.id);
+    for (let index = 0; index < 2; index += 1) await t.addCommitted(t.owner, album.id);
     const staff1 = (await t.staff1.request("invites.join", { secret: contributorLink.secret as string }, t.key())).value.membership;
 
     // An item of an album the member is not in, asked through either album, is indistinguishable from missing.
@@ -277,9 +281,10 @@ describe("shared album membership mock (B05)", () => {
     await t.owner.request("members.changeRole", { albumId: album.id, membershipId: promoted.id, expectedRevision: promoted.revision, role: "viewer" }, t.key());
 
     expect(await rejection(t.staff1.request("albumItems.commitUpload", { albumId: album.id, uploadId: removedAdd.upload?.upload.id as string }, t.key()))).toBe("not_found");
-    expect(await rejection(t.staff2.request("albumItems.commitUpload", { albumId: album.id, uploadId: demotedAdd.upload?.upload.id as string }, t.key()))).toBe("role_forbidden");
+    // Demotion ends the member's unpublished adds on the server, so the commit finds the add removed.
+    expect(await rejection(t.staff2.request("albumItems.commitUpload", { albumId: album.id, uploadId: demotedAdd.upload?.upload.id as string }, t.key()))).toBe("item_removed");
     const ownerView = await t.owner.request("albumItems.list", { albumId: album.id }, t.read);
-    expect(ownerView.items.every((item) => item.state === "preparing")).toBe(true);
+    expect(ownerView.items).toEqual([]);
 
     const leaver = (await t.owner.request("invites.create", { albumId: album.id, role: "contributor" }, t.key())).value;
     await t.outsider.request("invites.join", { secret: leaver.secret as string }, t.key());

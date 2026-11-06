@@ -27,9 +27,11 @@ export {
 export {
   RENDITION_EXIF_ALLOWED_TAGS,
   jpegMetadataRecord,
+  readJpegCaptureFields,
   renditionMetadataViolations,
   scanJpegMetadata,
   stripJpegMetadata,
+  type JpegCaptureFields,
   type JpegMetadataScan,
   type JpegMetadataSegmentKind,
 } from "./jpeg-metadata";

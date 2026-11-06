@@ -11852,8 +11852,8 @@
     },
     {
       "path": "packages/photo-cloud-library/README.md",
-      "sha256": "a84aeeb22b6a04b255cd670386edddfd023e2ac38b9989b0135f6f88527d06ef",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: C03実HTTPと狭いprotocol共有口および編集未有効の境界を記述\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。\n変更理由: 失効時に本人scopeだけをfenceして転送journalを消去し、通常disposeの再開情報保持を分離する\n変更理由: 曖昧なconnection teardownと確定的session失効を分け、再開可能journalを保護する\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: README.md を更新"
+      "sha256": "1fbd62d483ba30d1e5d584ca386b648e2ea2e4f7baf1aedbc8fbec281fcf729f",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: C03実HTTPと狭いprotocol共有口および編集未有効の境界を記述\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。\n変更理由: 失効時に本人scopeだけをfenceして転送journalを消去し、通常disposeの再開情報保持を分離する\n変更理由: 曖昧なconnection teardownと確定的session失効を分け、再開可能journalを保護する\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: README.md を更新\n変更理由: B12 #254 共有アルバムの項目の追加・差し替え・削除のため: README.md を更新"
     },
     {
       "path": "packages/photo-cloud-library/src/adapter.ts",
@@ -11867,8 +11867,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/browser/client.ts",
-      "sha256": "1a4a2207df82ecee16a0da324b70cd6b0d71641f12770b7224e7fd5a0524ca86",
-      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 公開CIの厳格型に合わせ、所有ArrayBufferと非同期callbackの非null snapshotを明示する\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: client.ts を更新"
+      "sha256": "b0de0ca70ba4caf78bb833145908672059551da14aed0c6a62f058312567d22f",
+      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 公開CIの厳格型に合わせ、所有ArrayBufferと非同期callbackの非null snapshotを明示する\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: client.ts を更新\n変更理由: B12 #254 共有アルバムの項目の追加・差し替え・削除のため: client.ts を更新"
     },
     {
       "path": "packages/photo-cloud-library/src/browser/index.ts",
@@ -13612,12 +13612,12 @@
     },
     {
       "path": "packages/photo-cloud-library/src/render-executor/index.ts",
-      "sha256": "1afad7ea08db62b7c6524bfd50b9103947697db48a6a8d1123f0b10826ca518c",
+      "sha256": "53f6c5db0d83ab59657b031a56b9903f88a714477b778e1e4b36bb85b4ec0a17",
       "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/photo-cloud-library/src/render-executor/jpeg-metadata.ts",
-      "sha256": "83d15e2467647071dfb08167e635299d9c319cbaadc57a918d10945aa67495ee",
+      "sha256": "9ceb09af71f41db07392e2bd98ecb1131718394383e08dffaed304ae475e0cff",
       "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13662,32 +13662,32 @@
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/contract.ts",
-      "sha256": "ca33d58c751cc0ae326a322b2ff8554b5050d5786f26b6cd9c5a49705fe1116c",
+      "sha256": "1b8c3b893e513a36493407dbe45547da9ca189a123daa28eb0697fb9858794a6",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/index.ts",
-      "sha256": "1e8144afcb57b0bcf12eefcebd5e401a8820fd51e09980f11044bbbe2c19c28d",
+      "sha256": "ea966b834e11cc245095a864be99761a8b854660d110dbee7f3c60c334f461a1",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/membership-client.ts",
-      "sha256": "afd9862ae86bd288a6a8da943f0786a8928d3ee1224a7a84fea233b6f3d9de72",
+      "sha256": "ae673f6bf176d5ad4641fcb825307ee5f153510e4d32071c4f14de30f2632f0a",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/membership-mock.ts",
-      "sha256": "ae5034638f7e618ef9a2a032ed157634ffa26cb965b2da52c08d464c86eea812",
+      "sha256": "7450587db60587316dd168f70b36d459a9147a7ec879931590585e4368765be4",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/membership-wire.ts",
-      "sha256": "9c892c6387d20e3a373feb76a8a8f1799b1a8e0f02f5cd18a286be3f99262982",
+      "sha256": "1bcaf7bf5d543b195b3b5e88700db33bc3de1e8c6685a068c29dba1e319e07c0",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/membership.ts",
-      "sha256": "da6648ce6e52bd798837b435d2011044cc9527deebf4534cb32b08e8e8aa86e5",
+      "sha256": "8e6d0f69a88c9b1c5d15d57db607a4ae519c168ba8a289c97535728acce3df4c",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
@@ -13697,13 +13697,43 @@
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-membership-mock.test.ts",
-      "sha256": "8d0217a016336b523b5cd36cfe595472fafe8f5568e53bd47c986d02c1feda18",
+      "sha256": "fc09de34e003e9ad385433e7348ea2c8ebd6cf78b7a8e0d974727a63239bfb69",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-membership-service.test.ts",
       "sha256": "8459fbcba68b4a9b905c5948f0d880c609b5dc4f11a572f7385e4cc7791a5322",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/sharing/album-client.ts",
+      "sha256": "d31acec1b66a07730afec2f4a14b352bfa5882593a6ba4291983b7fe1db196d5",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/sharing/album-items.ts",
+      "sha256": "1657a6489707b45d3816e4f4174750b8d388d554231c2412535817bb7876bf8f",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/sharing/album-wire.ts",
+      "sha256": "4cdc8bc849262c678442e7cfdd197cc1e7e220f761adb052ab2822214e02ab77",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/sharing/sharing-http.ts",
+      "sha256": "ed84270ceb60dcd140ef09e92a997c17312c273740b272a3d68419cc38170ef0",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/sharing-album-client.test.ts",
+      "sha256": "0edb2ba8d70f851ba5d62d3c94be18594448ee4b90914601d502bcee6ea872ec",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/sharing-album-items.test.ts",
+      "sha256": "bc52bce3597a68d392326da00dc95a07752e496ef8935b68fefe2d3453369190",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     }
   ],
   "excludedSources": [

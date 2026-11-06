@@ -197,7 +197,7 @@ export function sharingRecoveryOf(error: unknown): SharingRecovery | null {
 }
 
 /** ms to wait before replaying with the same key, or null when the failure is not a lost/delayed answer. */
-function replayDelay(error: unknown, attempt: number, maxRetryAfterSeconds: number): number | null {
+export function replayDelay(error: unknown, attempt: number, maxRetryAfterSeconds: number): number | null {
   if (isSharingErrorEnvelope(error)) {
     const { code, retryable, retryAfterSeconds } = error.error;
     if (!retryable || SHARING_ERROR_RECOVERY[code] !== "retrySameKey") return null;
@@ -210,7 +210,7 @@ function replayDelay(error: unknown, attempt: number, maxRetryAfterSeconds: numb
   return null;
 }
 
-async function abortableSleep(milliseconds: number, signal: AbortSignal): Promise<void> {
+export async function abortableSleep(milliseconds: number, signal: AbortSignal): Promise<void> {
   if (milliseconds <= 0) return;
   await new Promise<void>((resolve, reject) => {
     const timer = setTimeout(() => {

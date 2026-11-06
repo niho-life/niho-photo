@@ -45,6 +45,15 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 - 合成 server は photo 単位のリンク共有（`cloudSharing`）とは別で、共有リンクを招待として受け付けない。実際の権限台帳・資格情報・回数制限は既存の非公開境界に置き、この server を本番で選ばない。
 - 契約 package は package 名で読む（`src/sharing/contract.ts` の 1 箇所）。共有シート・招待画面・BFF と 401 の扱いへの接続は後続。
 
+## 共有アルバムの写真（`./sharing`、B12 #254）
+
+同じ `./sharing` に、アルバム・項目・オーナーの共有容量の client（`createBrowserSharedAlbumClient`）と UI 向けの操作（`createSharedAlbumItems`）を置く。B05 の client と同じ HTTP の芯（`sharing-http.ts`）と経路の表を使う。
+
+- 追加は 3 種類。自分のライブラリの写真（`addLibraryPhotos`。元データを持つ端末が B07 で描く）、端末で描いた写真（`addDevicePhoto`。`renderFinishedOutput` の結果を `deviceRenderFile` で渡す）、完成済みの JPEG（`addFile`。`prepareAlbumFile` が端末で撮影日時以外の metadata を落とす。向きの tag に頼る JPEG は受け取らない）。
+- 呼び出しごとに冪等 key を持ち、応答が失われたら同じ key で再送する。ticket のない再送の応答を受けたら、その upload を取り消して同じ項目へ同じ内容を出し直し、項目を二重に作らない。始めた upload は確定か解放で終わる（中断・確定の拒否・取消で予約を返し、公開されなかった追加は消す）。
+- 差し替え（`replaceFile`・`replaceDeviceRender`）、複数選択の削除（`removeItems`）と保存（`saveItems`。原寸を hash と照合して渡す）。
+- 合成 server は項目の状態、追加者の端末の描画 job、確定時の作り直し（許可した metadata だけ）、オーナーへの容量の算入と解放、補正の保存による自動差し替え、端末の休止、メンバーの解除・降格で公開前の追加を落とすことを持つ。画面への組み込みは B00・B08 の merge 後。
+
 ## 完全補正の同期core
 
 C03は `@niho/photo-cloud-sync` と組み合わせ、`recipes.put` / `recipe-conflicts.list` / `recipe-conflicts.get` / `recipe-conflicts.resolve` を同じ固定HTTP/BFFへ接続する。補正文書1MiB/depth32とPUT envelope2MiBを分離し、両版と選択結果を含む競合応答は4MiBまで検証する。`./protocol` はscope/有限待機/純粋なrecipe投影・比較の狭い共有口で、認証やhashの別正本ではない。

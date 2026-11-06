@@ -30,6 +30,7 @@ import {
   type PersonLabel,
   type SharingErrorCode,
   type SharingErrorEnvelope,
+  type SharingOperation,
   type SharingOperationMap,
   type SharingRouteMethod,
 } from "./contract";
@@ -73,8 +74,8 @@ export function isSharedAlbumMembershipMutation(operation: SharedAlbumMembership
   return MUTATIONS.has(operation);
 }
 
-export interface EncodedSharingRequest {
-  readonly operation: SharedAlbumMembershipOperation;
+export interface EncodedSharingRequest<Op extends SharingOperation = SharedAlbumMembershipOperation> {
+  readonly operation: Op;
   readonly method: SharingRouteMethod;
   /** Full same-origin path, with the encoded query when the route has one. */
   readonly path: string;
@@ -89,12 +90,21 @@ export interface EncodedSharingRequest {
  */
 export function encodeMembershipRequest(operation: string, request: unknown, idempotencyKey: string | undefined): EncodedSharingRequest {
   if (!isSharedAlbumMembershipOperation(operation)) throw new PersonalPhotoCloudError("unsupported");
-  const mutation = MUTATIONS.has(operation);
-  if (mutation ? !isValidIdempotencyKey(idempotencyKey) : idempotencyKey !== undefined) invalidRequest();
   validateMembershipRequest(operation, request);
+  return encodeRoutedRequest(operation, request, MUTATIONS.has(operation), idempotencyKey);
+}
+
+/** A validated request placed by the contract's route table; mutations carry their key, reads none. */
+export function encodeRoutedRequest<Op extends SharingOperation>(
+  operation: Op,
+  request: unknown,
+  mutation: boolean,
+  idempotencyKey: string | undefined,
+): EncodedSharingRequest<Op> {
+  if (mutation ? !isValidIdempotencyKey(idempotencyKey) : idempotencyKey !== undefined) invalidRequest();
   let route: ReturnType<typeof encodeSharingRequest>;
   try {
-    route = encodeSharingRequest(operation, request as SharingOperationMap[typeof operation]["request"]);
+    route = encodeSharingRequest(operation, request as SharingOperationMap[Op]["request"]);
   } catch (error) {
     if (error instanceof SharingRouteError) invalidRequest();
     throw error;
@@ -317,39 +327,40 @@ export function validateAlbum(value: unknown): Album {
   return album as unknown as Album;
 }
 
-function validateReceipt(value: unknown): { readonly value: unknown; readonly replayed: boolean } {
+export function validateReceipt(value: unknown): { readonly value: unknown; readonly replayed: boolean } {
   const receipt = exactRecord(value, ["value", "replayed"], ["value", "replayed"]);
   if (typeof receipt.replayed !== "boolean") invalidResponse();
   return { value: receipt.value, replayed: receipt.replayed };
 }
 
 // ---------------------------------------------------------------------------------------------------------
+// Shared checks (also used by the album and item wire)
 
-function exactRecord(value: unknown, allowed: readonly string[], required: readonly string[]): Record<string, unknown> {
+export function exactRecord(value: unknown, allowed: readonly string[], required: readonly string[]): Record<string, unknown> {
   if (!isRecord(value)) invalidResponse();
   const keys = new Set(allowed);
   if (Object.keys(value).some((key) => !keys.has(key)) || required.some((key) => !Object.hasOwn(value, key))) invalidResponse();
   return value;
 }
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 function isSecret(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value === value.trim() && textEncoder.encode(value).byteLength <= SECRET_MAX_BYTES && !/[\p{Cc}\p{Cf}\s]/u.test(value);
 }
-function isInstant(value: unknown): value is string {
+export function isInstant(value: unknown): value is string {
   return typeof value === "string" && INSTANT.test(value) && Number.isFinite(Date.parse(value));
 }
-function safeNonNegative(value: unknown): value is number {
+export function safeNonNegative(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
-function integerBetween(value: unknown, min: number, max: number): value is number {
+export function integerBetween(value: unknown, min: number, max: number): value is number {
   return safeNonNegative(value) && value >= min && value <= max;
 }
 /** Same local failure as the personal v2 wire for a request that must not be sent. */
-function invalidRequest(): never {
+export function invalidRequest(): never {
   throw new PersonalPhotoCloudError("invalid_response");
 }
-function invalidResponse(): never {
+export function invalidResponse(): never {
   throw new PersonalPhotoCloudError("invalid_response");
 }
