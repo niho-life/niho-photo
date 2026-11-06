@@ -43,7 +43,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 ## 常設Mac
 
 - metadata（補正・mask・アルバム定義・索引）の正本は NIHO。常設Macは元データと控え（replica）を持ち、控えで正本を上書きしない（`connector.pullReplica`/`ackReplica`）。
-- 控えの変更は revision 順の型付き upsert/delete（`ReplicaChange`。写真の索引記録・完全 recipe・mask・アルバム定義・除外）。mask の中身は `connector.getReplicaContent` で取り込み、surface の SHA-256 で照合する。`sinceRevision: 0` は現在の状態の snapshot。journal から詰められた revision や NIHO より先の revision は `replica_reset_required` で、控えを snapshot から作り直す（控えを正本へ昇格させない）。
+- 控えの変更は revision 順の型付き upsert/delete（`ReplicaChange`。写真の索引記録・完全 recipe・mask・アルバム定義・除外）。mask の中身は `connector.getReplicaContent` で取り込み、surface の SHA-256 で照合する。削除は tombstone で届く。`sinceRevision: 0` は現在の状態の snapshot で、返る `cursor` で最後まで続ける（途中で圧縮されたら `replica_reset_required` で snapshot をやり直す）。tombstone を捨てた範囲より前の revision や NIHO より先の revision は `replica_reset_required` で、控えを snapshot から作り直す（控えを正本へ昇格させない）。
 - 常設Mac library の mask は `hostedMasks.startUpload`/`completeUpload` で先に NIHO へ置く。参照する mask が全部そろうまで補正の保存は `missing_mask_surface` で拒否し、一部だけ保存しない。
 - 常設Macが休止中でも補正の保存は完了する。`hostedRecipes.put` は `durability: "niho"` を返し、控えの状態だけが `pendingHost` になる。待つのは `HOST_DEFERRED_WORK` の原寸書き出しと所有者の写真の完成写真だけ。
 - 通信は常設Macからの外向きだけ（登録・heartbeat・索引・控え・描画job）。NIHO から Mac へ入る経路はない。

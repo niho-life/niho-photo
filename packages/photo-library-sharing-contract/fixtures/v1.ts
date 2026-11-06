@@ -453,7 +453,7 @@ export const connectorResponses = {
   "connector.pullReplica": {
     sinceRevision: 12,
     changes: [{ revision: 13, op: "upsert", entity: "recipe", id: IDS.photo, body: { recipe: savedRecipe, recipeSourceGeneration: 1 } }],
-    nextRevision: 13, complete: true,
+    nextRevision: 13, complete: true, cursor: null,
   },
   "connector.ackReplica": { value: { acknowledgedRevision: 13, state: "current" }, replayed: false },
   "renderJobs.claim": { jobs: [claimedJob] },

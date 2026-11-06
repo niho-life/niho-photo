@@ -796,14 +796,18 @@ export type ReplicaChange =
   | ReplicaUpsert<"exclusion", ReplicaExclusion>
   | { readonly revision: number; readonly op: "delete"; readonly entity: ReplicaEntity; readonly id: string };
 /**
- * Changes after sinceRevision in revision order, up to nextRevision. sinceRevision 0 returns the current state as
- * a snapshot. A sinceRevision older than the retained journal (or ahead of NIHO) is replica_reset_required.
+ * Changes after sinceRevision in revision order, up to nextRevision; deletions arrive as tombstones. A
+ * sinceRevision older than the retained tombstones (or ahead of NIHO) is replica_reset_required.
+ * sinceRevision 0 is a snapshot of the current state: continue it with the returned cursor (and sinceRevision 0)
+ * until complete. A snapshot cursor outlived by compaction is replica_reset_required and the snapshot restarts.
  */
 export interface ReplicaPage {
   readonly sinceRevision: number;
   readonly changes: readonly ReplicaChange[];
   readonly nextRevision: number;
   readonly complete: boolean;
+  /** Snapshot continuation only; null for diffs and on the last snapshot page. */
+  readonly cursor: string | null;
 }
 
 /** Mask surface of a hosted photo uploaded to NIHO before a recipe that references it can be saved. */
@@ -1119,7 +1123,10 @@ export interface ConnectorOperationMap extends RenderExecutorOperationMap {
     { readonly serverTime: Instant; readonly metadataRevision: number; readonly queuedJobs: number }
   >;
   readonly "connector.putIndex": Operation<{ readonly entries: readonly IndexEntry[] }, MutationReceipt<{ readonly results: readonly IndexResult[] }>>;
-  readonly "connector.pullReplica": Operation<{ readonly sinceRevision: number; readonly limit?: number }, ReplicaPage>;
+  readonly "connector.pullReplica": Operation<
+    { readonly sinceRevision: number; readonly limit?: number; readonly cursor?: string },
+    ReplicaPage
+  >;
   /** Acknowledges a NIHO revision. The replica never writes back over NIHO. */
   readonly "connector.ackReplica": Operation<{ readonly revision: number }, MutationReceipt<LibraryReplicaStatus>>;
   /** Mask bytes for the replica, verified against the surface SHA-256. Originals never travel this way. */
@@ -1363,7 +1370,7 @@ export const CONNECTOR_REQUEST_SHAPES = {
   "connector.putIndex": {
     entries: { items: { fields: { localKey: "value", fileName: "value", source: SOURCE_SHAPE, capturedAt: "value", availability: "value" } } },
   },
-  "connector.pullReplica": { sinceRevision: "value", limit: "value" },
+  "connector.pullReplica": { sinceRevision: "value", limit: "value", cursor: "value" },
   "connector.ackReplica": { revision: "value" },
   "connector.getReplicaContent": { entity: "value", id: "value", range: RANGE_SHAPE },
   "renderJobs.claim": { maxJobs: "value" },
