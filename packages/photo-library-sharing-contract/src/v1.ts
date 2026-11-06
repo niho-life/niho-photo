@@ -775,7 +775,7 @@ export interface ReplicaMaskRecord {
 export interface ReplicaAlbumDefinition {
   readonly name: string;
   readonly revision: number;
-  readonly photoIds: readonly PhotoId[];
+  readonly items: readonly { readonly itemId: AlbumItemId; readonly photoId: PhotoId }[];
 }
 export interface ReplicaExclusion {
   readonly excludedAt: Instant;

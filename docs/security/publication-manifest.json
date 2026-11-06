@@ -13551,7 +13551,7 @@
     },
     {
       "path": "packages/photo-library-sharing-contract/src/v1.ts",
-      "sha256": "806f1d7f072defc662e3a91a07481f2b0869b7efe8377c4b862a732e18095a88",
+      "sha256": "dc49476af8ebc9fdf3a2c0f012651a73551b06a0f172fab0fa70b74a0bdec83a",
       "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
