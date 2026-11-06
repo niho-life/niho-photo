@@ -20,11 +20,13 @@ import {
   SHARING_ERROR_STATUS,
   SHARING_LIMITS,
   SharingRouteError,
+  encodePendingInviteRequest,
   encodeSharingRequest,
   findUnexpectedRequestFields,
   type Album,
   type AlbumRole,
   type InviteJoinRecord,
+  type InviteJoinResult,
   type InviteLink,
   type Membership,
   type PersonLabel,
@@ -74,7 +76,7 @@ export function isSharedAlbumMembershipMutation(operation: SharedAlbumMembership
   return MUTATIONS.has(operation);
 }
 
-export interface EncodedSharingRequest<Op extends SharingOperation = SharedAlbumMembershipOperation> {
+export interface EncodedSharingRequest<Op extends string = SharedAlbumMembershipOperation> {
   readonly operation: Op;
   readonly method: SharingRouteMethod;
   /** Full same-origin path, with the encoded query when the route has one. */
@@ -117,6 +119,22 @@ export function encodeRoutedRequest<Op extends SharingOperation>(
     path: route.query === "" ? route.path : `${route.path}?${route.query}`,
     body: route.body === null ? null : textEncoder.encode(JSON.stringify(route.body)),
     idempotencyKey: mutation ? (idempotencyKey as string) : null,
+  };
+}
+
+/**
+ * `invites.joinPending` (B00 `PENDING_INVITE_ROUTES`): the BFF opens its pending-invite cookie and joins with it. The
+ * body is `{}`; the secret never passes through the page again. Not keyed: the cookie is gone after one attempt.
+ */
+export function encodePendingInviteJoin(): EncodedSharingRequest<"invites.joinPending"> {
+  const route = encodePendingInviteRequest("invites.joinPending", {});
+  if (route.idempotencyKey || route.query !== "" || route.method !== "POST") invalidRequest();
+  return {
+    operation: "invites.joinPending",
+    method: route.method,
+    path: route.path,
+    body: textEncoder.encode(JSON.stringify(route.body ?? {})),
+    idempotencyKey: null,
   };
 }
 
@@ -214,18 +232,9 @@ export function validateMembershipResponse<K extends SharedAlbumMembershipOperat
       if (link.id !== (request as SharingOperationMap["invites.revoke"]["request"]).inviteLinkId || !link.revoked) invalidResponse();
       return raw as SharingOperationMap[K]["response"];
     }
-    case "invites.join": {
-      const receipt = validateReceipt(raw);
-      const result = exactRecord(receipt.value, ["album", "membership", "joined"], ["album", "membership", "joined"]);
-      const album = validateAlbum(result.album);
-      const membership = validateMembership(result.membership, album.id);
-      if (typeof result.joined !== "boolean" || membership.state !== "active" || !membership.member.isSelf || membership.role !== album.access.role) {
-        invalidResponse();
-      }
-      // A new join always records the link it came through; the owner never joins.
-      if (result.joined && (membership.joinedVia === null || membership.role === "owner")) invalidResponse();
+    case "invites.join":
+      validateJoinResult(validateReceipt(raw).value);
       return raw as SharingOperationMap[K]["response"];
-    }
     case "members.list": {
       const page = exactRecord(raw, ["items", "nextCursor"], ["items", "nextCursor"]);
       if (!Array.isArray(page.items) || page.items.length > SHARING_LIMITS.memberListMaxCount) invalidResponse();
@@ -256,6 +265,19 @@ export function validateMembershipResponse<K extends SharedAlbumMembershipOperat
 
 // ---------------------------------------------------------------------------------------------------------
 // Response shapes
+
+/** The value of a join: `invites.join` wraps it in a receipt, `invites.joinPending` returns it as is. */
+export function validateJoinResult(value: unknown): InviteJoinResult {
+  const result = exactRecord(value, ["album", "membership", "joined"], ["album", "membership", "joined"]);
+  const album = validateAlbum(result.album);
+  const membership = validateMembership(result.membership, album.id);
+  if (typeof result.joined !== "boolean" || membership.state !== "active" || !membership.member.isSelf || membership.role !== album.access.role) {
+    invalidResponse();
+  }
+  // A new join always records the link it came through; the owner never joins.
+  if (result.joined && (membership.joinedVia === null || membership.role === "owner")) invalidResponse();
+  return value as InviteJoinResult;
+}
 
 /** The only person shape a response may carry. Extra keys (user ID, email, spot ID) are rejected. */
 export function validatePersonLabel(value: unknown): PersonLabel {
@@ -347,7 +369,8 @@ export function exactRecord(value: unknown, allowed: readonly string[], required
 export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
-function isSecret(value: unknown): value is string {
+/** An invite secret as the wire accepts it (opaque, at most 512 bytes, no spaces or control characters). */
+export function isSecret(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value === value.trim() && textEncoder.encode(value).byteLength <= SECRET_MAX_BYTES && !/[\p{Cc}\p{Cf}\s]/u.test(value);
 }
 export function isInstant(value: unknown): value is string {

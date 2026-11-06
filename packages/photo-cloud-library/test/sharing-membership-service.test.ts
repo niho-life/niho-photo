@@ -162,6 +162,7 @@ describe("shared album membership actions (B05)", () => {
         calls.push(`${operation}:${"idempotencyKey" in options ? options.idempotencyKey : "-"}`);
         throw { error: { code: "rate_limited", requestId: "synthetic-request", retryable: true, retryAfterSeconds: 600 } };
       },
+      joinPending: async () => await Promise.reject(new Error("unused")),
     };
     const service = createSharedAlbumMembership({ client: limited, newIdempotencyKey: () => "fixed-key", sleep: t.sleep });
     const error = await service.join("synthetic-secret", t.signal).catch((caught: unknown) => caught);
@@ -183,17 +184,25 @@ describe("shared album membership actions (B05)", () => {
     const t = setup();
     const keys: (string | null)[] = [];
     let failures = 2;
+    let pendingJoins = 0;
     const flaky: SharedAlbumMembershipTransport = {
       async request(_operation, _request, options) {
         keys.push("idempotencyKey" in options ? options.idempotencyKey ?? null : null);
         if (failures-- > 0) throw { error: { code: "temporarily_unavailable", requestId: "synthetic-request", retryable: true } };
         return { value: { id: "m", albumId: "a" }, replayed: keys.length > 1 } as never;
       },
+      async joinPending() {
+        pendingJoins += 1;
+        throw { error: { code: "temporarily_unavailable", requestId: "synthetic-request", retryable: true } };
+      },
     };
     let counter = 0;
     const service = createSharedAlbumMembership({ client: flaky, newIdempotencyKey: () => `key-${++counter}`, sleep: t.sleep });
     await service.leave("a", t.signal);
     expect(keys).toEqual(["key-1", "key-1", "key-1"]);
+    // The BFF deletes the pending invite after one attempt: a pending join is never replayed.
+    await expect(service.joinPending(t.signal)).rejects.toMatchObject({ error: { code: "temporarily_unavailable" } });
+    expect(pendingJoins).toBe(1);
 
     failures = 5;
     keys.length = 0;

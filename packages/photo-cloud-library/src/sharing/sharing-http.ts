@@ -16,7 +16,7 @@ import type { PhotoByteRange, PhotoContent, SharingOperation, SharingSessionScop
 import { isSharingErrorEnvelope, parseSharingError, type EncodedSharingRequest } from "./membership-wire";
 
 /** What one client sends: its operations, how they are encoded, and how answers are checked. */
-export interface SharingWire<Op extends SharingOperation> {
+export interface SharingWire<Op extends string> {
   supports(operation: string): operation is Op;
   encode(operation: Op, request: unknown, idempotencyKey: string | undefined): EncodedSharingRequest<Op>;
   responseLimit(operation: Op): number;
@@ -30,7 +30,7 @@ export interface CreateSharingHttpClientOptions {
   readonly now?: () => number;
 }
 
-export interface SharingHttpClient<Op extends SharingOperation> {
+export interface SharingHttpClient<Op extends string> {
   readonly scope: SharingSessionScope;
   send(operation: Op, request: unknown, signal: AbortSignal, idempotencyKey: string | undefined): Promise<unknown>;
   /** A GET whose answer is a bounded content stream (the scope stays held until the stream ends or is cancelled). */
@@ -38,7 +38,7 @@ export interface SharingHttpClient<Op extends SharingOperation> {
   dispose(): void;
 }
 
-export function createSharingHttpClient<Op extends SharingOperation>(options: CreateSharingHttpClientOptions, wire: SharingWire<Op>): SharingHttpClient<Op> {
+export function createSharingHttpClient<Op extends string>(options: CreateSharingHttpClientOptions, wire: SharingWire<Op>): SharingHttpClient<Op> {
   const actor = options.identity.getSnapshot();
   const now = options.now ?? Date.now;
   if (actor === null || actor.transport !== "browser-session" || Date.parse(actor.expiresAt) <= now()) {
@@ -51,7 +51,7 @@ export function createSharingHttpClient<Op extends SharingOperation>(options: Cr
 
   /** One request under the scope fence; `consume` decides whether the scope is released here or by a stream. */
   async function exchange<T>(
-    encoded: EncodedSharingRequest<SharingOperation>,
+    encoded: EncodedSharingRequest<string>,
     range: string | null,
     signal: AbortSignal,
     consume: (response: Response, scoped: ReturnType<PersonalPhotoScope<null>["begin"]>, link: ReturnType<typeof linkedAbortController>) => Promise<{ readonly value: T; readonly ownsScope: boolean }>,
