@@ -144,6 +144,7 @@ function checkManifest(value: unknown, fail: () => never): PortableLibraryManife
     if (photo.recipeSourceGeneration > photo.source.generation) fail();
     if (!isList(photo.masks) || photo.masks.some((mask) => !isSha256(mask.surfaceId) || !safe(mask.sizeBytes))) fail();
     if (typeof photo.original?.included !== "boolean" || !(photo.original.sha256 === null || isSha256(photo.original.sha256))) fail();
+    if (photo.original.sha256 !== photo.source.sha256) fail();
     if (photo.original.included && (manifest.mode !== "full" || photo.original.sha256 === null)) fail();
   }
   const albumIds = new Set<string>();

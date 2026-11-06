@@ -93,13 +93,15 @@ test("mask bytes are verified; a corrupt mask leaves the whole page unapplied", 
 test("a disk failure mid-sync resumes from the durable revision with a CAS chain", async () => {
   const { canonical, ids, store } = await seeded();
   const sync = createHostedReplicaSync({ client: canonical.client(), store, pageLimit: 1 });
+  await sync.sync({ canonicalRevision: canonical.revision, signal });
   let applies = 0;
   const apply = store.apply.bind(store);
   store.apply = async (batch) => {
-    if (++applies === 3) throw new Error("synthetic disk failure");
+    if (++applies === 2) throw new Error("synthetic disk failure");
     return apply(batch);
   };
   await canonical.putRecipe(editRequest(canonical, ids.k1, { exposure: 1 }), "save-1");
+  await canonical.putRecipe(editRequest(canonical, ids.k2, { exposure: -1 }), "save-2");
   await assert.rejects(sync.sync({ canonicalRevision: canonical.revision, signal }));
   const partial = store.snapshot().revision;
   assert(partial > 0 && partial < canonical.revision, "pages applied before the failure stay durable");
@@ -120,6 +122,39 @@ test("a lost ack is acknowledged again with the same key", async () => {
   const second = await sync.sync({ canonicalRevision: canonical.revision, signal });
   assert.equal(second.mode, "unchanged");
   assert.equal(second.acknowledged, true);
+});
+
+test("a fresh replica consumes every page of the since-zero snapshot before swapping", async () => {
+  const { canonical, store } = await seeded();
+  const base = canonical.client();
+  const requests = [];
+  const client = {
+    request(operation, request, options) {
+      if (operation === "connector.pullReplica") requests.push(request);
+      return base.request(operation, request, options);
+    },
+  };
+  const sync = createHostedReplicaSync({ client, store, pageLimit: 2 });
+  const result = await sync.sync({ canonicalRevision: canonical.revision, signal });
+  assert.equal(result.mode, "snapshot");
+  assert(requests.length > 1);
+  assert(requests.every((request) => request.sinceRevision === 0));
+  assert.equal(requests[0].cursor, undefined);
+  assert.equal(typeof requests[1].cursor, "string");
+  assertMirrors(canonical, store);
+});
+
+test("a definitive connector ack rejection is returned to the caller", async () => {
+  const { canonical, store } = await seeded();
+  const base = canonical.client();
+  const client = {
+    request(operation, request, options) {
+      if (operation === "connector.ackReplica") return Promise.reject({ code: "not_found" });
+      return base.request(operation, request, options);
+    },
+  };
+  const sync = createHostedReplicaSync({ client, store });
+  await assert.rejects(sync.sync({ canonicalRevision: canonical.revision, signal }), { code: "not_found" });
 });
 
 test("deletions and late NIHO changes during a sync converge to NIHO", async () => {
@@ -206,4 +241,14 @@ test("malformed pages are rejected without touching the replica", async () => {
     await assert.rejects(sync.sync({ canonicalRevision: since + 2, signal }), { code: "invalid_response" }, name);
     assert.deepEqual(store.snapshot(), durable, name);
   }
+
+  const fresh = await seeded();
+  const malformedSnapshot = {
+    sinceRevision: 0, changes: [], nextRevision: fresh.canonical.revision, complete: true, cursor: "synthetic",
+  };
+  const client = { request: async () => malformedSnapshot };
+  await assert.rejects(
+    createHostedReplicaSync({ client, store: fresh.store }).sync({ canonicalRevision: fresh.canonical.revision, signal }),
+    { code: "invalid_response" },
+  );
 });
