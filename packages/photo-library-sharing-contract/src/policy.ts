@@ -160,8 +160,9 @@ export function decideHostedRecipeSave(input: {
 }
 
 /**
- * A replica pull continues from the connector's own revision. 0 is a snapshot of the current state. A revision
- * older than the retained journal, or ahead of NIHO, means the replica must be rebuilt; it is never promoted.
+ * A replica pull continues from the connector's own revision. 0 is a snapshot of the current state (its cursor is
+ * validated by the server against compaction). A revision older than the retained tombstones, or ahead of NIHO,
+ * means the replica must be rebuilt; it is never promoted.
  */
 export function decideReplicaPull(input: {
   readonly sinceRevision: number;
