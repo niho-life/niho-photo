@@ -171,21 +171,24 @@ export const snapshots = {
   ownerItem: {
     id: IDS.ownerItem, albumId: IDS.album, kind: "ownerPhoto", addedBy: PEOPLE.owner, addedAt: TIME, revision: 1,
     state: "updatePending", source: { kind: "libraryPhoto", libraryId: IDS.hostedLibrary, photoId: IDS.photo },
-    rendition, renditionBinding: binding, pendingReason: "waitingForHost", removedAt: null,
+    rendition, renditionBinding: binding, pendingReason: "waitingForHost", removedAt: null, pendingUpload: null,
   },
   memberItem: {
     id: IDS.memberItem, albumId: IDS.album, kind: "memberEdit", addedBy: PEOPLE.contributor, addedAt: TIME, revision: 1,
     state: "published", source: { kind: "devicePhoto", deviceSourceRef: IDS.deviceSource },
     rendition: memberRendition, renditionBinding: { ...binding, sourceSha256: HASH.deviceSource }, pendingReason: null, removedAt: null,
+    pendingUpload: null,
   },
   fileItem: {
     id: IDS.fileItem, albumId: IDS.album, kind: "fileUpload", addedBy: PEOPLE.contributor, addedAt: TIME, revision: 1,
     state: "published", source: null, rendition: fileRendition, renditionBinding: null, pendingReason: null, removedAt: null,
+    pendingUpload: null,
   },
   preparingItem: {
     id: IDS.preparingItem, albumId: IDS.album, kind: "memberEdit", addedBy: PEOPLE.contributor, addedAt: TIME, revision: 0,
     state: "preparing", source: { kind: "devicePhoto", deviceSourceRef: IDS.deviceSource },
     rendition: null, renditionBinding: null, pendingReason: "rendering", removedAt: null,
+    pendingUpload: { uploadId: "synthetic-initial-upload", binding: { ...binding, sourceSha256: HASH.deviceSource } },
   },
 } as const satisfies Record<string, AlbumItemSnapshot>;
 
@@ -365,9 +368,7 @@ export const responses = {
 };
 
 export const connectorResponses = {
-  "connector.startPairing": {
-    pairingId: IDS.pairing, userCode: "SYN-0000", pollSecret: "synthetic-poll", expiresAt: LATER,
-  },
+  "connector.startPairing": { value: { pairingId: IDS.pairing, userCode: "SYN-0000", expiresAt: LATER }, replayed: false },
   "connector.pollPairing": {
     state: "approved", connector,
     credential: { token: "synthetic-connector-credential", generation: 1, expiresAt: null },

@@ -6,7 +6,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 
 - 本人専用の [`@niho/photo-personal-cloud-contract` v2](personal-photo-cloud.md) は変更しない。v2 は本人専用・5GiB・`albums: false` のまま動く。共有は v2 の owner の読み替えや `false` の置換ではなく、追加契約 v1 で扱う。
 - v1 は v2 の型を再利用する。#195 の `UploadTicket`・`PhotoContent`、#196 の `RecipeDocument`・`RecipeConflict`、#197 の `RenderCapability` を別に定義しない。
-- 公開契約に実HTTP route・DB schema・内部locator・資格情報を入れない。request は閉じた形で、body の owner・role・revision・path を認可の証明にしない（`SHARING_REQUEST_KEYS`）。
+- 公開契約に実HTTP route・DB schema・内部locator・資格情報を入れない。request は入れ子まで閉じた形で、想定外の key は無視せず `invalid_request` にする（`SHARING_REQUEST_SHAPES`・`CONNECTOR_REQUEST_SHAPES`）。body の owner・role・revision・path を認可の証明にしない。recipe の settings だけは #196 の validator が検査する open JSON。
 
 ## 語彙（UI B08 と共有）
 
@@ -43,7 +43,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - metadata（補正・mask・アルバム定義・索引）の正本は NIHO。常設Macは元データと控え（replica）を持ち、控えで正本を上書きしない（`connector.pullReplica`/`ackReplica`）。
 - 常設Macが休止中でも補正の保存は完了する。`hostedRecipes.put` は `durability: "niho"` を返し、控えの状態だけが `pendingHost` になる。待つのは `HOST_DEFERRED_WORK` の原寸書き出しと所有者の写真の完成写真だけ。
 - 通信は常設Macからの外向きだけ（登録・heartbeat・索引・控え・描画job）。NIHO から Mac へ入る経路はない。
-- 登録は接続用ソフトが始め、owner が NIHO で承認する短期・一回限りの手順。端末資格は一度だけ返り、NIHO のログイン token と別。失効・再登録で `credentialGeneration` が進み、古い資格の確定を拒否する。
+- 登録は接続用ソフトが始め、owner が NIHO で承認する短期・一回限りの手順。接続用ソフトは乱数の poll secret を作り、その SHA-256 だけを送る。開始は冪等で、応答が失われても同じ key で同じ登録を返し、応答に bearer を含めない。端末資格は一度だけ返り、NIHO のログイン token と別。失効・再登録で `credentialGeneration` が進み、古い資格の確定を拒否する。
 - 索引は path ではなく不透明な `localKey` で送る。未 mount は削除扱いにしない（`volumeUnmounted`）。除外は一覧からの除外で、再走査で復活させない。
 - 元データが外部で変わったら source 世代が進む。古い世代に対して保存した補正は黙って使わず、保存は `revision_conflict`、共有中の項目は `updatePending`（`sourceChanged`）になる。
 
@@ -72,13 +72,15 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - 権限は server が台帳から毎回導く。`Album.access.permissions` は表示用の写し。
 - 在籍していない・離脱した・削除された・別アルバムの項目・見えない項目は、存在しないのと同じ 404（`not_found`）。在籍者で役割が足りないときだけ 403（`role_forbidden`）。
 - 他人の項目は owner でも差し替えられない（削除だけ）。役割は現在の値で判定するため、viewer に変更されたメンバーは自分の項目も外せない。
+- 所有者の写真・メンバーの補正写真を library から追加するときは、その library が追加者本人のものに限る（`decideAddPhoto`）。アルバムの役割で他人の library には届かない。
 - 準備中の項目と `pendingReason` は owner と追加者だけに見せる。他のメンバーには直前の完成写真を `published` として見せ、保管場所や Mac の状態を返さない。元写真への参照（`source`）は追加者だけ。件数・表紙も閲覧者に見える項目だけで作る。
 - 追加・差し替えは確定時（`albumItems.commitUpload`・`renderJobs.commit`）に現在の在籍・役割・項目・revision・世代・metadata を照合する。削除・離脱・降格が先なら確定しない。
+- 差し替えは最後に受け付けた意図（`AlbumItemSnapshot.pendingUpload`）だけが確定できる。新しい差し替えを始めると前の upload は置き換わり、先に始めた古い差し替えが後から届いても確定しない。端末が描いた差し替えの開始は、公開中と待機中の両方より新しい世代のときだけ受け付ける（`decideReplaceStart`）。
 
 ## 完成写真
 
 - 元データを持つ端末が描く。所有者の常設Mac の写真は常設Mac、メンバーの写真はその人の端末、NIHO クラウドの写真は本人の端末。描いた入力は `RenderBinding` で束縛する。
-- job の確定は、job の束縛が対象の現在の束縛と完全に一致し、lease と端末資格が有効で、項目が残っているときだけ。古い job・同じ revision で入力が違う結果・preview を完成写真として出す結果は拒否する。
+- job の確定は、呼び出した端末が job の実行端末そのもので、その job の検証済み upload を使い、metadata が許可範囲で、job の束縛が対象の現在の束縛と完全に一致し、lease と端末資格が有効で、項目が残っているときだけ。別の端末・別 job の upload・未完了の upload・古い job・同じ revision で入力が違う結果・preview を完成写真として出す結果は拒否する。
 - 端末が直接描いた写真の差し替えは、前の束縛より新しい世代のときだけ受け付ける。
 - 完成済み JPEG の直接追加は元写真への参照を持たず、自動では差し替えない。
 - metadata は許可した `capturedAt`・`capturedAtOffset`・`colorProfile` と、画素へ反映した向きだけ。位置情報・機材シリアル・元のパスを含むものは公開しない（`sanitizeRenditionMetadata`、`findForbiddenMetadata`、`content_rejected`）。download のファイル名に元のファイル名やパスを使わない。
@@ -88,12 +90,13 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 
 - 推測困難な secret（128bit 以上）を作成時の応答で一度だけ返し、一覧・ログ・永続保存に出さない。結果不明の再送では `secret: null` を返すので、そのリンクを無効化して作り直す。
 - 参加はログイン必須で回数制限をかける。未知・期限切れ・無効化済み・削除済みアルバム・削除後の古いリンクは同じ `invite_unavailable`（「このリンクは使えません」）。在籍中の人が使っても役割は変えない。参加のたびに owner へ `MemberJoinedEvent` を通知する。
+- owner が削除した時刻は台帳に album と user ごとに残す（`lastRemovedAt`）。その後に新しいリンクで再参加して離脱しても消えず、削除以前に作られたリンクでは参加できない。
 
 ## 冪等・結果不明・cursor
 
-- mutation は `idempotencyKey` が必須。replay の識別は actor・album または library（参加は account）・operation・key で、payload digest が同じなら同じ結果を `replayed: true` で返し、違えば `idempotency_conflict`。
+- mutation は `idempotencyKey` が必須。replay の識別は actor・album または library（参加は account、常設Macの登録開始は poll secret の hash）・operation・key で、payload digest が同じなら同じ結果を `replayed: true` で返し、違えば `idempotency_conflict`。
 - 応答が失われたら、同じ key と payload で再送して結果を照合する。新しい key で二重に追加しない。
-- cursor は actor・範囲・条件・membership revision に束縛し、15分で失効する。役割が変わった後の cursor は `invalid_cursor` で、別の写真を返さない。
+- cursor は actor・範囲・条件・membership revision に束縛し、15分で失効する。役割が変わった後の cursor は `invalid_cursor` で、別の写真を返さない。アルバム一覧の cursor は actor の在籍の世代（`accessRevision`。参加・離脱・削除・役割変更で進む）に束縛する。
 
 ## エラーと再試行
 
@@ -112,6 +115,12 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | 止める（容量・削除中・key の誤用など） | `quota_exceeded`、`account_deleting`、`idempotency_conflict`、`origin_rejected`、`unsupported_settings` |
 
 `quota_exceeded` の数値は owner だけに返す。メンバーには code だけを返し、UI は「アルバムがいっぱいです」と出す。
+
+## export と restore
+
+- B01 の範囲。schema/engine・完全 recipe・mask・アルバム定義・photo/album ID・元 asset の identity・hash を持ち、参照だけの `metadata` と元データ込みの `full` を分ける。
+- 鍵・ticket・session・招待の secret・在籍は含めない（`PORTABLE_EXPORT_EXCLUDES`）。メンバーが追加した項目と直接追加の項目の `source` は型で `null` に固定し、owner へメンバーの元写真への参照を渡さない。
+- restore は現在の台帳で権限を照合し、snapshot から在籍を戻さない（`membershipsRestored: 0`）。
 
 ## v2 との互換 adapter
 
@@ -151,4 +160,4 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 
 ## 検証
 
-`npm run test|typecheck|lint --workspace packages/photo-library-sharing-contract`。公開CIの `Photo editing` scope が実行する。test は語彙・§10 の表・全操作の担当と request key・遷移の閉包・閲覧者ごとの射影・metadata 規則・v2 互換・86件の負例 vector を参照判定で照合する。型の負例（owner の偽装、ownerの付与、CAS 無しの更新、第2段階の値など）は typecheck で固定する。
+`npm run test|typecheck|lint --workspace packages/photo-library-sharing-contract`。公開CIの `Photo editing` scope が実行する。test は語彙・§10 の表・全操作の担当と閉じた request の形・遷移の閉包・閲覧者ごとの射影・metadata 規則・v2 互換・確定時の照合（実行端末・upload・最新の意図）・103件の負例 vector を参照判定で照合する。型の負例（owner の偽装、ownerの付与、CAS 無しの更新、第2段階の値など）は typecheck で固定する。

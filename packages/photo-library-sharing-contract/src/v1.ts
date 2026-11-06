@@ -224,13 +224,14 @@ export interface HostConnector {
   readonly transport: "outboundOnly";
 }
 
-/** Short-lived one-time pairing started by the connector and approved by the owner in NIHO. */
+/**
+ * Short-lived one-time pairing started by the connector and approved by the owner in NIHO. The connector creates a
+ * random poll secret and sends only its SHA-256, so a lost response can be replayed without returning a bearer.
+ */
 export interface ConnectorPairingStart {
   readonly pairingId: PairingId;
   /** Short code shown on the Mac and confirmed by the signed-in owner. */
   readonly userCode: string;
-  /** Bearer for the connector's own polling; memory only. */
-  readonly pollSecret: string;
   readonly expiresAt: Instant;
 }
 export type ConnectorPairingTarget =
@@ -512,6 +513,11 @@ export interface AlbumItemSnapshot {
   readonly renditionBinding: RenderBinding | null;
   readonly pendingReason: AlbumItemPendingReason | null;
   readonly removedAt: Instant | null;
+  /**
+   * Latest accepted add/replace intent. Starting another replace supersedes it, and only this upload may commit,
+   * so an older replace that finishes late never overwrites a newer one.
+   */
+  readonly pendingUpload: { readonly uploadId: UploadId; readonly binding: RenderBinding | null } | null;
 }
 
 /** Declared by the uploading host; the server re-validates bytes, dimensions and metadata before publishing. */
@@ -744,17 +750,16 @@ export interface PortablePhoto {
   readonly masks: readonly { readonly surfaceId: Sha256; readonly sizeBytes: number }[];
   readonly original: { readonly included: boolean; readonly sha256: Sha256 | null };
 }
+export type PortableAlbumItem =
+  /** Added by the exporting album owner; the owner's own source reference may be exported. */
+  | { readonly itemId: AlbumItemId; readonly kind: "ownerPhoto"; readonly source: AlbumItemSource | null; readonly renditionSha256: Sha256 | null }
+  /** Added by a member or as a finished file. A member's source reference is never exported. */
+  | { readonly itemId: AlbumItemId; readonly kind: "memberEdit" | "fileUpload"; readonly source: null; readonly renditionSha256: Sha256 | null };
 export interface PortableAlbum {
   readonly albumId: AlbumId;
   readonly name: string;
   readonly revision: number;
-  /** Other members' sources are never exported. */
-  readonly items: readonly {
-    readonly itemId: AlbumItemId;
-    readonly kind: AlbumItemKind;
-    readonly source: AlbumItemSource | null;
-    readonly renditionSha256: Sha256 | null;
-  }[];
+  readonly items: readonly PortableAlbumItem[];
 }
 export interface PortableLibraryManifest {
   readonly format: "niho-photo-library";
@@ -1005,8 +1010,12 @@ export type RenderExecutorRequestOptions<K extends RenderExecutorOperation> = { 
 
 /** Hosted Mac connector protocol. The connector initiates every call; NIHO never connects to the Mac. */
 export interface ConnectorOperationMap extends RenderExecutorOperationMap {
-  /** Unauthenticated and rate limited; creates nothing until the owner approves. */
-  readonly "connector.startPairing": Operation<{ readonly platform: "macos"; readonly displayName: string }, ConnectorPairingStart>;
+  /** Unauthenticated and rate limited; creates no library or credential until the owner approves. */
+  readonly "connector.startPairing": Operation<
+    { readonly platform: "macos"; readonly displayName: string; readonly pollSecretSha256: Sha256 },
+    MutationReceipt<ConnectorPairingStart>
+  >;
+  /** Presents the poll secret whose SHA-256 was registered at start. */
   readonly "connector.pollPairing": Operation<{ readonly pairingId: PairingId; readonly pollSecret: string }, ConnectorPairingPoll>;
   readonly "connector.heartbeat": Operation<
     {
@@ -1073,7 +1082,8 @@ export interface HostConnectorClient {
 export type OperationAccess =
   | { readonly actor: "user"; readonly scope: "self" }
   | { readonly actor: "user"; readonly scope: "libraryOwner" }
-  | { readonly actor: "user"; readonly scope: "album"; readonly action: AlbumAction | "removeItem" }
+  /** requiresOwnSource: a libraryPhoto source must belong to the actor (album roles never reach another library). */
+  | { readonly actor: "user"; readonly scope: "album"; readonly action: AlbumAction | "removeItem"; readonly requiresOwnSource?: true }
   | { readonly actor: "user"; readonly scope: "inviteSecret" }
   | { readonly actor: "connectorOrUserDevice"; readonly scope: "renderExecutor" }
   | { readonly actor: "anonymousConnector"; readonly scope: "pairing" }
@@ -1108,7 +1118,7 @@ export const SHARING_OPERATION_ACCESS = {
   "albums.delete": { actor: "user", scope: "album", action: "deleteAlbum" },
   "albumItems.list": { actor: "user", scope: "album", action: "view" },
   "albumItems.get": { actor: "user", scope: "album", action: "view" },
-  "albumItems.addPhoto": { actor: "user", scope: "album", action: "addItem" },
+  "albumItems.addPhoto": { actor: "user", scope: "album", action: "addItem", requiresOwnSource: true },
   "albumItems.addFile": { actor: "user", scope: "album", action: "addItem" },
   "albumItems.replace": { actor: "user", scope: "album", action: "replaceOwnItem" },
   "albumItems.commitUpload": { actor: "user", scope: "album", action: "addItem" },
@@ -1138,52 +1148,133 @@ export const CONNECTOR_OPERATION_ACCESS = {
   "renderJobs.fail": { actor: "connectorOrUserDevice", scope: "renderExecutor" },
 } as const satisfies { readonly [K in ConnectorOperation]: OperationAccess };
 
-/** Top-level request keys per operation. Requests are closed: any other key is invalid_request, never ignored. */
-export const SHARING_REQUEST_KEYS = {
-  "libraries.list": [],
-  "libraries.get": ["libraryId"],
-  "storage.get": [],
-  "connectors.approvePairing": ["userCode", "target"],
-  "connectors.get": ["connectorId"],
-  "connectors.revoke": ["connectorId"],
-  "hostedPhotos.list": ["libraryId", "sort", "cursor", "limit"],
-  "hostedPhotos.get": ["libraryId", "photoId"],
-  "hostedPhotos.info": ["libraryId", "photoId"],
-  "hostedPhotos.content": ["libraryId", "photoId", "assetId", "range"],
-  "hostedPhotos.exclude": ["libraryId", "photoId"],
-  "hostedRecipes.put": ["libraryId", "photoId", "expectedRevision", "sourceGeneration", "settings", "baseVersion"],
-  "hostedRecipeConflicts.list": ["libraryId", "photoId", "cursor", "limit"],
-  "hostedRecipeConflicts.get": ["libraryId", "photoId", "conflictId"],
-  "hostedRecipeConflicts.resolve": ["libraryId", "photoId", "conflictId", "expectedRevision", "decision"],
-  "exports.request": ["libraryId", "photoId", "recipeRevision"],
-  "exports.get": ["exportId"],
-  "exports.content": ["exportId", "range"],
-  "portability.export": ["libraryId", "mode"],
-  "portability.get": ["exportId"],
-  "portability.restore": ["libraryId", "manifestSha256"],
-  "albums.list": ["cursor", "limit"],
-  "albums.get": ["albumId"],
-  "albums.create": ["name"],
-  "albums.rename": ["albumId", "expectedRevision", "name"],
-  "albums.delete": ["albumId", "expectedRevision"],
-  "albumItems.list": ["albumId", "cursor", "limit"],
-  "albumItems.get": ["albumId", "itemId"],
-  "albumItems.addPhoto": ["albumId", "source"],
-  "albumItems.addFile": ["albumId", "rendition"],
-  "albumItems.replace": ["albumId", "itemId", "expectedRevision", "content"],
-  "albumItems.commitUpload": ["albumId", "uploadId"],
-  "albumItems.cancelUpload": ["albumId", "uploadId"],
-  "albumItems.remove": ["albumId", "itemId"],
-  "albumItems.download": ["albumId", "itemId", "renditionId", "variant", "range"],
-  "invites.list": ["albumId"],
-  "invites.create": ["albumId", "role"],
-  "invites.revoke": ["albumId", "inviteLinkId"],
-  "invites.join": ["secret"],
-  "members.list": ["albumId", "cursor", "limit"],
-  "members.changeRole": ["albumId", "userId", "expectedRevision", "role"],
-  "members.remove": ["albumId", "userId"],
-  "members.leave": ["albumId"],
-} as const satisfies { readonly [K in SharingOperation]: readonly (keyof SharingOperationMap[K]["request"] & string)[] };
+/**
+ * Closed request schema. Keys outside the shape at any depth are invalid_request, never ignored. "open" marks
+ * opaque recipe JSON that the #196 recipe validator checks instead. Tagged unions are keyed by `kind`.
+ */
+export type RequestShape =
+  | "value"
+  | "open"
+  | { readonly fields: RequestFields }
+  | { readonly items: RequestShape }
+  | { readonly variants: { readonly [kind: string]: RequestFields } };
+export type RequestFields = { readonly [key: string]: RequestShape };
+
+const PAGE_FIELDS = { cursor: "value", limit: "value" } as const satisfies RequestFields;
+const HOSTED_PHOTO_FIELDS = { libraryId: "value", photoId: "value" } as const satisfies RequestFields;
+const RANGE_SHAPE = { fields: { start: "value", endInclusive: "value" } } as const satisfies RequestShape;
+const RENDITION_UPLOAD_FIELDS = {
+  sizeBytes: "value", sha256: "value", contentType: "value", width: "value", height: "value",
+  metadata: { fields: { capturedAt: "value", capturedAtOffset: "value", colorProfile: "value", orientation: "value" } },
+} as const satisfies RequestFields;
+const RENDITION_UPLOAD_SHAPE = { fields: RENDITION_UPLOAD_FIELDS } as const satisfies RequestShape;
+const BINDING_SHAPE = {
+  fields: {
+    sourceGeneration: "value", sourceSha256: "value", recipeRevision: "value", settingsSha256: "value", engine: "value",
+    rendererManifestSha256: "value", maskSurfaceIds: { items: "value" },
+  },
+} as const satisfies RequestShape;
+const RENDER_CAPABILITY_SHAPE = {
+  fields: {
+    sdkVersion: "value", crateVersion: "value", manifestSha256: "value", settingsVersions: { items: "value" },
+    engines: { items: "value" }, features: { items: "value" }, maskKinds: { items: "value" }, maskSurfaces: "value",
+  },
+} as const satisfies RequestShape;
+const SOURCE_SHAPE = {
+  fields: { generation: "value", sha256: "value", sizeBytes: "value", format: "value", width: "value", height: "value" },
+} as const satisfies RequestShape;
+
+type ShapeMap<Map extends { readonly [K in keyof Map]: { readonly request: unknown } }> = {
+  readonly [K in keyof Map]: { readonly [P in keyof Map[K]["request"]]-?: RequestShape };
+};
+
+export const SHARING_REQUEST_SHAPES = {
+  "libraries.list": {},
+  "libraries.get": { libraryId: "value" },
+  "storage.get": {},
+  "connectors.approvePairing": {
+    userCode: "value",
+    target: { variants: { newLibrary: { name: "value" }, existingLibrary: { libraryId: "value" } } },
+  },
+  "connectors.get": { connectorId: "value" },
+  "connectors.revoke": { connectorId: "value" },
+  "hostedPhotos.list": { libraryId: "value", sort: "value", ...PAGE_FIELDS },
+  "hostedPhotos.get": HOSTED_PHOTO_FIELDS,
+  "hostedPhotos.info": HOSTED_PHOTO_FIELDS,
+  "hostedPhotos.content": { ...HOSTED_PHOTO_FIELDS, assetId: "value", range: RANGE_SHAPE },
+  "hostedPhotos.exclude": HOSTED_PHOTO_FIELDS,
+  "hostedRecipes.put": { ...HOSTED_PHOTO_FIELDS, expectedRevision: "value", sourceGeneration: "value", settings: "open", baseVersion: "value" },
+  "hostedRecipeConflicts.list": { ...HOSTED_PHOTO_FIELDS, ...PAGE_FIELDS },
+  "hostedRecipeConflicts.get": { ...HOSTED_PHOTO_FIELDS, conflictId: "value" },
+  "hostedRecipeConflicts.resolve": { ...HOSTED_PHOTO_FIELDS, conflictId: "value", expectedRevision: "value", decision: "value" },
+  "exports.request": { ...HOSTED_PHOTO_FIELDS, recipeRevision: "value" },
+  "exports.get": { exportId: "value" },
+  "exports.content": { exportId: "value", range: RANGE_SHAPE },
+  "portability.export": { libraryId: "value", mode: "value" },
+  "portability.get": { exportId: "value" },
+  "portability.restore": { libraryId: "value", manifestSha256: "value" },
+  "albums.list": PAGE_FIELDS,
+  "albums.get": { albumId: "value" },
+  "albums.create": { name: "value" },
+  "albums.rename": { albumId: "value", expectedRevision: "value", name: "value" },
+  "albums.delete": { albumId: "value", expectedRevision: "value" },
+  "albumItems.list": { albumId: "value", ...PAGE_FIELDS },
+  "albumItems.get": { albumId: "value", itemId: "value" },
+  "albumItems.addPhoto": {
+    albumId: "value",
+    source: {
+      variants: {
+        libraryPhoto: { libraryId: "value", photoId: "value" },
+        devicePhoto: { deviceSourceRef: "value", binding: BINDING_SHAPE, rendition: RENDITION_UPLOAD_SHAPE },
+      },
+    },
+  },
+  "albumItems.addFile": { albumId: "value", rendition: RENDITION_UPLOAD_SHAPE },
+  "albumItems.replace": {
+    albumId: "value", itemId: "value", expectedRevision: "value",
+    content: {
+      variants: {
+        file: { rendition: RENDITION_UPLOAD_SHAPE },
+        deviceRender: { binding: BINDING_SHAPE, rendition: RENDITION_UPLOAD_SHAPE },
+      },
+    },
+  },
+  "albumItems.commitUpload": { albumId: "value", uploadId: "value" },
+  "albumItems.cancelUpload": { albumId: "value", uploadId: "value" },
+  "albumItems.remove": { albumId: "value", itemId: "value" },
+  "albumItems.download": { albumId: "value", itemId: "value", renditionId: "value", variant: "value", range: RANGE_SHAPE },
+  "invites.list": { albumId: "value" },
+  "invites.create": { albumId: "value", role: "value" },
+  "invites.revoke": { albumId: "value", inviteLinkId: "value" },
+  "invites.join": { secret: "value" },
+  "members.list": { albumId: "value", ...PAGE_FIELDS },
+  "members.changeRole": { albumId: "value", userId: "value", expectedRevision: "value", role: "value" },
+  "members.remove": { albumId: "value", userId: "value" },
+  "members.leave": { albumId: "value" },
+} as const satisfies ShapeMap<SharingOperationMap>;
+
+export const CONNECTOR_REQUEST_SHAPES = {
+  "connector.startPairing": { platform: "value", displayName: "value", pollSecretSha256: "value" },
+  "connector.pollPairing": { pairingId: "value", pollSecret: "value" },
+  "connector.heartbeat": { state: "value", renderer: RENDER_CAPABILITY_SHAPE, replicaRevision: "value" },
+  "connector.putIndex": {
+    entries: { items: { fields: { localKey: "value", fileName: "value", source: SOURCE_SHAPE, capturedAt: "value", availability: "value" } } },
+  },
+  "connector.pullReplica": { sinceRevision: "value", limit: "value" },
+  "connector.ackReplica": { revision: "value" },
+  "renderJobs.claim": { maxJobs: "value" },
+  "renderJobs.startOutput": {
+    jobId: "value", leaseToken: "value",
+    output: {
+      variants: {
+        rendition: RENDITION_UPLOAD_FIELDS,
+        preview: { sizeBytes: "value", sha256: "value", contentType: "value", width: "value", height: "value" },
+      },
+    },
+  },
+  "renderJobs.commit": { jobId: "value", leaseToken: "value", uploadId: "value" },
+  "renderJobs.fail": { jobId: "value", leaseToken: "value", code: "value" },
+} as const satisfies ShapeMap<ConnectorOperationMap>;
 
 // ---------------------------------------------------------------------------------------------------------
 // State transitions. Missing entries are rejected transitions.
@@ -1250,7 +1341,8 @@ export const FULL_RESOLUTION_EXPORT_TRANSITIONS = {
 export interface CursorBinding {
   readonly actorId: UserId;
   readonly scope:
-    | { readonly kind: "albums" }
+    /** accessRevision: account-level revision of the actor's memberships (join, leave, removal, role change). */
+    | { readonly kind: "albums"; readonly accessRevision: number }
     | { readonly kind: "album"; readonly albumId: AlbumId; readonly membershipRevision: number }
     | { readonly kind: "members"; readonly albumId: AlbumId; readonly membershipRevision: number }
     | { readonly kind: "library"; readonly libraryId: LibraryId };
@@ -1259,9 +1351,14 @@ export interface CursorBinding {
 }
 /** Replay identity of a mutation: actor + scope + operation + key. The payload digest decides replay vs conflict. */
 export interface IdempotencyRecord {
-  readonly actor: { readonly kind: "user"; readonly userId: UserId } | { readonly kind: "connector"; readonly connectorId: ConnectorId };
+  readonly actor:
+    | { readonly kind: "user"; readonly userId: UserId }
+    | { readonly kind: "connector"; readonly connectorId: ConnectorId }
+    /** Anonymous pairing start: the registered poll-secret hash stands in for the actor. */
+    | { readonly kind: "pairingAttempt"; readonly pollSecretSha256: Sha256 };
   readonly scope:
     | { readonly kind: "account" }
+    | { readonly kind: "pairing" }
     | { readonly kind: "album"; readonly albumId: AlbumId }
     | { readonly kind: "library"; readonly libraryId: LibraryId };
   readonly operation: SharingMutationOperation | ConnectorMutationOperation;

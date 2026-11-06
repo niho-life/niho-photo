@@ -1,5 +1,6 @@
 import type {
   AlbumItem,
+  ConnectorRequestOptions,
   AlbumRole,
   HostConnector,
   HostConnectorState,
@@ -8,11 +9,10 @@ import type {
   RenditionMetadata,
   RenditionUploadRequest,
   RestoreReport,
-  SharingOperation,
+  PortableAlbumItem,
   SharingOperationMap,
   SharingRequestOptions,
 } from "../src/v1.ts";
-import type { SHARING_REQUEST_KEYS } from "../src/v1.ts";
 import type { PersonalPhotoLibrary } from "../../photo-library-contract/src/v2.ts";
 
 // These must stay compile errors. Identifiers, owners and roles in a request confer no authority.
@@ -46,6 +46,9 @@ void item.recipe;
 const gps: RenditionMetadata = { capturedAt: null, capturedAtOffset: null, colorProfile: "sRGB", orientation: 1, gps: { latitude: 0, longitude: 0 } };
 // @ts-expect-error Orientation is baked into the pixels.
 const rotated: RenditionMetadata = { capturedAt: null, capturedAtOffset: null, colorProfile: "sRGB", orientation: 6 };
+// @ts-expect-error A portable export never carries a member's source reference.
+const memberSource: PortableAlbumItem = { itemId: "i", kind: "memberEdit", source: { kind: "devicePhoto", deviceSourceRef: "d" }, renditionSha256: null };
+void memberSource;
 // @ts-expect-error A restore never grants memberships from a snapshot.
 const restoredAccess: RestoreReport = { libraryId: "l", restoredPhotos: 0, restoredAlbums: 0, membershipsRestored: 2, mismatches: [] };
 void gps;
@@ -73,6 +76,9 @@ void partialLink;
 declare const signal: AbortSignal;
 // @ts-expect-error Every album mutation keeps its operation identity for unknown results.
 const keyless: SharingRequestOptions<"albumItems.addPhoto"> = { signal };
+// @ts-expect-error Pairing start is replayable only with a captured operation key.
+const pairingKeyless: ConnectorRequestOptions<"connector.startPairing"> = { signal };
+void pairingKeyless;
 // @ts-expect-error Reads carry no idempotency key.
 const keyedRead: SharingRequestOptions<"albums.get"> = { signal, idempotencyKey: "synthetic" };
 void keyless;
@@ -82,11 +88,3 @@ declare const personal: PersonalPhotoLibrary;
 // @ts-expect-error The personal v2 contract stays albums: false; sharing is not added by flipping it.
 const flipped: PersonalPhotoLibrary = { ...personal, capabilities: { ...personal.capabilities, albums: true } };
 void flipped;
-
-// Every request key is listed in SHARING_REQUEST_KEYS, so server validators can reject anything else.
-type RequestKeys<K extends SharingOperation> = string extends keyof SharingOperationMap[K]["request"]
-  ? never
-  : Exclude<keyof SharingOperationMap[K]["request"], (typeof SHARING_REQUEST_KEYS)[K][number]>;
-type UnlistedRequestKeys = { [K in SharingOperation]: RequestKeys<K> }[SharingOperation];
-const requestKeysComplete: [UnlistedRequestKeys] extends [never] ? true : false = true;
-void requestKeysComplete;

@@ -5,15 +5,16 @@ import { PHOTO_LIBRARY_CONTRACT_VERSION, PHOTO_LIMITS } from "../../photo-librar
 import { library as personalLibrary, maskedPhoto } from "../../photo-library-contract/fixtures/v2.ts";
 import {
   ALBUM_ACTIONS, ALBUM_ITEM_KINDS, ALBUM_ITEM_STATES, ALBUM_ITEM_TRANSITIONS, ALBUM_PERMISSIONS, ALBUM_ROLES,
-  CONNECTOR_OPERATION_ACCESS, DEFAULT_LIBRARY_KIND, FULL_RESOLUTION_EXPORT_TRANSITIONS, HOST_CONNECTOR_STATES,
+  CONNECTOR_OPERATION_ACCESS, CONNECTOR_REQUEST_SHAPES, DEFAULT_LIBRARY_KIND, FULL_RESOLUTION_EXPORT_TRANSITIONS, HOST_CONNECTOR_STATES,
   HOST_CONNECTOR_TRANSITIONS, LIBRARY_KINDS, MEMBERSHIP_TRANSITIONS, MEMBER_ROLES, PHOTO_LIBRARY_SHARING_CONTRACT_VERSION,
   RENDER_JOB_TRANSITIONS, RENDITION_METADATA_FIELDS, SHARING_ERROR_RECOVERY, SHARING_ERROR_STATUS, SHARING_LIMITS,
-  SHARING_OPERATION_ACCESS, SHARING_REQUEST_KEYS,
+  SHARING_OPERATION_ACCESS, SHARING_REQUEST_SHAPES,
 } from "../src/v1.ts";
 import {
-  checkCursor, compareIdempotency, compareRenderBinding, decideAlbumAction, decideHostedRecipeSave, decideJoin,
-  decideLibraryAccess, decideMembershipChange, decidePairingApproval, decideRenderCommit, decideUploadCommit,
-  findForbiddenMetadata, findUnexpectedRequestFields, inviteLinkStatus, nextAlbumItemState, nextRenderJobState,
+  checkCursor, compareIdempotency, compareRenderBinding, decideAddPhoto, decideAlbumAction, decideHostedRecipeSave,
+  decideJoin, decideLibraryAccess, decideMembershipChange, decidePairingApproval, decideRenderCommit, decideReplaceStart,
+  decideUploadCommit, findForbiddenMetadata, findUnexpectedConnectorFields, findUnexpectedRequestFields, inviteLinkStatus,
+  nextAlbumItemState, nextRenderJobState,
   projectAlbumItem, quotaExceededError, sanitizeRenditionMetadata,
 } from "../src/policy.ts";
 import {
@@ -80,7 +81,9 @@ test("every operation has one access rule, closed request keys, an owner Issue a
     assert.equal(row.wiring, "not-connected", operation);
     assert(row.evidence.length > 10, operation);
   }
-  assert.deepEqual(Object.keys(SHARING_REQUEST_KEYS).sort(), [...userOperations].sort());
+  assert.deepEqual(Object.keys(SHARING_REQUEST_SHAPES).sort(), [...userOperations].sort());
+  assert.deepEqual(Object.keys(CONNECTOR_REQUEST_SHAPES).sort(), [...connectorOperations].sort());
+  assert.equal(SHARING_OPERATION_ACCESS["albumItems.addPhoto"].requiresOwnSource, true);
   assert.deepEqual(Object.keys(fixtures.responses).sort(), userOperations.filter((op) => !STREAM_OPERATIONS.includes(op)).sort());
   assert.deepEqual(Object.keys(fixtures.connectorResponses).sort(), [...connectorOperations].sort());
   for (const [operation, access] of Object.entries(SHARING_OPERATION_ACCESS)) {
@@ -218,6 +221,62 @@ test("generation ordering never accepts an equal-revision binding with different
   assert.equal(inviteLinkStatus(fixtures.revokedInviteLink, fixtures.TIME), "revoked");
 });
 
+test("closed requests reject unexpected fields at any depth", () => {
+  const rendition = {
+    sizeBytes: 1, sha256: "a".repeat(64), contentType: "image/jpeg", width: 1, height: 1,
+    metadata: { capturedAt: null, capturedAtOffset: null, colorProfile: "sRGB", orientation: 1 },
+  };
+  assert.deepEqual(findUnexpectedRequestFields("albumItems.addFile", { albumId: "a", rendition }), []);
+  assert.deepEqual(findUnexpectedRequestFields("albumItems.addFile", { albumId: "a", rendition: { ...rendition, metadata: { ...rendition.metadata, GPSLatitude: 1 } } }), ["rendition.metadata.GPSLatitude"]);
+  assert.deepEqual(findUnexpectedRequestFields("albumItems.addPhoto", { albumId: "a", source: { kind: "libraryPhoto", libraryId: "l", photoId: "p", ownerId: "u" } }), ["source.ownerId"]);
+  assert.deepEqual(findUnexpectedRequestFields("albumItems.addPhoto", { albumId: "a", source: { kind: "unknown" } }), ["source.kind"]);
+  assert.deepEqual(findUnexpectedRequestFields("albumItems.addPhoto", { albumId: "a", source: { kind: "devicePhoto", deviceSourceRef: "d", binding: { ...fixtures.binding, maskSurfaceIds: [{ path: "x" }] }, rendition } }), ["source.binding.maskSurfaceIds[0]"]);
+  assert.deepEqual(findUnexpectedRequestFields("albums.get", JSON.parse('{"albumId":"a","__proto__":{"role":"owner"}}')), ["__proto__"]);
+  assert.deepEqual(findUnexpectedRequestFields("albums.get", { albumId: { nested: true } }), ["albumId"]);
+  // Recipe settings stay open JSON for the #196 validator; unknown fields are preserved, not rejected here.
+  assert.deepEqual(findUnexpectedRequestFields("hostedRecipes.put", {
+    libraryId: "l", photoId: "p", expectedRevision: 1, sourceGeneration: 1, baseVersion: null,
+    settings: { v: 99, engine: "synthetic-future-engine", futureField: { keep: [1] } },
+  }), []);
+  assert.deepEqual(findUnexpectedConnectorFields("renderJobs.startOutput", { jobId: "j", leaseToken: "t", output: { kind: "preview", sizeBytes: 1, sha256: "a", contentType: "image/jpeg", width: 1, height: 1, metadata: {} } }), ["output.metadata"]);
+  let deep = { leaf: 1 };
+  for (let index = 0; index < 40; index++) deep = { nested: deep };
+  assert(findForbiddenMetadata(deep).some((hit) => hit.category === "unverifiable"));
+});
+
+test("commit decisions bind the executor, the job's verified upload and the latest replace intent", () => {
+  const job = fixtures.renderJob;
+  const base = {
+    job, actor: job.executor, claimedGeneration: 1, executor: { lifecycle: "active", credentialGeneration: 1 },
+    upload: { jobId: job.id, kind: "rendition", state: "uploaded" }, bytesMetadata: fixtures.renditionMetadata,
+    desired: job.binding, now: fixtures.TIME,
+    item: { state: "updatePending", revision: job.purpose.itemRevision, adder: { userId: fixtures.USERS.owner, membership: fixtures.memberships.owner } },
+  };
+  assert.deepEqual(decideRenderCommit(base), { ok: true });
+  assert.deepEqual(decideRenderCommit({ ...base, actor: { kind: "userDevice", userId: fixtures.USERS.owner } }), { ok: false, code: "not_found" });
+  assert.deepEqual(decideRenderCommit({ ...base, upload: null }), { ok: false, code: "not_found" });
+  assert.deepEqual(decideRenderCommit({ ...base, desired: fixtures.binding }), { ok: false, code: "stale_render" });
+
+  const viewer = { userId: fixtures.USERS.contributor, membership: fixtures.memberships.contributor };
+  const item = { ...fixtures.snapshots.memberItem, addedBy: fixtures.PEOPLE.contributor, inRequestedAlbum: true };
+  const newer = { ...fixtures.snapshots.memberItem.renditionBinding, recipeRevision: 3 };
+  const newest = { ...newer, recipeRevision: 4 };
+  const content = (binding) => ({ kind: "deviceRender", binding, rendition: {} });
+  assert.deepEqual(decideReplaceStart(viewer, { ...item, addedBy: viewer.userId }, { expectedRevision: 1, content: content(newer) }), { ok: true });
+  const pending = { ...item, addedBy: viewer.userId, pendingUpload: { uploadId: "u-newest", binding: newest } };
+  assert.deepEqual(decideReplaceStart(viewer, pending, { expectedRevision: 1, content: content(newer) }), { ok: false, code: "stale_render" });
+  const commit = (uploadId) => decideUploadCommit({
+    viewer, item: { ...fixtures.snapshots.memberItem, pendingUpload: { uploadId: "u-newest", binding: newest } },
+    upload: { id: uploadId, targetItemRevision: 2, expiresAt: fixtures.LATER, state: "reserved" }, bytesMetadata: {}, now: fixtures.TIME,
+  });
+  assert.deepEqual(commit("u-older"), { ok: false, code: "stale_render" });
+  assert.deepEqual(commit("u-newest"), { ok: true });
+
+  assert.deepEqual(decideAddPhoto(viewer, { kind: "libraryPhoto" }, { ownerId: fixtures.USERS.owner, lifecycle: "active" }), { ok: false, code: "not_found" });
+  assert.deepEqual(decideAddPhoto(viewer, { kind: "libraryPhoto" }, { ownerId: viewer.userId, lifecycle: "active" }), { ok: true });
+  assert.deepEqual(decideAddPhoto({ userId: fixtures.USERS.viewer, membership: fixtures.memberships.viewer }, { kind: "libraryPhoto" }, { ownerId: fixtures.USERS.viewer, lifecycle: "active" }), { ok: false, code: "role_forbidden" });
+});
+
 test("error codes have one status and one recovery each", () => {
   assert.deepEqual(Object.keys(SHARING_ERROR_RECOVERY).sort(), Object.keys(SHARING_ERROR_STATUS).sort());
   for (const status of Object.values(SHARING_ERROR_STATUS)) assert(status >= 400 && status < 600);
@@ -230,6 +289,9 @@ test("error codes have one status and one recovery each", () => {
 // Conformance vectors evaluated through the reference policy.
 
 const actorId = (label) => vectors.actors[label] ?? null;
+const unexpected = (operation, request) => operation in SHARING_REQUEST_SHAPES
+  ? findUnexpectedRequestFields(operation, request)
+  : findUnexpectedConnectorFields(operation, request);
 const success = (operation, created) => ({ status: created ? 201 : 200 });
 const fromDecision = (decision, operation) => decision.ok ? success(operation, CREATE_OPERATIONS.has(operation)) : { status: SHARING_ERROR_STATUS[decision.code], code: decision.code };
 
@@ -239,6 +301,10 @@ function evaluate(vector) {
   switch (vector.check) {
     case "session":
       return fromDecision(userId ? { ok: true } : { ok: false, code: "unauthenticated" }, operation);
+    case "addPhoto":
+      return fromDecision(decideAddPhoto({ userId, membership: arrange.membership }, request.source, arrange.library), operation);
+    case "replaceStart":
+      return fromDecision(decideReplaceStart({ userId, membership: arrange.membership }, arrange.item, request), operation);
     case "albumAction":
       return fromDecision(decideAlbumAction({ userId, membership: arrange.membership }, SHARING_OPERATION_ACCESS[operation].action, arrange.target), operation);
     case "membershipChange": {
@@ -250,7 +316,7 @@ function evaluate(vector) {
     case "pairing":
       return fromDecision(decidePairingApproval({ actorId: userId, pairing: arrange.pairing, target: request.target, targetOwnerId: arrange.targetOwnerId, now: arrange.now }), operation);
     case "join": {
-      const decision = decideJoin({ actorId: userId, link: arrange.link, album: arrange.album, existing: arrange.existing, now: arrange.now });
+      const decision = decideJoin({ actorId: userId, link: arrange.link, album: arrange.album, existing: arrange.existing, lastRemovedAt: arrange.lastRemovedAt, now: arrange.now });
       return decision.ok ? success(operation, decision.joined) : fromDecision(decision, operation);
     }
     case "cursor":
@@ -273,7 +339,7 @@ function evaluate(vector) {
       return fromDecision(projected ? { ok: true } : { ok: false, code: "not_found" }, operation);
     }
     case "closedRequest":
-      return fromDecision(findUnexpectedRequestFields(operation, request).length ? { ok: false, code: "invalid_request" } : { ok: true }, operation);
+      return fromDecision(unexpected(operation, request).length ? { ok: false, code: "invalid_request" } : { ok: true }, operation);
     case "quota": {
       const error = quotaExceededError(arrange.audience, "synthetic-request", { availableBytes: arrange.availableBytes, requiredBytes: arrange.requiredBytes });
       assert.equal("storage" in error, arrange.audience === "owner", vector.id);
@@ -293,9 +359,7 @@ test("every conformance vector matches the reference policy", () => {
     assert(vector.operation in coverage.operations, vector.id);
     assert(vector.expected.invariants.length > 0, vector.id);
     if (vector.expected.code) assert.equal(SHARING_ERROR_STATUS[vector.expected.code], vector.expected.status, vector.id);
-    if (vector.check !== "closedRequest" && vector.operation in SHARING_REQUEST_KEYS) {
-      assert.deepEqual(findUnexpectedRequestFields(vector.operation, vector.request), [], vector.id);
-    }
+    if (vector.check !== "closedRequest") assert.deepEqual(unexpected(vector.operation, vector.request), [], vector.id);
     const actual = evaluate(vector);
     assert.deepEqual(actual, vector.expected.code ? { status: vector.expected.status, code: vector.expected.code } : { status: vector.expected.status }, vector.id);
   }
@@ -304,14 +368,15 @@ test("every conformance vector matches the reference policy", () => {
 test("B00 negative categories are all present", () => {
   const ids = new Set(vectors.cases.map((item) => item.id));
   const required = {
-    otherOwnerOrAlbum: ["foreign-album", "other-album-item", "member-reads-owner-library", "member-adds-owner-library-photo", "pairing-into-foreign-library", "member-edits-owner-photo"],
+    otherOwnerOrAlbum: ["foreign-album", "other-album-item", "member-reads-owner-library", "member-adds-owner-library-photo", "pairing-into-foreign-library", "member-edits-owner-photo", "job-other-executor", "job-upload-of-other-job"],
     viewerAdds: ["viewer-adds-photo", "viewer-adds-file"],
     othersItemRemoval: ["contributor-removes-others-item", "owner-replaces-member-item"],
     afterRevocation: ["removed-member-adds", "left-member-adds", "commit-after-removal", "commit-after-demotion", "job-after-adder-removed"],
-    staleCursorJobRevision: ["cursor-after-role-change", "cursor-expired", "stale-job-recipe", "superseded-job", "job-lease-expired", "rename-stale", "replace-stale-revision", "device-render-older", "hosted-save-old-source"],
-    unknownResultResend: ["add-unknown-result-replay", "changed-payload-same-key", "join-unknown-result-replay", "invite-create-replay", "job-commit-replay"],
-    inviteLinks: ["join-expired-link", "join-revoked-link", "join-unknown-secret", "join-unauthenticated", "join-removed-old-link"],
-    metadata: ["rendition-with-location", "rendition-with-serial", "rendition-with-path"],
+    staleCursorJobRevision: ["cursor-after-role-change", "albums-cursor-after-membership-change", "cursor-expired", "stale-job-recipe", "superseded-job", "job-lease-expired", "rename-stale", "replace-stale-revision", "device-render-older", "superseded-replace-commit", "replace-start-older-than-pending", "hosted-save-old-source"],
+    unknownResultResend: ["add-unknown-result-replay", "changed-payload-same-key", "join-unknown-result-replay", "invite-create-replay", "job-commit-replay", "pairing-start-replay"],
+    inviteLinks: ["join-expired-link", "join-revoked-link", "join-unknown-secret", "join-unauthenticated", "join-removed-old-link", "join-old-link-after-rejoin-and-leave"],
+    metadata: ["rendition-with-location", "rendition-with-serial", "rendition-with-path", "job-output-with-location", "location-in-rendition-request"],
+    closedRequests: ["owner-in-request", "path-in-add-source", "unknown-source-kind", "path-in-index-entry"],
   };
   for (const [category, list] of Object.entries(required)) for (const id of list) assert(ids.has(id), `${category}:${id}`);
 });

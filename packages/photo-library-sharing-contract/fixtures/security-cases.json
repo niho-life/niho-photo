@@ -137,7 +137,7 @@
       "id": "member-adds-owner-library-photo",
       "operation": "albumItems.addPhoto",
       "actor": "contributor",
-      "check": "libraryAccess",
+      "check": "addPhoto",
       "request": {
         "albumId": "synthetic-album-a",
         "source": {
@@ -147,6 +147,11 @@
         }
       },
       "arrange": {
+        "membership": {
+          "role": "contributor",
+          "state": "active",
+          "revision": 3
+        },
         "library": {
           "ownerId": "synthetic-user-a",
           "lifecycle": "active"
@@ -158,6 +163,38 @@
         "invariants": [
           "source_must_be_adders_own",
           "same_as_missing"
+        ]
+      }
+    },
+    {
+      "id": "contributor-adds-own-library-photo",
+      "operation": "albumItems.addPhoto",
+      "actor": "contributor",
+      "check": "addPhoto",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "source": {
+          "kind": "libraryPhoto",
+          "libraryId": "synthetic-library-contributor",
+          "photoId": "synthetic-photo-contributor"
+        }
+      },
+      "arrange": {
+        "membership": {
+          "role": "contributor",
+          "state": "active",
+          "revision": 3
+        },
+        "library": {
+          "ownerId": "synthetic-user-contributor",
+          "lifecycle": "active"
+        }
+      },
+      "expected": {
+        "status": 201,
+        "invariants": [
+          "render_on_adders_device",
+          "charged_to_album_owner"
         ]
       }
     },
@@ -231,7 +268,7 @@
       "id": "viewer-adds-photo",
       "operation": "albumItems.addPhoto",
       "actor": "viewer",
-      "check": "albumAction",
+      "check": "addPhoto",
       "request": {
         "albumId": "synthetic-album-a",
         "source": {
@@ -268,7 +305,8 @@
           "role": "viewer",
           "state": "active",
           "revision": 2
-        }
+        },
+        "library": null
       },
       "expected": {
         "status": 403,
@@ -773,7 +811,7 @@
       "id": "left-member-adds",
       "operation": "albumItems.addPhoto",
       "actor": "left-member",
-      "check": "albumAction",
+      "check": "addPhoto",
       "request": {
         "albumId": "synthetic-album-a",
         "source": {
@@ -810,7 +848,8 @@
           "role": "contributor",
           "state": "left",
           "revision": 4
-        }
+        },
+        "library": null
       },
       "expected": {
         "status": 404,
@@ -878,9 +917,14 @@
           },
           "state": "preparing",
           "revision": 0,
-          "renditionBinding": null
+          "renditionBinding": null,
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": null
+          }
         },
         "upload": {
+          "id": "synthetic-rendition-upload",
           "targetItemRevision": 1,
           "expiresAt": "2026-11-07T00:10:00.000Z",
           "state": "reserved"
@@ -927,9 +971,14 @@
           },
           "state": "preparing",
           "revision": 0,
-          "renditionBinding": null
+          "renditionBinding": null,
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": null
+          }
         },
         "upload": {
+          "id": "synthetic-rendition-upload",
           "targetItemRevision": 1,
           "expiresAt": "2026-11-07T00:10:00.000Z",
           "state": "reserved"
@@ -962,6 +1011,11 @@
       },
       "arrange": {
         "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
           "binding": {
             "sourceGeneration": 1,
             "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -982,13 +1036,25 @@
             "itemRevision": 1
           }
         },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
         "claimedGeneration": 1,
         "executor": {
           "lifecycle": "active",
           "credentialGeneration": 1
         },
-        "output": {
-          "kind": "rendition"
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
         },
         "desired": {
           "sourceGeneration": 1,
@@ -1141,6 +1207,42 @@
       }
     },
     {
+      "id": "albums-cursor-after-membership-change",
+      "operation": "albums.list",
+      "actor": "contributor",
+      "check": "cursor",
+      "request": {
+        "cursor": "synthetic-cursor"
+      },
+      "arrange": {
+        "cursor": {
+          "actorId": "synthetic-user-contributor",
+          "scope": {
+            "kind": "albums",
+            "accessRevision": 5
+          },
+          "queryDigest": "3333333333333333333333333333333333333333333333333333333333333333",
+          "issuedAt": "2026-11-07T00:00:00.000Z"
+        },
+        "current": {
+          "actorId": "synthetic-user-contributor",
+          "scope": {
+            "kind": "albums",
+            "accessRevision": 6
+          },
+          "queryDigest": "3333333333333333333333333333333333333333333333333333333333333333"
+        },
+        "now": "2026-11-07T00:10:00.000Z"
+      },
+      "expected": {
+        "status": 400,
+        "code": "invalid_cursor",
+        "invariants": [
+          "no_album_after_access_change"
+        ]
+      }
+    },
+    {
       "id": "cursor-expired",
       "operation": "albumItems.list",
       "actor": "contributor",
@@ -1191,6 +1293,11 @@
       },
       "arrange": {
         "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
           "binding": {
             "sourceGeneration": 1,
             "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1211,13 +1318,25 @@
             "itemRevision": 1
           }
         },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
         "claimedGeneration": 1,
         "executor": {
           "lifecycle": "active",
           "credentialGeneration": 1
         },
-        "output": {
-          "kind": "rendition"
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
         },
         "desired": {
           "sourceGeneration": 1,
@@ -1265,6 +1384,11 @@
       },
       "arrange": {
         "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
           "binding": {
             "sourceGeneration": 1,
             "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1285,13 +1409,25 @@
             "itemRevision": 1
           }
         },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
         "claimedGeneration": 1,
         "executor": {
           "lifecycle": "active",
           "credentialGeneration": 1
         },
-        "output": {
-          "kind": "rendition"
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
         },
         "desired": {
           "sourceGeneration": 1,
@@ -1338,6 +1474,11 @@
       },
       "arrange": {
         "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
           "binding": {
             "sourceGeneration": 1,
             "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1358,13 +1499,25 @@
             "itemRevision": 1
           }
         },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
         "claimedGeneration": 1,
         "executor": {
           "lifecycle": "active",
           "credentialGeneration": 1
         },
-        "output": {
-          "kind": "rendition"
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
         },
         "desired": {
           "sourceGeneration": 1,
@@ -1411,6 +1564,11 @@
       },
       "arrange": {
         "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
           "binding": {
             "sourceGeneration": 1,
             "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1431,13 +1589,25 @@
             "itemRevision": 1
           }
         },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
         "claimedGeneration": 1,
         "executor": {
           "lifecycle": "active",
           "credentialGeneration": 1
         },
-        "output": {
-          "kind": "rendition"
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
         },
         "desired": {
           "sourceGeneration": 1,
@@ -1484,6 +1654,11 @@
       },
       "arrange": {
         "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
           "binding": {
             "sourceGeneration": 1,
             "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1504,13 +1679,25 @@
             "itemRevision": 1
           }
         },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
         "claimedGeneration": 1,
         "executor": {
           "lifecycle": "revoked",
           "credentialGeneration": 2
         },
-        "output": {
-          "kind": "rendition"
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
         },
         "desired": {
           "sourceGeneration": 1,
@@ -1557,6 +1744,11 @@
       },
       "arrange": {
         "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
           "binding": {
             "sourceGeneration": 1,
             "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1577,13 +1769,25 @@
             "itemRevision": 1
           }
         },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
         "claimedGeneration": 1,
         "executor": {
           "lifecycle": "active",
           "credentialGeneration": 2
         },
-        "output": {
-          "kind": "rendition"
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
         },
         "desired": {
           "sourceGeneration": 1,
@@ -1630,6 +1834,11 @@
       },
       "arrange": {
         "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
           "binding": {
             "sourceGeneration": 1,
             "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1650,13 +1859,25 @@
             "itemRevision": 1
           }
         },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
         "claimedGeneration": 1,
         "executor": {
           "lifecycle": "active",
           "credentialGeneration": 1
         },
-        "output": {
-          "kind": "preview"
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "preview",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
         },
         "desired": {
           "sourceGeneration": 1,
@@ -1692,7 +1913,7 @@
       }
     },
     {
-      "id": "job-item-revision-moved",
+      "id": "job-other-executor",
       "operation": "renderJobs.commit",
       "actor": "connector",
       "check": "renderCommit",
@@ -1703,6 +1924,11 @@
       },
       "arrange": {
         "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
           "binding": {
             "sourceGeneration": 1,
             "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1723,13 +1949,477 @@
             "itemRevision": 1
           }
         },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-other-connector"
+        },
         "claimedGeneration": 1,
         "executor": {
           "lifecycle": "active",
           "credentialGeneration": 1
         },
-        "output": {
-          "kind": "rendition"
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
+        },
+        "desired": {
+          "sourceGeneration": 1,
+          "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipeRevision": 2,
+          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+          "engine": "niho-14",
+          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+          "maskSurfaceIds": [
+            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          ]
+        },
+        "item": {
+          "state": "updatePending",
+          "revision": 1,
+          "adder": {
+            "userId": "synthetic-user-a",
+            "membership": {
+              "role": "owner",
+              "state": "active",
+              "revision": 1
+            }
+          }
+        },
+        "now": "2026-11-07T00:05:00.000Z"
+      },
+      "expected": {
+        "status": 404,
+        "code": "not_found",
+        "invariants": [
+          "executor_bound_to_job",
+          "same_as_missing"
+        ]
+      }
+    },
+    {
+      "id": "job-user-device-for-connector-job",
+      "operation": "renderJobs.commit",
+      "actor": "owner",
+      "check": "renderCommit",
+      "request": {
+        "jobId": "synthetic-render-job",
+        "leaseToken": "synthetic-lease",
+        "uploadId": "synthetic-output-upload"
+      },
+      "arrange": {
+        "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
+          "binding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "state": "claimed",
+          "leaseExpiresAt": "2026-11-07T00:10:00.000Z",
+          "purpose": {
+            "kind": "albumItem",
+            "albumId": "synthetic-album-a",
+            "itemId": "synthetic-item-owner-photo",
+            "itemRevision": 1
+          }
+        },
+        "actor": {
+          "kind": "userDevice",
+          "userId": "synthetic-user-a"
+        },
+        "claimedGeneration": 1,
+        "executor": {
+          "lifecycle": "active",
+          "credentialGeneration": 1
+        },
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
+        },
+        "desired": {
+          "sourceGeneration": 1,
+          "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipeRevision": 2,
+          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+          "engine": "niho-14",
+          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+          "maskSurfaceIds": [
+            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          ]
+        },
+        "item": {
+          "state": "updatePending",
+          "revision": 1,
+          "adder": {
+            "userId": "synthetic-user-a",
+            "membership": {
+              "role": "owner",
+              "state": "active",
+              "revision": 1
+            }
+          }
+        },
+        "now": "2026-11-07T00:05:00.000Z"
+      },
+      "expected": {
+        "status": 404,
+        "code": "not_found",
+        "invariants": [
+          "executor_bound_to_job"
+        ]
+      }
+    },
+    {
+      "id": "job-upload-of-other-job",
+      "operation": "renderJobs.commit",
+      "actor": "connector",
+      "check": "renderCommit",
+      "request": {
+        "jobId": "synthetic-render-job",
+        "leaseToken": "synthetic-lease",
+        "uploadId": "synthetic-output-upload"
+      },
+      "arrange": {
+        "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
+          "binding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "state": "claimed",
+          "leaseExpiresAt": "2026-11-07T00:10:00.000Z",
+          "purpose": {
+            "kind": "albumItem",
+            "albumId": "synthetic-album-a",
+            "itemId": "synthetic-item-owner-photo",
+            "itemRevision": 1
+          }
+        },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
+        "claimedGeneration": 1,
+        "executor": {
+          "lifecycle": "active",
+          "credentialGeneration": 1
+        },
+        "upload": {
+          "jobId": "synthetic-other-job",
+          "kind": "rendition",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
+        },
+        "desired": {
+          "sourceGeneration": 1,
+          "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipeRevision": 2,
+          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+          "engine": "niho-14",
+          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+          "maskSurfaceIds": [
+            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          ]
+        },
+        "item": {
+          "state": "updatePending",
+          "revision": 1,
+          "adder": {
+            "userId": "synthetic-user-a",
+            "membership": {
+              "role": "owner",
+              "state": "active",
+              "revision": 1
+            }
+          }
+        },
+        "now": "2026-11-07T00:05:00.000Z"
+      },
+      "expected": {
+        "status": 404,
+        "code": "not_found",
+        "invariants": [
+          "upload_bound_to_job"
+        ]
+      }
+    },
+    {
+      "id": "job-upload-incomplete",
+      "operation": "renderJobs.commit",
+      "actor": "connector",
+      "check": "renderCommit",
+      "request": {
+        "jobId": "synthetic-render-job",
+        "leaseToken": "synthetic-lease",
+        "uploadId": "synthetic-output-upload"
+      },
+      "arrange": {
+        "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
+          "binding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "state": "claimed",
+          "leaseExpiresAt": "2026-11-07T00:10:00.000Z",
+          "purpose": {
+            "kind": "albumItem",
+            "albumId": "synthetic-album-a",
+            "itemId": "synthetic-item-owner-photo",
+            "itemRevision": 1
+          }
+        },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
+        "claimedGeneration": 1,
+        "executor": {
+          "lifecycle": "active",
+          "credentialGeneration": 1
+        },
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "reserved"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
+        },
+        "desired": {
+          "sourceGeneration": 1,
+          "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipeRevision": 2,
+          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+          "engine": "niho-14",
+          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+          "maskSurfaceIds": [
+            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          ]
+        },
+        "item": {
+          "state": "updatePending",
+          "revision": 1,
+          "adder": {
+            "userId": "synthetic-user-a",
+            "membership": {
+              "role": "owner",
+              "state": "active",
+              "revision": 1
+            }
+          }
+        },
+        "now": "2026-11-07T00:05:00.000Z"
+      },
+      "expected": {
+        "status": 400,
+        "code": "invalid_request",
+        "invariants": [
+          "verified_bytes_only"
+        ]
+      }
+    },
+    {
+      "id": "job-output-with-location",
+      "operation": "renderJobs.commit",
+      "actor": "connector",
+      "check": "renderCommit",
+      "request": {
+        "jobId": "synthetic-render-job",
+        "leaseToken": "synthetic-lease",
+        "uploadId": "synthetic-output-upload"
+      },
+      "arrange": {
+        "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
+          "binding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "state": "claimed",
+          "leaseExpiresAt": "2026-11-07T00:10:00.000Z",
+          "purpose": {
+            "kind": "albumItem",
+            "albumId": "synthetic-album-a",
+            "itemId": "synthetic-item-owner-photo",
+            "itemRevision": 1
+          }
+        },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
+        "claimedGeneration": 1,
+        "executor": {
+          "lifecycle": "active",
+          "credentialGeneration": 1
+        },
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1,
+          "GPSLatitude": 35.3
+        },
+        "desired": {
+          "sourceGeneration": 1,
+          "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "recipeRevision": 2,
+          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+          "engine": "niho-14",
+          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+          "maskSurfaceIds": [
+            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+          ]
+        },
+        "item": {
+          "state": "updatePending",
+          "revision": 1,
+          "adder": {
+            "userId": "synthetic-user-a",
+            "membership": {
+              "role": "owner",
+              "state": "active",
+              "revision": 1
+            }
+          }
+        },
+        "now": "2026-11-07T00:05:00.000Z"
+      },
+      "expected": {
+        "status": 422,
+        "code": "content_rejected",
+        "invariants": [
+          "no_location_published"
+        ]
+      }
+    },
+    {
+      "id": "job-item-revision-moved",
+      "operation": "renderJobs.commit",
+      "actor": "connector",
+      "check": "renderCommit",
+      "request": {
+        "jobId": "synthetic-render-job",
+        "leaseToken": "synthetic-lease",
+        "uploadId": "synthetic-output-upload"
+      },
+      "arrange": {
+        "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
+          "binding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "state": "claimed",
+          "leaseExpiresAt": "2026-11-07T00:10:00.000Z",
+          "purpose": {
+            "kind": "albumItem",
+            "albumId": "synthetic-album-a",
+            "itemId": "synthetic-item-owner-photo",
+            "itemRevision": 1
+          }
+        },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
+        "claimedGeneration": 1,
+        "executor": {
+          "lifecycle": "active",
+          "credentialGeneration": 1
+        },
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
         },
         "desired": {
           "sourceGeneration": 1,
@@ -1776,6 +2466,11 @@
       },
       "arrange": {
         "job": {
+          "id": "synthetic-render-job",
+          "executor": {
+            "kind": "hostedMac",
+            "connectorId": "synthetic-connector"
+          },
           "binding": {
             "sourceGeneration": 1,
             "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
@@ -1796,13 +2491,25 @@
             "itemRevision": 1
           }
         },
+        "actor": {
+          "kind": "hostedMac",
+          "connectorId": "synthetic-connector"
+        },
         "claimedGeneration": 1,
         "executor": {
           "lifecycle": "active",
           "credentialGeneration": 1
         },
-        "output": {
-          "kind": "rendition"
+        "upload": {
+          "jobId": "synthetic-render-job",
+          "kind": "rendition",
+          "state": "uploaded"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
         },
         "desired": {
           "sourceGeneration": 1,
@@ -1872,23 +2579,27 @@
             "maskSurfaceIds": [
               "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
             ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 1,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
           }
         },
         "upload": {
+          "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
           "state": "reserved"
-        },
-        "binding": {
-          "sourceGeneration": 1,
-          "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
-          "recipeRevision": 1,
-          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
-          "engine": "niho-14",
-          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
-          "maskSurfaceIds": [
-            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-          ]
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -1941,23 +2652,27 @@
             "maskSurfaceIds": [
               "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
             ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 2,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
           }
         },
         "upload": {
+          "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
           "state": "reserved"
-        },
-        "binding": {
-          "sourceGeneration": 1,
-          "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
-          "recipeRevision": 2,
-          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
-          "engine": "niho-14",
-          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
-          "maskSurfaceIds": [
-            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-          ]
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -2010,23 +2725,27 @@
             "maskSurfaceIds": [
               "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
             ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
           }
         },
         "upload": {
+          "id": "synthetic-rendition-upload",
           "targetItemRevision": 2,
           "expiresAt": "2026-11-07T00:10:00.000Z",
           "state": "reserved"
-        },
-        "binding": {
-          "sourceGeneration": 1,
-          "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
-          "recipeRevision": 3,
-          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
-          "engine": "niho-14",
-          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
-          "maskSurfaceIds": [
-            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-          ]
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -2079,23 +2798,27 @@
             "maskSurfaceIds": [
               "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
             ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
           }
         },
         "upload": {
+          "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
           "state": "reserved"
-        },
-        "binding": {
-          "sourceGeneration": 1,
-          "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
-          "recipeRevision": 3,
-          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
-          "engine": "niho-14",
-          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
-          "maskSurfaceIds": [
-            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-          ]
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -2110,6 +2833,80 @@
         "code": "upload_expired",
         "invariants": [
           "reservation_released_once"
+        ]
+      }
+    },
+    {
+      "id": "superseded-replace-commit",
+      "operation": "albumItems.commitUpload",
+      "actor": "contributor",
+      "check": "uploadCommit",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "uploadId": "synthetic-rendition-upload"
+      },
+      "arrange": {
+        "viewer": {
+          "userId": "synthetic-user-contributor",
+          "membership": {
+            "role": "contributor",
+            "state": "active",
+            "revision": 3
+          }
+        },
+        "item": {
+          "addedBy": {
+            "userId": "synthetic-user-contributor",
+            "displayName": "Synthetic Contributor"
+          },
+          "state": "published",
+          "revision": 2,
+          "renditionBinding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-newer-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 4,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
+          }
+        },
+        "upload": {
+          "id": "synthetic-rendition-upload",
+          "targetItemRevision": 3,
+          "expiresAt": "2026-11-07T00:10:00.000Z",
+          "state": "reserved"
+        },
+        "bytesMetadata": {
+          "capturedAt": "2026-11-01T09:30:00",
+          "capturedAtOffset": "+09:00",
+          "colorProfile": "sRGB",
+          "orientation": 1
+        },
+        "now": "2026-11-07T00:00:00.000Z"
+      },
+      "expected": {
+        "status": 409,
+        "code": "stale_render",
+        "invariants": [
+          "newer_intent_wins",
+          "no_stale_overwrite"
         ]
       }
     },
@@ -2148,23 +2945,27 @@
             "maskSurfaceIds": [
               "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
             ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
           }
         },
         "upload": {
+          "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
           "state": "reserved"
-        },
-        "binding": {
-          "sourceGeneration": 1,
-          "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
-          "recipeRevision": 3,
-          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
-          "engine": "niho-14",
-          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
-          "maskSurfaceIds": [
-            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-          ]
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -2178,6 +2979,247 @@
         "status": 200,
         "invariants": [
           "item_published_next_revision"
+        ]
+      }
+    },
+    {
+      "id": "replace-start-older-than-pending",
+      "operation": "albumItems.replace",
+      "actor": "contributor",
+      "check": "replaceStart",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "itemId": "synthetic-item-member-edit",
+        "expectedRevision": 2,
+        "content": {
+          "kind": "deviceRender",
+          "binding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+            "recipeRevision": 3,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "rendition": {
+            "sizeBytes": 8388608,
+            "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+            "contentType": "image/jpeg",
+            "width": 6000,
+            "height": 4000,
+            "metadata": {
+              "capturedAt": "2026-11-01T09:30:00",
+              "capturedAtOffset": "+09:00",
+              "colorProfile": "sRGB",
+              "orientation": 1
+            }
+          }
+        }
+      },
+      "arrange": {
+        "membership": {
+          "role": "contributor",
+          "state": "active",
+          "revision": 3
+        },
+        "item": {
+          "kind": "memberEdit",
+          "state": "published",
+          "revision": 2,
+          "source": {
+            "kind": "devicePhoto",
+            "deviceSourceRef": "synthetic-device-source"
+          },
+          "renditionBinding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-newer-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 4,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
+          },
+          "addedBy": "synthetic-user-contributor",
+          "inRequestedAlbum": true
+        }
+      },
+      "expected": {
+        "status": 409,
+        "code": "stale_render",
+        "invariants": [
+          "newer_intent_wins"
+        ]
+      }
+    },
+    {
+      "id": "replace-start-newest",
+      "operation": "albumItems.replace",
+      "actor": "contributor",
+      "check": "replaceStart",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "itemId": "synthetic-item-member-edit",
+        "expectedRevision": 2,
+        "content": {
+          "kind": "deviceRender",
+          "binding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+            "recipeRevision": 5,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "rendition": {
+            "sizeBytes": 8388608,
+            "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+            "contentType": "image/jpeg",
+            "width": 6000,
+            "height": 4000,
+            "metadata": {
+              "capturedAt": "2026-11-01T09:30:00",
+              "capturedAtOffset": "+09:00",
+              "colorProfile": "sRGB",
+              "orientation": 1
+            }
+          }
+        }
+      },
+      "arrange": {
+        "membership": {
+          "role": "contributor",
+          "state": "active",
+          "revision": 3
+        },
+        "item": {
+          "kind": "memberEdit",
+          "state": "published",
+          "revision": 2,
+          "source": {
+            "kind": "devicePhoto",
+            "deviceSourceRef": "synthetic-device-source"
+          },
+          "renditionBinding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+            "recipeRevision": 2,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-newer-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 4,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
+          },
+          "addedBy": "synthetic-user-contributor",
+          "inRequestedAlbum": true
+        }
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "supersedes_pending_upload",
+          "previous_rendition_until_commit"
+        ]
+      }
+    },
+    {
+      "id": "replace-library-item-manually",
+      "operation": "albumItems.replace",
+      "actor": "owner",
+      "check": "replaceStart",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "itemId": "synthetic-item-owner-photo",
+        "expectedRevision": 1,
+        "content": {
+          "kind": "file",
+          "rendition": {
+            "sizeBytes": 8388608,
+            "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+            "contentType": "image/jpeg",
+            "width": 6000,
+            "height": 4000,
+            "metadata": {
+              "capturedAt": "2026-11-01T09:30:00",
+              "capturedAtOffset": "+09:00",
+              "colorProfile": "sRGB",
+              "orientation": 1
+            }
+          }
+        }
+      },
+      "arrange": {
+        "membership": {
+          "role": "owner",
+          "state": "active",
+          "revision": 1
+        },
+        "item": {
+          "kind": "ownerPhoto",
+          "state": "published",
+          "revision": 1,
+          "source": {
+            "kind": "libraryPhoto",
+            "libraryId": "synthetic-library-hosted",
+            "photoId": "synthetic-hosted-photo"
+          },
+          "renditionBinding": {
+            "sourceGeneration": 1,
+            "sourceSha256": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+            "recipeRevision": 1,
+            "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+            "engine": "niho-14",
+            "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+            "maskSurfaceIds": [
+              "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+            ]
+          },
+          "pendingUpload": null,
+          "addedBy": "synthetic-user-a",
+          "inRequestedAlbum": true
+        }
+      },
+      "expected": {
+        "status": 400,
+        "code": "invalid_request",
+        "invariants": [
+          "library_items_update_automatically"
         ]
       }
     },
@@ -2632,6 +3674,50 @@
       }
     },
     {
+      "id": "pairing-start-replay",
+      "operation": "connector.startPairing",
+      "actor": "none",
+      "check": "idempotency",
+      "request": {
+        "platform": "macos",
+        "displayName": "Synthetic Mac",
+        "pollSecretSha256": "8888888888888888888888888888888888888888888888888888888888888888"
+      },
+      "arrange": {
+        "stored": {
+          "actor": {
+            "kind": "pairingAttempt",
+            "pollSecretSha256": "8888888888888888888888888888888888888888888888888888888888888888"
+          },
+          "scope": {
+            "kind": "pairing"
+          },
+          "operation": "connector.startPairing",
+          "key": "synthetic-key-1",
+          "payloadSha256": "4444444444444444444444444444444444444444444444444444444444444444"
+        },
+        "incoming": {
+          "actor": {
+            "kind": "pairingAttempt",
+            "pollSecretSha256": "8888888888888888888888888888888888888888888888888888888888888888"
+          },
+          "scope": {
+            "kind": "pairing"
+          },
+          "operation": "connector.startPairing",
+          "key": "synthetic-key-1",
+          "payloadSha256": "4444444444444444444444444444444444444444444444444444444444444444"
+        }
+      },
+      "expected": {
+        "status": 200,
+        "invariants": [
+          "same_pairing_returned",
+          "no_bearer_in_response"
+        ]
+      }
+    },
+    {
       "id": "job-commit-replay",
       "operation": "renderJobs.commit",
       "actor": "connector",
@@ -2702,6 +3788,7 @@
           "lifecycle": "active"
         },
         "existing": null,
+        "lastRemovedAt": null,
         "now": "2026-11-14T00:00:00.000Z"
       },
       "expected": {
@@ -2738,6 +3825,7 @@
           "lifecycle": "active"
         },
         "existing": null,
+        "lastRemovedAt": null,
         "now": "2026-11-09T00:00:00.000Z"
       },
       "expected": {
@@ -2764,6 +3852,7 @@
           "lifecycle": "active"
         },
         "existing": null,
+        "lastRemovedAt": null,
         "now": "2026-11-09T00:00:00.000Z"
       },
       "expected": {
@@ -2800,6 +3889,7 @@
           "lifecycle": "active"
         },
         "existing": null,
+        "lastRemovedAt": null,
         "now": "2026-11-09T00:00:00.000Z"
       },
       "expected": {
@@ -2837,9 +3927,9 @@
         },
         "existing": {
           "role": "contributor",
-          "state": "removed",
-          "endedAt": "2026-11-07T00:10:00.000Z"
+          "state": "removed"
         },
+        "lastRemovedAt": "2026-11-07T00:10:00.000Z",
         "now": "2026-11-09T00:00:00.000Z"
       },
       "expected": {
@@ -2876,9 +3966,9 @@
         },
         "existing": {
           "role": "contributor",
-          "state": "removed",
-          "endedAt": "2026-11-07T00:10:00.000Z"
+          "state": "removed"
         },
+        "lastRemovedAt": "2026-11-07T00:10:00.000Z",
         "now": "2026-11-09T00:00:00.000Z"
       },
       "expected": {
@@ -2915,9 +4005,9 @@
         },
         "existing": {
           "role": "viewer",
-          "state": "left",
-          "endedAt": "2026-11-07T00:10:00.000Z"
+          "state": "left"
         },
+        "lastRemovedAt": null,
         "now": "2026-11-09T00:00:00.000Z"
       },
       "expected": {
@@ -2954,9 +4044,9 @@
         },
         "existing": {
           "role": "viewer",
-          "state": "active",
-          "endedAt": null
+          "state": "active"
         },
+        "lastRemovedAt": null,
         "now": "2026-11-09T00:00:00.000Z"
       },
       "expected": {
@@ -2964,6 +4054,46 @@
         "invariants": [
           "role_unchanged",
           "no_owner_notification"
+        ]
+      }
+    },
+    {
+      "id": "join-old-link-after-rejoin-and-leave",
+      "operation": "invites.join",
+      "actor": "removed-member",
+      "check": "join",
+      "request": {
+        "secret": "synthetic-invite-secret"
+      },
+      "arrange": {
+        "link": {
+          "id": "synthetic-invite",
+          "albumId": "synthetic-album-a",
+          "role": "contributor",
+          "createdBy": "synthetic-user-a",
+          "createdAt": "2026-11-07T00:00:00.000Z",
+          "expiresAt": "2026-11-14T00:00:00.000Z",
+          "revoked": false,
+          "revokedAt": null,
+          "joinCount": 1
+        },
+        "album": {
+          "ownerId": "synthetic-user-a",
+          "lifecycle": "active"
+        },
+        "existing": {
+          "role": "contributor",
+          "state": "left"
+        },
+        "lastRemovedAt": "2026-11-07T00:10:00.000Z",
+        "now": "2026-11-09T00:00:00.000Z"
+      },
+      "expected": {
+        "status": 410,
+        "code": "invite_unavailable",
+        "invariants": [
+          "removal_not_bypassed_by_old_link",
+          "fence_survives_leave"
         ]
       }
     },
@@ -2992,6 +4122,7 @@
           "lifecycle": "active"
         },
         "existing": null,
+        "lastRemovedAt": null,
         "now": "2026-11-09T00:00:00.000Z"
       },
       "expected": {
@@ -3026,6 +4157,7 @@
           "lifecycle": "deleting"
         },
         "existing": null,
+        "lastRemovedAt": null,
         "now": "2026-11-09T00:00:00.000Z"
       },
       "expected": {
@@ -3061,6 +4193,7 @@
           "lifecycle": "active"
         },
         "existing": null,
+        "lastRemovedAt": null,
         "now": "2026-11-09T00:00:00.000Z"
       },
       "expected": {
@@ -3190,23 +4323,27 @@
             "maskSurfaceIds": [
               "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
             ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
           }
         },
         "upload": {
+          "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
           "state": "reserved"
-        },
-        "binding": {
-          "sourceGeneration": 1,
-          "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
-          "recipeRevision": 3,
-          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
-          "engine": "niho-14",
-          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
-          "maskSurfaceIds": [
-            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-          ]
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -3262,23 +4399,27 @@
             "maskSurfaceIds": [
               "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
             ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
           }
         },
         "upload": {
+          "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
           "state": "reserved"
-        },
-        "binding": {
-          "sourceGeneration": 1,
-          "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
-          "recipeRevision": 3,
-          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
-          "engine": "niho-14",
-          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
-          "maskSurfaceIds": [
-            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-          ]
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -3332,23 +4473,27 @@
             "maskSurfaceIds": [
               "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
             ]
+          },
+          "pendingUpload": {
+            "uploadId": "synthetic-rendition-upload",
+            "binding": {
+              "sourceGeneration": 1,
+              "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
+              "recipeRevision": 3,
+              "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
+              "engine": "niho-14",
+              "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
+              "maskSurfaceIds": [
+                "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
+              ]
+            }
           }
         },
         "upload": {
+          "id": "synthetic-rendition-upload",
           "targetItemRevision": 3,
           "expiresAt": "2026-11-07T00:10:00.000Z",
           "state": "reserved"
-        },
-        "binding": {
-          "sourceGeneration": 1,
-          "sourceSha256": "7777777777777777777777777777777777777777777777777777777777777777",
-          "recipeRevision": 3,
-          "settingsSha256": "9b830e0cee503e719a24750927cad444d306a77524be110dc1a6b9367077beef",
-          "engine": "niho-14",
-          "rendererManifestSha256": "c3f175559b61ab5823c166abff9361aed9e2c00a1f090fbe665720f879fe321e",
-          "maskSurfaceIds": [
-            "dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd"
-          ]
         },
         "bytesMetadata": {
           "capturedAt": "2026-11-01T09:30:00",
@@ -3453,6 +4598,117 @@
         "code": "invalid_request",
         "invariants": [
           "access_from_ledger_only"
+        ]
+      }
+    },
+    {
+      "id": "path-in-add-source",
+      "operation": "albumItems.addPhoto",
+      "actor": "contributor",
+      "check": "closedRequest",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "source": {
+          "kind": "libraryPhoto",
+          "libraryId": "synthetic-library-hosted",
+          "photoId": "synthetic-hosted-photo",
+          "path": "synthetic-root"
+        }
+      },
+      "arrange": {},
+      "expected": {
+        "status": 400,
+        "code": "invalid_request",
+        "invariants": [
+          "no_locator_in_contract"
+        ]
+      }
+    },
+    {
+      "id": "unknown-source-kind",
+      "operation": "albumItems.addPhoto",
+      "actor": "contributor",
+      "check": "closedRequest",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "source": {
+          "kind": "originalFile",
+          "photoId": "synthetic-hosted-photo"
+        }
+      },
+      "arrange": {},
+      "expected": {
+        "status": 400,
+        "code": "invalid_request",
+        "invariants": [
+          "closed_union"
+        ]
+      }
+    },
+    {
+      "id": "location-in-rendition-request",
+      "operation": "albumItems.addFile",
+      "actor": "contributor",
+      "check": "closedRequest",
+      "request": {
+        "albumId": "synthetic-album-a",
+        "rendition": {
+          "sizeBytes": 8388608,
+          "sha256": "2222222222222222222222222222222222222222222222222222222222222222",
+          "contentType": "image/jpeg",
+          "width": 6000,
+          "height": 4000,
+          "metadata": {
+            "capturedAt": "2026-11-01T09:30:00",
+            "capturedAtOffset": "+09:00",
+            "colorProfile": "sRGB",
+            "orientation": 1,
+            "gps": {
+              "latitude": 35.3,
+              "longitude": 139.5
+            }
+          }
+        }
+      },
+      "arrange": {},
+      "expected": {
+        "status": 400,
+        "code": "invalid_request",
+        "invariants": [
+          "no_location_published"
+        ]
+      }
+    },
+    {
+      "id": "path-in-index-entry",
+      "operation": "connector.putIndex",
+      "actor": "connector",
+      "check": "closedRequest",
+      "request": {
+        "entries": [
+          {
+            "localKey": "synthetic-local-key",
+            "fileName": "synthetic.rw2",
+            "source": {
+              "generation": 1,
+              "sha256": null,
+              "sizeBytes": 1,
+              "format": "raw",
+              "width": null,
+              "height": null
+            },
+            "capturedAt": null,
+            "availability": "available",
+            "path": "synthetic-root"
+          }
+        ]
+      },
+      "arrange": {},
+      "expected": {
+        "status": 400,
+        "code": "invalid_request",
+        "invariants": [
+          "no_path_leaves_the_mac"
         ]
       }
     },

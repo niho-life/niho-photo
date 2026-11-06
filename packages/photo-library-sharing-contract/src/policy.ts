@@ -6,11 +6,13 @@ import {
   ALBUM_ITEM_TRANSITIONS,
   ALBUM_PERMISSIONS,
   FORBIDDEN_RENDITION_METADATA,
+  CONNECTOR_REQUEST_SHAPES,
   RENDER_JOB_TRANSITIONS,
   SHARING_LIMITS,
-  SHARING_REQUEST_KEYS,
+  SHARING_REQUEST_SHAPES,
 } from "./v1.ts";
 import type {
+  AddPhotoSource,
   AlbumAction,
   AlbumItem,
   AlbumItemEvent,
@@ -18,6 +20,7 @@ import type {
   AlbumItemState,
   AlbumPermissionSet,
   AlbumRole,
+  ConnectorOperation,
   ConnectorPairingTarget,
   CursorBinding,
   ForbiddenMetadataCategory,
@@ -28,12 +31,16 @@ import type {
   InviteLinkStatus,
   Membership,
   RenderBinding,
+  RenderExecutor,
   RenderJob,
   RenderJobEvent,
   RenderJobState,
   RenderOutputRequest,
   RenditionMetadata,
   RenditionUpload,
+  ReplaceContent,
+  RequestFields,
+  RequestShape,
   SharingErrorCode,
   SharingErrorEnvelope,
   SharingOperation,
@@ -52,10 +59,61 @@ const time = (value: Instant): number => {
 // ---------------------------------------------------------------------------------------------------------
 // Requests and libraries
 
-/** Keys outside the closed request shape (owner, role, revision or locator claims included). */
-export function findUnexpectedRequestFields(operation: SharingOperation, request: Readonly<Record<string, unknown>>): readonly string[] {
-  const allowed: readonly string[] = SHARING_REQUEST_KEYS[operation];
-  return Object.keys(request).filter((key) => !allowed.includes(key));
+const MAX_REQUEST_DEPTH = 32;
+const isPlainObject = (value: unknown): value is Readonly<Record<string, unknown>> =>
+  value !== null && typeof value === "object" && !Array.isArray(value);
+
+/**
+ * Paths outside a closed request shape at any depth: owner, role, revision or locator claims, unknown union kinds
+ * and structured values where a scalar is expected. Only "open" recipe JSON is skipped. Missing keys are a type error.
+ */
+export function findUnexpectedFields(fields: RequestFields, request: unknown): readonly string[] {
+  const found: string[] = [];
+  const join = (prefix: string, key: string): string => (prefix ? `${prefix}.${key}` : key);
+  const walkFields = (shape: RequestFields, value: unknown, path: string, depth: number): void => {
+    if (!isPlainObject(value)) {
+      found.push(path || "(root)");
+      return;
+    }
+    for (const [key, child] of Object.entries(value)) {
+      const next = join(path, key);
+      if (!Object.hasOwn(shape, key)) found.push(next);
+      else walk(shape[key] as RequestShape, child, next, depth + 1);
+    }
+  };
+  const walk = (shape: RequestShape, value: unknown, path: string, depth: number): void => {
+    if (depth > MAX_REQUEST_DEPTH) {
+      found.push(path);
+      return;
+    }
+    if (value === null || value === undefined || shape === "open") return;
+    if (shape === "value") {
+      if (typeof value === "object") found.push(path);
+      return;
+    }
+    if ("items" in shape) {
+      if (!Array.isArray(value)) found.push(path);
+      else value.forEach((item, index) => walk(shape.items, item, `${path}[${index}]`, depth + 1));
+      return;
+    }
+    if ("fields" in shape) {
+      walkFields(shape.fields, value, path, depth);
+      return;
+    }
+    const kind = isPlainObject(value) ? value.kind : undefined;
+    const variant = typeof kind === "string" && Object.hasOwn(shape.variants, kind) ? shape.variants[kind] : undefined;
+    if (!variant) found.push(join(path, "kind"));
+    else walkFields({ ...variant, kind: "value" }, value, path, depth);
+  };
+  walkFields(fields, request, "", 0);
+  return found;
+}
+
+export function findUnexpectedRequestFields(operation: SharingOperation, request: unknown): readonly string[] {
+  return findUnexpectedFields(SHARING_REQUEST_SHAPES[operation], request);
+}
+export function findUnexpectedConnectorFields(operation: ConnectorOperation, request: unknown): readonly string[] {
+  return findUnexpectedFields(CONNECTOR_REQUEST_SHAPES[operation], request);
 }
 
 /** Library-scoped operations are owner-only. Album membership never grants access to the owner's library. */
@@ -173,6 +231,49 @@ export function decideMembershipChange(
 }
 
 /**
+ * Adding a photo needs the album role and, for a libraryPhoto source, ownership of that library. Album roles never
+ * reach another person's library; a foreign or missing source library is indistinguishable (404).
+ */
+export function decideAddPhoto(
+  viewer: AlbumViewer,
+  source: Pick<AddPhotoSource, "kind">,
+  sourceLibrary: { readonly ownerId: UserId; readonly lifecycle: "active" | "deleting" } | null,
+): Decision {
+  const album = decideAlbumAction(viewer, "addItem");
+  if (!album.ok || source.kind !== "libraryPhoto") return album;
+  return decideLibraryAccess(viewer.userId, sourceLibrary);
+}
+
+/**
+ * Starting a replacement. Only the adder replaces; file items take a file, device items a newer device render;
+ * library items update automatically. A device render must be newer than both the published and the pending intent.
+ */
+export function decideReplaceStart(
+  viewer: AlbumViewer,
+  item:
+    | (Pick<AlbumItemSnapshot, "kind" | "state" | "revision" | "source" | "renditionBinding" | "pendingUpload"> & {
+        readonly addedBy: UserId;
+        readonly inRequestedAlbum: boolean;
+      })
+    | null,
+  request: { readonly expectedRevision: number; readonly content: Pick<ReplaceContent, "kind"> & { readonly binding?: RenderBinding } },
+): Decision {
+  if (!viewer.membership || viewer.membership.state !== "active" || !item) return deny("not_found");
+  const access = decideAlbumAction(viewer, "replaceOwnItem", item);
+  if (!access.ok) return access;
+  if (request.expectedRevision !== item.revision) return deny("revision_conflict");
+  const content = request.content;
+  if (content.kind === "file" ? item.kind !== "fileUpload" : item.source?.kind !== "devicePhoto") return deny("invalid_request");
+  if (content.kind === "deviceRender") {
+    if (!content.binding) return deny("invalid_request");
+    for (const previous of [item.renditionBinding, item.pendingUpload?.binding ?? null]) {
+      if (previous && compareRenderBinding(content.binding, previous) !== "newer") return deny("stale_render");
+    }
+  }
+  return allow;
+}
+
+/**
  * Per-viewer projection of a server item. Returns null when the viewer must not see it.
  * - source: adder only. - pendingReason: owner and adder only; others see the previous rendition as published.
  */
@@ -220,8 +321,13 @@ export interface JoinContext {
   /** null when the secret matches no link. */
   readonly link: InviteLink | null;
   readonly album: { readonly ownerId: UserId; readonly lifecycle: "active" | "deleting" } | null;
-  /** The actor's previous membership in the link's album, if any. */
-  readonly existing: Pick<Membership, "role" | "state" | "endedAt"> | null;
+  /** The actor's current membership in the link's album, if any. */
+  readonly existing: Pick<Membership, "role" | "state"> | null;
+  /**
+   * Ledger value kept per album and user: the latest time the owner removed this user. It survives later joins and
+   * leaves, so leaving after a rejoin never reopens links created before the removal.
+   */
+  readonly lastRemovedAt: Instant | null;
   readonly now: Instant;
 }
 export type JoinDecision =
@@ -239,9 +345,7 @@ export function decideJoin(context: JoinContext): JoinDecision {
   if (inviteLinkStatus(link, context.now) !== "usable") return { ok: false, code: "invite_unavailable" };
   if (album.ownerId === context.actorId) return { ok: true, joined: false, role: "owner" };
   if (existing?.state === "active") return { ok: true, joined: false, role: existing.role };
-  if (existing?.state === "removed" && (!existing.endedAt || time(existing.endedAt) >= time(link.createdAt))) {
-    return { ok: false, code: "invite_unavailable" };
-  }
+  if (context.lastRemovedAt && time(link.createdAt) <= time(context.lastRemovedAt)) return { ok: false, code: "invite_unavailable" };
   return { ok: true, joined: true, role: link.role };
 }
 
@@ -293,11 +397,21 @@ export function nextRenderJobState(state: RenderJobState, event: RenderJobEvent)
 }
 
 export interface RenderCommitContext {
-  readonly job: Pick<RenderJob, "binding" | "state" | "leaseExpiresAt" | "purpose">;
+  readonly job: Pick<RenderJob, "id" | "executor" | "binding" | "state" | "leaseExpiresAt" | "purpose">;
+  /** The authenticated caller: a hosted Mac connector or the user's signed-in device. */
+  readonly actor: RenderExecutor;
   /** Credential generation captured when the job was claimed. */
   readonly claimedGeneration: number;
   readonly executor: { readonly lifecycle: "active" | "revoked"; readonly credentialGeneration: number };
-  readonly output: Pick<RenderOutputRequest, "kind">;
+  /** The output upload named by the commit; null when it does not exist. */
+  readonly upload: {
+    readonly jobId: RenderJob["id"];
+    readonly kind: RenderOutputRequest["kind"];
+    /** uploaded: all bytes received and hash/size verified by the server. */
+    readonly state: "reserved" | "uploaded" | "expired" | "rejected";
+  } | null;
+  /** Metadata the server validator decoded from the uploaded bytes. */
+  readonly bytesMetadata: Readonly<Record<string, unknown>>;
   /** The binding the target needs now; null when the target photo is gone. */
   readonly desired: RenderBinding | null;
   /** For album items: the item's current state (null when missing) and the adder's ledger entry. */
@@ -305,14 +419,23 @@ export interface RenderCommitContext {
   readonly now: Instant;
 }
 
-/** Commit only the exact current binding, by a live executor and lease, for a target that still accepts it. */
+/**
+ * Commit only by the job's own executor with a live credential and lease, using this job's verified upload with
+ * clean metadata, for the exact current binding of a target that still accepts it.
+ */
 export function decideRenderCommit(context: RenderCommitContext): Decision {
-  const { job, executor } = context;
+  const { job, executor, upload } = context;
+  if (canonical(context.actor) !== canonical(job.executor)) return deny("not_found");
   if (executor.lifecycle !== "active" || executor.credentialGeneration !== context.claimedGeneration) return deny("unauthenticated");
   if (job.state !== "claimed") return deny("stale_render");
   if (!job.leaseExpiresAt || time(context.now) >= time(job.leaseExpiresAt)) return deny("lease_expired");
+  if (!upload || upload.jobId !== job.id) return deny("not_found");
+  if (upload.state === "expired") return deny("upload_expired");
+  if (upload.state === "rejected") return deny("content_rejected");
+  if (upload.state !== "uploaded") return deny("invalid_request");
   const expectedOutput = job.purpose.kind === "preview" ? "preview" : "rendition";
-  if (context.output.kind !== expectedOutput) return deny("content_rejected");
+  if (upload.kind !== expectedOutput) return deny("content_rejected");
+  if (findForbiddenMetadata(context.bytesMetadata).length) return deny("content_rejected");
   if (job.purpose.kind === "albumItem") {
     const item = context.item;
     if (!item || item.state === null) return deny("not_found");
@@ -329,18 +452,17 @@ export function decideRenderCommit(context: RenderCommitContext): Decision {
 export interface UploadCommitContext {
   readonly viewer: AlbumViewer;
   /** null when the item no longer exists or belongs to another album. */
-  readonly item: Pick<AlbumItemSnapshot, "addedBy" | "state" | "revision" | "renditionBinding"> | null;
-  readonly upload: Pick<RenditionUpload, "targetItemRevision" | "expiresAt" | "state">;
-  /** Present for device renders: the binding the device rendered. */
-  readonly binding?: RenderBinding;
+  readonly item: Pick<AlbumItemSnapshot, "addedBy" | "state" | "revision" | "renditionBinding" | "pendingUpload"> | null;
+  readonly upload: Pick<RenditionUpload, "id" | "targetItemRevision" | "expiresAt" | "state">;
   /** Metadata actually found in the uploaded bytes by the server validator. */
   readonly bytesMetadata: Readonly<Record<string, unknown>>;
   readonly now: Instant;
 }
 
 /**
- * Re-checks everything at commit time (Epic §10): current membership and role, the item, the target revision,
- * the generation order and the published metadata. Removal, leaving or demotion before commit wins.
+ * Re-checks everything at commit time (Epic §10): current membership and role, the item, that this upload is the
+ * latest intent, the target revision, the generation order and the published metadata. Removal, leaving or
+ * demotion before commit wins, and a superseded upload never commits.
  */
 export function decideUploadCommit(context: UploadCommitContext): Decision {
   const membership = context.viewer.membership;
@@ -352,11 +474,11 @@ export function decideUploadCommit(context: UploadCommitContext): Decision {
   if (!ALBUM_PERMISSIONS[membership.role][action]) return deny("role_forbidden");
   if (context.upload.state !== "reserved" && context.upload.state !== "verifying") return deny("upload_expired");
   if (time(context.now) >= time(context.upload.expiresAt)) return deny("upload_expired");
+  if (!item.pendingUpload || item.pendingUpload.uploadId !== context.upload.id) return deny("stale_render");
   // Every committed rendition creates the next item revision; a preparing item starts at revision 0.
   if (context.upload.targetItemRevision !== item.revision + 1) return deny("revision_conflict");
-  if (context.binding && item.renditionBinding && compareRenderBinding(context.binding, item.renditionBinding) !== "newer") {
-    return deny("stale_render");
-  }
+  const binding = item.pendingUpload.binding;
+  if (binding && item.renditionBinding && compareRenderBinding(binding, item.renditionBinding) !== "newer") return deny("stale_render");
   return findForbiddenMetadata(context.bytesMetadata).length ? deny("content_rejected") : allow;
 }
 
@@ -380,13 +502,20 @@ export function sanitizeRenditionMetadata(input: Readonly<Record<string, unknown
 
 const normalizeKey = (key: string): string => key.toLowerCase().replace(/[^a-z0-9]/g, "");
 
-/** Finds forbidden keys at any depth. Used on decoded metadata of uploaded bytes before publication. */
+/**
+ * Finds forbidden keys at any depth in decoded metadata of uploaded bytes. Nesting beyond the limit cannot be
+ * verified and is reported as "unverifiable", which rejects the upload like any other hit.
+ */
 export function findForbiddenMetadata(
   record: Readonly<Record<string, unknown>>,
-): readonly { readonly key: string; readonly category: ForbiddenMetadataCategory }[] {
-  const found: { key: string; category: ForbiddenMetadataCategory }[] = [];
+): readonly { readonly key: string; readonly category: ForbiddenMetadataCategory | "unverifiable" }[] {
+  const found: { key: string; category: ForbiddenMetadataCategory | "unverifiable" }[] = [];
   const visit = (value: unknown, prefix: string, depth: number): void => {
-    if (depth > 32 || value === null || typeof value !== "object") return;
+    if (value === null || typeof value !== "object") return;
+    if (depth > MAX_REQUEST_DEPTH) {
+      found.push({ key: prefix, category: "unverifiable" });
+      return;
+    }
     for (const [key, child] of Object.entries(value)) {
       const normalized = normalizeKey(key);
       const path = prefix ? `${prefix}.${key}` : key;
