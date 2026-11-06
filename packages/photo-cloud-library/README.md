@@ -39,3 +39,13 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 C03は `@niho/photo-cloud-sync` と組み合わせ、`recipes.put` / `recipe-conflicts.list` / `recipe-conflicts.get` / `recipe-conflicts.resolve` を同じ固定HTTP/BFFへ接続する。補正文書1MiB/depth32とPUT envelope2MiBを分離し、両版と選択結果を含む競合応答は4MiBまで検証する。`./protocol` はscope/有限待機/純粋なrecipe投影・比較の狭い共有口で、認証やhashの別正本ではない。
 
 この接続だけでPhotoLibraryの編集capabilityは開かない。共有autosaverのdebounce前stage、実mask/base/versions、各hostへの注入と正式環境での受入を続ける。
+
+## 端末で仕上がり写真を作る（`./render-executor`、#248）
+
+`@niho/photo-cloud-library/render-executor` は、原本を持つ端末（Macアプリ・Web。のちに常設Mac）で共有アルバムの仕上がり写真とpreviewを作り、`@niho/photo-library-sharing-contract` の `renderJobs.claim` → `startOutput` → upload → `commit` / `fail` で送る。
+
+- 画素は既存engine（#197）の書出しだけで作り、engineの版は変えない。JPEGの品質はengineのWeb書出しと同じ90。
+- 仕上がり写真は全画素に限る。recipeの回転・切抜きから決まる大きさとengineの出力が一致しなければ `full_resolution_unavailable` で止め、小さい画像を仕上がりとして送らない。このengine経路は長辺4096pxまでのJPEG/PNGの原本を扱う。
+- metadataは端末で作り直す。既定のJFIFと画像のsegmentだけを残し、ほかのAPPn・COM・EOI後のbyteを落としてから、撮影日時（UTC offset付き）と向きだけをengineの `withCaptureExif` で書く。色はタグなしsRGBだけ。
+- jobは `RenderBinding` に拘束し、古いrecipeの結果は送らない（サーバも `decideRenderCommit` で拒否する）。端末ごとの同時実行数を守り、`drain` は端末内で1本だけ走る。表示中の写真を先に作り、recipeの更新・項目やアルバムの削除で古いjobを止め、容量不足は失敗にせず空きができたら再開する。
+- `createRenderJobMockServer` は契約のpolicyを使う合成のjob queueで、試験とUI確認に使う。実HTTP routeとhostへの接続は後続。
