@@ -71,12 +71,16 @@ export interface CreateHostedReplicaSyncOptions {
 const ENTITIES: readonly ReplicaEntity[] = ["photo", "recipe", "mask", "albumDefinition", "exclusion"];
 const revisionOk = (value: unknown): value is number => Number.isSafeInteger(value) && (value as number) >= 0;
 
-function validatePage(page: ReplicaPage, since: number): void {
-  if (!page || page.sinceRevision !== since || !revisionOk(page.nextRevision) || page.nextRevision < since) {
+/** `after`: the revision the previous page ended at (equal to since for a diff, 0 for a fresh snapshot). */
+function validatePage(page: ReplicaPage, since: number, after: number): void {
+  if (!page || page.sinceRevision !== since || !revisionOk(page.nextRevision) || page.nextRevision < after) {
     throw new HostedLibraryError("invalid_response");
   }
   if (!Array.isArray(page.changes) || typeof page.complete !== "boolean") throw new HostedLibraryError("invalid_response");
-  let previous = since;
+  // A diff never carries a cursor; an unfinished snapshot always does.
+  if (since !== 0 && page.cursor !== null) throw new HostedLibraryError("invalid_response");
+  if (since === 0 && !page.complete && (typeof page.cursor !== "string" || !page.cursor)) throw new HostedLibraryError("invalid_response");
+  let previous = after;
   for (const change of page.changes) {
     if (!revisionOk(change.revision) || change.revision <= previous || change.revision > page.nextRevision) {
       throw new HostedLibraryError("invalid_response");
@@ -94,7 +98,7 @@ function validatePage(page: ReplicaPage, since: number): void {
     }
     previous = change.revision;
   }
-  if (!page.complete && page.nextRevision === since && page.changes.length === 0) throw new HostedLibraryError("invalid_response");
+  if (!page.complete && page.nextRevision === after && page.changes.length === 0) throw new HostedLibraryError("invalid_response");
 }
 
 export function createHostedReplicaSync(options: CreateHostedReplicaSyncOptions): HostedReplicaSync {
@@ -124,29 +128,47 @@ export function createHostedReplicaSync(options: CreateHostedReplicaSyncOptions)
   const pull = async (since: number, signal: AbortSignal): Promise<ReplicaPage> => {
     assertNotAborted(signal);
     const page = await options.client.request("connector.pullReplica", { sinceRevision: since, limit: pageLimit }, { signal });
-    validatePage(page, since);
+    validatePage(page, since, since);
     return page;
   };
 
-  const rebuild = async (signal: AbortSignal): Promise<{ revision: number; applied: number }> => {
+  /** One snapshot pass into a staged replacement; the old replica stays readable until commit. */
+  const snapshotOnce = async (signal: AbortSignal): Promise<{ revision: number; applied: number }> => {
     const replacement = await options.store.beginReplace();
     try {
-      let since = 0;
+      let cursor: string | null = null;
+      let after = 0;
       let applied = 0;
       for (let pages = 0; ; pages++) {
         if (pages >= maxPages) throw new HostedLibraryError("incomplete_replica");
-        const page = await pull(since, signal);
+        assertNotAborted(signal);
+        const request: { sinceRevision: number; limit: number; cursor?: string } = { sinceRevision: 0, limit: pageLimit };
+        if (cursor) request.cursor = cursor;
+        const page = await options.client.request("connector.pullReplica", request, { signal });
+        validatePage(page, 0, after);
         await replacement.append(page.changes, await fetchMasks(page.changes, signal));
         applied += page.changes.length;
-        since = page.nextRevision;
+        after = page.nextRevision;
         if (page.complete) break;
+        cursor = page.cursor;
       }
       assertNotAborted(signal);
-      await replacement.commit(since);
-      return { revision: since, applied };
+      await replacement.commit(after);
+      return { revision: after, applied };
     } catch (error) {
       await replacement.abort().catch(() => undefined);
       throw error;
+    }
+  };
+
+  /** Compaction during a snapshot invalidates its cursor; the snapshot restarts from the beginning. */
+  const rebuild = async (signal: AbortSignal): Promise<{ revision: number; applied: number }> => {
+    for (let attempt = 1; ; attempt++) {
+      try {
+        return await snapshotOnce(signal);
+      } catch (error) {
+        if (sharingErrorCode(error) !== "replica_reset_required" || attempt >= 3) throw error;
+      }
     }
   };
 

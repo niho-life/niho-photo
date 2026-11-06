@@ -136,3 +136,35 @@ test("deletions and late NIHO changes during a sync converge to NIHO", async () 
   assert.equal(await store.get("albumDefinition", "synthetic-album"), null);
   assert.notEqual(await store.get("exclusion", ids.k2), null);
 });
+
+test("compaction during a snapshot restarts it from the beginning", async () => {
+  const { canonical, ids, store } = await seeded({ k1: "one", k2: "two", k3: "three", k4: "four" });
+  canonical.defineAlbum("synthetic-album", "Synthetic", [{ itemId: "synthetic-item-1", photoId: ids.k1 }]);
+  canonical.compact(canonical.revision);
+  store.tamperRevision(canonical.revision + 1);
+  const sync = createHostedReplicaSync({ client: canonical.client(), store, pageLimit: 2 });
+  let pulls = 0;
+  canonical.afterPull = () => {
+    // After the first snapshot page, an album is deleted and NIHO compacts its tombstones.
+    if (++pulls === 1) {
+      canonical.deleteAlbum("synthetic-album");
+      canonical.compact(canonical.revision);
+    }
+  };
+  const result = await sync.sync({ canonicalRevision: canonical.revision, signal });
+  assert.equal(result.mode, "snapshot");
+  assert(pulls > 2, "the snapshot restarted after its cursor was invalidated");
+  assertMirrors(canonical, store);
+  assert.equal(await store.get("albumDefinition", "synthetic-album"), null);
+});
+
+test("a deletion during a snapshot reaches the staged replica through its cursor", async () => {
+  const { canonical, ids, store } = await seeded({ k1: "one", k2: "two", k3: "three" });
+  canonical.defineAlbum("synthetic-album", "Synthetic", [{ itemId: "synthetic-item-1", photoId: ids.k1 }]);
+  store.tamperRevision(canonical.revision + 1);
+  const sync = createHostedReplicaSync({ client: canonical.client(), store, pageLimit: 2 });
+  let pulls = 0;
+  canonical.afterPull = () => { if (++pulls === 1) canonical.deleteAlbum("synthetic-album"); };
+  await sync.sync({ canonicalRevision: canonical.revision, signal });
+  assertMirrors(canonical, store);
+});

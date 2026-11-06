@@ -44,6 +44,10 @@ const NEUTRAL = { v: 1, engine: "niho-14", exposure: 0, contrast: 0, saturation:
 export class SyntheticHostedCanonical {
   revision = 0;
   tombstoneFloor = 0;
+  /** Bumped by every compaction; snapshot cursors from an older epoch are no longer valid. */
+  compactions = 0;
+  /** Test hook: runs after each replica page is served. */
+  afterPull: (() => void) | null = null;
   acknowledgedRevision = 0;
   connectorState: "online" | "sleeping" = "online";
   /** Fault injection for the next mutation: lose it before commit, or commit and lose the response. */
@@ -191,25 +195,42 @@ export class SyntheticHostedCanonical {
   compact(floor: number): void {
     for (const [key, change] of this.latest) if (change.op === "delete" && change.revision < floor) this.latest.delete(key);
     this.tombstoneFloor = floor;
+    this.compactions++;
   }
 
-  pull(sinceRevision: number, limit: number): ReplicaPage {
+  pull(sinceRevision: number, limit: number, cursor?: string): ReplicaPage {
     const decision = decideReplicaPull({ sinceRevision, retainedFromRevision: this.tombstoneFloor, canonicalRevision: this.revision });
     if (!decision.ok) throw contractError(decision.code);
-    const after = [...this.latest.values()]
-      .filter((change) => change.revision > sinceRevision && !(sinceRevision === 0 && change.op === "delete"))
+    let after = sinceRevision;
+    if (sinceRevision === 0 && cursor !== undefined) {
+      const [epoch, last] = cursor.split(":").map(Number);
+      if (epoch !== this.compactions || !Number.isSafeInteger(last)) throw contractError("replica_reset_required");
+      after = last as number;
+    } else if (sinceRevision !== 0 && cursor !== undefined) {
+      throw contractError("invalid_request");
+    }
+    // A fresh snapshot has nothing to delete; continuation pages carry tombstones for deletions during the snapshot.
+    const pending = [...this.latest.values()]
+      .filter((change) => change.revision > after && !(sinceRevision === 0 && cursor === undefined && change.op === "delete"))
       .sort((a, b) => a.revision - b.revision);
-    const changes = after.slice(0, limit);
-    const complete = changes.length === after.length;
-    const last = changes.at(-1);
-    return { sinceRevision, changes, nextRevision: complete ? this.revision : last?.revision ?? sinceRevision, complete };
+    const changes = pending.slice(0, limit);
+    const complete = changes.length === pending.length;
+    const last = changes.at(-1)?.revision ?? after;
+    const page: ReplicaPage = {
+      sinceRevision, changes, nextRevision: complete ? this.revision : last, complete,
+      cursor: sinceRevision === 0 && !complete ? `${this.compactions}:${last}` : null,
+    };
+    this.afterPull?.();
+    return page;
   }
 
   /** Connector transport over this store: only the outbound connector operations exist. */
   client(): Pick<HostConnectorClient, "request"> {
     const request = async (operation: string, body: Record<string, unknown>, options: { idempotencyKey?: string }): Promise<unknown> => {
       this.calls.push(operation);
-      if (operation === "connector.pullReplica") return this.pull(body.sinceRevision as number, (body.limit as number | undefined) ?? 500);
+      if (operation === "connector.pullReplica") {
+        return this.pull(body.sinceRevision as number, (body.limit as number | undefined) ?? 500, body.cursor as string | undefined);
+      }
       if (operation === "connector.getReplicaContent") {
         const data = this.maskData.get(body.id as string);
         const change = this.upsert("mask", body.id as string);
