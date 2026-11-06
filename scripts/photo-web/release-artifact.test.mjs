@@ -163,7 +163,7 @@ function inputFixture() {
   const staticBuild = {
     schemaVersion: 1,
     buildId: "build-123",
-    sdk: { sdkVersion: sdkManifest.version, sourceCommit: sdkManifest.source.commit, manifestSha256: sha256(sdkManifestBytes) },
+    sdk: { sdkVersion: sdkManifest.version, sourceCommit: sdkManifest.source.commit, manifestSha256: sdkManifest.engine.manifest.sha256 },
   };
   writeFileSync(path.join(inputDirectory, "static/photo-build.json"), `${JSON.stringify(staticBuild, null, 2)}\n`);
   writeFileSync(path.join(inputDirectory, "static/index.html"), "<!doctype html><html></html>\n");
@@ -250,6 +250,24 @@ test("Photo Web release archive is deterministic USTAR and binds every payload b
   });
   assert.equal(repeated.manifestSha256, result.manifestSha256);
   assert.deepEqual(readFileSync(path.join(repeatedOutput, repeated.archiveFile)), archiveBytes);
+});
+
+test("Photo Web release builder binds static metadata to the SDK runtime manifest, not the release manifest", () => {
+  const fixture = inputFixture();
+  const metadataFile = path.join(fixture.inputDirectory, "static/photo-build.json");
+  const metadata = JSON.parse(readFileSync(metadataFile, "utf8"));
+  metadata.sdk.manifestSha256 = sha256(fixture.sdkManifestBytes);
+  writeFileSync(metadataFile, `${JSON.stringify(metadata, null, 2)}\n`);
+  assert.throws(() => createPhotoWebRelease({
+    inputDirectory: fixture.inputDirectory,
+    outputDirectory: path.join(temp("niho-photo-web-mismatched-runtime-proof-"), "release"),
+    sourceSha: "c".repeat(40),
+    sourceTree: "d".repeat(40),
+    toolingCommit: "e".repeat(40),
+    runId: "123",
+    runAttempt: "1",
+    artifact: { id: "456", name: `niho-photo-web-${"c".repeat(40)}-run-123-attempt-1`, digest: `sha256:${"f".repeat(64)}` },
+  }), /static build metadata is not bound to the SDK release/u);
 });
 
 test("Photo Web release builder rejects symlink payloads and artifact identity mismatch", () => {
