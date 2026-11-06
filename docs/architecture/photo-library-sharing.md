@@ -110,7 +110,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 共有アルバム・項目・招待・メンバー・完成写真の upload と、常設 Mac ライブラリの利用者向けの操作は、本人クラウドの [`/cloud/v2`](personal-photo-transfers.md) と同じ Photo origin・同じ形の経路にする。定数と encode/match/decode は [`src/routes.ts`](../../packages/photo-library-sharing-contract/src/routes.ts)（`SHARING_ROUTES`）が正本で、下の表はそこから作る。BFF は既存の Photo auth で本人・親 session・epoch を検証し、同じ suffix を trusted upstream prefix へ写す。
 
 - path は `/cloud/sharing/v1` に続く。path 内の ID は単一の opaque segment（1〜512 bytes、前後の空白・`.`/`..`・`/`・`\`・制御文字を不可、正規の encode だけ受ける）。
-- query は表の項目を各1回だけ。数値は `limit`・`expectedRevision`。未知・重複の query、GET/DELETE の body、表にない body の項目、入れ子の想定外の項目は `invalid_request`。
+- query は表の項目を各1回だけ。数値は `limit`・`expectedRevision`。未知・重複の query、GET/DELETE の body、表にない body の項目、入れ子の想定外の項目は `invalid_request`。経路の decode は配置と想定外の項目だけを検査する。必須の項目・型・値の範囲は、BFF とサーバーが operation ごとの検査で確かめる。
 - capture header は `X-NIHO-Photo-Actor-Id` / `X-NIHO-Photo-Session-Id` / `X-NIHO-Photo-Session-Epoch`、key は `Idempotency-Key`（mutation は必須、読み取りは不可）。content は `Range` の単一区間と、`/cloud/v2` と同じ hash・全体 size・206 の検証を使う。
 - 招待の secret は body だけに載せ、URL・log・storage に出さない。
 - 常設 Mac（接続用ソフト）と NIHO の間は端末資格を使う別の通信で、下の「接続用ソフトの経路」に分ける。
