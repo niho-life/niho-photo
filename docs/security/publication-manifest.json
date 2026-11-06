@@ -12436,7 +12436,7 @@
     },
     {
       "path": "docs/legal/asset-inventory.csv",
-      "sha256": "ddda8d60fa074ae850289aa92547e3491f084d77542f8facf873a90defdf5674",
+      "sha256": "50cce4a706e34a56ec33eb510e6e5c3f65cbed3bc4091771cfb1efb5aa78982f",
       "origin": "Photo #193 / C00 の契約確定に伴い監査。既存backendの即時purgeとPhoto製品未接続の区別、抽出した合成fixtureの権利・出典または対象型検査を記録。内部URL・実写真・資格情報を含まない。\n変更理由: レビュー反映後の合成型負例のexact hashとサイズを更新\n変更理由: 競合ID取得の合成fixtureの現行公開sourceとexact hashを追加監査し元の抽出記録を保持\n変更理由: B00 #241 の共有アルバム契約の合成fixture（TS）2件を公開可能として登録。"
     },
     {
@@ -13551,12 +13551,12 @@
     },
     {
       "path": "packages/photo-library-sharing-contract/src/v1.ts",
-      "sha256": "dc49476af8ebc9fdf3a2c0f012651a73551b06a0f172fab0fa70b74a0bdec83a",
+      "sha256": "49a725a8d9e31dc097434d704fb62585ff7c767f2a7c71f4a8bbecbbbcc97e06",
       "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/photo-library-sharing-contract/src/policy.ts",
-      "sha256": "eb4e1e39933a4571b854046d9e083f62ebe4143c77472c28f0557e7cc6714c66",
+      "sha256": "3e166fcbeea04d6845817d06d1dfc52a5786fdf31190c6f979fa3633bb3980e6",
       "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13566,7 +13566,7 @@
     },
     {
       "path": "packages/photo-library-sharing-contract/fixtures/v1.ts",
-      "sha256": "3de1d798c9e9de4ed4899b13f6158db4418255182f33c5d37041b8de7e3ba91a",
+      "sha256": "4c50346ed07a4558c7facad231d1668473756b8b0195285e7fcfe30c37662ce1",
       "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13586,7 +13586,7 @@
     },
     {
       "path": "docs/architecture/photo-library-sharing.md",
-      "sha256": "a6c98bd93427bb71636056d8686db794b06b1d377320f8d3478105380651cd05",
+      "sha256": "cebf1be463b8ab9b30e64ef4c40946fd81c14506a18ab8e6ae7aa9cb8a353be4",
       "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     }
   ],
