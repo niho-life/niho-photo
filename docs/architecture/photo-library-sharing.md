@@ -32,7 +32,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | HostConnector | `connectorId`、owner、library、`credentialGeneration`、状態、renderer 能力、`transport: "outboundOnly"` | owner |
 | HostedPhoto | `photoId`、`source.generation`/`sha256`（遅延hash）、recipe revision、recipe を保存した source 世代、preview | owner |
 | RenderBinding | source 世代・hash、recipe revision・settings hash、engine、renderer manifest、mask surface hash | 追加者と server |
-| Album | `albumId`、owner（表示名と本人かどうか）、名前（1〜100 code point）、`revision`、閲覧者ごとの `access`（役割・membership revision・表示用権限・準備中の進捗） | 在籍者 |
+| Album | `albumId`、owner（表示名と本人かどうか）、名前（1〜100 code point）、`revision`、公開済みの枚数 `itemCount`、owner を含む在籍中のメンバー数 `memberCount`、閲覧者ごとの `access`（役割・membership revision・表示用権限・準備中の進捗） | 在籍者 |
 | AlbumItem | `itemId`、追加者（表示名と本人かどうか。離脱後も表示名を保持）、kind、`revision`、状態、待機理由、完成写真、元写真への参照（追加者だけ） | 在籍者（準備中と待機理由は owner と追加者） |
 | Rendition | 原寸JPEG（`fullResolution: true`）、サムネイル、許可した metadata だけ。item revision ごとに1つ | 在籍者 |
 | Membership | `membershipId`（album ごとの不透明な ID）、member（表示名と本人かどうか）、役割、`state`（active/left/removed）、`revision` | 在籍者 |
@@ -103,6 +103,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 ## 招待リンク
 
 - 推測困難な secret（128bit 以上）を作成時の応答で一度だけ返し、一覧・ログ・永続保存に出さない。結果不明の再送では `secret: null` を返すので、そのリンクを無効化して作り直す。
+- 未ログインで開いたリンク（BFF だけ。上流の `invites.join` は変えない）: ブラウザは secret を BFF に一度だけ渡し（`invites.holdPending`）、BFF は暗号化した httpOnly・Secure・SameSite=Lax の cookie（`PENDING_INVITE_COOKIE`、path は `/cloud/sharing/v1/invites/pending`）に15分持つ。JS からは secret も cookie も読めない。ログインから戻った画面は `invites.joinPending` を頼み、BFF は cookie を開いて通常の `invites.join` を上流へ送り、成否に関係なく cookie を消す。期限切れ・使用済み（BFF は使った保留の ID を期限まで覚える）・別の人がログインした（ログイン中に保留したとき）・cookie が無いときは `invite_unavailable`。未ログインのまま頼まれたら `unauthenticated` で cookie は残す（`decidePendingInviteJoin`）。応答を失ったらアルバムの一覧を読み直す。参加の前に確認の画面は挟まず、preview の op は持たない（参加のたびに owner へ通知が届き、すぐ外せる）。
 - 参加はログイン必須で回数制限をかける。未知・期限切れ・無効化済み・削除済みアルバム・削除後の古いリンクは同じ `invite_unavailable`（「このリンクは使えません」）。在籍中の人が使っても役割は変えない。参加のたびに owner へ `MemberJoinedEvent` を通知する。
 - owner が削除した時刻は台帳に album と user ごとに残す（`lastRemovedAt`）。その後に新しいリンクで再参加して離脱しても消えず、削除以前に作られたリンクでは参加できない。
 
@@ -167,6 +168,8 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 | invites.create | POST `/albums/{albumId}/invites` | body: `{role}` | 必須 |
 | invites.revoke | POST `/albums/{albumId}/invites/{inviteLinkId}/revoke` | body: `{}` | 必須 |
 | invites.join | POST `/invites/join` | body: `{secret}` | 必須 |
+| invites.holdPending | POST `/invites/pending` | body: `{secret}` | なし（BFF だけ） |
+| invites.joinPending | POST `/invites/pending/join` | body: `{}` | なし（BFF だけ） |
 | members.list | GET `/albums/{albumId}/members` | query: cursor、limit | 不可 |
 | members.changeRole | POST `/albums/{albumId}/members/{membershipId}/role` | body: `{expectedRevision, role}` | 必須 |
 | members.remove | DELETE `/albums/{albumId}/members/{membershipId}` | なし | 必須 |
