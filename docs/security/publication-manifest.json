@@ -13516,13 +13516,13 @@
     },
     {
       "path": "scripts/photo-web/release-artifact.test.mjs",
-      "sha256": "2d775cc7cd92cc7456bcc84d476f6a817bc99e6a87d7576bca13f5f0a9f2dc99",
-      "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加"
+      "sha256": "744be86a2fa3c1f32253fd76499df1e78931c46f4edea72a19d1f397d24e2d12",
+      "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: SDK runtime manifest hash束縛の回帰fixtureを追加"
     },
     {
       "path": "scripts/photo-web/release-lib.mjs",
-      "sha256": "21eb107272933550cd3e7a50171ab2eb2eb936be8b6467fd8887ef217419809b",
-      "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定"
+      "sha256": "649c7265e961434a7d983078081054db02014f91ea87ca90d9aaffd174d13bea",
+      "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: SDK release manifestとengine runtime manifestのhash照合を区別"
     }
   ],
   "excludedSources": [

@@ -273,11 +273,11 @@ function proofRecord(file, relative, maximum = PHOTO_WEB_BUDGET.metadata) {
   return Object.freeze({ file: relative, sha256: sha256(bytes), sizeBytes: bytes.length });
 }
 
-function validateBuildProof(build, sdkManifest, sdkManifestSha256) {
+function validateBuildProof(build, sdkManifest) {
   if (!build || typeof build !== "object" || Array.isArray(build) || build.schemaVersion !== 1
     || typeof build.buildId !== "string" || !/^[A-Za-z0-9._:@+-]{1,160}$/u.test(build.buildId)
     || build.sdk?.sdkVersion !== sdkManifest.version || build.sdk?.sourceCommit !== sdkManifest.source.commit
-    || build.sdk?.manifestSha256 !== sdkManifestSha256) fail("static build metadata is not bound to the SDK release");
+    || build.sdk?.manifestSha256 !== sdkManifest.engine?.manifest?.sha256) fail("static build metadata is not bound to the SDK release");
   return build;
 }
 
@@ -349,7 +349,7 @@ export function createPhotoWebRelease({
 
   const staticBuildFile = path.join(input, "static/photo-build.json");
   const staticBuildRead = jsonFile(staticBuildFile, "Photo Web static build metadata");
-  const staticBuild = validateBuildProof(staticBuildRead.value, sdkManifest, sdkManifestSha256);
+  const staticBuild = validateBuildProof(staticBuildRead.value, sdkManifest);
   const files = [];
   collectTree(path.join(input, "server"), "server", files);
   collectTree(path.join(input, "static"), "static", files);
