@@ -13,6 +13,7 @@ import {
   PERSONAL_PHOTO_CLOUD_HOST_LIMITS,
   createPendingInviteHandler,
   createPersonalPhotoCloudProxy,
+  createSharingCloudProxy,
 } from "@niho/photo-cloud-library/server";
 
 import type { PhotoStaticBuildResult } from "../build/types.ts";
@@ -21,9 +22,9 @@ import { createPhotoWebFetchHost } from "./fetch-host.ts";
 import { createPhotoWebNodeServer } from "./node-server.ts";
 import {
   chainPhotoWebCloudHandlers,
-  readPhotoWebPendingInviteConfiguration,
-  type PhotoWebPendingInviteConfiguration,
-} from "./pending-invite-config.ts";
+  readPhotoWebSharingConfiguration,
+  type PhotoWebSharingConfiguration,
+} from "./sharing-config.ts";
 import { loadRetainedPhotoWebStaticStore } from "./static-store.ts";
 import type { LoadPhotoWebStaticStoreOptions } from "./types.ts";
 
@@ -95,8 +96,8 @@ export async function createPhotoWebProductionServer(options: {
   readonly currentDirectory: string;
   readonly acceptedPrior?: readonly LoadPhotoWebStaticStoreOptions[];
   readonly cloudEnabled: boolean;
-  /** Private ops configuration of the pending-invite cookie; without it those routes are not mounted. */
-  readonly pendingInvite?: PhotoWebPendingInviteConfiguration | null;
+  /** Private ops configuration of the shared-album routes; without it `/cloud/sharing/v1` is not mounted. */
+  readonly sharing?: PhotoWebSharingConfiguration | null;
   readonly fetch?: typeof fetch;
 }) {
   const current = Object.freeze({ directory: options.currentDirectory, build: await readBuild(options.currentDirectory) });
@@ -123,16 +124,26 @@ export async function createPhotoWebProductionServer(options: {
     upstreamPathPrefix: CLOUD_API_PREFIX,
     ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
   }) : undefined;
-  const pendingInvite = options.cloudEnabled && options.pendingInvite ? createPendingInviteHandler({
-    photoOrigin: PHOTO_WEB_ORIGIN,
-    authService: auth,
-    upstreamOrigin: NIHO_PRODUCTION_ORIGIN,
-    upstreamPathPrefix: options.pendingInvite.upstreamPathPrefix,
-    keys: options.pendingInvite.keys,
-    ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
-  }) : undefined;
-  const cloudHandler = personalCloud !== undefined && pendingInvite !== undefined
-    ? chainPhotoWebCloudHandlers(pendingInvite, personalCloud)
+  const sharing = options.cloudEnabled && options.sharing ? options.sharing : null;
+  // The pending-invite routes first (they are BFF only), then the route table of `/cloud/sharing/v1`, then `/cloud/v2`.
+  const cloudHandler = personalCloud !== undefined && sharing !== null
+    ? chainPhotoWebCloudHandlers(
+      createPendingInviteHandler({
+        photoOrigin: PHOTO_WEB_ORIGIN,
+        authService: auth,
+        upstreamOrigin: NIHO_PRODUCTION_ORIGIN,
+        upstreamPathPrefix: sharing.upstreamPathPrefix,
+        keys: sharing.keys,
+        ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+      }),
+      createSharingCloudProxy({
+        authService: auth,
+        upstreamOrigin: NIHO_PRODUCTION_ORIGIN,
+        upstreamPathPrefix: sharing.upstreamPathPrefix,
+        ...(options.fetch === undefined ? {} : { fetch: options.fetch }),
+      }),
+      personalCloud,
+    )
     : personalCloud;
   const handler = createPhotoWebFetchHost({
     enabled: true,
@@ -162,13 +173,13 @@ async function start(): Promise<void> {
     throw new Error("Photo Web PORT must be 8080");
   }
   const cloudEnabled = process.env.PHOTO_WEB_CLOUD_ENABLED === "true";
-  const pendingInvite = cloudEnabled ? readPhotoWebPendingInviteConfiguration(process.env) : null;
+  const sharing = cloudEnabled ? readPhotoWebSharingConfiguration(process.env) : null;
   const acceptedPrior = await acceptedPriorStores(ACCEPTED_PRIOR_DIRECTORY);
   const server = await createPhotoWebProductionServer({
     currentDirectory: CURRENT_STATIC_DIRECTORY,
     acceptedPrior,
     cloudEnabled,
-    pendingInvite,
+    sharing,
   });
   await new Promise<void>((resolve, reject) => {
     server.once("error", reject);

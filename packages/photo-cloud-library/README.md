@@ -43,7 +43,18 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 - 応答は厳密に検証し、人は `{displayName, isSelf}` 以外を拒否する。表示用の権限は契約の表と一致しなければ拒否する。
 - 1 操作 1 key。応答喪失は同じ key で再送する（参加の通知は重複しない）。作成時の secret が replay で失われたリンクは毎回無効化してから作り直す。
 - 合成 server は photo 単位のリンク共有（`cloudSharing`）とは別で、共有リンクを招待として受け付けない。実際の権限台帳・資格情報・回数制限は既存の非公開境界に置き、この server を本番で選ばない。
-- 契約 package は package 名で読む（`src/sharing/contract.ts` の 1 箇所）。共有シート・招待画面・BFF と 401 の扱いへの接続は後続。
+- 契約 package は package 名で読む（`src/sharing/contract.ts` の 1 箇所）。共有シート・招待画面と 401 の扱いへの接続は後続。
+
+### 共有アルバムの BFF（`@niho/photo-cloud-library/server` の `createSharingCloudProxy`）
+
+`/cloud/sharing/v1` を本人 v2 の proxy と同じ作りで中継する（[本人写真のHTTP転送](../../docs/architecture/personal-photo-transfers.md)）。
+
+- 経路は契約の表（`SHARING_ROUTES`）だけ。表に無い path・method、このpackageが応答を検査できない操作は `not_found`。path の ID は単一の opaque segment の正規の符号化だけを受ける。
+- request は契約で decode し（配置と閉じた形）、client と同じ値の規則で検査してから正規の形に encode し直す。mutation は `Idempotency-Key` が必須、ほかは拒否。`Range` は content の経路だけ。呼び出し側の `Authorization` は拒否し、cookie・header を上流へ渡さない。
+- `withAuthorizedCredential` で本人・親 session・epoch を capture header と照合し、新しい credential を固定の upstream（`NIHO_PRODUCTION_ORIGIN` と非公開の起動設定の prefix）にだけ渡す。同じ suffix を prefix へ写す。
+- JSON は parse の前に byte 数を制限し、client と同じ応答の規則で検査する。error は契約の envelope で status が一致するものだけ。upload ticket は trusted provider の、その upload のものだけ。content は v2 と同じ（200 は全体、206 は要求した範囲、全体の size と SHA-256、正確な長さ、全量を buffer しない）。
+- 公開の前に session をもう一度確かめ、失敗なら上流の body を取り消して 1 byte も出さない。応答はすべて `no-store`。
+- 中継する操作は `SHARING_PROXY_OPERATIONS`: メンバーと招待（B05）、アルバム・項目・オーナーの共有容量・完成写真の download と upload ticket（B12）。家の Mac のライブラリ・書き出し・render job など、応答を検査する client がまだ無い操作は閉じている。
 
 ### 未ログインで開いた招待（`@niho/photo-cloud-library/server` の `createPendingInviteHandler`）
 
