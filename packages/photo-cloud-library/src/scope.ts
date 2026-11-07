@@ -1,11 +1,18 @@
-import type { PersonalPhotoCloudClient, VerifiedPhotoActor } from "@niho/photo-personal-cloud-contract";
+import type { VerifiedPhotoActor } from "@niho/photo-personal-cloud-contract";
 
 import { PersonalPhotoCloudError } from "./errors";
 import type { PersonalPhotoCloudIdentity } from "./types";
 
-type CapturedScope = {
+/**
+ * Selectors a client captured from the verified session. Personal v2 clients are bound to one library; shared-album
+ * clients span libraries and are bound to the session only (`Library = null`, no libraryId).
+ */
+export type PhotoScopeFields<Library extends string | null> = { readonly actorId: string; readonly sessionEpoch: string } &
+  (Library extends string ? { readonly libraryId: string } : { readonly libraryId?: never });
+
+type CapturedScope<Library extends string | null> = {
   actorId: string;
-  libraryId: string;
+  libraryId: Library;
   sessionEpoch: string;
   sessionId: string;
   transport: VerifiedPhotoActor["transport"];
@@ -18,8 +25,8 @@ export type ScopedRequest = {
   release(): void;
 };
 
-export class PersonalPhotoScope {
-  readonly captured: Readonly<CapturedScope>;
+export class PersonalPhotoScope<Library extends string | null = string> {
+  readonly captured: Readonly<CapturedScope<Library>>;
 
   private actor: VerifiedPhotoActor;
   private readonly controllers = new Set<AbortController>();
@@ -30,7 +37,7 @@ export class PersonalPhotoScope {
   private disposed = false;
 
   constructor(
-    private readonly client: PersonalPhotoCloudClient,
+    private readonly client: { readonly scope: PhotoScopeFields<Library> },
     private readonly identity: PersonalPhotoCloudIdentity,
     private readonly now: () => number,
   ) {
@@ -38,9 +45,11 @@ export class PersonalPhotoScope {
     if (!actor) throw new PersonalPhotoCloudError("invalid_identity");
     const expiresAtMs = readExpiry(actor.expiresAt);
     assertActor(actor, expiresAtMs, now());
+    // A library-bound scope needs a non-empty libraryId; a session-only scope carries none at all.
+    const libraryId = libraryOf(client);
     if (
       !nonEmpty(client.scope.actorId) ||
-      !nonEmpty(client.scope.libraryId) ||
+      (libraryId !== null && !nonEmpty(libraryId)) ||
       !nonEmpty(client.scope.sessionEpoch) ||
       client.scope.actorId !== actor.userId ||
       client.scope.sessionEpoch !== actor.sessionEpoch
@@ -50,7 +59,7 @@ export class PersonalPhotoScope {
     this.actor = actor;
     this.captured = {
       actorId: actor.userId,
-      libraryId: client.scope.libraryId,
+      libraryId: libraryId as Library,
       sessionEpoch: actor.sessionEpoch,
       sessionId: actor.sessionId,
       transport: actor.transport,
@@ -87,7 +96,7 @@ export class PersonalPhotoScope {
     }
     if (this.failure) throw this.failure;
     const actor = this.identity.getSnapshot();
-    if (!actor || !this.isSameLogicalScope(actor) || this.client.scope.libraryId !== this.captured.libraryId) {
+    if (!actor || !this.isSameLogicalScope(actor) || libraryOf(this.client) !== this.captured.libraryId) {
       this.invalidate(new PersonalPhotoCloudError("scope_changed"));
       throw this.failure;
     }
@@ -137,7 +146,7 @@ export class PersonalPhotoScope {
       actor.transport === this.captured.transport &&
       this.client.scope.actorId === this.captured.actorId &&
       this.client.scope.sessionEpoch === this.captured.sessionEpoch &&
-      this.client.scope.libraryId === this.captured.libraryId
+      libraryOf(this.client) === this.captured.libraryId
     );
   }
 
@@ -176,6 +185,10 @@ function assertActor(actor: VerifiedPhotoActor, expiresAtMs: number, now: number
   ) {
     throw new PersonalPhotoCloudError("invalid_identity");
   }
+}
+
+function libraryOf(client: { readonly scope: { readonly libraryId?: unknown } }): unknown {
+  return client.scope.libraryId === undefined ? null : client.scope.libraryId;
 }
 
 function readExpiry(value: string): number {
