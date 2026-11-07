@@ -149,7 +149,8 @@ async function publishContent(
   return new Response(boundStream(upstream.body, metadata.length, request.signal), { status: upstream.status, headers });
 }
 
-function parseContentMetadata(response: Response, requestedRange: string | null): {
+/** Content headers of a 200/206 answer, checked against the requested range (shared with the sharing proxy). */
+export function parseContentMetadata(response: Response, requestedRange: string | null): {
   readonly length: number; readonly totalBytes: number; readonly sha256: string; readonly contentType: string; readonly contentRange: string | null;
 } | null {
   const length = integerHeader(response.headers, "Content-Length");
@@ -169,7 +170,8 @@ function parseContentMetadata(response: Response, requestedRange: string | null)
   return { length, totalBytes, sha256, contentType, contentRange };
 }
 
-function boundStream(source: ReadableStream<Uint8Array>, expected: number, signal: AbortSignal): ReadableStream<Uint8Array> {
+/** The upstream body as exactly `expected` bytes, never buffered whole; short, long, idle or aborted streams error. */
+export function boundStream(source: ReadableStream<Uint8Array>, expected: number, signal: AbortSignal): ReadableStream<Uint8Array> {
   const reader = source.getReader(); let read = 0; let empty = 0; let output: ReadableStreamDefaultController<Uint8Array> | null = null; let finished = false;
   const finish = (): void => { if (!finished) { finished = true; signal.removeEventListener("abort", abort); try { reader.releaseLock(); } catch { /* pending read */ } } };
   function abort(): void { void reader.cancel().catch(() => undefined); finish(); try { output?.error(new PersonalPhotoCloudError("unavailable")); } catch { /* consumer already cancelled */ } }
@@ -211,8 +213,13 @@ function oneHeader(headers: Headers, name: string): string { const value = heade
 function validateStartup(options: CreatePersonalPhotoCloudProxyOptions): string {
   if (options.upstreamOrigin !== NIHO_PRODUCTION_ORIGIN || options.trustedUploadOrigin !== undefined && options.trustedUploadOrigin !== TRUSTED_GCS_UPLOAD_ORIGIN) throw new Error("invalid photo cloud startup configuration");
   const value = options.upstreamPathPrefix;
-  if (!/^\/[A-Za-z0-9._~/-]+$/u.test(value) || value.endsWith("/") || value.startsWith("//") || value.split("/").some((item) => item === "." || item === "..") || new URL(value, NIHO_PRODUCTION_ORIGIN).pathname !== value) throw new Error("invalid photo cloud startup configuration");
+  if (!isValidUpstreamPathPrefix(value)) throw new Error("invalid photo cloud startup configuration");
   return value;
+}
+/** A trusted upstream path prefix: absolute, no trailing slash, no dot segments, already canonical. */
+export function isValidUpstreamPathPrefix(value: unknown): value is string {
+  return typeof value === "string" && /^\/[A-Za-z0-9._~/-]+$/u.test(value) && !value.endsWith("/") && !value.startsWith("//")
+    && !value.split("/").some((item) => item === "." || item === "..") && new URL(value, NIHO_PRODUCTION_ORIGIN).pathname === value;
 }
 function responseLibraryId(value: unknown): string {
   if (!isRecord(value)) return "";
