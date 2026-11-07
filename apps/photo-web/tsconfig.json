@@ -22,6 +22,8 @@
   "include": [
     "src/**/*.ts",
     "src/**/*.tsx",
+    "dev/**/*.ts",
+    "dev/**/*.tsx",
     "vite.config.ts",
     "vite.server.config.ts",
     "scripts/prepare-static.mts"
