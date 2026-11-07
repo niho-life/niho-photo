@@ -62,3 +62,8 @@ commands.allow = ["camera_photo_request", "camera_photo_content_open", "camera_p
 identifier = "allow-camera-photo-copy"
 description = "同梱main画面だけに、native認証へ束縛した本人の明示copyの再開・開始・状態確認・取消と、SHA-256・PNG形状を照合したmaskの保存を許可する。opaque ID・mask PNGだけを渡し、原本・path・token・ticket・URL・headerはnative内に保つ。明示copyは原本・全参照mask・完全補正の照合前に完了を返さない。"
 commands.allow = ["camera_photo_copy_recover", "camera_photo_copy_start", "camera_photo_copy_status", "camera_photo_copy_cancel", "camera_photo_mask_upload"]
+
+[[permission]]
+identifier = "allow-camera-photo-sharing"
+description = "同梱のmain画面だけに、共有アルバム（/cloud/sharing/v1）の通信を許可する。画面は route の表で作った path・query・body・冪等 key だけを渡し、native が固定の origin と build 設定の上流 prefix・native 認証を付ける（BFF だけの保留の招待の経路は送らない）。upload の ticket は native に留め、画面へは代わりの handle を返す。完成写真の bytes（raw IPC、200MiB まで）を native が ticket の先へ送り、完成写真・thumbnail は SHA-256 と長さを確かめてから 1MiB ずつ返す。token・URL・path は受け渡さない。"
+commands.allow = ["camera_sharing_status", "camera_sharing_request", "camera_sharing_upload", "camera_sharing_content_open", "camera_sharing_content_read", "camera_sharing_content_close"]

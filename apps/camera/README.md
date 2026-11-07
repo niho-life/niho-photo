@@ -34,6 +34,21 @@ cargo test --locked --manifest-path packages/desktop-photo/Cargo.toml
 
 アプリ名と既存 `camera` パス・端末内データの互換方針は [移植計画](../../docs/migration/mac-client.md) を参照してください。
 
+## 共有アルバムの native 通信（Epic #240 / B08 #249）
+
+Mac の「共有アルバム」は、本人クラウド v2 と同じ native の session で開きます（`src/native-photo-sharing.ts` と `src-tauri/src/photo_sharing.rs`）。画面の共有の client（`@niho/photo-cloud-library/sharing` の `SharingTransport`）が契約の route の表（`SHARING_ROUTES`）で作った path・query・body・冪等 key だけを native へ渡し、応答の意味は client が検査します。
+
+- 宛先は固定の origin と、build の設定 `NIHO_PHOTO_SHARING_API_PREFIX` の上流の prefix だけです（`/api/` で始まる固定の path。`desktop-account` の `Config::with_sharing_prefix`）。未設定の公開の build では `camera_sharing_status` が閉じていると答え、画面に共有アルバムを出しません。BFF だけの経路（保留の招待）は送りません。招待のリンクは Photo Web（`https://photo.niho.life/#invite=...`）で開きます。
+- 完成写真の upload の ticket は native に留め、画面には `https://upload.native.invalid/<handle>` の代わりを返します。画面は完成写真の bytes をその代わりと一緒に raw IPC（`camera_sharing_upload`、200MiB まで）で渡し、native が ticket の先へ 8MiB ずつ送ります。ほかに token・URL が残った応答は拒みます。
+- 完成写真と thumbnail の download は、native が SHA-256・長さ・形式を確かめてから handle で 1MiB ずつ渡します（Range は使わず全体を読む。同時に 4 件・計 256MiB・5 分まで）。
+
+| コマンド | 用途 |
+| --- | --- |
+| `camera_sharing_status` | 共有の通信が build の設定で開いているか |
+| `camera_sharing_request` | route の表の 1 つの要求（JSON）。upload の ticket は代わりにして返す |
+| `camera_sharing_upload` | 完成写真の bytes を native に留めた ticket の先へ送る |
+| `camera_sharing_content_open` / `_read` / `_close` | 完成写真・thumbnail を照合して読む |
+
 ## 現像の native の口（#152）
 
 Mac アプリの WKWebView は独自の scheme（`tauri://localhost`）の画面で `SharedArrayBuffer` を出さず、共有メモリを Worker へ渡せないので、wasm のスレッドを使えません（#148・#173）。COOP / COEP を付けても、WebKit が共有メモリを許す process へ切り替えるのは NetworkProcess を通る http(s) の読み込みだけで、`WKURLSchemeHandler` の読み込みは通りません。macOS 27 では画面と URL の Worker の `crossOriginIsolated` が true になっても共有メモリは渡せません。確かめる道具は [webview-isolation-probe](tools/webview-isolation-probe/README.md) です。代わりに、現像の Worker が読む glue（wasm-bindgen の口と同じ形）を native に差し替え、同梱の `niho-develop-render serve` で描きます。
