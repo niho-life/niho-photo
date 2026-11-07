@@ -15,7 +15,14 @@ import {
   validateMembershipResponse,
   type SharedAlbumMembershipOperation,
 } from "./membership-wire";
-import { createSharingHttpClient, type CreateSharingHttpClientOptions } from "./sharing-http";
+import {
+  createSharingClientOnTransport,
+  createSharingHttpClient,
+  type CreateSharingHttpClientOptions,
+  type SharingHttpClient,
+  type SharingTransport,
+  type SharingWire,
+} from "./sharing-http";
 
 /** The B05 slice of the contract's `PhotoLibrarySharingClient` (album, item and render operations are other issues). */
 export interface SharedAlbumMembershipClient {
@@ -37,13 +44,26 @@ export type CreateBrowserSharedAlbumMembershipClientOptions = CreateSharingHttpC
 
 type MembershipWireOperation = SharedAlbumMembershipOperation | "invites.joinPending";
 
+const MEMBERSHIP_WIRE: SharingWire<MembershipWireOperation> = {
+  supports: (operation): operation is MembershipWireOperation => operation === "invites.joinPending" || isSharedAlbumMembershipOperation(operation),
+  encode: (operation, request, key) => (operation === "invites.joinPending" ? encodePendingInviteJoin() : encodeMembershipRequest(operation, request, key)),
+  responseLimit: (operation) => (operation === "invites.joinPending" ? JSON_LIMITS.success : membershipResponseLimit(operation)),
+  validate: (operation, request, raw) => (operation === "invites.joinPending" ? validateJoinResult(raw) : validateMembershipResponse(operation, request as never, raw)),
+};
+
 export function createBrowserSharedAlbumMembershipClient(options: CreateBrowserSharedAlbumMembershipClientOptions): SharedAlbumMembershipClient {
-  const core = createSharingHttpClient<MembershipWireOperation>(options, {
-    supports: (operation): operation is MembershipWireOperation => operation === "invites.joinPending" || isSharedAlbumMembershipOperation(operation),
-    encode: (operation, request, key) => (operation === "invites.joinPending" ? encodePendingInviteJoin() : encodeMembershipRequest(operation, request, key)),
-    responseLimit: (operation) => (operation === "invites.joinPending" ? JSON_LIMITS.success : membershipResponseLimit(operation)),
-    validate: (operation, request, raw) => (operation === "invites.joinPending" ? validateJoinResult(raw) : validateMembershipResponse(operation, request as never, raw)),
-  });
+  return membershipClientOn(createSharingHttpClient<MembershipWireOperation>(options, MEMBERSHIP_WIRE));
+}
+
+/**
+ * The same client on another transport (the Mac app's native session). There is no BFF cookie there, so
+ * `joinPending` is refused by that transport (links are opened in the browser).
+ */
+export function createSharedAlbumMembershipClientOnTransport(transport: SharingTransport): SharedAlbumMembershipClient {
+  return membershipClientOn(createSharingClientOnTransport(transport, MEMBERSHIP_WIRE));
+}
+
+function membershipClientOn(core: SharingHttpClient<MembershipWireOperation>): SharedAlbumMembershipClient {
   return {
     scope: core.scope,
     async request(operation, request, requestOptions) {

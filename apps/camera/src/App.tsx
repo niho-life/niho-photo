@@ -49,8 +49,8 @@ export type PersonalCloudPhotoBinding = {
   scopeKey?: string;
   copyLocalPhoto?: BrowserPhotoCopyToCloudBinding["copyLocalPhoto"];
   /**
-   * 「共有アルバム」と設定の「保存先」（B08 #249）。rollout が開いたときだけ host が渡す（無ければ何も出さない）。共有アルバムの
-   * client はまだ browser の session だけに対応するので、Mac の native session 用の transport が入るまで host は渡さない。
+   * 「共有アルバム」と設定の「保存先」（B08 #249）。rollout が開いたときだけ host が渡す（無ければ何も出さない）。Mac では
+   * native の session の transport（`native-photo-sharing.ts`）で開き、build の設定が無ければ host は渡さない。
    */
   sharedAlbums?: PhotoSharedAlbumPort;
 };

@@ -1,7 +1,7 @@
 use super::*;
 use crate::account::Clock;
 use crate::connect::{Pending, PENDING_TTL_MS};
-use crate::photo_cloud::{NativePhotoRequest, PhotoHttpResponse, PhotoHttpTransport};
+use crate::photo_cloud::{NativePhotoRequest, PhotoHttpResponse, PhotoHttpTransport, ProviderResponse};
 use crate::photo_session::{PhotoSessionResponse, PhotoSessionTransport};
 use base64::{engine::general_purpose::URL_SAFE_NO_PAD, Engine};
 use serde_json::{json, Value};
@@ -1376,4 +1376,173 @@ fn exchange_network_failure_without_saved_credentials_requires_a_fresh_login_not
     AccountError::InvalidState
   );
   assert_eq!(f.server.state.lock().unwrap().calls.len(), calls);
+}
+
+/// 共有アルバムの合成の上流: 追加の答えに upload の ticket を付け、ticket の先は 8MiB ごとに受ける。
+struct SharingPhotoHttp {
+  status: u16,
+  size_bytes: u64,
+  sent_paths: Mutex<Vec<String>>,
+  puts: Mutex<Vec<(u64, usize)>>,
+}
+
+impl SharingPhotoHttp {
+  fn new(status: u16, size_bytes: u64) -> Self {
+    Self {
+      status,
+      size_bytes,
+      sent_paths: Mutex::new(Vec::new()),
+      puts: Mutex::new(Vec::new()),
+    }
+  }
+}
+
+impl PhotoHttpTransport for SharingPhotoHttp {
+  fn send(
+    &self,
+    _: &Config,
+    bearer: &Secret,
+    request: &NativePhotoRequest,
+    content: bool,
+  ) -> Result<PhotoHttpResponse, AccountError> {
+    assert_eq!(bearer.expose(), "synthetic-id-token");
+    assert!(!content);
+    self.sent_paths.lock().unwrap().push(request.url.path().to_owned());
+    let (status, value) = if self.status == 401 {
+      (
+        401,
+        json!({ "error": { "code": "unauthenticated", "requestId": "r", "retryable": false } }),
+      )
+    } else {
+      (
+        200,
+        json!({
+          "value": {
+            "item": { "id": "synthetic-item", "state": "preparing" },
+            "upload": {
+              "upload": { "id": "synthetic-upload", "sizeBytes": self.size_bytes, "state": "reserved" },
+              "ticket": {
+                "url": "https://storage.googleapis.com/synthetic-bucket/upload?upload_id=synthetic",
+                "method": "PUT",
+                "headers": { "Content-Type": "image/jpeg" },
+                "expiresAt": "2099-01-01T00:00:00.000Z",
+                "resumeOffsetBytes": 0
+              }
+            }
+          },
+          "replayed": false
+        }),
+      )
+    };
+    let bytes = serde_json::to_vec(&value).unwrap();
+    Ok(PhotoHttpResponse {
+      status,
+      content_length: Some(bytes.len() as u64),
+      content_type: Some("application/json".into()),
+      sha256: None,
+      total_bytes: None,
+      body: Box::new(Cursor::new(bytes)),
+    })
+  }
+
+  fn provider_put(
+    &self,
+    url: &Url,
+    content_type: &str,
+    offset: u64,
+    total: u64,
+    body: &[u8],
+  ) -> Result<ProviderResponse, AccountError> {
+    assert_eq!(url.host_str(), Some("storage.googleapis.com"));
+    assert_eq!(content_type, "image/jpeg");
+    self.puts.lock().unwrap().push((offset, body.len()));
+    let end = offset + body.len() as u64;
+    if end == total {
+      Ok(ProviderResponse::synthetic(200, None))
+    } else {
+      Ok(ProviderResponse::synthetic(308, Some(&format!("bytes=0-{}", end - 1))))
+    }
+  }
+}
+
+fn sharing_add_request() -> SharingRequest {
+  SharingRequest::parse(
+    "POST",
+    "/cloud/sharing/v1/albums/synthetic-album/file-items",
+    Some(json!({ "rendition": { "contentType": "image/jpeg" } })),
+    Some("synthetic-key".into()),
+  )
+  .unwrap()
+}
+
+#[test]
+fn sharing_requests_keep_upload_tickets_native_and_upload_in_chunks() {
+  let size = 9 * 1024 * 1024;
+  let http = Arc::new(SharingPhotoHttp::new(200, size));
+  let f = Fixture::with_photo_http(Arc::clone(&http) as Arc<dyn PhotoHttpTransport>);
+  f.login();
+  let scope = photo_scope(&f.account.photo_identity().unwrap());
+  let response = f.account.photo_sharing_request(&scope, &sharing_add_request()).unwrap();
+  assert_eq!(
+    http.sent_paths.lock().unwrap().as_slice(),
+    ["/api/synthetic-sharing/v1/albums/synthetic-album/file-items"]
+  );
+  assert_eq!(response.tickets.len(), 1);
+  let shown = response.body["value"]["upload"]["ticket"]["url"].as_str().unwrap();
+  assert_eq!(sharing_ticket_handle(shown), Some(response.tickets[0].handle.as_str()));
+  assert!(!serde_json::to_string(&response.body).unwrap().contains("googleapis"));
+
+  let bytes = vec![7_u8; size as usize];
+  f.account
+    .photo_sharing_upload(&scope, &response.tickets[0].ticket, &bytes)
+    .unwrap();
+  assert_eq!(
+    http.puts.lock().unwrap().as_slice(),
+    [(0, 8 * 1024 * 1024), (8 * 1024 * 1024, 1024 * 1024)]
+  );
+  // 大きさの違う bytes は送らない
+  assert_eq!(
+    f.account
+      .photo_sharing_upload(&scope, &response.tickets[0].ticket, &bytes[1..]),
+    Err(AccountError::InvalidResponse)
+  );
+}
+
+#[test]
+fn a_refused_sharing_session_invalidates_the_photo_identity() {
+  let f = Fixture::with_photo_http(Arc::new(SharingPhotoHttp::new(401, 1)));
+  f.login();
+  let scope = photo_scope(&f.account.photo_identity().unwrap());
+  let response = f.account.photo_sharing_request(&scope, &sharing_add_request()).unwrap();
+  assert_eq!(response.status, 401);
+  assert!(response.tickets.is_empty());
+  assert_eq!(f.account.snapshot().phase, AccountPhase::Failed);
+}
+
+#[test]
+fn sharing_json_and_content_routes_do_not_cross() {
+  let http = Arc::new(SharingPhotoHttp::new(200, 1));
+  let f = Fixture::with_photo_http(http);
+  f.login();
+  let scope = photo_scope(&f.account.photo_identity().unwrap());
+  let download = SharingRequest::parse(
+    "GET",
+    "/cloud/sharing/v1/albums/synthetic-album/items/synthetic-item/renditions/synthetic-rendition/content?variant=full",
+    None,
+    None,
+  )
+  .unwrap();
+  assert!(matches!(
+    f.account.photo_sharing_request(&scope, &download),
+    Err(AccountError::InvalidResponse)
+  ));
+  let list = SharingRequest::parse("GET", "/cloud/sharing/v1/albums", None, None).unwrap();
+  let mut bytes = Vec::new();
+  assert_eq!(
+    f.account
+      .photo_sharing_content(&scope, &list, &mut bytes, &PhotoDownloadCancel::default())
+      .unwrap_err(),
+    AccountError::InvalidResponse
+  );
+  assert!(bytes.is_empty());
 }
