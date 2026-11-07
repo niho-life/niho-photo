@@ -10497,7 +10497,7 @@
     },
     {
       "path": "apps/photo-web/README.md",
-      "sha256": "016c8a7f3ba88c1cf2df2e995a321b395a9470e128f8e5e32df4660c233b49b1",
+      "sha256": "b5b15d522dd0656e0d851c0f1e0fb70c0dc67012b9c1a77b6fb24c79919022de",
       "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: Photo WebのC01 captureとC02 clientの接続・受信stream寿命、正式bootstrapの残る責務を記録する。\n変更理由: 固定Photo BFFの401だけをruntimeの世代別本人再確認へ接続し、透過fetchとbrowser graphの対象検証・責務を追加する\n変更理由: 同じ本人のBFF認証拒否をpeer通知・BFCacheの世代変更をまたいで保持し、明示retry又は本人変更だけで解除する\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持\n変更理由: C06: 本人scope失効時の下書き消去、実Node build起動手順と配布境界を記録。"
     },
     {
@@ -10537,7 +10537,7 @@
     },
     {
       "path": "apps/photo-web/src/browser/auth-fetch.ts",
-      "sha256": "95a6c456999bd094bc0f547785da3aec1cd79842e806b776614ba7b7739abcc8",
+      "sha256": "4887d891f45a139159e803c34a030da046109c652b2b7c65295382179065ebb3",
       "origin": "NIHOが固定Photo BFFの認証拒否だけをPhoto Web runtimeへ通知するbrowser接続として新規作成。credentialを解釈・保持せずprovider輸送は対象外。"
     },
     {
@@ -10682,7 +10682,7 @@
     },
     {
       "path": "apps/photo-web/test/auth-fetch.test.ts",
-      "sha256": "1539811e0ad2d46a55e916460464defe90a2e0f417ae5f7c6a7fb36352198d4f",
+      "sha256": "d54d75f60117b813737dcbe4a2d13a59b23f4d6e63f9691df1a8f851e9d21bb6",
       "origin": "NIHOが合成Response/RequestによるPhoto BFF限定・失効遅着・status透過の回帰試験として新規作成。実credential・写真・個人情報を含まない。\n変更理由: 資格情報を含むURLを公開fixtureへ埋めず、合成URL objectでuserinfo通知拒否を検証する"
     },
     {
