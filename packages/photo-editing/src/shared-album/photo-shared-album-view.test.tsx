@@ -83,6 +83,56 @@ function click(element: Element | undefined | null) {
 }
 
 describe("PhotoSharedAlbumView", () => {
+  it("自分が足した完成写真を 1 枚選んだときだけ「その他」に「差し替え」を出し、選び直した JPEG を渡す", () => {
+    const onReplace = vi.fn();
+    const own = photoSharedAlbumFixtureItem(0, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.contributorSelf, kind: "fileUpload" });
+    const ownEdit = photoSharedAlbumFixtureItem(1, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.contributorSelf, kind: "memberEdit" });
+    const others = photoSharedAlbumFixtureItem(2, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.owner, kind: "fileUpload" });
+    render(props({ album: album({ role: "contributor" }), items: [own, ownEdit, others], onReplace }));
+
+    // Another person's file, an own photo rendered on a device: no menu.
+    for (const index of [1, 2]) {
+      click(tiles()[index]);
+      expect(buttonByLabel("その他")).toBeUndefined();
+      click(buttonByLabel("選択を終了"));
+    }
+    click(tiles()[0]);
+    const more = buttonByLabel("その他");
+    expect(more?.getAttribute("aria-haspopup")).toBe("menu");
+    // Two selected: no single item to replace.
+    click(tiles()[1]);
+    expect(buttonByLabel("その他")).toBeUndefined();
+    click(tiles()[1]);
+
+    const input = container.querySelector<HTMLInputElement>("input[accept='image/jpeg']");
+    if (!input) throw new Error("input not found");
+    expect(input.multiple).toBe(false);
+    const inputClick = vi.spyOn(input, "click").mockImplementation(() => undefined);
+    click(buttonByText("差し替え"));
+    expect(inputClick).toHaveBeenCalledTimes(1);
+    const file = new File([new Uint8Array([1, 2, 3])], "IMG_0002.JPG", { type: "image/jpeg" });
+    Object.defineProperty(input, "files", { configurable: true, value: [file] });
+    act(() => {
+      input.dispatchEvent(new Event("change", { bubbles: true }));
+    });
+    expect(onReplace).toHaveBeenCalledWith(own.itemId, file);
+    // The selection ends after the file was chosen.
+    expect(buttonByLabel("その他")).toBeUndefined();
+    expect(buttonByLabel("選択を終了")).toBeUndefined();
+  });
+
+  it("見るだけの人と、差し替えを渡さない接続には「その他」を出さない", () => {
+    const own = photoSharedAlbumFixtureItem(0, { addedBy: PHOTO_SHARED_ALBUM_FIXTURE_PEOPLE.contributorSelf, kind: "fileUpload" });
+    render(props({ album: album({ role: "viewer" }), items: [own], onReplace: vi.fn() }));
+    click(tiles()[0]);
+    expect(buttonByLabel("その他")).toBeUndefined();
+    act(() => root.unmount());
+    root = createRoot(container);
+    render(props({ album: album({ role: "contributor" }), items: [own] }));
+    click(tiles()[0]);
+    expect(buttonByLabel("その他")).toBeUndefined();
+  });
+
   it("写真のグリッドを主役にし、削除済みは出さず、新着には追加者の名前を載せる", () => {
     render(props());
     const labels = tiles().map((tile) => tile.getAttribute("aria-label"));

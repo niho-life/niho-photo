@@ -63,6 +63,7 @@ function fakePort(overrides: Partial<PhotoSharedAlbumPort> = {}): PhotoSharedAlb
     removeMember: vi.fn(async () => undefined),
     leave: vi.fn(async () => undefined),
     addFile: vi.fn(async () => ({ ok: true as const })),
+    replaceFile: vi.fn(async () => ({ ok: true as const })),
     save: vi.fn(async () => ({ failed: 0 })),
     remove: vi.fn(async () => ({ failed: 0 })),
     join: vi.fn(async () => ({ kind: "joined" as const, albumId: PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId })),
@@ -217,6 +218,46 @@ describe("PhotoSharedAlbumWorkspace", () => {
     await act(async () => root.render(<PhotoSharedAlbumWorkspace port={unusable} invite={{ kind: "held" }} />));
     await flush();
     expect(container.querySelector("h1")?.textContent).toBe("このリンクは使えません");
+  });
+
+  it("replaces an own finished photo through the same upload queue and shows its progress", async () => {
+    const own = { ...photoSharedAlbumFixtureItems()[1], addedBy: { userId: "fixture-self", displayName: "自分", isSelf: true }, kind: "fileUpload" as const, state: "published" as const };
+    let finish!: (result: { readonly ok: true }) => void;
+    const port = fakePort({
+      openAlbum: vi.fn(async () => opened({ items: [own], permissions: { ...OWNER_PERMISSIONS } })),
+      replaceFile: vi.fn(async () => await new Promise<{ readonly ok: true }>((resolve) => { finish = resolve; })),
+    });
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} />));
+    await flush();
+    await act(async () => (Array.from(container.querySelectorAll("ul button"))[0] as HTMLButtonElement).click());
+    await flush();
+    await act(async () => (Array.from(container.querySelectorAll("ul button"))[0] as HTMLButtonElement).click());
+    await flush();
+    const input = container.querySelector<HTMLInputElement>("input[accept='image/jpeg']");
+    if (!input) throw new Error("input not found");
+    vi.spyOn(input, "click").mockImplementation(() => undefined);
+    const more = Array.from(container.querySelectorAll("button")).find((button) => button.getAttribute("aria-label") === "その他");
+    if (!more) throw new Error("more menu not found");
+    await act(async () => {
+      more.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+      more.click();
+    });
+    await flush();
+    const replace = buttonByText("差し替え", document.body);
+    if (!replace) throw new Error("replace not found");
+    await act(async () => replace.click());
+    const file = new File(["b"], "replacement.jpg", { type: "image/jpeg" });
+    Object.defineProperty(input, "files", { configurable: true, value: [file] });
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+    await flush();
+    expect(port.replaceFile).toHaveBeenCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, own.itemId, file, expect.any(AbortSignal));
+    expect(port.addFile).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("replacement.jpg");
+    const reads = vi.mocked(port.openAlbum).mock.calls.length;
+    await act(async () => finish({ ok: true }));
+    await flush();
+    // The album is read again after the replacement settles.
+    expect(vi.mocked(port.openAlbum).mock.calls.length).toBeGreaterThan(reads);
   });
 
   it("shows the album as ended when it can no longer be opened, and creates an album by name", async () => {

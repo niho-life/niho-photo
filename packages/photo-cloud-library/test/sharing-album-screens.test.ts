@@ -267,6 +267,24 @@ describe("shared album screens port (B08 on B05/B12)", () => {
     expect(await holdBrowserPendingInvite(secret, { fetch: async () => { throw new TypeError("Failed to fetch"); } })).toBeNull();
   });
 
+  it("replaces an own finished photo with a newly picked JPEG, keeping the item", async () => {
+    const t = setup();
+    const { owner, albumId } = await sharedAlbum(t);
+    expect(await owner.addFile(albumId, t.file(1), t.signal)).toEqual({ ok: true });
+    const before = (await owner.openAlbum(albumId, t.signal))?.items[0];
+    if (!before) throw new Error("item not found");
+    expect(await owner.replaceFile(albumId, before.itemId, t.file(2), t.signal)).toEqual({ ok: true });
+    const after = (await owner.openAlbum(albumId, t.signal))?.items;
+    expect(after?.map((item) => item.itemId)).toEqual([before.itemId]);
+    expect(after?.[0]?.state).toBe("published");
+    // A new rendition: a new thumbnail.
+    expect(after?.[0]?.thumbnailUrl).not.toBe(before.thumbnailUrl);
+    // An item the screen has not read is not sent.
+    expect(await owner.replaceFile(albumId, "synthetic-unknown-item", t.file(3), t.signal)).toEqual({ ok: false, reason: null });
+    // A file that is not a usable JPEG is refused on this device with its reason.
+    expect(await owner.replaceFile(albumId, before.itemId, new File([new Uint8Array([1, 2, 3])], "broken.jpg", { type: "image/jpeg" }), t.signal)).toMatchObject({ ok: false });
+  });
+
   it("reads every page: more albums than one page, more members than one page", async () => {
     const t = setup({ extraUsers: 101 });
     const owner = t.portFor(OWNER);

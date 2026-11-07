@@ -62,6 +62,8 @@ export interface PhotoSharedAlbumPort {
   removeMember(albumId: string, memberId: string, signal: AbortSignal): Promise<void>;
   leave(albumId: string, signal: AbortSignal): Promise<void>;
   addFile(albumId: string, file: File, signal: AbortSignal): Promise<PhotoSharedAlbumAddResult>;
+  /** 自分が足した完成写真を、選び直した JPEG に差し替える（{@link photoSharedAlbumItemReplaceable} の項目だけ） */
+  replaceFile(albumId: string, itemId: string, file: File, signal: AbortSignal): Promise<PhotoSharedAlbumAddResult>;
   /** 選んだ完成写真を端末に保存する。保存できなかった枚数を返す */
   save(albumId: string, itemIds: readonly string[], signal: AbortSignal): Promise<{ readonly failed: number }>;
   /** 選んだ項目をアルバムから外す。外せなかった枚数を返す */

@@ -27,7 +27,7 @@ import type {
   PhotoStorageLocation,
   PhotoStorageLocationKind,
 } from "niho-photo-editing/shared-album/photo-shared-album-model";
-import type { PhotoSharedAlbumPermissions, PhotoSharedAlbumPort } from "niho-photo-editing/shared-album/photo-shared-album-port";
+import type { PhotoSharedAlbumAddResult, PhotoSharedAlbumPermissions, PhotoSharedAlbumPort } from "niho-photo-editing/shared-album/photo-shared-album-port";
 
 import { readJpegCaptureFields } from "../render-executor/jpeg-metadata";
 import { createTicketUploader } from "../render-executor/ticket-upload";
@@ -270,6 +270,32 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
     return results;
   }
 
+  /** A picked file prepared on this device and sent (added or replacing); failures as the screens' reasons. */
+  async function sendFile(albumId: string, file: File, send: (prepared: PreparedAlbumFile) => Promise<void>): Promise<PhotoSharedAlbumAddResult> {
+    let prepared: PreparedAlbumFile;
+    try {
+      prepared = await prepareFile(file);
+    } catch (error) {
+      if (error instanceof SharedAlbumFileError) return { ok: false, reason: fileReason(error) };
+      throw error;
+    }
+    try {
+      await send(prepared);
+      fullAlbums.delete(albumId);
+      return { ok: true };
+    } catch (error) {
+      if (!isSharingErrorEnvelope(error)) return { ok: false, reason: null };
+      const code = error.error.code;
+      if (code === "quota_exceeded") {
+        fullAlbums.set(albumId, now());
+        return { ok: false, reason: "albumFull" };
+      }
+      if (code === "not_found" || code === "role_forbidden" || code === "item_removed") return { ok: false, reason: "accessEnded" };
+      if (code === "content_rejected" || code === "unsupported_format") return { ok: false, reason: "unsupported" };
+      return { ok: false, reason: null };
+    }
+  }
+
   /** A refusal that ends the invite (not a lost answer, a rate limit or a short outage). */
   const definiteRefusal = (error: unknown): boolean =>
     isSharingErrorEnvelope(error) && !error.error.retryable && SHARING_ERROR_RECOVERY[error.error.code] !== "retrySameKey";
@@ -344,28 +370,17 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
       await options.membership.leave(albumId, live(signal));
     },
     async addFile(albumId, file, signal) {
-      let prepared: PreparedAlbumFile;
-      try {
-        prepared = await prepareFile(file);
-      } catch (error) {
-        if (error instanceof SharedAlbumFileError) return { ok: false, reason: fileReason(error) };
-        throw error;
-      }
-      try {
+      return await sendFile(albumId, file, async (prepared) => {
         await options.items.addFile(albumId, prepared, live(signal));
-        fullAlbums.delete(albumId);
-        return { ok: true };
-      } catch (error) {
-        if (!isSharingErrorEnvelope(error)) return { ok: false, reason: null };
-        const code = error.error.code;
-        if (code === "quota_exceeded") {
-          fullAlbums.set(albumId, now());
-          return { ok: false, reason: "albumFull" };
-        }
-        if (code === "not_found" || code === "role_forbidden" || code === "item_removed") return { ok: false, reason: "accessEnded" };
-        if (code === "content_rejected" || code === "unsupported_format") return { ok: false, reason: "unsupported" };
-        return { ok: false, reason: null };
-      }
+      });
+    },
+    async replaceFile(albumId, itemId, file, signal) {
+      // The revision the screen last read; a newer one on the server answers revision_conflict (tried again by the user).
+      const item = (loadedItems.get(albumId) ?? []).find((entry) => entry.id === itemId);
+      if (!item) return { ok: false, reason: null };
+      return await sendFile(albumId, file, async (prepared) => {
+        await options.items.replaceFile(albumId, { id: item.id, revision: item.revision }, prepared, live(signal));
+      });
     },
     async save(albumId, itemIds, signal) {
       const wanted = new Set(itemIds);

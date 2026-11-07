@@ -58,7 +58,13 @@ type Screen =
 const heldJoins = new WeakMap<PhotoSharedAlbumPort, Promise<PhotoSharedAlbumJoinResult | null>>();
 
 /** An addition belongs to the album it was started in: it is shown and retried there only. */
-type Pending = { readonly albumId: string; readonly upload: PhotoSharedAlbumUpload; readonly file: File };
+type Pending = {
+  readonly albumId: string;
+  readonly upload: PhotoSharedAlbumUpload;
+  readonly file: File;
+  /** A replacement of this own item instead of a new addition. */
+  readonly replaceItemId: string | null;
+};
 
 /**
  * 「共有アルバム」の画面（一覧・アルバム・共有シート・招待）を口につなぐ（B08 #249）。部品は通信を持たないので、読み込み・追加の
@@ -263,7 +269,9 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
       if (signal.aborted) return;
       setUpload(pending.upload.uploadId, { phase: "sending", fraction: null, reason: null });
       try {
-        const result = await port.addFile(target, pending.file, signal);
+        const result = pending.replaceItemId === null
+          ? await port.addFile(target, pending.file, signal)
+          : await port.replaceFile(target, pending.replaceItemId, pending.file, signal);
         if (result.ok) {
           setUpload(pending.upload.uploadId, { phase: "added" });
           port.markOriginalsNoteShown();
@@ -277,12 +285,13 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
     });
   }, [port, setUpload]);
 
-  const addFiles = useCallback((files: readonly File[]) => {
+  const queueFiles = useCallback((files: readonly File[], replaceItemId: string | null) => {
     const target = albumIdRef.current;
     if (target === null || files.length === 0) return;
     const added = files.map((file, index): Pending => ({
       albumId: target,
       file,
+      replaceItemId,
       upload: {
         uploadId: `upload-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`,
         name: file.name,
@@ -295,6 +304,8 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
     setUploads((current) => [...current, ...added]);
     for (const pending of added) runUpload(pending);
   }, [runUpload]);
+  const addFiles = useCallback((files: readonly File[]) => queueFiles(files, null), [queueFiles]);
+  const replaceFile = useCallback((itemId: string, file: File) => queueFiles([file], itemId), [queueFiles]);
 
   const retryUpload = useCallback((uploadId: string) => {
     // Retried in the album it was started in, whichever album is open now.
@@ -387,6 +398,7 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
                 },
               }
             : {})}
+          {...(permissions.addItem && !album.accessEnded ? { onReplace: replaceFile } : {})}
           onRetryUpload={retryUpload}
           onDismissUploads={dismissUploads}
           {...(props.onOpenStorage ? { onOpenStorage: props.onOpenStorage } : {})}
