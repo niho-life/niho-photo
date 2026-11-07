@@ -40,6 +40,9 @@ import {
   type PhotoWebRendererProof,
 } from "./renderer.ts";
 
+/** Photos per page in 「写真から選ぶ」. */
+const SHARED_ALBUM_PICKER_PAGE_SIZE = 60;
+
 export type PhotoWebRevocationReason = "identity-changed" | "revoked" | "logout-complete" | "expired";
 
 export interface CreatePhotoWebConnectionFactoryOptions {
@@ -554,6 +557,22 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
               locationId: "nihoCloud", kind: "nihoCloud", name: null, hostedMacStatus: null,
               usage: { usedBytes: usage.usedBytes, quotaBytes: usage.quotaBytes },
             }],
+            // 「写真から選ぶ」 reads the same library as 写真 (photos with originals, newest added first).
+            library: {
+              libraryId: client.scope.libraryId,
+              list: async (cursor, signal) => {
+                const page = await library.list({
+                  ...(cursor === null ? {} : { cursor }),
+                  limit: Math.min(SHARED_ALBUM_PICKER_PAGE_SIZE, library.limits.listPageSize),
+                  sort: "added",
+                  hasOriginal: true,
+                }, { signal });
+                return {
+                  items: page.items.map((item) => ({ photoId: item.id, thumbnailUrl: item.editedPreview?.thumbUrl ?? item.previewUrl, label: item.fileName })),
+                  next: page.next,
+                };
+              },
+            },
           });
         }
         usage = snapshotUsage(await handle.usage({ signal: input.signal }));

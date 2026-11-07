@@ -7,7 +7,7 @@ import {
   createSharedAlbumScreensPort,
   holdBrowserPendingInvite,
 } from "../src/sharing";
-import { cameraExifWithLocation, exifPayload, syntheticJpeg } from "./render-support";
+import { bindingFor, cameraExifWithLocation, exifPayload, recipeFor, syntheticJpeg } from "./render-support";
 
 const OWNER = "synthetic-user-owner";
 const MEMBER = "synthetic-user-member";
@@ -32,7 +32,7 @@ function setup(options: { extraUsers?: number } = {}) {
   const revoked: string[] = [];
   const saved: { name: string; bytes: Uint8Array }[] = [];
   const memberLists = { count: 0 };
-  const portFor = (user: string) => {
+  const portFor = (user: string, extra: Partial<Parameters<typeof createSharedAlbumScreensPort>[0]> = {}) => {
     const client = server.clientFor(user);
     const key = () => `${user}-key-${++keys}`;
     const membership = createSharedAlbumMembership({ client, newIdempotencyKey: key, sleep: async () => undefined });
@@ -57,6 +57,7 @@ function setup(options: { extraUsers?: number } = {}) {
         },
         revoke: (url) => { revoked.push(url); },
       },
+      ...extra,
     });
   };
   const signal = new AbortController().signal;
@@ -265,6 +266,34 @@ describe("shared album screens port (B08 on B05/B12)", () => {
     expect(await holdBrowserPendingInvite(secret, { fetch: async () => new Response("{}", { status: 503 }) })).toBeNull();
     expect(await holdBrowserPendingInvite(secret, { fetch: async () => Response.json({ expiresAt: "later", secret }) })).toBeNull();
     expect(await holdBrowserPendingInvite(secret, { fetch: async () => { throw new TypeError("Failed to fetch"); } })).toBeNull();
+  });
+
+  it("adds the user's own library photos from 写真から選ぶ as preparing items and wakes this device's renderer", async () => {
+    const t = setup();
+    const owner = t.portFor(OWNER);
+    const albumId = await owner.createAlbum("Synthetic shared album", t.signal);
+    const recipe = recipeFor(1);
+    t.server.addLibraryPhoto({ ownerId: OWNER, libraryId: "synthetic-library", photoId: "photo-1", recipe, binding: bindingFor("a".repeat(64), recipe), expectedOutput: { width: 1200, height: 800 } });
+    const woken: string[] = [];
+    const prioritized: unknown[] = [];
+    const pages = [{ items: [{ photoId: "photo-1", thumbnailUrl: "blob:synthetic/library-1", label: "IMG_1.JPG" }], next: "page-2" }, { items: [], next: null }];
+    const withLibrary = t.portFor(OWNER, {
+      library: { libraryId: "synthetic-library", list: async (cursor) => pages[cursor === null ? 0 : 1] as (typeof pages)[number] },
+      renderJobs: { wake: () => { woken.push("wake"); }, prioritize: (photos) => { prioritized.push(photos); } },
+    });
+    expect(await withLibrary.libraryPhotos?.(null, t.signal)).toEqual(pages[0]);
+    expect(await withLibrary.libraryPhotos?.("page-2", t.signal)).toEqual(pages[1]);
+    // One photo NIHO knows and one it does not: the unknown one is counted, the other becomes a preparing item.
+    expect(await withLibrary.addLibraryPhotos?.(albumId, ["photo-1", "photo-unknown"], t.signal)).toEqual({ failed: 1 });
+    expect(woken).toEqual(["wake"]);
+    const opened = await withLibrary.openAlbum(albumId, t.signal);
+    expect(opened?.items).toEqual([expect.objectContaining({ kind: "ownerPhoto", state: "preparing", addedBy: expect.objectContaining({ isSelf: true }) })]);
+    // Opening the album puts this device's own preparing photo first.
+    expect(prioritized.at(-1)).toEqual([{ libraryId: "synthetic-library", photoId: "photo-1" }]);
+    expect(woken).toEqual(["wake", "wake"]);
+    // Without a library the port offers no picker.
+    expect(owner.libraryPhotos).toBeUndefined();
+    expect(owner.addLibraryPhotos).toBeUndefined();
   });
 
   it("replaces an own finished photo with a newly picked JPEG, keeping the item", async () => {

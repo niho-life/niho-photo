@@ -220,6 +220,50 @@ describe("PhotoSharedAlbumWorkspace", () => {
     expect(container.querySelector("h1")?.textContent).toBe("このリンクは使えません");
   });
 
+  it("offers 写真から選ぶ only with the user's library, adds the picked photos and reads the album again", async () => {
+    const plain = fakePort();
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={plain} />));
+    await flush();
+    await act(async () => (Array.from(container.querySelectorAll("ul button"))[0] as HTMLButtonElement).click());
+    await flush();
+    // Without a library, 追加 picks files directly (no menu).
+    expect(buttonByText("追加", container)?.getAttribute("aria-haspopup")).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+
+    let failures = 1;
+    const port = fakePort({
+      libraryPhotos: vi.fn(async () => ({ items: [{ photoId: "photo-1", thumbnailUrl: null, label: "IMG_1.JPG" }, { photoId: "photo-2", thumbnailUrl: null, label: "IMG_2.JPG" }], next: null })),
+      addLibraryPhotos: vi.fn(async () => ({ failed: failures-- > 0 ? 1 : 0 })),
+    });
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} />));
+    await flush();
+    await act(async () => (Array.from(container.querySelectorAll("ul button"))[0] as HTMLButtonElement).click());
+    await flush();
+    const add = buttonByText("追加", container);
+    expect(add?.getAttribute("aria-haspopup")).toBe("menu");
+    await act(async () => {
+      add?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+      add?.click();
+    });
+    await flush();
+    await act(async () => buttonByText("写真から選ぶ")?.click());
+    await flush();
+    const tiles = Array.from(document.body.querySelectorAll<HTMLButtonElement>("ul[aria-label='写真から選ぶ'] button"));
+    await act(async () => tiles[1]?.click());
+    const reads = vi.mocked(port.openAlbum).mock.calls.length;
+    await act(async () => buttonByText("1枚を追加")?.click());
+    await flush();
+    expect(port.addLibraryPhotos).toHaveBeenCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, ["photo-2"], expect.any(AbortSignal));
+    expect(vi.mocked(port.openAlbum).mock.calls.length).toBeGreaterThan(reads);
+    // One was not added: the line offers to try the same photos again.
+    expect(container.querySelector("[role='alert']")).not.toBeNull();
+    await act(async () => buttonByText("再試行", container)?.click());
+    await flush();
+    expect(port.addLibraryPhotos).toHaveBeenCalledTimes(2);
+    expect(container.querySelector("[role='alert']")).toBeNull();
+  });
+
   it("replaces an own finished photo through the same upload queue and shows its progress", async () => {
     const own = { ...photoSharedAlbumFixtureItems()[1], addedBy: { userId: "fixture-self", displayName: "自分", isSelf: true }, kind: "fileUpload" as const, state: "published" as const };
     let finish!: (result: { readonly ok: true }) => void;

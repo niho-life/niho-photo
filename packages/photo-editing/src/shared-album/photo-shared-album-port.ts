@@ -40,6 +40,19 @@ export interface PhotoSharedAlbumPeople {
 /** 1 枚の追加の結果。足さなかった理由が分かれば `reason`、分からなければ null（再試行できる失敗）。 */
 export type PhotoSharedAlbumAddResult = { readonly ok: true } | { readonly ok: false; readonly reason: PhotoSharedAlbumUploadReason | null };
 
+/** 「写真から選ぶ」の 1 枚（本人のライブラリの写真）。 */
+export interface PhotoSharedAlbumLibraryPhoto {
+  readonly photoId: string;
+  readonly thumbnailUrl: string | null;
+  /** 読み上げ名（ファイル名など、本人にだけ見える） */
+  readonly label: string;
+}
+export interface PhotoSharedAlbumLibraryPage {
+  readonly items: readonly PhotoSharedAlbumLibraryPhoto[];
+  /** 次のページ（無ければ null） */
+  readonly next: string | null;
+}
+
 export type PhotoSharedAlbumJoinResult = { readonly kind: "joined"; readonly albumId: string } | { readonly kind: "unavailable" };
 
 /**
@@ -62,6 +75,14 @@ export interface PhotoSharedAlbumPort {
   removeMember(albumId: string, memberId: string, signal: AbortSignal): Promise<void>;
   leave(albumId: string, signal: AbortSignal): Promise<void>;
   addFile(albumId: string, file: File, signal: AbortSignal): Promise<PhotoSharedAlbumAddResult>;
+  /**
+   * 本人のライブラリの写真の 1 ページ（「写真から選ぶ」）。本人のライブラリを持つ接続だけが渡す（無ければ「追加」はファイルだけ）
+   */
+  libraryPhotos?(cursor: string | null, signal: AbortSignal): Promise<PhotoSharedAlbumLibraryPage>;
+  /**
+   * 選んだ本人の写真を足す。元データのある端末が描くので準備中から始まる。足せなかった枚数を返す（{@link libraryPhotos} と一緒に渡す）
+   */
+  addLibraryPhotos?(albumId: string, photoIds: readonly string[], signal: AbortSignal): Promise<{ readonly failed: number }>;
   /** 自分が足した完成写真を、選び直した JPEG に差し替える（{@link photoSharedAlbumItemReplaceable} の項目だけ） */
   replaceFile(albumId: string, itemId: string, file: File, signal: AbortSignal): Promise<PhotoSharedAlbumAddResult>;
   /** 選んだ完成写真を端末に保存する。保存できなかった枚数を返す */

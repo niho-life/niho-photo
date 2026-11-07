@@ -34,6 +34,8 @@ export {
   sharedAlbumView,
   type CreateBrowserSharedAlbumScreensPortOptions,
   type CreateSharedAlbumScreensPortOptions,
+  type SharedAlbumRenderJobsHook,
+  type SharedAlbumScreensLibrary,
 } from "./album-screens";
 export {
   createBrowserSharedAlbumMembershipClient,
