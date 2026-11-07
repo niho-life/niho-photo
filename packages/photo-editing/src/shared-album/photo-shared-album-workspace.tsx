@@ -269,11 +269,13 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
     addLibraryPhotos.call(port, target, photoIds, signal).then(
       (result) => {
         if (signal.aborted) return;
-        if (result.failed > 0) setLibraryAddFailure({ albumId: target, photoIds });
+        // Only the photos that were not added are offered again: the others are in the album already.
+        if (result.failedPhotoIds.length > 0) setLibraryAddFailure({ albumId: target, photoIds: result.failedPhotoIds });
         if (albumIdRef.current === target) setAlbumToken((token) => token + 1);
       },
       () => {
-        if (!signal.aborted) setLibraryAddFailure({ albumId: target, photoIds });
+        // Not knowing which were added, nothing is sent again; the album shows what arrived.
+        if (!signal.aborted && albumIdRef.current === target) setAlbumToken((token) => token + 1);
       },
     );
   }, [port]);

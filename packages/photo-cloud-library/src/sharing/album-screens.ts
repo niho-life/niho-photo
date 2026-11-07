@@ -306,7 +306,7 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
           options.renderJobs?.wake();
         }
         if (results.some((result) => !result.ok && isSharingErrorEnvelope(result.error) && result.error.error.code === "quota_exceeded")) fullAlbums.set(albumId, now());
-        return { failed: results.filter((result) => !result.ok).length };
+        return { failedPhotoIds: results.filter((result) => !result.ok).map((result) => result.target) };
       },
     };
   }

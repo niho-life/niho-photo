@@ -116,9 +116,19 @@ describe("PhotoSharedAlbumView", () => {
       input.dispatchEvent(new Event("change", { bubbles: true }));
     });
     expect(onReplace).toHaveBeenCalledWith(own.itemId, file);
-    // The selection ends after the file was chosen.
+    // The selection ends after the file was chosen, and focus returns to 選択.
     expect(buttonByLabel("その他")).toBeUndefined();
     expect(buttonByLabel("選択を終了")).toBeUndefined();
+    expect(document.activeElement).toBe(buttonByText("選択"));
+
+    // Closing the chooser without a file keeps the selection and brings focus back to その他.
+    click(tiles()[0]);
+    click(buttonByText("差し替え"));
+    act(() => {
+      input.dispatchEvent(new Event("cancel"));
+    });
+    expect(document.activeElement).toBe(buttonByLabel("その他"));
+    expect(onReplace).toHaveBeenCalledTimes(1);
   });
 
   it("見るだけの人と、差し替えを渡さない接続には「その他」を出さない", () => {

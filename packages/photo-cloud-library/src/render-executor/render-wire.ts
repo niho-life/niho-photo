@@ -144,10 +144,16 @@ export function validateRenderJobResponse<K extends RenderExecutorOperation>(
       if (renewed.uploadId !== fields.uploadId || !isInstant(renewed.expiresAt) || !isTicketShape(renewed.ticket)) invalid();
       return done;
     }
-    case "renderJobs.commit":
-    case "renderJobs.fail": {
+    case "renderJobs.commit": {
+      // The output is published: the job is done and its lease released.
       const job = validateRenderJob(validateReceipt(raw).value);
-      if (job.id !== fields.jobId) invalid();
+      if (job.id !== fields.jobId || job.state !== "committed" || job.failure !== null || job.leaseExpiresAt !== null) invalid();
+      return done;
+    }
+    case "renderJobs.fail": {
+      // Recorded with the code this device reported, lease released.
+      const job = validateRenderJob(validateReceipt(raw).value);
+      if (job.id !== fields.jobId || job.state !== "failed" || job.failure !== fields.code || job.leaseExpiresAt !== null) invalid();
       return done;
     }
   }
@@ -155,7 +161,13 @@ export function validateRenderJobResponse<K extends RenderExecutorOperation>(
 }
 
 /** One render job as the contract describes it (`RenderJob`). */
-function validateRenderJob(value: unknown): { readonly id: string; readonly state: string; readonly executor: { readonly kind: string } } {
+function validateRenderJob(value: unknown): {
+  readonly id: string;
+  readonly state: string;
+  readonly failure: string | null;
+  readonly leaseExpiresAt: string | null;
+  readonly executor: { readonly kind: string };
+} {
   const keys = ["id", "purpose", "executor", "photo", "binding", "recipe", "state", "attempt", "createdAt", "leaseExpiresAt", "failure", "expectedOutput"];
   const job = exactRecord(value, keys, keys);
   if (!isOpaqueWireId(job.id) || !JOB_STATES.has(String(job.state)) || !safeNonNegative(job.attempt) || !isInstant(job.createdAt)) invalid();
@@ -175,7 +187,7 @@ function validateRenderJob(value: unknown): { readonly id: string; readonly stat
     const size = exactRecord(job.expectedOutput, ["width", "height"], ["width", "height"]);
     if (!integerBetween(size.width, 1, Number.MAX_SAFE_INTEGER) || !integerBetween(size.height, 1, Number.MAX_SAFE_INTEGER)) invalid();
   }
-  return job as unknown as { readonly id: string; readonly state: string; readonly executor: { readonly kind: string } };
+  return job as unknown as ReturnType<typeof validateRenderJob>;
 }
 
 function checkPurpose(value: unknown): void {

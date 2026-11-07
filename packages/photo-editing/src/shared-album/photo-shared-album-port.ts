@@ -80,9 +80,10 @@ export interface PhotoSharedAlbumPort {
    */
   libraryPhotos?(cursor: string | null, signal: AbortSignal): Promise<PhotoSharedAlbumLibraryPage>;
   /**
-   * 選んだ本人の写真を足す。元データのある端末が描くので準備中から始まる。足せなかった枚数を返す（{@link libraryPhotos} と一緒に渡す）
+   * 選んだ本人の写真を足す。元データのある端末が描くので準備中から始まる。足せなかった写真を返す（足せた写真をもう一度送ると二重に
+   * なるので、再試行はこの写真だけ）。{@link libraryPhotos} と一緒に渡す
    */
-  addLibraryPhotos?(albumId: string, photoIds: readonly string[], signal: AbortSignal): Promise<{ readonly failed: number }>;
+  addLibraryPhotos?(albumId: string, photoIds: readonly string[], signal: AbortSignal): Promise<{ readonly failedPhotoIds: readonly string[] }>;
   /** 自分が足した完成写真を、選び直した JPEG に差し替える（{@link photoSharedAlbumItemReplaceable} の項目だけ） */
   replaceFile(albumId: string, itemId: string, file: File, signal: AbortSignal): Promise<PhotoSharedAlbumAddResult>;
   /** 選んだ完成写真を端末に保存する。保存できなかった枚数を返す */

@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
 import { AlertCircle, Check, ChevronLeft, CloudUpload, Ellipsis, FolderOpen, ImageUp, Images, Moon, Plus, RefreshCw, Users, X } from "lucide-react";
 
 import { appDialog } from "niho-ui/app-dialog";
@@ -107,6 +107,7 @@ export function PhotoSharedAlbumView(props: PhotoSharedAlbumViewProps) {
   const [removing, setRemoving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const replaceInputRef = useRef<HTMLInputElement | null>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
   // 差し替えのファイルを選んでいる項目（選択画面が閉じてから届くので、選んだ時点の項目を覚える）
   const replaceTargetRef = useRef<{ readonly albumId: string; readonly itemId: string } | null>(null);
   const selectButtonRef = useRef<HTMLButtonElement | null>(null);
@@ -186,11 +187,27 @@ export function PhotoSharedAlbumView(props: PhotoSharedAlbumViewProps) {
     const target = replaceTargetRef.current;
     replaceTargetRef.current = null;
     // 選んでいる間に別のアルバムを開いたら、前のアルバムの項目を差し替えない
-    if (file === null || target === null || target.albumId !== albumIdRef.current || !props.onReplace) return;
+    if (file === null || target === null || target.albumId !== albumIdRef.current || !props.onReplace) {
+      moreButtonRef.current?.focus();
+      return;
+    }
     props.onReplace(target.itemId, file);
+    // The selection ends; focus goes to 選択, where it started.
+    focusAfterModeChangeRef.current = true;
     setSelecting(false);
     setSelected(new Set());
   };
+  // Closing the file chooser without a file leaves focus nowhere visible: bring it back to その他.
+  useEffect(() => {
+    const input = replaceInputRef.current;
+    if (!input) return;
+    const cancelled = () => {
+      replaceTargetRef.current = null;
+      moreButtonRef.current?.focus();
+    };
+    input.addEventListener("cancel", cancelled);
+    return () => input.removeEventListener("cancel", cancelled);
+  }, []);
   const canRemoveSelection = props.onRemove !== undefined
     && selectedItems.length > 0
     && selectedItems.every((item) => photoSharedAlbumCanRemoveItem(album.role, item));
@@ -344,7 +361,7 @@ export function PhotoSharedAlbumView(props: PhotoSharedAlbumViewProps) {
                 {selected.size > 0 ? PHOTO_SHARED_ALBUM_COPY.selectedCount(selected.size) : PHOTO_SHARED_ALBUM_COPY.selectPrompt}
               </span>
             </h1>
-            {replaceable ? <PhotoSharedAlbumMoreButton disabled={removing} onReplace={chooseReplacement} /> : null}
+            {replaceable ? <PhotoSharedAlbumMoreButton buttonRef={moreButtonRef} disabled={removing} onReplace={chooseReplacement} /> : null}
             {canRemoveSelection ? (
               <button
                 type="button"
@@ -492,12 +509,12 @@ export function PhotoSharedAlbumView(props: PhotoSharedAlbumViewProps) {
 }
 
 /** 選択中の「その他」。今は 1 枚の自分の完成写真の「差し替え」だけ（出せる操作が無いときはボタンごと出さない）。 */
-function PhotoSharedAlbumMoreButton(props: { disabled: boolean; onReplace: () => void }) {
+function PhotoSharedAlbumMoreButton(props: { disabled: boolean; onReplace: () => void; buttonRef: RefObject<HTMLButtonElement> }) {
   const [open, setOpen] = useState(false);
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
-        <button type="button" disabled={props.disabled} aria-haspopup="menu" aria-label={PHOTO_SHARED_ALBUM_COPY.more} className={HEADER_ICON_BUTTON_CLASS_NAME}>
+        <button ref={props.buttonRef} type="button" disabled={props.disabled} aria-haspopup="menu" aria-label={PHOTO_SHARED_ALBUM_COPY.more} className={HEADER_ICON_BUTTON_CLASS_NAME}>
           <Ellipsis className="h-5 w-5" aria-hidden />
         </button>
       </PopoverTrigger>

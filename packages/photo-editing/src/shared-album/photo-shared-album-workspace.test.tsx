@@ -234,7 +234,7 @@ describe("PhotoSharedAlbumWorkspace", () => {
     let failures = 1;
     const port = fakePort({
       libraryPhotos: vi.fn(async () => ({ items: [{ photoId: "photo-1", thumbnailUrl: null, label: "IMG_1.JPG" }, { photoId: "photo-2", thumbnailUrl: null, label: "IMG_2.JPG" }], next: null })),
-      addLibraryPhotos: vi.fn(async () => ({ failed: failures-- > 0 ? 1 : 0 })),
+      addLibraryPhotos: vi.fn(async (_albumId: string, photoIds: readonly string[]) => ({ failedPhotoIds: failures-- > 0 ? photoIds.slice(-1) : [] })),
     });
     await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} />));
     await flush();
@@ -250,16 +250,18 @@ describe("PhotoSharedAlbumWorkspace", () => {
     await act(async () => buttonByText("写真から選ぶ")?.click());
     await flush();
     const tiles = Array.from(document.body.querySelectorAll<HTMLButtonElement>("ul[aria-label='写真から選ぶ'] button"));
+    await act(async () => tiles[0]?.click());
     await act(async () => tiles[1]?.click());
     const reads = vi.mocked(port.openAlbum).mock.calls.length;
-    await act(async () => buttonByText("1枚を追加")?.click());
+    await act(async () => buttonByText("2枚を追加")?.click());
     await flush();
-    expect(port.addLibraryPhotos).toHaveBeenCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, ["photo-2"], expect.any(AbortSignal));
+    expect(port.addLibraryPhotos).toHaveBeenCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, ["photo-1", "photo-2"], expect.any(AbortSignal));
     expect(vi.mocked(port.openAlbum).mock.calls.length).toBeGreaterThan(reads);
-    // One was not added: the line offers to try the same photos again.
+    // photo-2 was not added: the line offers to try that photo only (photo-1 is in the album already).
     expect(container.querySelector("[role='alert']")).not.toBeNull();
     await act(async () => buttonByText("再試行", container)?.click());
     await flush();
+    expect(port.addLibraryPhotos).toHaveBeenLastCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, ["photo-2"], expect.any(AbortSignal));
     expect(port.addLibraryPhotos).toHaveBeenCalledTimes(2);
     expect(container.querySelector("[role='alert']")).toBeNull();
   });

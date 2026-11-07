@@ -63,7 +63,19 @@ describe("render job wire (B07 on USER_RENDER_ROUTES)", () => {
     refused(() => validateRenderJobResponse("renderJobs.startOutput", start, { value: { uploadId: "u1", expiresAt: "2026-11-07T00:30:00.000Z", ticket }, replayed: true }));
     refused(() => validateRenderJobResponse("renderJobs.startOutput", start, { value: { uploadId: "u1", expiresAt: "2026-11-07T00:30:00.000Z", ticket: null }, replayed: false }));
     refused(() => validateRenderJobResponse("renderJobs.renewOutput", { jobId: "job-1", leaseToken: "t", uploadId: "u1" }, { uploadId: "u2", expiresAt: "2026-11-07T00:30:00.000Z", ticket }));
-    refused(() => validateRenderJobResponse("renderJobs.commit", { jobId: "job-1", leaseToken: "t", uploadId: "u1" }, { value: job({ id: "job-2" }), replayed: false }));
-    expect(() => validateRenderJobResponse("renderJobs.fail", { jobId: "job-1", leaseToken: "t", code: "decoder_failed" }, { value: job({ state: "failed", failure: "decoder_failed", leaseExpiresAt: null }), replayed: false })).not.toThrow();
+    const commit = { jobId: "job-1", leaseToken: "t", uploadId: "u1" };
+    const committed = { state: "committed", leaseExpiresAt: null };
+    expect(() => validateRenderJobResponse("renderJobs.commit", commit, { value: job(committed), replayed: false })).not.toThrow();
+    refused(() => validateRenderJobResponse("renderJobs.commit", commit, { value: job({ ...committed, id: "job-2" }), replayed: false }));
+    // An answer that is not a published job is not a commit (the executor would stop as if it were done).
+    refused(() => validateRenderJobResponse("renderJobs.commit", commit, { value: job(), replayed: false }));
+    refused(() => validateRenderJobResponse("renderJobs.commit", commit, { value: job({ state: "committed" }), replayed: false }));
+    refused(() => validateRenderJobResponse("renderJobs.commit", commit, { value: job({ ...committed, failure: "decoder_failed" }), replayed: false }));
+    const failRequest = { jobId: "job-1", leaseToken: "t", code: "decoder_failed" } as const;
+    const failed = { state: "failed", failure: "decoder_failed", leaseExpiresAt: null };
+    expect(() => validateRenderJobResponse("renderJobs.fail", failRequest, { value: job(failed), replayed: false })).not.toThrow();
+    refused(() => validateRenderJobResponse("renderJobs.fail", failRequest, { value: job({ ...failed, failure: "source_missing" }), replayed: false }));
+    refused(() => validateRenderJobResponse("renderJobs.fail", failRequest, { value: job({ ...failed, state: "claimed" }), replayed: false }));
+    refused(() => validateRenderJobResponse("renderJobs.fail", failRequest, { value: job({ ...failed, leaseExpiresAt: "2026-11-07T00:15:00.000Z" }), replayed: false }));
   });
 });

@@ -284,7 +284,7 @@ describe("shared album screens port (B08 on B05/B12)", () => {
     expect(await withLibrary.libraryPhotos?.(null, t.signal)).toEqual(pages[0]);
     expect(await withLibrary.libraryPhotos?.("page-2", t.signal)).toEqual(pages[1]);
     // One photo NIHO knows and one it does not: the unknown one is counted, the other becomes a preparing item.
-    expect(await withLibrary.addLibraryPhotos?.(albumId, ["photo-1", "photo-unknown"], t.signal)).toEqual({ failed: 1 });
+    expect(await withLibrary.addLibraryPhotos?.(albumId, ["photo-1", "photo-unknown"], t.signal)).toEqual({ failedPhotoIds: ["photo-unknown"] });
     expect(woken).toEqual(["wake"]);
     const opened = await withLibrary.openAlbum(albumId, t.signal);
     expect(opened?.items).toEqual([expect.objectContaining({ kind: "ownerPhoto", state: "preparing", addedBy: expect.objectContaining({ isSelf: true }) })]);

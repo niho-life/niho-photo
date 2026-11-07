@@ -215,6 +215,27 @@ describe("shared-album BFF proxy (/cloud/sharing/v1, B00 SHARING_ROUTES)", () =>
     ]);
     expect(render[0]?.headers.get("Authorization")).toBe(`Bearer server-only-credential-${OWNER}`);
 
+    // A commit answer that is not a published job never reaches the device as a commit: the job stays preparing.
+    const unpublished = setup({
+      tamper: (body) => {
+        const value = body.value as { state?: string } | undefined;
+        return value?.state === "committed" ? { ...body, value: { ...value, state: "claimed" } } : body;
+      },
+    });
+    const pendingAlbum = await createSharedAlbumItems({ client: unpublished.albumClientFor(OWNER), uploader: unpublished.server.uploader, newIdempotencyKey: () => `item-${Math.random()}`, sleep: async () => undefined }).createAlbum("Synthetic album", signal);
+    unpublished.server.addLibraryPhoto({ ownerId: OWNER, libraryId: "synthetic-library", photoId: "photo-1", recipe, binding: bindingFor(hex(source.bytes), recipe), expectedOutput: { width: source.width, height: source.height } });
+    await unpublished.server.clientFor(OWNER).request("albumItems.addPhoto", { albumId: pendingAlbum.id, source: { kind: "libraryPhoto", libraryId: "synthetic-library", photoId: "photo-1" } }, { signal, idempotencyKey: "add-unpublished" });
+    const unpublishedExecutor = createSourceDeviceRenderExecutor({
+      transport: createBrowserRenderJobClient({ identity: new FakeIdentity(defaultActor({ userId: OWNER })), fetch: async (input, init) => (await unpublished.proxy(new Request(new URL(String(input), PHOTO_ORIGIN), init))) as Response, now: () => START }),
+      executor: { kind: "userDevice", userId: OWNER },
+      renderer: fakeRenderer().renderer,
+      sources: sourcePort(new Map<string, SyntheticSource>([["photo-1", source]])),
+      uploader: unpublished.server.uploader,
+      now: () => START,
+      sleep: async () => undefined,
+    });
+    expect((await unpublishedExecutor.drain(signal)).committed).toBe(0);
+
     // An output ticket pointing anywhere but the trusted provider never reaches the device.
     const forged = setup({
       tamper: (body) => {
