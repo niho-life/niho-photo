@@ -23,11 +23,14 @@
 
 C08の信頼された設定に、C01実producer登録、C02実transport、C03下書き・guard・失効消去、共有dialog取消し、正式なCSP/immutable asset保持を合わせる。安全なUI identity metadataをserverの本人証明として送らない。通常のcredential refreshでは編集を維持し、失効・本人切替では処理と派生資源を同期的に止める。通常の画面終了を下書きの失効消去にしない。
 
-## 未ログインで開いた招待
+## 共有アルバムの BFF（`/cloud/sharing/v1`）
 
-`PHOTO_WEB_CLOUD_ENABLED=true` で、非公開の運用側が `PHOTO_WEB_PENDING_INVITE_KEYS`（base64url の 32 bytes を 1〜2 個、カンマ区切り。先頭で封じ、どちらでも開く）と `PHOTO_WEB_SHARING_UPSTREAM_PATH_PREFIX`（共有の上流 prefix）を両方渡したときだけ、`/cloud/sharing/v1/invites/pending` と `.../pending/join` を `@niho/photo-cloud-library/server` の `createPendingInviteHandler` が受ける。片方だけなら起動しない。値は source・log・エラーに出さない。鍵の入れ替えは新しい鍵を先頭に足し、15分後に古い鍵を外す。
+`PHOTO_WEB_CLOUD_ENABLED=true` で、非公開の運用側が `PHOTO_WEB_SHARING_UPSTREAM_PATH_PREFIX`（共有の上流 prefix）と `PHOTO_WEB_PENDING_INVITE_KEYS`（base64url の 32 bytes を 1〜2 個、カンマ区切り。先頭で封じ、どちらでも開く）を両方渡したときだけ、`@niho/photo-cloud-library/server` の 2 つを `/cloud/v2` の前に組み込む。片方だけなら起動しない。値は source・log・エラーに出さない。鍵の入れ替えは新しい鍵を先頭に足し、15分後に古い鍵を外す。
 
-この 2 つの経路だけでは共有アルバムは使えない。参加のあとの一覧・アルバムなど `/cloud/sharing/v1` の通常の経路を上流へ送る BFF proxy はまだ無いので、その proxy と同時に設定し、拠点の rollout（`sharedAlbums`）もそれまで閉じておく。
+- `createPendingInviteHandler`: 未ログインで開いた招待の保留と参加（`/cloud/sharing/v1/invites/pending`・`.../pending/join`）
+- `createSharingCloudProxy`: 契約の経路の表（`SHARING_ROUTES`）を `/cloud/v2` と同じ作りで上流へ中継する。中継するのは応答を検査できる操作（`SHARING_PROXY_OPERATIONS`）だけで、ほかは `not_found`
+
+拠点の rollout（`sharedAlbums`）は、この 2 つの値と、上流の `/cloud/sharing/v1`（非公開側の権限台帳・最終認可・参加の通知）がそろったら開ける。
 
 ## production artifact
 

@@ -149,7 +149,8 @@ async function publishContent(
   return new Response(boundStream(upstream.body, metadata.length, request.signal), { status: upstream.status, headers });
 }
 
-function parseContentMetadata(response: Response, requestedRange: string | null): {
+/** Content headers of a 200/206 answer, checked against the requested range (shared with the sharing proxy). */
+export function parseContentMetadata(response: Response, requestedRange: string | null): {
   readonly length: number; readonly totalBytes: number; readonly sha256: string; readonly contentType: string; readonly contentRange: string | null;
 } | null {
   const length = integerHeader(response.headers, "Content-Length");
@@ -169,7 +170,8 @@ function parseContentMetadata(response: Response, requestedRange: string | null)
   return { length, totalBytes, sha256, contentType, contentRange };
 }
 
-function boundStream(source: ReadableStream<Uint8Array>, expected: number, signal: AbortSignal): ReadableStream<Uint8Array> {
+/** The upstream body as exactly `expected` bytes, never buffered whole; short, long, idle or aborted streams error. */
+export function boundStream(source: ReadableStream<Uint8Array>, expected: number, signal: AbortSignal): ReadableStream<Uint8Array> {
   const reader = source.getReader(); let read = 0; let empty = 0; let output: ReadableStreamDefaultController<Uint8Array> | null = null; let finished = false;
   const finish = (): void => { if (!finished) { finished = true; signal.removeEventListener("abort", abort); try { reader.releaseLock(); } catch { /* pending read */ } } };
   function abort(): void { void reader.cancel().catch(() => undefined); finish(); try { output?.error(new PersonalPhotoCloudError("unavailable")); } catch { /* consumer already cancelled */ } }
