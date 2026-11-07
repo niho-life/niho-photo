@@ -3,7 +3,14 @@ import { NIHO_PRODUCTION_ORIGIN, PhotoAuthorizationError } from "@niho/photo-clo
 import { describe, expect, it } from "vitest";
 
 import { createSharingCloudProxy, type SharingProxyOperations } from "../src/server";
-import { createBrowserSharedAlbumMembershipClient, createSharedAlbumMockServer } from "../src/sharing";
+import {
+  createBrowserSharedAlbumClient,
+  createBrowserSharedAlbumMembershipClient,
+  createSharedAlbumItems,
+  createSharedAlbumMockServer,
+  prepareAlbumFile,
+} from "../src/sharing";
+import { syntheticJpeg } from "./render-support";
 import { FakeIdentity, defaultActor } from "./support";
 
 const PHOTO_ORIGIN = "https://photo.example.test";
@@ -16,7 +23,7 @@ const signal = new AbortController().signal;
 
 type Upstream = (request: Request) => Promise<Response> | Response;
 
-function setup(options: { upstream?: Upstream; operations?: SharingProxyOperations } = {}) {
+function setup(options: { upstream?: Upstream; operations?: SharingProxyOperations; tamper?: (body: Record<string, unknown>) => Record<string, unknown> } = {}) {
   let secrets = 0;
   const server = createSharedAlbumMockServer({
     users: [{ userId: OWNER, displayName: "Synthetic Owner" }, { userId: MEMBER, displayName: "Synthetic Member" }],
@@ -48,11 +55,13 @@ function setup(options: { upstream?: Upstream; operations?: SharingProxyOperatio
       if (options.upstream) return await options.upstream(request);
       // The synthetic server stands in for the upstream: the same suffix under its own prefix.
       const url = new URL(request.url);
-      return await server.fetch(new Request(`${PHOTO_ORIGIN}${SHARING}${url.pathname.slice(PREFIX.length)}${url.search}`, {
+      const answer = await server.fetch(new Request(`${PHOTO_ORIGIN}${SHARING}${url.pathname.slice(PREFIX.length)}${url.search}`, {
         method: request.method,
         headers: request.headers,
         ...(body === "" ? {} : { body }),
       }));
+      if (!options.tamper || !answer.ok || !answer.headers.get("Content-Type")?.includes("json")) return answer;
+      return new Response(JSON.stringify(options.tamper(await answer.json() as Record<string, unknown>)), { status: answer.status, headers: { "Content-Type": "application/json" } });
     },
   });
   const browserFetch: typeof fetch = async (input, init) => {
@@ -65,6 +74,7 @@ function setup(options: { upstream?: Upstream; operations?: SharingProxyOperatio
     return response;
   };
   const clientFor = (userId: string) => createBrowserSharedAlbumMembershipClient({ identity: new FakeIdentity(defaultActor({ userId })), fetch: browserFetch, now: () => START });
+  const albumClientFor = (userId: string) => createBrowserSharedAlbumClient({ identity: new FakeIdentity(defaultActor({ userId })), fetch: browserFetch, now: () => START });
   const capture = (userId = MEMBER): Record<string, string> => ({
     "X-NIHO-Photo-Actor-Id": userId,
     "X-NIHO-Photo-Session-Id": "parent-1",
@@ -73,7 +83,7 @@ function setup(options: { upstream?: Upstream; operations?: SharingProxyOperatio
   const call = async (method: string, path: string, init: { headers?: Record<string, string>; body?: string } = {}) =>
     await proxy(new Request(`${PHOTO_ORIGIN}${path}`, { method, headers: { ...capture(), ...init.headers }, ...(init.body === undefined ? {} : { body: init.body }) }));
   const album = async () => (await server.clientFor(OWNER).request("albums.create", { name: "Synthetic album" }, { signal, idempotencyKey: `album-${Math.random()}` })).value;
-  return { server, proxy, auth, upstreamRequests, clientFor, call, capture, album };
+  return { server, proxy, auth, upstreamRequests, clientFor, albumClientFor, call, capture, album };
 }
 
 async function errorCode(response: Response | null): Promise<string> {
@@ -120,13 +130,59 @@ describe("shared-album BFF proxy (/cloud/sharing/v1, B00 SHARING_ROUTES)", () =>
     expect(refused).toMatchObject({ error: { code: "role_forbidden" } });
   });
 
+  it("forwards albums, items, upload tickets and rendition downloads (B12) with the album client's checks", async () => {
+    const t = setup();
+    let keys = 0;
+    const owner = createSharedAlbumItems({ client: t.albumClientFor(OWNER), uploader: t.server.uploader, newIdempotencyKey: () => `key-${++keys}`, sleep: async () => undefined });
+    const album = await owner.createAlbum("Synthetic album", signal);
+    const file = prepareAlbumFile(syntheticJpeg({ width: 1200, height: 800, seed: 3 }));
+    const item = await owner.addFile(album.id, file, signal);
+    expect(item.state).toBe("published");
+    const listed = await owner.listItems(album.id, { limit: 10 }, signal);
+    expect(listed.items.map((entry) => entry.id)).toEqual([item.id]);
+
+    const rendition = item.rendition as NonNullable<typeof item.rendition>;
+    const content = await t.albumClientFor(OWNER).download({ albumId: album.id, itemId: item.id, renditionId: rendition.id, variant: "full", range: { start: 4, endInclusive: 99 } }, signal);
+    expect(content).toMatchObject({ sha256: rendition.asset.sha256, totalBytes: rendition.asset.sizeBytes, range: { start: 4, endInclusive: 99 } });
+    expect(new Uint8Array(await new Response(content.body).arrayBuffer())).toEqual((t.server.renditionBytes(item.id) as Uint8Array).subarray(4, 100));
+
+    // The upload ticket went through the BFF's provider check; the renewal (not a mutation) carries no key upstream.
+    const client = t.albumClientFor(OWNER);
+    const pending = (await client.request("albumItems.addFile", { albumId: album.id, rendition: file.rendition }, { signal, idempotencyKey: "add-2" })).value;
+    expect(pending.upload?.ticket?.url.startsWith("https://storage.googleapis.com/")).toBe(true);
+    await client.request("albumItems.renewUpload", { albumId: album.id, uploadId: pending.upload?.upload.id as string }, { signal });
+    const upstream = t.upstreamRequests.map((request) => `${request.method} ${new URL(request.url).pathname.slice(PREFIX.length)}${new URL(request.url).search} ${request.headers.get("Idempotency-Key") === null ? "-" : "key"}`);
+    expect(upstream).toEqual([
+      "POST /albums key",
+      `POST /albums/${album.id}/file-items key`,
+      expect.stringMatching(new RegExp(`^POST /albums/${album.id}/uploads/[^/]+/commit key$`, "u")),
+      `GET /albums/${album.id}/items?limit=10 -`,
+      `GET /albums/${album.id}/items/${item.id}/renditions/${rendition.id}/content?variant=full -`,
+      `POST /albums/${album.id}/file-items key`,
+      `POST /albums/${album.id}/uploads/${pending.upload?.upload.id}/renew -`,
+    ]);
+    expect(t.upstreamRequests[4]?.headers.get("Range")).toBe("bytes=4-99");
+
+    // A ticket pointing anywhere but the trusted provider never reaches the browser.
+    const forged = setup({
+      tamper: (body) => {
+        const upload = (body.value as { upload?: { ticket?: { url: string } } } | undefined)?.upload;
+        if (upload?.ticket) upload.ticket.url = "https://uploads.example.test/stolen";
+        return body;
+      },
+    });
+    const forgedAlbum = await forged.album();
+    const refused = await forged.albumClientFor(OWNER).request("albumItems.addFile", { albumId: forgedAlbum.id, rendition: file.rendition }, { signal, idempotencyKey: "add-forged" }).catch((error: unknown) => error);
+    expect(refused).toMatchObject({ error: { code: "temporarily_unavailable" } });
+  });
+
   it("answers only the route table's paths and the operations it can check", async () => {
     const t = setup();
     const albumId = "synthetic-album";
     for (const [method, path] of [
       ["GET", `${SHARING}/unknown`],
       ["GET", SHARING],
-      ["GET", `${SHARING}/albums`], // in the table, but its checks are not in this package yet
+      ["GET", `${SHARING}/libraries`], // in the table, but its checks are not in this package yet
       ["GET", `${SHARING}/render-jobs/claim`],
       ["PUT", `${SHARING}/albums/${albumId}/invites`],
       ["GET", `${SHARING}/albums/a%2Fb/invites`],

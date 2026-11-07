@@ -54,7 +54,7 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 - `withAuthorizedCredential` で本人・親 session・epoch を capture header と照合し、新しい credential を固定の upstream（`NIHO_PRODUCTION_ORIGIN` と非公開の起動設定の prefix）にだけ渡す。同じ suffix を prefix へ写す。
 - JSON は parse の前に byte 数を制限し、client と同じ応答の規則で検査する。error は契約の envelope で status が一致するものだけ。upload ticket は trusted provider の、その upload のものだけ。content は v2 と同じ（200 は全体、206 は要求した範囲、全体の size と SHA-256、正確な長さ、全量を buffer しない）。
 - 公開の前に session をもう一度確かめ、失敗なら上流の body を取り消して 1 byte も出さない。応答はすべて `no-store`。
-- 中継する操作は `SHARING_PROXY_OPERATIONS`（このPRではメンバーと招待）。
+- 中継する操作は `SHARING_PROXY_OPERATIONS`: メンバーと招待（B05）、アルバム・項目・オーナーの共有容量・完成写真の download と upload ticket（B12）。家の Mac のライブラリ・書き出し・render job など、応答を検査する client がまだ無い操作は閉じている。
 
 ### 未ログインで開いた招待（`@niho/photo-cloud-library/server` の `createPendingInviteHandler`）
 
