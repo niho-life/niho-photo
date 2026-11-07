@@ -67,6 +67,7 @@ test("an export with access material or a member's source is rejected", async ()
   reject((copy) => { copy.photos[0].recipe.settings.session = "synthetic"; });
   reject((copy) => { copy.photos[0].recipe.settings.look = { apiKey: "synthetic" }; });
   reject((copy) => { copy.photos[0].recipe.settings.preset = "https://download.example.test/signed"; });
+  reject((copy) => { copy.photos[0].recipe.maskSurfaceIds = ["../outside"] });
   // Missing fields in untrusted input are invalid_request, never a TypeError.
   reject((copy) => { delete copy.albums[0].items; });
   reject((copy) => { delete copy.photos[0].recipe; });
@@ -118,6 +119,32 @@ test("a full export with a missing mask writes no manifest", async () => {
   assert.equal(result.manifest, null);
   assert.equal(result.missingMasks.length, 1);
   assert(!written.includes("manifest.json"), "an incomplete archive is never published as a full export");
+});
+
+test("a recipe mask omitted from the mask inventory blocks export and fails archive verification", async () => {
+  const { manifest, surfaceId, mask } = await exported();
+  const incomplete = structuredClone(manifest);
+  const photo = incomplete.photos.find((entry) => entry.recipe.maskSurfaceIds.includes(surfaceId));
+  photo.masks = photo.masks.filter((entry) => entry.surfaceId !== surfaceId);
+  const written = [];
+
+  const result = await buildFullExport({
+    manifest: incomplete,
+    readOriginal: async () => null,
+    readMask: async () => mask,
+    sink: { add: async (path) => { written.push(path); } },
+    signal,
+  });
+  assert.equal(result.manifest, null);
+  assert.deepEqual(result.missingMasks, [surfaceId]);
+  assert(!written.includes("manifest.json"), "the manifest is withheld when a recipe mask is not exported");
+
+  const full = { ...incomplete, mode: "full" };
+  assert.deepEqual(
+    await verifyFullExport({ manifest: full, read: async (path) => path === `masks/${surfaceId}.png` ? mask : null, signal }),
+    [`masks/${surfaceId}.png`],
+    "verification checks per-photo references even when the archive happens to contain matching bytes",
+  );
 });
 
 test("restore keeps newer NIHO data, checks hashes and masks, and never restores access", async () => {

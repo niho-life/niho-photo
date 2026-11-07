@@ -10824,8 +10824,8 @@
     },
     {
       "path": "docs/architecture/photo-library-sharing.md",
-      "sha256": "e8caa8f33ecbb6ac8fa6ac31608a6d6abc6518daba7b45a2e0ded9ce528fe5f8",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 経路decodeの検査範囲とBFF・serverの責務を明確化。\n変更理由: Portable exportの取得経路とworking copy送信契約を追記。\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加"
+      "sha256": "5cd4275859d79aed96f5afe811839b370f1e4933629a9ba728f6ae4278ad8070",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 経路decodeの検査範囲とBFF・serverの責務を明確化。\n変更理由: Portable exportの取得経路とworking copy送信契約を追記。\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加\n変更理由: B00のcookie境界文書をmainと統合"
     },
     {
       "path": "docs/ci/public-ci.md",
@@ -13629,8 +13629,8 @@
     },
     {
       "path": "packages/photo-hosted-library/src/replica.ts",
-      "sha256": "d3c35b6428bb4df4417db2757f1a1d2b05dd765372b6bd009014794112fa4f01",
-      "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B01: validate replica snapshots and export hashes"
+      "sha256": "fdab88688f7eb4684c4581c9d2b6fd797edca0664188f485ede6d957adcf4935",
+      "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B01: validate replica snapshots and export hashes\n変更理由: 上限で未完了の差分同期を次回へ引き継ぐ"
     },
     {
       "path": "packages/photo-hosted-library/src/index-recovery.ts",
@@ -13639,8 +13639,8 @@
     },
     {
       "path": "packages/photo-hosted-library/src/portability.ts",
-      "sha256": "34ea0c3c74562ccb3b0a6a78a6d96718234fdceef98e727d68738fe275ccd7f9",
-      "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B01: validate replica snapshots and export hashes"
+      "sha256": "e898d20e0c2b75acce9f3f8ff67a9a15689331c8d8654aa2efcb1e99fdcbfed6",
+      "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B01: validate replica snapshots and export hashes\n変更理由: full exportでrecipeのmask参照も検査\n変更理由: archive検証でも写真ごとのrecipe参照を照合"
     },
     {
       "path": "packages/photo-hosted-library/src/index.ts",
@@ -13664,8 +13664,8 @@
     },
     {
       "path": "packages/photo-hosted-library/test/replica.test.mjs",
-      "sha256": "ffebd614a6f29df40f7096bfe1873ddae3f0c24d5147f745a49c77d0084ee3c7",
-      "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B01: validate replica snapshots and export hashes"
+      "sha256": "4a888cc587cbb55b4ed594da0bfea4e67f9b8b1a1a0960676f664806a4429389",
+      "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B01: validate replica snapshots and export hashes\n変更理由: heartbeatが同じでも未完了差分を継続する回帰を追加"
     },
     {
       "path": "packages/photo-hosted-library/test/save.test.mjs",
@@ -13679,8 +13679,8 @@
     },
     {
       "path": "packages/photo-hosted-library/test/portability.test.mjs",
-      "sha256": "4789711950f41790364a593123979658bca4086acff133cd2f9b08a87b44489e",
-      "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B01: validate replica snapshots and export hashes"
+      "sha256": "6f77296d1bc78a2c9b2f59fd72070efe6072f02683d37ddcad52fcc60e5055c5",
+      "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B01: validate replica snapshots and export hashes\n変更理由: recipe参照の欠落とfull export検証の回帰を追加\n変更理由: 既存bytesがあってもrecipe参照欠落を検出する回帰"
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-shared-album-fixtures.ts",

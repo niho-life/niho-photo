@@ -33,6 +33,27 @@ test("saves made while the Mac sleeps reach the replica on wake, as a diff from 
   for (const call of canonical.calls) assert(ALLOWED.has(call), call);
 });
 
+test("an unfinished bounded diff continues when the heartbeat matches the applied revision", async () => {
+  const { canonical, ids, store } = await seeded();
+  await createHostedReplicaSync({ client: canonical.client(), store }).sync({ canonicalRevision: canonical.revision, signal });
+  const sync = createHostedReplicaSync({ client: canonical.client(), store, pageLimit: 1, maxPages: 1 });
+  await canonical.putRecipe(editRequest(canonical, ids.k1, { exposure: 0.4 }), "save-before-heartbeat");
+  const heartbeat = canonical.revision;
+  await canonical.putRecipe(editRequest(canonical, ids.k2, { exposure: -0.4 }), "save-after-heartbeat");
+
+  const first = await sync.sync({ canonicalRevision: heartbeat, signal });
+  assert.equal(first.mode, "diff");
+  assert.equal(first.replicaRevision, heartbeat);
+  assert.deepEqual(sync.status(), { canonicalRevision: heartbeat, replicaRevision: heartbeat, state: "behind" });
+
+  const continued = await sync.sync({ canonicalRevision: heartbeat, signal });
+  assert.equal(continued.mode, "diff", "an unchanged heartbeat cannot suppress an unfinished diff");
+  assert.equal(continued.appliedChanges, 1);
+  assert.equal(continued.replicaRevision, canonical.revision);
+  assert.equal(sync.status().state, "current");
+  assertMirrors(canonical, store);
+});
+
 test("the replica never writes back; a replica ahead of NIHO is rebuilt, not promoted", async () => {
   const { canonical, ids, store } = await seeded();
   const sync = createHostedReplicaSync({ client: canonical.client(), store });
