@@ -46,7 +46,8 @@ const XMP_GPS_MARKERS = ["GPSLatitude", "GPSLongitude"];
 
 const PNG_SIGNATURE = [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a];
 
-type JpegSegment = {
+/** One JPEG header segment up to and including SOS (`dataStart`..`end` is the payload after the length). */
+export type JpegSegment = {
   marker: number;
   /** セグメント本体（長さ 2 バイトの直後）の開始位置。 */
   dataStart: number;
@@ -72,7 +73,8 @@ function isJpegSofMarker(marker: number): boolean {
  * SOI から SOS（圧縮データの開始）までのメタデータセグメントを並べる。
  * JPEG でない・途中で壊れている場合は null。
  */
-function readJpegHeaderSegments(bytes: Uint8Array): JpegSegment[] | null {
+/** Header segments from SOI through SOS (null for non-JPEG or truncated input). Shared with the render-output scrub. */
+export function readJpegHeaderSegments(bytes: Uint8Array): JpegSegment[] | null {
   if (bytes.length < 4 || bytes[0] !== 0xff || bytes[1] !== JPEG_SOI) return null;
 
   const segments: JpegSegment[] = [];

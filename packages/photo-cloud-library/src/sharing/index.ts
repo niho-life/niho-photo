@@ -1,7 +1,26 @@
 /**
- * Shared-album membership and invite links (B05 #246): the same-origin client, the UI-facing actions and a synthetic
- * in-memory server for development and tests. Not wired into any host yet.
+ * Shared albums: membership and invite links (B05 #246), albums, items and the owner's shared storage (B12 #254). The
+ * same-origin clients, the UI-facing actions and a synthetic in-memory server for development and tests. Not wired
+ * into any host yet.
  */
+export {
+  createBrowserSharedAlbumClient,
+  type CreateBrowserSharedAlbumClientOptions,
+  type SharedAlbumClient,
+} from "./album-client";
+export {
+  SharedAlbumFileError,
+  createSharedAlbumItems,
+  deviceRenderFile,
+  prepareAlbumFile,
+  type CreateSharedAlbumItemsOptions,
+  type PreparedAlbumFile,
+  type SharedAlbumFileProblem,
+  type SharedAlbumItemResult,
+  type SharedAlbumItems,
+  type SharedAlbumItemsTransport,
+} from "./album-items";
+export { SHARED_ALBUM_ITEM_OPERATIONS, type SharedAlbumItemOperation } from "./album-wire";
 export {
   createBrowserSharedAlbumMembershipClient,
   type CreateBrowserSharedAlbumMembershipClientOptions,
@@ -27,6 +46,7 @@ export {
   createSharedAlbumMockServer,
   type CreateSharedAlbumMockServerOptions,
   type SharedAlbumMockClient,
+  type SharedAlbumMockLibraryPhoto,
   type SharedAlbumMockOperation,
   type SharedAlbumMockServer,
   type SharedAlbumMockUser,

@@ -54,7 +54,7 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 - `withAuthorizedCredential` で本人・親 session・epoch を capture header と照合し、新しい credential を固定の upstream（`NIHO_PRODUCTION_ORIGIN` と非公開の起動設定の prefix）にだけ渡す。同じ suffix を prefix へ写す。
 - JSON は parse の前に byte 数を制限し、client と同じ応答の規則で検査する。error は契約の envelope で status が一致するものだけ。upload ticket は trusted provider の、その upload のものだけ。content は v2 と同じ（200 は全体、206 は要求した範囲、全体の size と SHA-256、正確な長さ、全量を buffer しない）。
 - 公開の前に session をもう一度確かめ、失敗なら上流の body を取り消して 1 byte も出さない。応答はすべて `no-store`。
-- 中継する操作は `SHARING_PROXY_OPERATIONS`（このPRではメンバーと招待）。
+- 中継する操作は `SHARING_PROXY_OPERATIONS`: メンバーと招待（B05）、アルバム・項目・オーナーの共有容量・完成写真の download と upload ticket（B12）。家の Mac のライブラリ・書き出し・render job など、応答を検査する client がまだ無い操作は閉じている。
 
 ### 未ログインで開いた招待（`@niho/photo-cloud-library/server` の `createPendingInviteHandler`）
 
@@ -66,8 +66,27 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 - 鍵は非公開の運用側から渡す 32 bytes を 1〜2 個（先頭で封じ、どちらでも開く）。値を source・log・エラーに出さない。使った保留の ID は期限までこの process が覚え、別の instance で同じ cookie が使われたときは上流の key の replay（`replayed: true`）を `invite_unavailable` にする。
 - 同一 origin・`Origin` 一致・`Sec-Fetch-Site: same-origin`（ある場合）・`Content-Type: application/json`・query と `Idempotency-Key` なし・閉じた body だけを受ける。
 
+## 共有アルバムの写真（`./sharing`、B12 #254）
+
+同じ `./sharing` に、アルバム・項目・オーナーの共有容量の client（`createBrowserSharedAlbumClient`）と UI 向けの操作（`createSharedAlbumItems`）を置く。B05 の client と同じ HTTP の芯（`sharing-http.ts`）と経路の表を使う。
+
+- 追加は 3 種類。自分のライブラリの写真（`addLibraryPhotos`。元データを持つ端末が B07 で描く）、端末で描いた写真（`addDevicePhoto`。`renderFinishedOutput` の結果を `deviceRenderFile` で渡す）、完成済みの JPEG（`addFile`。`prepareAlbumFile` が端末で撮影日時以外の metadata を落とす。向きの tag に頼る JPEG は受け取らない）。
+- 呼び出しごとに冪等 key を持ち、応答が失われたら同じ key で再送する。ticket のない再送の応答を受けたら、その upload を取り消して同じ項目へ同じ内容を出し直し、項目を二重に作らない。始めた upload は確定か解放で終わる（中断・確定の拒否・取消で予約を返し、公開されなかった追加は消す）。
+- 差し替え（`replaceFile`・`replaceDeviceRender`）、複数選択の削除（`removeItems`）と保存（`saveItems`。原寸を hash と照合して渡す）。
+- 合成 server は項目の状態、追加者の端末の描画 job、確定時の作り直し（許可した metadata だけ）、オーナーへの容量の算入と解放、補正の保存による自動差し替え、端末の休止、メンバーの解除・降格で公開前の追加を落とすことを持つ。画面への組み込みは B00・B08 の merge 後。
+
 ## 完全補正の同期core
 
 C03は `@niho/photo-cloud-sync` と組み合わせ、`recipes.put` / `recipe-conflicts.list` / `recipe-conflicts.get` / `recipe-conflicts.resolve` を同じ固定HTTP/BFFへ接続する。補正文書1MiB/depth32とPUT envelope2MiBを分離し、両版と選択結果を含む競合応答は4MiBまで検証する。`./protocol` はscope/有限待機/純粋なrecipe投影・比較の狭い共有口で、認証やhashの別正本ではない。
 
 この接続だけでPhotoLibraryの編集capabilityは開かない。共有autosaverのdebounce前stage、実mask/base/versions、各hostへの注入と正式環境での受入を続ける。
+
+## 端末で仕上がり写真を作る（`./render-executor`、#248）
+
+`@niho/photo-cloud-library/render-executor` は、原本を持つ端末（Macアプリ・Web。のちに常設Mac）で共有アルバムの仕上がり写真とpreviewを作り、`@niho/photo-library-sharing-contract` の `renderJobs.claim` → `startOutput` → upload → `commit` / `fail` で送る。
+
+- 画素は既存engine（#197）の書出しだけで作り、engineの版は変えない。JPEGの品質はengineのWeb書出しと同じ90。
+- 仕上がり写真は全画素に限る。recipeの回転・切抜きから決まる大きさとengineの出力が一致しなければ `full_resolution_unavailable` で止め、小さい画像を仕上がりとして送らない。このengine経路は長辺4096pxまでのJPEG/PNGの原本を扱う。
+- metadataは端末で作り直す。既定のJFIFと画像のsegmentだけを残し、ほかのAPPn・COM・EOI後のbyteを落としてから、撮影日時（UTC offset付き）と向きだけをengineの `withCaptureExif` で書く。色はタグなしsRGBだけ。
+- jobは `RenderBinding` に拘束し、古いrecipeの結果は送らない（サーバも `decideRenderCommit` で拒否する）。端末ごとの同時実行数を守り、`drain` は端末内で1本だけ走る。表示中の写真を先に作り、recipeの更新・項目やアルバムの削除で古いjobを止め、容量不足は失敗にせず空きができたら再開する。
+- `createRenderJobMockServer` は契約のpolicyを使う合成のjob queueで、試験とUI確認に使う。実HTTP routeとhostへの接続は後続。
