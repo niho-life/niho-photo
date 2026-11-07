@@ -1532,10 +1532,10 @@ fn sharing_json_and_content_routes_do_not_cross() {
     None,
   )
   .unwrap();
-  assert_eq!(
-    f.account.photo_sharing_request(&scope, &download).unwrap_err(),
-    AccountError::InvalidResponse
-  );
+  assert!(matches!(
+    f.account.photo_sharing_request(&scope, &download),
+    Err(AccountError::InvalidResponse)
+  ));
   let list = SharingRequest::parse("GET", "/cloud/sharing/v1/albums", None, None).unwrap();
   let mut bytes = Vec::new();
   assert_eq!(
