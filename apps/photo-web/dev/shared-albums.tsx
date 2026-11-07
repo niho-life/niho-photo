@@ -1,7 +1,7 @@
 /**
  * Development only (B08 #249): the shared-album screens in the Photo Web shell, on the synthetic in-memory server with
  * canvas-drawn gradient photos. No real photo, person, secret or server. `?as=owner|member|viewer` picks the viewer,
- * `?scene=list|album|share|settings|invite-unavailable|held` the starting screen, and `#frame:<query>:<width>:<height>` shows
+ * `?scene=list|album|share|settings|invite-unavailable|held|picker|replace` the starting screen, and `#frame:<query>:<width>:<height>` shows
  * that page in a fixed-size frame (narrow screenshots).
  */
 import { useEffect, useState } from "react";
@@ -61,6 +61,15 @@ async function seed() {
   step("start");
   const server = createSharedAlbumMockServer({ users: Object.values(USERS) });
   const signal = new AbortController().signal;
+  // The owner's own library for 「写真から選ぶ」: canvas-drawn photos, known to the synthetic server.
+  const libraryItems = await Promise.all(Array.from({ length: 14 }, async (_, index) => {
+    const file = await gradientPhoto(index + 2, 1200, 800);
+    return { photoId: `synthetic-photo-${index + 1}`, thumbnailUrl: URL.createObjectURL(file), label: file.name };
+  }));
+  const libraryBinding = { sourceGeneration: 1, sourceSha256: "d".repeat(64), recipeRevision: 1, settingsSha256: "b".repeat(64), engine: "niho-14", rendererManifestSha256: "c".repeat(64), maskSurfaceIds: [] };
+  for (const item of libraryItems) {
+    server.addLibraryPhoto({ ownerId: USERS.owner.userId, libraryId: "synthetic-owner-library", photoId: item.photoId, binding: libraryBinding, recipe: { revision: 1, settings: { v: 1, engine: "niho-14" }, settingsSha256: "b".repeat(64), baseVersion: null, maskSurfaceIds: [], updatedAt: "2026-11-07T00:00:00.000Z" } as never });
+  }
   const ports = Object.fromEntries((Object.keys(USERS) as Who[]).map((who) => {
     const client = server.clientFor(USERS[who].userId);
     const port = createSharedAlbumScreensPort({
@@ -73,6 +82,7 @@ async function seed() {
         { locationId: "nihoCloud", kind: "nihoCloud", name: null, hostedMacStatus: null, usage: { usedBytes: 1.2e9, quotaBytes: 5e9 } },
         { locationId: "hosted", kind: "hostedMac", name: "自宅の Mac mini", hostedMacStatus: "sleeping", usage: null },
       ],
+      ...(who === "owner" ? { library: { libraryId: "synthetic-owner-library", list: async () => ({ items: libraryItems, next: null }) } } : {}),
     });
     return [who, port];
   })) as Record<Who, PhotoSharedAlbumPort>;
@@ -122,7 +132,7 @@ function Harness(props: { readonly who: Who; readonly scene: string }) {
       const port = seeded.ports[props.who];
       // Opening the album goes through the same path as an invite link (joining again changes nothing).
       let secret: string | null = null;
-      if (props.scene === "album" || props.scene === "share") {
+      if (props.scene === "album" || props.scene === "share" || props.scene === "picker" || props.scene === "replace") {
         secret = props.who === "owner" ? null : await seeded.openWorkshop(props.who);
         if (props.who === "owner") {
           const url = await seeded.ports.owner.copyInviteLink(seeded.workshop, "contributor", new AbortController().signal);
@@ -143,14 +153,35 @@ function Harness(props: { readonly who: Who; readonly scene: string }) {
     });
   }, [props.who, props.scene]);
   useEffect(() => {
-    if (props.scene !== "share" || !state) return;
+    if (!state) return;
+    // Each scene is a few clicks a person would make, done as soon as the button is on screen.
+    const buttons = (selector: string) => Array.from(document.querySelectorAll<HTMLButtonElement>(selector));
+    const byText = (text: string) => buttons("button").find((button) => button.textContent?.trim() === text);
+    const scripts: Record<string, readonly (() => HTMLButtonElement | undefined)[]> = {
+      share: [() => buttons("button[aria-label='共有']")[0]],
+      picker: [
+        () => buttons("button[aria-haspopup='menu']").find((button) => button.textContent?.trim() === "追加"),
+        () => byText("写真から選ぶ"),
+        () => buttons("ul[aria-label='写真から選ぶ'] button")[0],
+        () => buttons("ul[aria-label='写真から選ぶ'] button")[2],
+        () => buttons("ul[aria-label='写真から選ぶ'] button")[3],
+      ],
+      replace: [
+        () => buttons("ul[aria-label] button").find((button) => button.getAttribute("aria-label")?.includes("あなた")),
+        () => buttons("button[aria-label='その他']")[0],
+      ],
+    };
+    const script = scripts[props.scene];
+    if (!script) return;
+    let index = 0;
     const timer = setInterval(() => {
-      const share = document.querySelector<HTMLButtonElement>("button[aria-label='共有']");
-      if (share) {
-        share.click();
-        clearInterval(timer);
-      }
-    }, 100);
+      const target = script[index]?.();
+      if (!target) return;
+      target.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0, pointerType: "mouse" }));
+      target.click();
+      index += 1;
+      if (index >= script.length) clearInterval(timer);
+    }, 150);
     return () => clearInterval(timer);
   }, [props.scene, state]);
   return (

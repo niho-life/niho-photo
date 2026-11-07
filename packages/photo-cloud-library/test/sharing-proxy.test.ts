@@ -10,7 +10,8 @@ import {
   createSharedAlbumMockServer,
   prepareAlbumFile,
 } from "../src/sharing";
-import { syntheticJpeg } from "./render-support";
+import { createBrowserRenderJobClient, createSourceDeviceRenderExecutor } from "../src/render-executor";
+import { bindingFor, fakeRenderer, hex, recipeFor, sourcePort, syntheticJpeg, syntheticSource, type SyntheticSource } from "./render-support";
 import { FakeIdentity, defaultActor } from "./support";
 
 const PHOTO_ORIGIN = "https://photo.example.test";
@@ -173,6 +174,66 @@ describe("shared-album BFF proxy (/cloud/sharing/v1, B00 SHARING_ROUTES)", () =>
     });
     const forgedAlbum = await forged.album();
     const refused = await forged.albumClientFor(OWNER).request("albumItems.addFile", { albumId: forgedAlbum.id, rendition: file.rendition }, { signal, idempotencyKey: "add-forged" }).catch((error: unknown) => error);
+    expect(refused).toMatchObject({ error: { code: "temporarily_unavailable" } });
+  });
+
+  it("forwards render jobs of the user's own device (B07): the executor claims, uploads and commits through the BFF", async () => {
+    const t = setup();
+    const owner = createSharedAlbumItems({ client: t.albumClientFor(OWNER), uploader: t.server.uploader, newIdempotencyKey: () => `item-${Math.random()}`, sleep: async () => undefined });
+    const album = await owner.createAlbum("Synthetic album", signal);
+    const source = syntheticSource("photo-1");
+    const recipe = recipeFor(1);
+    t.server.addLibraryPhoto({ ownerId: OWNER, libraryId: "synthetic-library", photoId: "photo-1", recipe, binding: bindingFor(hex(source.bytes), recipe), expectedOutput: { width: source.width, height: source.height } });
+    const [added] = await owner.addLibraryPhotos(album.id, [{ libraryId: "synthetic-library", photoId: "photo-1" }], signal);
+    expect(added).toMatchObject({ ok: true, item: { state: "preparing" } });
+
+    const client = createBrowserRenderJobClient({ identity: new FakeIdentity(defaultActor({ userId: OWNER })), fetch: async (input, init) => {
+      const url = new URL(String(input), PHOTO_ORIGIN);
+      const response = await t.proxy(new Request(url, init));
+      if (response === null) throw new Error("unexpected unhandled route");
+      return response;
+    }, now: () => START });
+    const executor = createSourceDeviceRenderExecutor({
+      transport: client,
+      executor: { kind: "userDevice", userId: OWNER },
+      renderer: fakeRenderer().renderer,
+      sources: sourcePort(new Map<string, SyntheticSource>([["photo-1", source]])),
+      uploader: t.server.uploader,
+      now: () => START,
+      sleep: async () => undefined,
+    });
+    expect(await executor.drain(signal)).toMatchObject({ committed: 1, failed: 0, interrupted: 0 });
+    const item = (await owner.listItems(album.id, {}, signal)).items[0];
+    expect(item?.state).toBe("published");
+
+    const render = t.upstreamRequests.filter((request) => request.url.includes("/render-jobs"));
+    expect(render.map((request) => `${request.method} ${new URL(request.url).pathname.slice(PREFIX.length).replace(/\/render-jobs\/(?!claim$)[^/]+/u, "/render-jobs/{job}")} ${request.headers.get("Idempotency-Key") === null ? "-" : "key"}`)).toEqual([
+      "POST /render-jobs/claim key",
+      "POST /render-jobs/{job}/outputs key",
+      "POST /render-jobs/{job}/commit key",
+      "POST /render-jobs/claim key",
+    ]);
+    expect(render[0]?.headers.get("Authorization")).toBe(`Bearer server-only-credential-${OWNER}`);
+
+    // An output ticket pointing anywhere but the trusted provider never reaches the device.
+    const forged = setup({
+      tamper: (body) => {
+        const value = body.value as { ticket?: { url: string } } | undefined;
+        if (value?.ticket) value.ticket.url = "https://uploads.example.test/stolen";
+        return body;
+      },
+    });
+    const forgedAlbum = await forged.album();
+    forged.server.addLibraryPhoto({ ownerId: OWNER, libraryId: "synthetic-library", photoId: "photo-2", recipe, binding: bindingFor(hex(source.bytes), recipe), expectedOutput: { width: source.width, height: source.height } });
+    await forged.server.clientFor(OWNER).request("albumItems.addPhoto", { albumId: forgedAlbum.id, source: { kind: "libraryPhoto", libraryId: "synthetic-library", photoId: "photo-2" } }, { signal, idempotencyKey: "add-photo-2" });
+    const forgedClient = createBrowserRenderJobClient({ identity: new FakeIdentity(defaultActor({ userId: OWNER })), fetch: async (input, init) => (await forged.proxy(new Request(new URL(String(input), PHOTO_ORIGIN), init))) as Response, now: () => START });
+    const claimed = await forgedClient.request("renderJobs.claim", { maxJobs: 1 }, { signal, idempotencyKey: "claim-forged" });
+    const job = claimed.value.jobs[0];
+    if (!job) throw new Error("no job");
+    const refused = await forgedClient.request("renderJobs.startOutput", {
+      jobId: job.job.id, leaseToken: job.lease.leaseToken,
+      output: { kind: "rendition", sizeBytes: 100, sha256: "b".repeat(64), contentType: "image/jpeg", width: 10, height: 10, metadata: { capturedAt: null, capturedAtOffset: null, colorProfile: "sRGB", orientation: 1 } },
+    }, { signal, idempotencyKey: "start-forged" }).catch((error: unknown) => error);
     expect(refused).toMatchObject({ error: { code: "temporarily_unavailable" } });
   });
 

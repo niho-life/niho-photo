@@ -330,7 +330,15 @@ export function PhotoSharedAlbumView(props: PhotoSharedAlbumViewProps) {
             >
               <X className="h-5 w-5" aria-hidden />
             </button>
-            <h1 id={`photo-shared-album-title-${album.albumId}`} className="min-w-0 flex-1 truncate px-1 text-body font-bold">
+            {/* With every selection action in the row, 400px 未満 puts the count on its own line (like the album name) */}
+            {replaceable ? <span aria-hidden className="flex-1 min-[400px]:hidden" /> : null}
+            <h1
+              id={`photo-shared-album-title-${album.albumId}`}
+              className={cn(
+                "min-w-0 truncate px-1 text-body font-bold",
+                replaceable ? "order-last w-full px-3 pb-1 min-[400px]:order-none min-[400px]:w-auto min-[400px]:flex-1 min-[400px]:px-1 min-[400px]:pb-0" : "flex-1",
+              )}
+            >
               <span className="sr-only">{album.name}、</span>
               <span aria-live="polite">
                 {selected.size > 0 ? PHOTO_SHARED_ALBUM_COPY.selectedCount(selected.size) : PHOTO_SHARED_ALBUM_COPY.selectPrompt}
