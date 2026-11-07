@@ -14,10 +14,11 @@ use crate::photo_cloud::{
   PhotoHttpResponse,
 };
 use crate::{AccountError, Config, NativeUploadTicket, PhotoDownloadCancel, PhotoScopeCapture};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use sha2::{Digest, Sha256};
 use std::io::{Read, Write};
+use std::sync::OnceLock;
 use zeroize::Zeroizing;
 
 /// 画面の route の表の prefix（`SHARING_CLOUD_PATH_PREFIX`）。
@@ -34,6 +35,50 @@ const SEGMENT_MAX: usize = 512;
 const MAX_DEPTH: usize = 38;
 const MAX_TICKETS: usize = 4;
 pub const SHARING_CONTENT_MAX: u64 = 200 * 1024 * 1024;
+const SHARING_CONTENT_OPERATION: &str = "albumItems.download";
+
+/// 共有アルバムの操作の経路（契約の `SHARING_ROUTES` から作った表。photo-cloud-library の試験が一致を確かめる）。これ以外は送らない。
+const SHARING_ROUTES_JSON: &str = include_str!("sharing_routes.json");
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct RouteTable {
+  routes: Vec<Route>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct Route {
+  operation: String,
+  method: String,
+  path: String,
+  query: Vec<String>,
+  body: Option<Vec<String>>,
+  idempotency_key: bool,
+}
+
+fn routes() -> &'static [Route] {
+  static ROUTES: OnceLock<Vec<Route>> = OnceLock::new();
+  ROUTES.get_or_init(|| {
+    serde_json::from_str::<RouteTable>(SHARING_ROUTES_JSON)
+      .map(|table| table.routes)
+      .unwrap_or_default()
+  })
+}
+
+/// method と path が表のどの操作か（`{field}` は 1 つの segment。それ以外の要素は完全一致）。
+fn match_route(method: &str, suffix: &str) -> Option<&'static Route> {
+  let segments: Vec<&str> = suffix[1..].split('/').collect();
+  routes().iter().find(|route| {
+    let template: Vec<&str> = route.path[1..].split('/').collect();
+    route.method == method
+      && template.len() == segments.len()
+      && template
+        .iter()
+        .zip(&segments)
+        .all(|(part, segment)| (part.starts_with('{') && part.ends_with('}')) || part == segment)
+  })
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub(crate) enum SharingMethod {
@@ -57,6 +102,7 @@ impl SharingMethod {
 /// 画面が route の表で作った 1 つの要求。
 #[derive(Clone, Debug)]
 pub struct SharingRequest {
+  operation: &'static str,
   method: SharingMethod,
   suffix: String,
   query: Option<String>,
@@ -138,8 +184,24 @@ impl SharingRequest {
     {
       return Err(AccountError::InvalidResponse);
     }
-    // 保留の招待は BFF だけの経路（native には cookie がない）
-    if suffix == "/invites/pending" || suffix.starts_with("/invites/pending/") {
+    // 共有アルバムの操作の経路だけ（保留の招待など BFF だけの経路・常設 Mac・connector の経路は表にない）
+    let route = match_route(method.as_str(), suffix).ok_or(AccountError::InvalidResponse)?;
+    if let Some(query) = query {
+      let mut seen = Vec::new();
+      for pair in query.split('&') {
+        let key = pair.split_once('=').map_or(pair, |(key, _)| key);
+        if !route.query.iter().any(|allowed| allowed == key) || seen.contains(&key) {
+          return Err(AccountError::InvalidResponse);
+        }
+        seen.push(key);
+      }
+    }
+    match (&route.body, &body) {
+      (None, None) => {}
+      (Some(fields), Some(Value::Object(map))) if map.keys().all(|key| fields.contains(key)) => {}
+      _ => return Err(AccountError::InvalidResponse),
+    }
+    if route.idempotency_key != idempotency_key.is_some() {
       return Err(AccountError::InvalidResponse);
     }
     let body = match (method, body) {
@@ -161,6 +223,7 @@ impl SharingRequest {
       return Err(AccountError::InvalidResponse);
     }
     Ok(Self {
+      operation: route.operation.as_str(),
       method,
       suffix: suffix.to_owned(),
       query: query.map(str::to_owned),
@@ -171,6 +234,16 @@ impl SharingRequest {
 
   pub fn is_get(&self) -> bool {
     self.method == SharingMethod::Get
+  }
+
+  /// 表の操作の名前（`albums.list` など）。
+  pub fn operation(&self) -> &'static str {
+    self.operation
+  }
+
+  /// 完成写真・thumbnail の bytes を読む操作（`albumItems.download`）。JSON の操作とは別の通り道で扱う。
+  pub fn is_content(&self) -> bool {
+    self.operation == SHARING_CONTENT_OPERATION
   }
 
   /// 上流の固定の宛先（origin と build の設定の prefix）。
@@ -357,7 +430,7 @@ pub(crate) fn read_sharing_json(response: PhotoHttpResponse) -> Result<SharingJs
     }
   }
   // ticket を取り出した後に、ほかの資格・URL が残っていれば渡さない
-  validate_no_transport_material(&value, false)?;
+  validate_taken_tickets_only(&value)?;
   let mut next = 0;
   put_placeholders(&mut value, &tickets, &mut next);
   if next != tickets.len() {
@@ -368,6 +441,30 @@ pub(crate) fn read_sharing_json(response: PhotoHttpResponse) -> Result<SharingJs
     body: value,
     tickets,
   })
+}
+
+/// 取り出し済みの `ticket: null` だけを許し、それ以外の資格・URL は v2 と同じ検査で拒む。
+fn validate_taken_tickets_only(value: &Value) -> Result<(), AccountError> {
+  match value {
+    Value::Array(values) => values.iter().try_for_each(validate_taken_tickets_only),
+    Value::Object(map) => {
+      for (key, child) in map {
+        if key == "ticket" && child.is_null() {
+          continue;
+        }
+        let mut single = serde_json::Map::new();
+        single.insert(key.clone(), Value::Null);
+        // キー名の検査（token・ticket・url・headers など）は v2 と同じ
+        validate_no_transport_material(&Value::Object(single), false)?;
+        if key == "settings" || key == "meta" {
+          continue;
+        }
+        validate_taken_tickets_only(child)?;
+      }
+      Ok(())
+    }
+    _ => Ok(()),
+  }
 }
 
 /// error の JSON の `error.code`。

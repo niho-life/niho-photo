@@ -1468,7 +1468,7 @@ impl PhotoHttpTransport for SharingPhotoHttp {
 fn sharing_add_request() -> SharingRequest {
   SharingRequest::parse(
     "POST",
-    "/cloud/sharing/v1/albums/synthetic-album/items/file",
+    "/cloud/sharing/v1/albums/synthetic-album/file-items",
     Some(json!({ "rendition": { "contentType": "image/jpeg" } })),
     Some("synthetic-key".into()),
   )
@@ -1485,7 +1485,7 @@ fn sharing_requests_keep_upload_tickets_native_and_upload_in_chunks() {
   let response = f.account.photo_sharing_request(&scope, &sharing_add_request()).unwrap();
   assert_eq!(
     http.sent_paths.lock().unwrap().as_slice(),
-    ["/api/synthetic-sharing/v1/albums/synthetic-album/items/file"]
+    ["/api/synthetic-sharing/v1/albums/synthetic-album/file-items"]
   );
   assert_eq!(response.tickets.len(), 1);
   let shown = response.body["value"]["upload"]["ticket"]["url"].as_str().unwrap();
@@ -1517,4 +1517,32 @@ fn a_refused_sharing_session_invalidates_the_photo_identity() {
   assert_eq!(response.status, 401);
   assert!(response.tickets.is_empty());
   assert_eq!(f.account.snapshot().phase, AccountPhase::Failed);
+}
+
+#[test]
+fn sharing_json_and_content_routes_do_not_cross() {
+  let http = Arc::new(SharingPhotoHttp::new(200, 1));
+  let f = Fixture::with_photo_http(http);
+  f.login();
+  let scope = photo_scope(&f.account.photo_identity().unwrap());
+  let download = SharingRequest::parse(
+    "GET",
+    "/cloud/sharing/v1/albums/synthetic-album/items/synthetic-item/renditions/synthetic-rendition/content?variant=full",
+    None,
+    None,
+  )
+  .unwrap();
+  assert_eq!(
+    f.account.photo_sharing_request(&scope, &download).unwrap_err(),
+    AccountError::InvalidResponse
+  );
+  let list = SharingRequest::parse("GET", "/cloud/sharing/v1/albums", None, None).unwrap();
+  let mut bytes = Vec::new();
+  assert_eq!(
+    f.account
+      .photo_sharing_content(&scope, &list, &mut bytes, &PhotoDownloadCancel::default())
+      .unwrap_err(),
+    AccountError::InvalidResponse
+  );
+  assert!(bytes.is_empty());
 }

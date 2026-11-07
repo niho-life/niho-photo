@@ -16,7 +16,7 @@ use niho_desktop_account::{
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
-use std::sync::{Arc, Mutex, MutexGuard};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, State};
 
@@ -26,6 +26,10 @@ const MAX_CONTENTS: usize = 4;
 const MAX_CONTENT_HELD: usize = 256 * 1024 * 1024;
 const CONTENT_TTL: Duration = Duration::from_secs(5 * 60);
 const READ_CHUNK: usize = 1024 * 1024;
+/// 同時に読む content（各 200MiB まで）と、同時に送る upload の数。待つのは最長 `GATE_WAIT`。
+const CONTENT_IN_FLIGHT: usize = 2;
+const UPLOAD_IN_FLIGHT: usize = 1;
+const GATE_WAIT: Duration = Duration::from_secs(120);
 /// raw IPC の upload の添え書き（`{ scope, ticketUrl, contentType }`）。
 pub const UPLOAD_HEADER: &str = "x-niho-photo-sharing-upload";
 
@@ -41,10 +45,63 @@ struct HeldContent {
   held_at: Instant,
 }
 
-#[derive(Default)]
+/// 同時に走る数の上限（読み込み中・送信中の bytes がメモリを圧迫しないように）。
+struct Gate {
+  active: Mutex<usize>,
+  released: Condvar,
+  max: usize,
+}
+
+impl Gate {
+  fn new(max: usize) -> Self {
+    Self {
+      active: Mutex::new(0),
+      released: Condvar::new(),
+      max,
+    }
+  }
+
+  /// 空くまで最長 `wait` 待つ（blocking の thread から呼ぶ）。
+  fn acquire(self: &Arc<Self>, wait: Duration) -> Result<GateSlot, AccountError> {
+    let active = lock(&self.active);
+    let (mut active, timeout) = self
+      .released
+      .wait_timeout_while(active, wait, |active| *active >= self.max)
+      .unwrap_or_else(|poison| poison.into_inner());
+    if timeout.timed_out() && *active >= self.max {
+      return Err(AccountError::Busy);
+    }
+    *active += 1;
+    Ok(GateSlot(Arc::clone(self)))
+  }
+}
+
+struct GateSlot(Arc<Gate>);
+
+impl Drop for GateSlot {
+  fn drop(&mut self) {
+    let mut active = lock(&self.0.active);
+    *active = active.saturating_sub(1);
+    self.0.released.notify_one();
+  }
+}
+
 pub struct PhotoSharingState {
   tickets: Mutex<HashMap<String, HeldTicket>>,
   contents: Mutex<HashMap<String, HeldContent>>,
+  content_gate: Arc<Gate>,
+  upload_gate: Arc<Gate>,
+}
+
+impl Default for PhotoSharingState {
+  fn default() -> Self {
+    Self {
+      tickets: Mutex::default(),
+      contents: Mutex::default(),
+      content_gate: Arc::new(Gate::new(CONTENT_IN_FLIGHT)),
+      upload_gate: Arc::new(Gate::new(UPLOAD_IN_FLIGHT)),
+    }
+  }
 }
 
 fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
@@ -124,7 +181,9 @@ impl PhotoSharingState {
   }
 
   fn read_content(&self, handle: &str, scope: &PhotoScopeCapture, offset: usize) -> Result<Vec<u8>, AccountError> {
-    let held = lock(&self.contents);
+    let mut held = lock(&self.contents);
+    // 読み残して閉じられなかった content も期限で手放す
+    held.retain(|_, content| content.held_at.elapsed() < CONTENT_TTL);
     let content = held.get(handle).ok_or(AccountError::Expired)?;
     if &content.scope != scope || content.held_at.elapsed() >= CONTENT_TTL || offset > content.bytes.len() {
       return Err(AccountError::Expired);
@@ -241,13 +300,20 @@ pub async fn camera_sharing_upload(app: AppHandle, request: tauri::ipc::Request<
   }
   let shared = app.state::<Arc<SharedAccount>>().inner().clone();
   let generation = shared.begin_photo_operation()?;
+  // 送る bytes の複製は 1 つずつ（同時の upload でメモリを圧迫しない）
+  let gate = Arc::clone(&state.upload_gate);
+  let slot = tauri::async_runtime::spawn_blocking(move || gate.acquire(GATE_WAIT))
+    .await
+    .map_err(|_| AccountError::Internal)??;
   let bytes = body.to_vec();
   let scope = input.scope.clone();
   let worker = Arc::clone(&shared);
-  let result =
-    tauri::async_runtime::spawn_blocking(move || worker.account.photo_sharing_upload(&scope, &ticket, &bytes))
-      .await
-      .map_err(|_| AccountError::Internal)?;
+  let result = tauri::async_runtime::spawn_blocking(move || {
+    let _slot = slot;
+    worker.account.photo_sharing_upload(&scope, &ticket, &bytes)
+  })
+  .await
+  .map_err(|_| AccountError::Internal)?;
   let current = shared.ensure_photo_operation_current(generation);
   shared.observe(&app);
   current?;
@@ -286,7 +352,10 @@ pub async fn camera_sharing_content_open(
   let request = SharingRequest::parse("GET", &input.path, None, None)?;
   let scope = input.scope.clone();
   let worker = Arc::clone(&account);
+  let gate = Arc::clone(&state.content_gate);
   let result = tauri::async_runtime::spawn_blocking(move || {
+    // 同時に読み込む content は `CONTENT_IN_FLIGHT` まで（各 200MiB まで）
+    let _slot = gate.acquire(GATE_WAIT)?;
     let mut bytes = Vec::new();
     worker
       .account
@@ -323,13 +392,12 @@ pub fn camera_sharing_content_read(
   state: State<'_, Arc<PhotoSharingState>>,
   input: ContentReadInput,
 ) -> Result<tauri::ipc::Response, AccountError> {
-  account.account.photo_scope_current(&input.scope)?;
   let offset = usize::try_from(input.offset).map_err(|_| AccountError::InvalidResponse)?;
-  Ok(tauri::ipc::Response::new(state.read_content(
-    &input.handle,
-    &input.scope,
-    offset,
-  )?))
+  // v2 と同じく、読む前と後で本人の session を確かめる（間にログアウト・失効があれば bytes を返さない）
+  let bytes = account
+    .account
+    .photo_content_read_guarded(&input.scope, || state.read_content(&input.handle, &input.scope, offset))?;
+  Ok(tauri::ipc::Response::new(bytes))
 }
 
 #[derive(Deserialize)]
@@ -384,6 +452,21 @@ mod tests {
       .filter(|handle| state.read_content(handle, &scope("a"), 0).is_ok())
       .count();
     assert_eq!(live, MAX_CONTENTS);
+  }
+
+  #[test]
+  fn gates_bound_work_in_flight_and_release_on_drop() {
+    let gate = Arc::new(Gate::new(1));
+    let first = gate.acquire(Duration::from_millis(10)).unwrap();
+    assert_eq!(gate.acquire(Duration::from_millis(10)).err(), Some(AccountError::Busy));
+    drop(first);
+    assert!(gate.acquire(Duration::from_millis(10)).is_ok());
+    let waiter = Arc::clone(&gate);
+    let held = gate.acquire(Duration::from_millis(10)).unwrap();
+    let pending = std::thread::spawn(move || waiter.acquire(Duration::from_secs(5)).is_ok());
+    std::thread::sleep(Duration::from_millis(20));
+    drop(held);
+    assert!(pending.join().unwrap(), "a waiter gets the slot once it is released");
   }
 
   #[test]

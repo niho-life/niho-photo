@@ -10997,7 +10997,7 @@
     },
     {
       "path": "packages/desktop-account/src/account.rs",
-      "sha256": "b2e98e33b81d90294d30d0b8de6a4cd95418a3d52bdb35c08b08ceaab385c6c8",
+      "sha256": "f5b229f1e2a186d4ab537cc8af465112225314bad44b04da195c9d18fa29df61",
       "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: pending login の取消時に残存するOS資格情報を削除し、旧資格情報を含む取消テストを追加。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: このMacのlogoutは取得済みID tokenで現在接続のDELETEも試み、ローカル資格削除と別世代の保持を守る。\n変更理由: Camera限定の安全な本人写真session読取と即時失効を実接続し、旧session遅着と保存待ちを隔離する\n変更理由: 自然CIのClippy question_mark指摘に従い同じエラー伝播を?演算子へ機械的に置換\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する\n変更理由: 親mainとのmergeで実ファイルを統合\nIssue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: pending login の取消時に残存するOS資格情報を削除し、旧資格情報を含む取消テストを追加。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: このMacのlogoutは取得済みID tokenで現在接続のDELETEも試み、ローカル資格削除と別世代の保持を守る。\n変更理由: Camera限定の安全な本人写真session読取と即時失効を実接続し、旧session遅着と保存待ちを隔離する\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する\n変更理由: 自然CIのClippy question_mark指摘に従い同じエラー伝播を?演算子へ機械的に置換\n変更理由: 正式Mac bootstrapの依存を通常mergeし、mainの共有編集面と固定native transportを保持\n変更理由: 本人PhotoのMac起動接続・検証済み原本保存とPNG終端検証を追加。\n変更理由: 本人Photoの実bootstrap・検証済み原本保存・失効と確定の排他・PNGのEOF検証を追加。\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: PR230の実CIで検出したoptional fixture型とRust unused import/single_matchを修復\n変更理由: Photo #249 / B08 の Mac の共有アルバムの native 通信（/cloud/sharing/v1、ticket を native に留める upload・照合した download）を追加"
     },
     {
@@ -11027,7 +11027,7 @@
     },
     {
       "path": "packages/desktop-account/src/tests.rs",
-      "sha256": "ad21df8105ae389e8592abc278e511544fe6a88dd7215e78d9f9da645ed118cd",
+      "sha256": "d87a7cd5f5a4ac141997b29ef6ad18c056ced624064877f20ae364109c20a1c3",
       "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: pending login の取消時に残存するOS資格情報を削除し、旧資格情報を含む取消テストを追加。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: 接続資格を保存する前のexchange一時失敗は自動refreshせず、新しいstate/verifierのログインを必要とする否定テストを追加。\n変更理由: logoutが現在接続のDELETEを試み、接続資格を保存する前の一時失敗では新しいログインを要求することを検証。\n変更理由: Camera限定の安全な本人写真session読取と即時失効を実接続し、旧session遅着と保存待ちを隔離する\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する\n変更理由: 実CIで検出したborrow済みsafe identityのtransport移動をcloneに直しRustのテスト型検査を通す\n変更理由: 親mainとのmergeで実ファイルを統合\nIssue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: pending login の取消時に残存するOS資格情報を削除し、旧資格情報を含む取消テストを追加。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: 接続資格を保存する前のexchange一時失敗は自動refreshせず、新しいstate/verifierのログインを必要とする否定テストを追加。\n変更理由: logoutが現在接続のDELETEを試み、接続資格を保存する前の一時失敗では新しいログインを要求することを検証。\n変更理由: Camera限定の安全な本人写真session読取と即時失効を実接続し、旧session遅着と保存待ちを隔離する\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する\n変更理由: 正式Mac bootstrapの依存を通常mergeし、mainの共有編集面と固定native transportを保持\n変更理由: 実CIで検出したborrow済みsafe identityのtransport移動をcloneに直しRustのテスト型検査を通す\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持\n変更理由: 本人Photoの実bootstrap・検証済み原本保存・失効と確定の排他・PNGのEOF検証を追加。\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: Photo #249 / B08 の Mac の共有アルバムの native 通信（/cloud/sharing/v1、ticket を native に留める upload・照合した download）を追加"
     },
     {
@@ -13882,27 +13882,27 @@
     },
     {
       "path": "apps/camera/src-tauri/src/photo_sharing.rs",
-      "sha256": "9bd1c08933933536ad610f1fecc58d060ea7d6113f15afd88ff8ab45c787e073",
+      "sha256": "7b8b1fa536b583b805ce4096ab02f478573a91d05b1567eded5e6cee091e879e",
       "origin": "Photo #249 / B08 の Mac の共有アルバムの native 通信（route の表の要求・ticket を native に留める upload・照合した download）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "apps/camera/src/native-photo-sharing.test.ts",
-      "sha256": "9e4b4f76cb4abe4aacbb80baf3c9f04fade1a86afcab64a9ccc1d09bc48b312f",
+      "sha256": "b0e791bd6c82befd8c239fd22fc5a4704417dd45534ac86f616883f772978329",
       "origin": "Photo #249 / B08 の Mac の共有アルバムの native 通信（route の表の要求・ticket を native に留める upload・照合した download）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "apps/camera/src/native-photo-sharing.ts",
-      "sha256": "8abe4b9db11c78185a58bf142b538b739fddb692148e42813e77ac10d06bb497",
+      "sha256": "bcc89ad8a41f14570b39065eae9fb9e6e2addd15803bf3f314c6357ffb4e7c6a",
       "origin": "Photo #249 / B08 の Mac の共有アルバムの native 通信（route の表の要求・ticket を native に留める upload・照合した download）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/desktop-account/src/photo_sharing.rs",
-      "sha256": "e4db269b8d5fcb7af67f165d0c8361733cd0aefb1a0b2de8ab42c625dc0922d7",
+      "sha256": "0a4b56da052bcbcb21ac245b333902aa0cbcf5ed2f5e47a0b7577af2f9336eb8",
       "origin": "Photo #249 / B08 の Mac の共有アルバムの native 通信（route の表の要求・ticket を native に留める upload・照合した download）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/desktop-account/src/photo_sharing_tests.rs",
-      "sha256": "e81c054fabe78f9a7b3589bb926cbfbfcd99ed8cc8e94840b74fef0076bc3501",
+      "sha256": "3f366a51c017fd21bc0155f31a6f64cfc1dfb7777194338db73df1dad61fed19",
       "origin": "Photo #249 / B08 の Mac の共有アルバムの native 通信（route の表の要求・ticket を native に留める upload・照合した download）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
@@ -13934,6 +13934,16 @@
       "path": "packages/photo-cloud-library/test/sharing-proxy.test.ts",
       "sha256": "96efcb7969c0cb387989e1904a70ad3b6032c8bf82f68b1366e51978b6e1d51b",
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムのBFF（/cloud/sharing/v1 を契約の経路の表で中継し、本人・session・epochの検証、固定の上流、byte数の上限、応答の検査、content streamとupload ticketの検査を本人v2と同じ規則で行う）と回帰試験。上流のprefixは非公開の運用設定から渡し、値を含まない。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/desktop-account/src/sharing_routes.json",
+      "sha256": "249eb6e0392d5dbf4a2a010cd79a85da3750c97d5fe2b9d913b45868773fd439",
+      "origin": "Photo #249 / B08 の Mac の共有アルバムの native 通信（route の表の要求・ticket を native に留める upload・照合した download）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/sharing-native-routes.test.ts",
+      "sha256": "abfd4141064a6cb0e2439b3e12e84726ab11a02e8dda446313bc832e000c7c6a",
+      "origin": "Photo #249 / B08 の Mac の共有アルバムの native 通信（route の表の要求・ticket を native に留める upload・照合した download）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     }
   ],
   "excludedSources": [

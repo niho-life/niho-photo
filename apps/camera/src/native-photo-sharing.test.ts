@@ -167,6 +167,42 @@ describe("Mac shared albums over the native session", () => {
     expect(native.contents.size).toBe(0);
   });
 
+  it("closes the native content handle when the download is aborted mid-stream", async () => {
+    const native = fakeNative();
+    const who = identity();
+    const transport = createNativeSharingTransport({ identity: who.port, invoke: native.invoke, now: () => NOW });
+    const client = createSharedAlbumClientOnTransport(transport);
+    let keys = 0;
+    const items = createSharedAlbumItems({
+      client,
+      uploader: createNativeSharingUploader({ identity: who.port, invokeBinary: native.invokeBinary, now: () => NOW }),
+      newIdempotencyKey: () => `key-${++keys}`,
+      sleep: async () => undefined,
+    });
+    const setup = new AbortController().signal;
+    const album = await items.createAlbum("Synthetic album", setup);
+    const item = await items.addFile(album.id, prepareAlbumFile(syntheticJpeg({ width: 1200, height: 800, seed: 11 })), setup);
+    const request = { albumId: album.id, itemId: item.id, renditionId: item.rendition!.id, variant: "full" as const };
+
+    // Aborted after open, before the page consumes the body: the handle is released and nothing more is read.
+    const reads = () => native.invoke.mock.calls.filter(([command]) => command === "camera_sharing_content_read").length;
+    const early = new AbortController();
+    const opened = await client.download(request, early.signal);
+    expect(native.contents.size).toBe(1);
+    early.abort();
+    await Promise.resolve();
+    expect(native.contents.size).toBe(0);
+    const readsAtAbort = reads();
+    await expect(new Response(opened.body).arrayBuffer()).rejects.toBeDefined();
+    expect(reads()).toBe(readsAtAbort);
+
+    // Already aborted: nothing is left open.
+    const gone = new AbortController();
+    gone.abort();
+    await expect(client.download(request, gone.signal)).rejects.toBeDefined();
+    expect(native.contents.size).toBe(0);
+  });
+
   it("refuses a range, a non-placeholder ticket, and use after the session changed", async () => {
     const native = fakeNative();
     const who = identity();

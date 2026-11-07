@@ -61,15 +61,16 @@ fn requests_are_routes_of_the_table_under_the_fixed_prefix() {
 
   let post = SharingRequest::parse(
     "POST",
-    "/cloud/sharing/v1/albums/synthetic%20album/items",
-    Some(serde_json::json!({ "source": { "kind": "libraryPhoto" } })),
+    "/cloud/sharing/v1/albums/synthetic%20album/file-items",
+    Some(serde_json::json!({ "rendition": { "sizeBytes": 1 } })),
     Some("synthetic-key".into()),
   )
   .unwrap();
+  assert_eq!(post.operation(), "albumItems.addFile");
   let native = post.native(&config, &capture()).unwrap();
   assert_eq!(
     native.url.path(),
-    "/api/synthetic-sharing/v1/albums/synthetic%20album/items"
+    "/api/synthetic-sharing/v1/albums/synthetic%20album/file-items"
   );
   assert_eq!(native.idempotency_key.as_deref(), Some("synthetic-key"));
 
@@ -121,6 +122,32 @@ fn malformed_or_bff_only_requests_are_refused() {
     ),
     ("POST", "/cloud/sharing/v1/invites/pending", object(), None),
     ("POST", "/cloud/sharing/v1/invites/pending/join", object(), None),
+    // 表にない経路（BFF だけ・常設 Mac・percent-encoding で literal を装う）
+    ("POST", "/cloud/sharing/v1/invites/%70ending/join", object(), None),
+    ("GET", "/cloud/sharing/v1/libraries/l/photos", None, None),
+    ("GET", "/cloud/sharing/v1/%61lbums", None, None),
+    // 表の操作でも、query・body の項目・key の要否が違うもの
+    ("GET", "/cloud/sharing/v1/albums?ownerId=x", None, None),
+    ("GET", "/cloud/sharing/v1/albums?limit=1&limit=2", None, None),
+    (
+      "POST",
+      "/cloud/sharing/v1/albums",
+      Some(serde_json::json!({ "name": "a", "ownerId": "x" })),
+      Some("k".to_string()),
+    ),
+    (
+      "POST",
+      "/cloud/sharing/v1/albums",
+      Some(serde_json::json!({ "name": "a" })),
+      None,
+    ),
+    (
+      "POST",
+      "/cloud/sharing/v1/albums/a/uploads/u/renew",
+      object(),
+      Some("k".to_string()),
+    ),
+    ("DELETE", "/cloud/sharing/v1/albums/a", None, None),
   ] {
     assert_eq!(
       SharingRequest::parse(method, path, body, key).err(),
@@ -286,4 +313,69 @@ fn the_sharing_prefix_is_a_fixed_api_path() {
   }
   let config = Config::production(ClientId::Camera, "synthetic-public-key").unwrap();
   assert!(config.with_sharing_prefix("/cloud/x").is_err());
+}
+
+#[test]
+fn the_route_table_is_the_shared_album_operations_only() {
+  let names: Vec<&str> = routes().iter().map(|route| route.operation.as_str()).collect();
+  assert_eq!(names.len(), 24);
+  for expected in [
+    "albums.list",
+    "albumItems.addFile",
+    "albumItems.renewUpload",
+    "albumItems.download",
+    "invites.join",
+    "members.leave",
+  ] {
+    assert!(names.contains(&expected), "{expected}");
+  }
+  assert!(names
+    .iter()
+    .all(|name| !name.starts_with("hosted") && !name.starts_with("connector") && !name.contains("Pending")));
+  assert_eq!(
+    SharingRequest::parse(
+      "POST",
+      "/cloud/sharing/v1/albums/a/uploads/u/renew",
+      Some(serde_json::json!({})),
+      None
+    )
+    .unwrap()
+    .operation(),
+    "albumItems.renewUpload"
+  );
+  assert_eq!(
+    SharingRequest::parse(
+      "DELETE",
+      "/cloud/sharing/v1/albums/a?expectedRevision=3",
+      None,
+      Some("k".into())
+    )
+    .unwrap()
+    .operation(),
+    "albums.delete"
+  );
+}
+
+#[test]
+fn only_the_download_route_is_content() {
+  let download = SharingRequest::parse(
+    "GET",
+    "/cloud/sharing/v1/albums/a/items/i/renditions/r/content?variant=full",
+    None,
+    None,
+  )
+  .unwrap();
+  assert!(download.is_content());
+  let list = SharingRequest::parse("GET", "/cloud/sharing/v1/albums", None, None).unwrap();
+  assert!(!list.is_content());
+}
+
+#[test]
+fn a_taken_ticket_is_the_only_transport_material_allowed() {
+  let mut value = added(Value::Null);
+  assert!(validate_taken_tickets_only(&value).is_ok());
+  value["value"]["upload"]["upload"]["url"] = Value::String("https://x".into());
+  assert!(validate_taken_tickets_only(&value).is_err());
+  assert!(validate_taken_tickets_only(&serde_json::json!({ "ticket": {} })).is_err());
+  assert!(validate_taken_tickets_only(&serde_json::json!({ "settings": { "url": "opaque" } })).is_ok());
 }

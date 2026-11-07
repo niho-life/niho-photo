@@ -966,6 +966,9 @@ impl Account {
     capture: &PhotoScopeCapture,
     request: &SharingRequest,
   ) -> Result<SharingJsonResponse, AccountError> {
+    if request.is_content() {
+      return Err(AccountError::InvalidResponse);
+    }
     let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
     let authority = self.capture_photo_authority(adapters, capture)?;
     let native = request.native(&adapters.config, &authority.scope)?;
@@ -1027,7 +1030,7 @@ impl Account {
     writer: &mut W,
     cancel: &PhotoDownloadCancel,
   ) -> Result<SharingContentMetadata, AccountError> {
-    if !request.is_get() {
+    if !request.is_get() || !request.is_content() {
       return Err(AccountError::InvalidResponse);
     }
     let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;

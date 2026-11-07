@@ -138,11 +138,24 @@ export function createNativeSharingTransport(options: CreateNativeSharingTranspo
       }
       const handle = opened.handle;
       const totalBytes = opened.totalBytes;
-      const close = () => { void options.invoke("camera_sharing_content_close", { input: { handle } }).catch(() => undefined); };
+      let closed = false;
+      // 読み終わり・失敗・中止・取り消しのどれでも native の handle を一度だけ閉じる
+      const close = () => {
+        if (closed) return;
+        closed = true;
+        signal.removeEventListener("abort", close);
+        void options.invoke("camera_sharing_content_close", { input: { handle } }).catch(() => undefined);
+      };
+      if (signal.aborted) {
+        close();
+        throw signal.reason ?? new PersonalPhotoCloudError("disposed");
+      }
+      signal.addEventListener("abort", close, { once: true });
       let offset = 0;
       const body = new ReadableStream<Uint8Array>({
         async pull(controller) {
           try {
+            if (signal.aborted) throw signal.reason ?? new PersonalPhotoCloudError("disposed");
             assertCurrent();
             const chunk = toBytes(await options.invoke("camera_sharing_content_read", { input: { scope, handle, offset } }));
             if (chunk.byteLength === 0) {
@@ -156,7 +169,7 @@ export function createNativeSharingTransport(options: CreateNativeSharingTranspo
             controller.enqueue(chunk);
           } catch (error) {
             close();
-            controller.error(nativeFailure(error));
+            controller.error(signal.aborted ? signal.reason ?? new PersonalPhotoCloudError("disposed") : nativeFailure(error));
           }
         },
         cancel: close,
