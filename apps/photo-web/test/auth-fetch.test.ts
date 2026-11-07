@@ -30,6 +30,16 @@ describe("Photo BFF authentication notification", () => {
     expect(await test.response.json()).toEqual({ error: { code: "unauthenticated" } });
   });
 
+  it.each([
+    "/cloud/sharing/v1/albums",
+    "/cloud/sharing/v1/albums/synthetic-album/items?limit=10",
+    "/cloud/sharing/v1/invites/pending/join",
+  ])("notifies a 401 of the shared-album BFF the same way: %s", async (path) => {
+    const test = harness();
+    expect(await test.request(path)).toBe(test.response);
+    expect(test.rejected).toHaveBeenCalledTimes(1);
+  });
+
   it.each(["url", "request"] as const)("supports a same-origin %s input", async (kind) => {
     const test = harness();
     const input = kind === "url" ? new URL("/cloud/v2/photos?cursor=synthetic", ORIGIN) : new Request(ORIGIN + "/cloud/v2/usage");
@@ -47,6 +57,7 @@ describe("Photo BFF authentication notification", () => {
     "https://storage.googleapis.com/cloud/v2/library",
     "https://other.example/cloud/v2/library",
     "/cloud/v20/library", "/cloud/v2", "/auth/session", "/develop-engine/static.wasm",
+    "/cloud/sharing/v1", "/cloud/sharing/v10/albums", "/cloud/sharing/albums", "https://other.example/cloud/sharing/v1/albums",
   ])("does not treat an unrelated request as a Photo BFF rejection: %s", async (input) => {
     const test = harness();
     expect(await test.request(input)).toBe(test.response);

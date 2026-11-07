@@ -11,6 +11,7 @@ export {
 } from "./pending-invite";
 export { createSharingCloudProxy, type CreateSharingCloudProxyOptions } from "./sharing-proxy";
 export {
+  RENDER_JOB_PROXY_OPERATIONS,
   SHARED_ALBUM_ITEM_PROXY_OPERATIONS,
   SHARED_ALBUM_MEMBERSHIP_PROXY_OPERATIONS,
   SHARING_PROXY_OPERATIONS,

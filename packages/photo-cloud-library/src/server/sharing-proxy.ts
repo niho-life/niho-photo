@@ -31,8 +31,11 @@ import {
   SHARING_CLOUD_PATH_PREFIX,
   SHARING_ERROR_STATUS,
   decodeSharingRequest,
+  decodeUserRenderRequest,
   encodeSharingRequest,
+  encodeUserRenderRequest,
   matchSharingRoute,
+  matchUserRenderRoute,
   type SharingErrorCode,
 } from "../sharing/contract";
 import { parseSharingError } from "../sharing/membership-wire";
@@ -62,6 +65,32 @@ export interface CreateSharingCloudProxyOptions {
   readonly fetch?: typeof fetch;
   readonly now?: () => number;
   readonly trustedUploadOrigin?: typeof TRUSTED_GCS_UPLOAD_ORIGIN;
+}
+
+/**
+ * The contract's two tables under the prefix: the user's sharing routes and render jobs on the user's own device (B07).
+ * Each placement is decoded and re-encoded by the table it matched.
+ */
+type DecodeInput = Parameters<typeof decodeSharingRequest>[1];
+const ROUTE_TABLES = [
+  {
+    match: (method: string, path: string) => matchSharingRoute(method, path),
+    decode: (operation: string, input: DecodeInput) => decodeSharingRequest(operation as never, input),
+    encode: (operation: string, request: unknown) => encodeSharingRequest(operation as never, request as never),
+  },
+  {
+    match: (method: string, path: string) => matchUserRenderRoute(method, path),
+    decode: (operation: string, input: DecodeInput) => decodeUserRenderRequest(operation as never, input),
+    encode: (operation: string, request: unknown) => encodeUserRenderRequest(operation as never, request as never),
+  },
+] as const;
+
+function matchRoute(method: string, path: string): { readonly table: (typeof ROUTE_TABLES)[number]; readonly operation: string; readonly params: Readonly<Record<string, string>> } | null {
+  for (const table of ROUTE_TABLES) {
+    const matched = table.match(method, path);
+    if (matched !== null) return { table, operation: matched.operation, params: matched.params };
+  }
+  return null;
 }
 
 /** Thrown for a request that must not be sent; answered `invalid_request` without contacting the upstream. */
@@ -97,8 +126,8 @@ export function createSharingCloudProxy(options: CreateSharingCloudProxyOptions)
     }
     if (url.pathname !== SHARING_CLOUD_PATH_PREFIX && !url.pathname.startsWith(`${SHARING_CLOUD_PATH_PREFIX}/`)) return null;
     try {
-      const matched = matchSharingRoute(request.method.toUpperCase(), url.pathname);
-      const entry = matched === null ? undefined : operations[matched.operation];
+      const matched = matchRoute(request.method.toUpperCase(), url.pathname);
+      const entry = matched === null ? undefined : operations[matched.operation as keyof SharingProxyOperations];
       if (matched === null || entry === undefined) {
         cancelRequestBody(request);
         return sharingError("not_found");
@@ -123,10 +152,11 @@ export function createSharingCloudProxy(options: CreateSharingCloudProxyOptions)
       }
       let decoded: Record<string, unknown>;
       let encoded: ReturnType<typeof encodeSharingRequest>;
+      const table = matched.table;
       try {
-        decoded = decodeSharingRequest(operation, { params: matched.params, query: url.searchParams, body, range }) as Record<string, unknown>;
+        decoded = table.decode(operation, { params: matched.params, query: url.searchParams, body, range }) as Record<string, unknown>;
         entry.validateRequest(decoded);
-        encoded = encodeSharingRequest(operation, decoded as never);
+        encoded = table.encode(operation, decoded);
       } catch {
         throw new RejectedRequest();
       }
@@ -196,7 +226,12 @@ export function createSharingCloudProxy(options: CreateSharingCloudProxyOptions)
         if (upstream.ok) {
           entry.validateResponse(decoded, parsed.value);
           for (const ticket of entry.tickets?.(decoded, parsed.value) ?? []) {
-            validateTicket(ticket.ticket, { trustedOrigin: trustedUploadOrigin, expectedContentType: ticket.contentType, expectedSize: ticket.sizeBytes, now: now() });
+            validateTicket(ticket.ticket, {
+              trustedOrigin: trustedUploadOrigin,
+              ...(ticket.contentType === undefined ? {} : { expectedContentType: ticket.contentType }),
+              expectedSize: ticket.sizeBytes,
+              now: now(),
+            });
           }
         } else {
           parseSharingError(parsed.value, upstream.status);

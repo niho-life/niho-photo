@@ -9,6 +9,7 @@ import { PHOTO_SHARED_ALBUM_COPY, PHOTO_SHARED_ALBUM_INVITE_COPY, PHOTO_SHARED_A
 import { PHOTO_EDITING_SECONDARY_BUTTON_CLASS_NAME } from "../editor/photo-editing-button-classes";
 
 import { PhotoSharedAlbumInvite } from "./photo-shared-album-invite";
+import { PhotoSharedAlbumLibraryPicker } from "./photo-shared-album-library-picker";
 import { PhotoSharedAlbumList } from "./photo-shared-album-list";
 import type {
   PhotoSharedAlbum,
@@ -58,7 +59,13 @@ type Screen =
 const heldJoins = new WeakMap<PhotoSharedAlbumPort, Promise<PhotoSharedAlbumJoinResult | null>>();
 
 /** An addition belongs to the album it was started in: it is shown and retried there only. */
-type Pending = { readonly albumId: string; readonly upload: PhotoSharedAlbumUpload; readonly file: File };
+type Pending = {
+  readonly albumId: string;
+  readonly upload: PhotoSharedAlbumUpload;
+  readonly file: File;
+  /** A replacement of this own item instead of a new addition. */
+  readonly replaceItemId: string | null;
+};
 
 /**
  * 「共有アルバム」の画面（一覧・アルバム・共有シート・招待）を口につなぐ（B08 #249）。部品は通信を持たないので、読み込み・追加の
@@ -79,6 +86,8 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
   const [peopleToken, setPeopleToken] = useState(0);
   const [uploads, setUploads] = useState<readonly Pending[]>([]);
   const [saveFailure, setSaveFailure] = useState<{ readonly albumId: string; readonly itemIds: readonly string[] } | null>(null);
+  const [pickerAlbum, setPickerAlbum] = useState<string | null>(null);
+  const [libraryAddFailure, setLibraryAddFailure] = useState<{ readonly albumId: string; readonly photoIds: readonly string[] } | null>(null);
   const [joinAttempt, setJoinAttempt] = useState(0);
   const [originalsNote, setOriginalsNote] = useState(() => !port.originalsNoteShown());
   const lifetime = useRef(new AbortController());
@@ -251,6 +260,26 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
     );
   }, [port]);
 
+  /** The picked library photos become preparing items (rendered by the device that holds them); the album is read again. */
+  const runLibraryAdd = useCallback((target: string, photoIds: readonly string[]) => {
+    const addLibraryPhotos = port.addLibraryPhotos;
+    if (!addLibraryPhotos || photoIds.length === 0) return;
+    setLibraryAddFailure(null);
+    const signal = lifetime.current.signal;
+    addLibraryPhotos.call(port, target, photoIds, signal).then(
+      (result) => {
+        if (signal.aborted) return;
+        // Only the photos that were not added are offered again: the others are in the album already.
+        if (result.failedPhotoIds.length > 0) setLibraryAddFailure({ albumId: target, photoIds: result.failedPhotoIds });
+        if (albumIdRef.current === target) setAlbumToken((token) => token + 1);
+      },
+      () => {
+        // Not knowing which were added, nothing is sent again; the album shows what arrived.
+        if (!signal.aborted && albumIdRef.current === target) setAlbumToken((token) => token + 1);
+      },
+    );
+  }, [port]);
+
   const setUpload = useCallback((uploadId: string, change: Partial<PhotoSharedAlbumUpload>) => {
     setUploads((current) => current.map((pending) => (pending.upload.uploadId === uploadId ? { ...pending, upload: { ...pending.upload, ...change } } : pending)));
   }, []);
@@ -263,7 +292,9 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
       if (signal.aborted) return;
       setUpload(pending.upload.uploadId, { phase: "sending", fraction: null, reason: null });
       try {
-        const result = await port.addFile(target, pending.file, signal);
+        const result = pending.replaceItemId === null
+          ? await port.addFile(target, pending.file, signal)
+          : await port.replaceFile(target, pending.replaceItemId, pending.file, signal);
         if (result.ok) {
           setUpload(pending.upload.uploadId, { phase: "added" });
           port.markOriginalsNoteShown();
@@ -277,12 +308,13 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
     });
   }, [port, setUpload]);
 
-  const addFiles = useCallback((files: readonly File[]) => {
+  const queueFiles = useCallback((files: readonly File[], replaceItemId: string | null) => {
     const target = albumIdRef.current;
     if (target === null || files.length === 0) return;
     const added = files.map((file, index): Pending => ({
       albumId: target,
       file,
+      replaceItemId,
       upload: {
         uploadId: `upload-${Date.now()}-${index}-${Math.random().toString(36).slice(2)}`,
         name: file.name,
@@ -295,6 +327,8 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
     setUploads((current) => [...current, ...added]);
     for (const pending of added) runUpload(pending);
   }, [runUpload]);
+  const addFiles = useCallback((files: readonly File[]) => queueFiles(files, null), [queueFiles]);
+  const replaceFile = useCallback((itemId: string, file: File) => queueFiles([file], itemId), [queueFiles]);
 
   const retryUpload = useCallback((uploadId: string) => {
     // Retried in the album it was started in, whichever album is open now.
@@ -361,10 +395,13 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
   const target = album.albumId;
   const sheetRole = album.role;
   const failedSave = saveFailure && saveFailure.albumId === target ? saveFailure : null;
+  const failedLibraryAdd = libraryAddFailure && libraryAddFailure.albumId === target ? libraryAddFailure : null;
+  const canPickFromLibrary = permissions.addItem && !album.accessEnded && typeof port.libraryPhotos === "function" && typeof port.addLibraryPhotos === "function";
   return (
     <div className="flex h-full min-h-0 flex-col">
       {albumFailed ? <RetryLine onRetry={() => setAlbumToken((token) => token + 1)} /> : null}
       {failedSave ? <RetryLine onRetry={() => runSave(failedSave.albumId, failedSave.itemIds)} /> : null}
+      {failedLibraryAdd ? <RetryLine onRetry={() => runLibraryAdd(failedLibraryAdd.albumId, failedLibraryAdd.photoIds)} /> : null}
       <div className="min-h-0 flex-1">
         <PhotoSharedAlbumView
           album={album}
@@ -387,11 +424,21 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
                 },
               }
             : {})}
+          {...(permissions.addItem && !album.accessEnded ? { onReplace: replaceFile } : {})}
+          {...(canPickFromLibrary ? { onAddFromLibrary: () => setPickerAlbum(target) } : {})}
           onRetryUpload={retryUpload}
           onDismissUploads={dismissUploads}
           {...(props.onOpenStorage ? { onOpenStorage: props.onOpenStorage } : {})}
         />
       </div>
+      {canPickFromLibrary ? (
+        <PhotoSharedAlbumLibraryPicker
+          open={pickerAlbum === target}
+          onOpenChange={(open) => setPickerAlbum(open ? target : null)}
+          loadPage={(cursor, pageSignal) => (port.libraryPhotos as NonNullable<typeof port.libraryPhotos>).call(port, cursor, pageSignal)}
+          onAdd={(photoIds) => runLibraryAdd(target, photoIds)}
+        />
+      ) : null}
       <PhotoSharedAlbumShareSheet
         key={target}
         open={shareOpen && !album.accessEnded}
