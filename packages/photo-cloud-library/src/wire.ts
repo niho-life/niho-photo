@@ -452,7 +452,8 @@ function exactResponseRecord(value: Record<string, unknown>, key: string): unkno
   return value[key];
 }
 function validateTicketShape(value: unknown): UploadTicket { if (!isUploadTicketShape(value)) invalidResponse(); return value; }
-function parseJsonBytes(bytes: Uint8Array): unknown {
+/** UTF-8 JSON with the transport depth limit (bounded bytes are read first). */
+export function parseJsonBytes(bytes: Uint8Array): unknown {
   let text: string;
   try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { invalidResponse(); }
   try {

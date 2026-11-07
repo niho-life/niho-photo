@@ -241,49 +241,49 @@
       "issue": 246,
       "backend": "missing",
       "wiring": "not-connected",
-      "evidence": "オーナー限定。secretは返さない。公開側: client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
+      "evidence": "オーナー限定。secretは返さない。公開側: BFF `photo-cloud-library/src/server/sharing-proxy.ts`（試験 `test/sharing-proxy.test.ts`）、client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
     },
     "invites.create": {
       "issue": 246,
       "backend": "missing",
       "wiring": "not-connected",
-      "evidence": "期限7日・複数人可。secretは最初の応答だけ。公開側: client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
+      "evidence": "期限7日・複数人可。secretは最初の応答だけ。公開側: BFF `photo-cloud-library/src/server/sharing-proxy.ts`（試験 `test/sharing-proxy.test.ts`）、client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
     },
     "invites.revoke": {
       "issue": 246,
       "backend": "missing",
       "wiring": "not-connected",
-      "evidence": "受付時点で新規参加を止める。公開側: client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
+      "evidence": "受付時点で新規参加を止める。公開側: BFF `photo-cloud-library/src/server/sharing-proxy.ts`（試験 `test/sharing-proxy.test.ts`）、client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
     },
     "invites.join": {
       "issue": 246,
       "backend": "missing",
       "wiring": "not-connected",
-      "evidence": "ログイン必須・回数制限。参加のたびにオーナーへ通知する。公開側: client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
+      "evidence": "ログイン必須・回数制限。参加のたびにオーナーへ通知する。公開側: BFF `photo-cloud-library/src/server/sharing-proxy.ts`（試験 `test/sharing-proxy.test.ts`）、client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
     },
     "members.list": {
       "issue": 246,
       "backend": "missing",
       "wiring": "not-connected",
-      "evidence": "在籍中のメンバーと役割。公開側: client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
+      "evidence": "在籍中のメンバーと役割。公開側: BFF `photo-cloud-library/src/server/sharing-proxy.ts`（試験 `test/sharing-proxy.test.ts`）、client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
     },
     "members.changeRole": {
       "issue": 246,
       "backend": "missing",
       "wiring": "not-connected",
-      "evidence": "オーナー限定、expectedRevision付き。ownerは付与しない。公開側: client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
+      "evidence": "オーナー限定、expectedRevision付き。ownerは付与しない。公開側: BFF `photo-cloud-library/src/server/sharing-proxy.ts`（試験 `test/sharing-proxy.test.ts`）、client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
     },
     "members.remove": {
       "issue": 246,
       "backend": "missing",
       "wiring": "not-connected",
-      "evidence": "受付時点で新規アクセスと追加を止め、追加済みの写真は残す。公開側: client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
+      "evidence": "受付時点で新規アクセスと追加を止め、追加済みの写真は残す。公開側: BFF `photo-cloud-library/src/server/sharing-proxy.ts`（試験 `test/sharing-proxy.test.ts`）、client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
     },
     "members.leave": {
       "issue": 246,
       "backend": "missing",
       "wiring": "not-connected",
-      "evidence": "本人の離脱。オーナーは離脱できない。公開側: client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
+      "evidence": "本人の離脱。オーナーは離脱できない。公開側: BFF `photo-cloud-library/src/server/sharing-proxy.ts`（試験 `test/sharing-proxy.test.ts`）、client `photo-cloud-library/src/sharing/membership-client.ts`（経路の表でencode）、合成server `membership-mock.ts`（同じ表でdecode）、試験 `test/sharing-membership-*.test.ts`。"
     },
     "connector.startPairing": {
       "issue": 244,
