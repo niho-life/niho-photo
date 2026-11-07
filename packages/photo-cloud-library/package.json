@@ -16,6 +16,7 @@
     "lint": "eslint ."
   },
   "dependencies": {
+    "@niho/photo-library-sharing-contract": "*",
     "@niho/photo-personal-cloud-contract": "*",
     "@noble/hashes": "2.4.0",
     "niho-photo-editing": "*",

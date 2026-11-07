@@ -1,0 +1,393 @@
+{
+  "contractVersion": 1,
+  "auditedAt": "2026-11-07",
+  "productionAcceptance": "not-performed",
+  "operations": {
+    "libraries.list": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "本人のNIHOクラウドはv2 libraryをcompat adapterで投影し、常設Macは登録済みlibraryのread modelを返す。"
+    },
+    "libraries.get": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "library owner限定。metadata revision・控えの世代・索引の進捗を正本から構成する。"
+    },
+    "storage.get": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "プレビュー・完成写真・一時書き出しをオーナーへ算入する共有容量。v2の5GiB枠と別に計上する。"
+    },
+    "connectors.approvePairing": {
+      "issue": 244,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "短期・一回限りの登録をNIHOの本人画面で承認する。別所有者・期限切れ・再利用を拒否する。"
+    },
+    "connectors.get": {
+      "issue": 244,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "owner限定。接続状態・端末資格の世代・renderer能力を返す。"
+    },
+    "connectors.revoke": {
+      "issue": 244,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "端末資格を失効させ、常設Macの元データは削除しない。"
+    },
+    "hostedPhotos.list": {
+      "issue": 244,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "read-only索引から使える写真を順に返す。cursorはlibrary・条件に束縛する。"
+    },
+    "hostedPhotos.get": {
+      "issue": 244,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "source generation・補正revision・previewの束縛を返す。pathを返さない。"
+    },
+    "hostedPhotos.info": {
+      "issue": 244,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "owner限定のEXIF。完成写真のmetadataへは入れない。"
+    },
+    "hostedPhotos.content": {
+      "issue": 244,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "プレビュー・作業コピーだけ。元データの外部取得はB04の第2段階。"
+    },
+    "hostedPhotos.exclude": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "一覧からの除外記録。元データを消さず、再走査で復活させない。"
+    },
+    "hostedMasks.startUpload": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "常設Mac libraryのmaskをNIHOへ上げる。保存より先に永続化し、同じ所有者の共有容量に算入する。"
+    },
+    "hostedMasks.completeUpload": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "hashと寸法を照合してmaskを確定する。確定前のmaskを参照する保存は拒否する。"
+    },
+    "hostedRecipes.put": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "#196の完全recipe・CASを再利用し、常設Macの休止中も保存を完了する。"
+    },
+    "hostedRecipeConflicts.list": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "#196の競合保持を常設Mac libraryへ適用する。"
+    },
+    "hostedRecipeConflicts.get": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "#196の競合保持を常設Mac libraryへ適用する。"
+    },
+    "hostedRecipeConflicts.resolve": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "#196の明示選択とCASを常設Mac libraryへ適用する。"
+    },
+    "exports.request": {
+      "issue": 248,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "原寸書き出しを常設Macへ割り当て、休止中は起動後に行う状態にする。"
+    },
+    "exports.get": {
+      "issue": 248,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "owner限定の期限付き一時領域の状態を返す。"
+    },
+    "exports.content": {
+      "issue": 248,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "owner限定。期限後は取得不可。"
+    },
+    "portability.export": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "schema/engine・完全recipe・mask・album定義・hashを含むexport。鍵・URL・session・共有権限を含めない。"
+    },
+    "portability.get": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "export manifestの状態。"
+    },
+    "portability.content": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "owner限定でreadyなportable exportのmanifestを含むarchiveをrange付きstreamとして取得する。"
+    },
+    "portability.restore": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "整合検査と索引復旧。古いsnapshotから共有権限を戻さない。"
+    },
+    "albums.list": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "actorが現在の在籍者であるアルバムだけを返す。"
+    },
+    "albums.get": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "閲覧者に見える項目だけで件数・表紙を構成する。"
+    },
+    "albums.create": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "作成者がオーナーになる。"
+    },
+    "albums.rename": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "オーナー限定、expectedRevision付き。"
+    },
+    "albums.delete": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "完成写真を消し、元データとオーナーのlibraryは消さない。"
+    },
+    "albumItems.list": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "準備中はオーナーと追加者だけ。cursorはmembership revisionに束縛する。"
+    },
+    "albumItems.get": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "他albumの項目・見えない項目は不在と同じ404。"
+    },
+    "albumItems.addPhoto": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "所有者の写真・メンバーの補正写真を追加し、B07で完成写真を作る。"
+    },
+    "albumItems.addFile": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "完成済みJPEGを#195のtransferで追加する。容量はオーナーに算入する。"
+    },
+    "albumItems.replace": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "追加者による手動差し替え。expectedRevision付き。"
+    },
+    "albumItems.commitUpload": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "確定前に現在の役割・項目・世代・metadataを照合する。"
+    },
+    "albumItems.cancelUpload": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "予約を一度だけ解放する。"
+    },
+    "albumItems.renewUpload": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "v2 uploads.renew と同じ形で同じ予約の ticket を取り直す。追加者・最新の upload・reserved だけ。"
+    },
+    "albumItems.remove": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "自分の項目は追加者、他人の項目はオーナーだけ。元データは残す。"
+    },
+    "albumItems.download": {
+      "issue": 254,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "全役割が原寸で保存できる。metadataは許可項目だけ。"
+    },
+    "invites.list": {
+      "issue": 246,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "オーナー限定。secretは返さない。"
+    },
+    "invites.create": {
+      "issue": 246,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "期限7日・複数人可。secretは最初の応答だけ。"
+    },
+    "invites.revoke": {
+      "issue": 246,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "受付時点で新規参加を止める。"
+    },
+    "invites.join": {
+      "issue": 246,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "ログイン必須・回数制限。参加のたびにオーナーへ通知する。"
+    },
+    "members.list": {
+      "issue": 246,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "在籍中のメンバーと役割。"
+    },
+    "members.changeRole": {
+      "issue": 246,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "オーナー限定、expectedRevision付き。ownerは付与しない。"
+    },
+    "members.remove": {
+      "issue": 246,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "受付時点で新規アクセスと追加を止め、追加済みの写真は残す。"
+    },
+    "members.leave": {
+      "issue": 246,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "本人の離脱。オーナーは離脱できない。"
+    },
+    "connector.startPairing": {
+      "issue": 244,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "接続用ソフトから外向きに開始する。承認まで何も作らない。"
+    },
+    "connector.pollPairing": {
+      "issue": 244,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "承認後に端末資格を一度だけ返す。NIHOのログインtokenと別にする。"
+    },
+    "connector.rotateCredential": {
+      "issue": 244,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "接続用ソフトが作った次の端末資格をhashで登録し、前の資格を止める。資格そのものは通信に乗せない。"
+    },
+    "connector.heartbeat": {
+      "issue": 244,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "online/sleepingの申告。期限超過はunreachable。"
+    },
+    "connector.putIndex": {
+      "issue": 244,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "pathではなく不透明なlocalKeyで索引を送る。"
+    },
+    "connector.pullReplica": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "NIHOの正本から控えへ差分を同期する。"
+    },
+    "connector.ackReplica": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "控えの世代を記録する。控えで正本を上書きしない。"
+    },
+    "connector.getReplicaContent": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "控えにmaskの中身を取り込む。surfaceのSHA-256で照合し、元データは運ばない。"
+    },
+    "connector.startWorkingCopyUpload": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "常設Macからsource generation・SDK metadata・asset hashに束縛したcanonical working copyを予約する。"
+    },
+    "connector.completeWorkingCopyUpload": {
+      "issue": 242,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "アップロード後にsource generationを再確認してworking copyを正本へ確定する。"
+    },
+    "renderJobs.claim": {
+      "issue": 248,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "元データのある端末へjobを割り当てる。keyつきで、応答喪失の再送では同じleaseを返す。表示中の写真を先にするヒントを受ける。"
+    },
+    "renderJobs.startOutput": {
+      "issue": 248,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "#195のtransferで出力を送る。"
+    },
+    "renderJobs.commit": {
+      "issue": 248,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "jobの束縛が現在の束縛と一致するときだけ確定する。"
+    },
+    "renderJobs.fail": {
+      "issue": 248,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "理由と次の操作を返す。低解像度の代替を公開しない。"
+    },
+    "renderJobs.renewOutput": {
+      "issue": 248,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "同じ出力のuploadへ新しいticketを返す。予約は変えず、再開位置を含める。"
+    }
+  },
+  "bffOperations": {
+    "invites.holdPending": {
+      "issue": 246,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "BFFだけ。未ログインでも受け、secretを暗号化したhttpOnly・Secure・SameSite=Laxのcookieに15分持つ。"
+    },
+    "invites.joinPending": {
+      "issue": 246,
+      "backend": "missing",
+      "wiring": "not-connected",
+      "evidence": "BFFだけ。ログイン後にcookieを開いて上流のinvites.joinへ送り、成否に関係なくcookieを消す。"
+    }
+  }
+}

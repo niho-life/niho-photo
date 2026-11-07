@@ -10143,6 +10143,16 @@
       "origin": "niho-photo#125 のため新規作成。AI セッション向けの作業ルール（固定の座席 niho-photo-1〜8・root は main 専用・共通の検証と公開 manifest の決まり）。外部の文章・コードを含まない。"
     },
     {
+      "path": "CLAUDE.md",
+      "sha256": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
+      "origin": "niho-photo#125 のため新規作成。Claude Code が AGENTS.md を読むための 1 行の参照。"
+    },
+    {
+      "path": "apps/camera/LICENSES.md",
+      "sha256": "5db6b00b3f3a92e81b48c92a535597552338f108db1b326d4ce75a18e91c1e62",
+      "origin": "公開Macクライアント #7 のため新規作成。秘密なしunsignedビルド・公開CI・ライセンス・lint契約を明示。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: 固定したJSON正規化依存のライセンスと正式候補noticeへの包含を記録"
+    },
+    {
       "path": "apps/camera/account-contract.json",
       "sha256": "000cb019ddfa98e2ebca59c970d5b434e7497d59150f06b105e6b0e53124cb75",
       "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。"
@@ -10151,11 +10161,6 @@
       "path": "apps/camera/eslint.config.mjs",
       "sha256": "4cb4e5e9316ddc238a9ed36bb8433f43837d26a32c7e5acb9c5107c72440171a",
       "origin": "公開Macクライアント #7 のため新規作成。秘密なしunsignedビルド・公開CI・ライセンス・lint契約を明示。"
-    },
-    {
-      "path": "apps/camera/LICENSES.md",
-      "sha256": "5db6b00b3f3a92e81b48c92a535597552338f108db1b326d4ce75a18e91c1e62",
-      "origin": "公開Macクライアント #7 のため新規作成。秘密なしunsignedビルド・公開CI・ライセンス・lint契約を明示。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: 固定したJSON正規化依存のライセンスと正式候補noticeへの包含を記録"
     },
     {
       "path": "apps/camera/public-ci.json",
@@ -10238,14 +10243,14 @@
       "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: Camera限定の安全な本人写真session読取と即時失効を実接続し、旧session遅着と保存待ちを隔離する\n変更理由: ログアウト後の本人写真session読取と並行refreshによる失効解除を防止\n変更理由: ログアウト失効フェンスとTauri account command境界を修正\n変更理由: ログアウト中のsession失効とstale observer競合を防止\n変更理由: ログアウト失効フェンスの回帰testを整備\n変更理由: 公開commandの型可視性をcrate境界に限定\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する\n変更理由: 親のterminal logout fenceとcache TTLを合成しC00読取の開始と公開直前を同じnative世代へ束縛する\n変更理由: 親mainとのmergeで実ファイルを統合\nIssue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: Camera限定の安全な本人写真session読取と即時失効を実接続し、旧session遅着と保存待ちを隔離する\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する\n変更理由: ログアウト後の本人写真session読取と並行refreshによる失効解除を防止\n変更理由: ログアウト失効フェンスとTauri account command境界を修正\n変更理由: ログアウト中のsession失効とstale observer競合を防止\n変更理由: ログアウト失効フェンスの回帰testを整備\n変更理由: 公開commandの型可視性をcrate境界に限定\n変更理由: 親のterminal logout fenceとcache TTLを合成しC00読取の開始と公開直前を同じnative世代へ束縛する\n変更理由: 正式Mac bootstrapの依存を通常mergeし、mainの共有編集面と固定native transportを保持\n変更理由: 本人Photoの実bootstrap・検証済み原本保存・失効と確定の排他・PNGのEOF検証を追加。\n変更理由: MacBearer transport enumの値を使いlogout時commit拒否テストのRust型不整合を修正"
     },
     {
-      "path": "apps/camera/src-tauri/src/cloud_copy_source.rs",
-      "sha256": "6ba705bd08861d15aab89084c38d24d96df45bb6140a61be621b653e66f59cd5",
-      "origin": "NIHO所有の新規実装。個人クラウド接続の未接続境界・原本同一性と取消/再照合を合成fixtureで検証。実写真・認証情報・第三者資産を含まない。\n変更理由: 原本保持・取消後retry・scope世代切替と不明結果照合を負例テストで固定。\n変更理由: 本人PhotoのMac起動接続・検証済み原本保存とPNG終端検証を追加。\n変更理由: 本人Photoの実bootstrap・検証済み原本保存・失効と確定の排他・PNGのEOF検証を追加。\n変更理由: library entry解決テストのsynthetic photoをJPEG拡張子とmagic bytesに揃える\n変更理由: library entry解決テストのsynthetic photoをJPEG拡張子とmagic bytesに揃える\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映"
-    },
-    {
       "path": "apps/camera/src-tauri/src/cloud_copy.rs",
       "sha256": "9cd8a6f7acfc53fdc29b737a769ed91e80dd15d9cbf1441af8ba9226b7bd89d2",
       "origin": "NIHO Photo公開クライアントで新規作成。明示コピーのnative journal・安全なIPC・合成データによる回帰検証。内部ソース・秘密・実写真を含まない。\n変更理由: 合成fixtureを公開可能なパスに統一しnativeコピーのscope検証を追加\n変更理由: 取消の未確定start再照合と既存原本の保護を回帰で固定\n変更理由: 未編集ラスタのコピーを同梱SDKの完全初期補正と実canonical baseへ接続\n変更理由: SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正\n変更理由: journal書込み用fileの可変性を維持し読取側だけ不要なmutを除去\n変更理由: 実SDK初期状態の証明と未知設定の保持を補強\n変更理由: 未知設定のsubtree保護とmask転送再開・保存結果の照合を補強\n変更理由: PR232のMac接続を単一のdurable mask barrierへ統合し固定keys・scope・実SDK能力を検証\n変更理由: 実CIで検出したatomic非推奨とworking-copy artifact metadataの読取を根本修正し実ICCを確認"
+    },
+    {
+      "path": "apps/camera/src-tauri/src/cloud_copy_source.rs",
+      "sha256": "6ba705bd08861d15aab89084c38d24d96df45bb6140a61be621b653e66f59cd5",
+      "origin": "NIHO所有の新規実装。個人クラウド接続の未接続境界・原本同一性と取消/再照合を合成fixtureで検証。実写真・認証情報・第三者資産を含まない。\n変更理由: 原本保持・取消後retry・scope世代切替と不明結果照合を負例テストで固定。\n変更理由: 本人PhotoのMac起動接続・検証済み原本保存とPNG終端検証を追加。\n変更理由: 本人Photoの実bootstrap・検証済み原本保存・失効と確定の排他・PNGのEOF検証を追加。\n変更理由: library entry解決テストのsynthetic photoをJPEG拡張子とmagic bytesに揃える\n変更理由: library entry解決テストのsynthetic photoをJPEG拡張子とmagic bytesに揃える\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映"
     },
     {
       "path": "apps/camera/src-tauri/src/develop_engine_scheme.rs",
@@ -10258,19 +10263,14 @@
       "origin": "公開repoで新規作成（niho-photo#152）。同梱の niho-develop-render serve を 1 プロセス持ち、stdin / stdout の封で要求を多重化する（起動・hello・落ちたときの起動し直し・待ちの上限・終了）。偽の serve での試験を含む。外部のコード・実写真・非公開の情報を含まない。\n変更理由: PR #163 の再起動時の誤参照と書き込み停止時の無期限待機を修正\n変更理由: CI の未使用警告を防ぎ旧入口をテスト時だけに限定\n変更理由: #171 正規切替の停止箇所を同じ試行IDで記録する診断\n変更理由: main の Public CI: sidecar の時間切れで、見張りと要求の側が同時に止めにいくと終了のログより先に戻る競合を直す"
     },
     {
-      "path": "apps/camera/src-tauri/src/flags_tests.rs",
-      "sha256": "9a0c6c37940c91a45f7b6f596472d112779640965a54f9afc9846792e3625583",
-      "origin": "niho-photo#47 のため新規作成。選別のフラグのコマンドと一覧の印の test（一時フォルダと合成のファイルだけを使用）。"
-    },
-    {
       "path": "apps/camera/src-tauri/src/flags.rs",
       "sha256": "f794312361eb352e19498d3da7d2fb6c3ebcb29555bfce35cd6ca75e4a6fd7f5",
       "origin": "niho-photo#47 のため新規作成。この Mac の選別のフラグの Tauri コマンド（entryId で付け外し）と一覧の写真への印。外部コード・実データを含まない。"
     },
     {
-      "path": "apps/camera/src-tauri/src/mask_detection_tests.rs",
-      "sha256": "ff4751f648c89a2df32dcbae9cc079ecbcc910a79d0006d82dec07c6d8884cc7",
-      "origin": "Issue #135のため独立作成。検出の要求の検査・作業画像を描く設定・覚えた検出の Rust テスト。実写真を含まない。"
+      "path": "apps/camera/src-tauri/src/flags_tests.rs",
+      "sha256": "9a0c6c37940c91a45f7b6f596472d112779640965a54f9afc9846792e3625583",
+      "origin": "niho-photo#47 のため新規作成。選別のフラグのコマンドと一覧の印の test（一時フォルダと合成のファイルだけを使用）。"
     },
     {
       "path": "apps/camera/src-tauri/src/mask_detection.rs",
@@ -10278,14 +10278,19 @@
       "origin": "Issue #135のため独立作成。開いた写真の作業画像（RAW は作業コピーを niho-develop-render で sRGB 8bit）に niho-camera-cutout surface を当て、面の置き場へ保存する Tauri コマンド。パスを受け取らず返さない。"
     },
     {
-      "path": "apps/camera/src-tauri/src/mask_surfaces_tests.rs",
-      "sha256": "0a8fa2d3f0bde3cf0cbaca99eb31973d36ed9a473c1419c9120702746cc2a2c9",
-      "origin": "Issue #68の公開仕様と手作りの合成PNGだけから新規作成した、マスクの面のコマンドの引数・開いた写真ごとの往復・上限の回帰。実写真・非公開コード・私有参照出力を含まない。\n変更理由: Preserve mask surfaces in saved versions"
+      "path": "apps/camera/src-tauri/src/mask_detection_tests.rs",
+      "sha256": "ff4751f648c89a2df32dcbae9cc079ecbcc910a79d0006d82dec07c6d8884cc7",
+      "origin": "Issue #135のため独立作成。検出の要求の検査・作業画像を描く設定・覚えた検出の Rust テスト。実写真を含まない。"
     },
     {
       "path": "apps/camera/src-tauri/src/mask_surfaces.rs",
       "sha256": "a81a06bd30ff007b148e66b538c4f4855a0722b199032f7b659c49079678fe54",
       "origin": "Issue #68の公開仕様だけから新規作成した、NIHO photo のマスクの面の保存・読み出し・有無の Tauri コマンドと引数の検査。実写真・非公開コード・私有参照出力を含まない。"
+    },
+    {
+      "path": "apps/camera/src-tauri/src/mask_surfaces_tests.rs",
+      "sha256": "0a8fa2d3f0bde3cf0cbaca99eb31973d36ed9a473c1419c9120702746cc2a2c9",
+      "origin": "Issue #68の公開仕様と手作りの合成PNGだけから新規作成した、マスクの面のコマンドの引数・開いた写真ごとの往復・上限の回帰。実写真・非公開コード・私有参照出力を含まない。\n変更理由: Preserve mask surfaces in saved versions"
     },
     {
       "path": "apps/camera/src-tauri/src/photo_cloud.rs",
@@ -10418,11 +10423,6 @@
       "origin": "niho-photo#49 のため新規作成。窓の backgroundColor と画面の地の色（styles.css）が同じかを確かめるテスト。"
     },
     {
-      "path": "apps/camera/tools/webview-isolation-probe/build.rs",
-      "sha256": "b01bb80b64916f502a3033afdb4567227ef2abcc3b938889f02283aefa780fbe",
-      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
-    },
-    {
       "path": "apps/camera/tools/webview-isolation-probe/Cargo.lock",
       "sha256": "eec163683e4f22a779afcb1550ce84a42375f0cd6cd194bd451e25eea0945b73",
       "origin": "Issue #173 の研究用。apps/camera/src-tauri/Cargo.lock を写し、cargo update --workspace で使わない crate を除いたもの（tauri 2.12.3・wry 0.57.0 の版はアプリと同じ）。"
@@ -10430,6 +10430,16 @@
     {
       "path": "apps/camera/tools/webview-isolation-probe/Cargo.toml",
       "sha256": "c2c1f3c53b86bb79e16d06f2d06ed50153a4d8d73d244df526d9d651e6d8e2c4",
+      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
+    },
+    {
+      "path": "apps/camera/tools/webview-isolation-probe/README.md",
+      "sha256": "73e98b7e7582490b457bb2762d97e860c396d6a38d3ea76908570cbe60dd2cad",
+      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
+    },
+    {
+      "path": "apps/camera/tools/webview-isolation-probe/build.rs",
+      "sha256": "b01bb80b64916f502a3033afdb4567227ef2abcc3b938889f02283aefa780fbe",
       "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
     },
     {
@@ -10445,11 +10455,6 @@
     {
       "path": "apps/camera/tools/webview-isolation-probe/page/worker.js",
       "sha256": "d91fd13fafecfe5e6897d58423a1b90ee72a7852c60b329126dd7305d5169b09",
-      "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
-    },
-    {
-      "path": "apps/camera/tools/webview-isolation-probe/README.md",
-      "sha256": "73e98b7e7582490b457bb2762d97e860c396d6a38d3ea76908570cbe60dd2cad",
       "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
     },
     {
@@ -10478,6 +10483,11 @@
       "origin": "Issue #173 の Mac Tauri WebView の分離条件の研究用に新規作成。合成の 1x1 画像だけを使い、写真・内部 URL・個人情報を含まない。配布物と公開 CI に入れない。"
     },
     {
+      "path": "apps/photo-web/README.md",
+      "sha256": "39e515fe475b5301b23900a4c2118bce8938905e4ac20b47d88a7601d5d0827b",
+      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: Photo WebのC01 captureとC02 clientの接続・受信stream寿命、正式bootstrapの残る責務を記録する。\n変更理由: 固定Photo BFFの401だけをruntimeの世代別本人再確認へ接続し、透過fetchとbrowser graphの対象検証・責務を追加する\n変更理由: 同じ本人のBFF認証拒否をpeer通知・BFCacheの世代変更をまたいで保持し、明示retry又は本人変更だけで解除する\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持\n変更理由: C06: 本人scope失効時の下書き消去、実Node build起動手順と配布境界を記録。"
+    },
+    {
       "path": "apps/photo-web/eslint.config.mjs",
       "sha256": "4cb4e5e9316ddc238a9ed36bb8433f43837d26a32c7e5acb9c5107c72440171a",
       "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。"
@@ -10496,11 +10506,6 @@
       "path": "apps/photo-web/provenance.json",
       "sha256": "bf6ded3c85a6037eececa1bba978d368e29d7d29dc1d9cb2cd1f038a350e4707",
       "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。"
-    },
-    {
-      "path": "apps/photo-web/README.md",
-      "sha256": "39e515fe475b5301b23900a4c2118bce8938905e4ac20b47d88a7601d5d0827b",
-      "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: C06: 共通編集画面のbrowser mountとVite graphを接続し対象検証へ追加\n変更理由: C06: 実renderer probeと同一manifestのbinding・対象試験を追加\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: Photo WebのC01 captureとC02 clientの接続・受信stream寿命、正式bootstrapの残る責務を記録する。\n変更理由: 固定Photo BFFの401だけをruntimeの世代別本人再確認へ接続し、透過fetchとbrowser graphの対象検証・責務を追加する\n変更理由: 同じ本人のBFF認証拒否をpeer通知・BFCacheの世代変更をまたいで保持し、明示retry又は本人変更だけで解除する\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持\n変更理由: C06: 本人scope失効時の下書き消去、実Node build起動手順と配布境界を記録。"
     },
     {
       "path": "apps/photo-web/scripts/clean-build.mjs",
@@ -10798,11 +10803,6 @@
       "origin": "NIHO所有の独立Photo Web host・静的配信・PWA・共通表示接続。C06/Bのpush済みsource d3f3bc4a1d885054b773d8d14903d4a01acfdc98をA/C08が共有登録。由来と除外範囲はapps/photo-web/provenance.json。合成fixtureだけを含み、実credential・写真・内部URLを含まない。\n変更理由: Photo専用Webの原本転送操作と本人scope別の明示再開表示を追加し、遅着応答・別タブ更新からUIを保護する\n変更理由: 親のmain統合を通常mergeし、既存出所と今回のPhoto実装の両方を保持"
     },
     {
-      "path": "CLAUDE.md",
-      "sha256": "336cc4fbf19beaada7ccf9986414fa91851a8d7a07dfb3ccbe800a69eed0ab49",
-      "origin": "niho-photo#125 のため新規作成。Claude Code が AGENTS.md を読むための 1 行の参照。"
-    },
-    {
       "path": "docs/architecture/personal-photo-cloud.md",
       "sha256": "3d7485790178a112a0b23fd65f893a382be7df1baedf17bdaae7656163c9d696",
       "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消\n変更理由: 親sessionと通常refreshを区別し端末間の独立性と失効時の旧scope破棄を明確化\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。\n変更理由: native失効時はWASM読込より先に旧renderer宣言を失効させる\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: 競合ID直接取得と本人Photo境界を接続契約へ追加\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記"
@@ -10821,6 +10821,11 @@
       "path": "docs/architecture/personal-photo-transfers.md",
       "sha256": "f507d99c5fade13acd19d40f81cec79fcf01a0032c9786e9752366e6a95ff78c",
       "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 期限後の結果照合と取消復旧およびupload応答bindingを明文化\n変更理由: 文書rootとHTTP envelopeの深さ境界を実C00構造に合わせて明文化\n変更理由: stored start再送の最大六段envelopeを接続契約へ反映"
+    },
+    {
+      "path": "docs/architecture/photo-library-sharing.md",
+      "sha256": "5cd4275859d79aed96f5afe811839b370f1e4933629a9ba728f6ae4278ad8070",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 経路decodeの検査範囲とBFF・serverの責務を明確化。\n変更理由: Portable exportの取得経路とworking copy送信契約を追記。\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加\n変更理由: Photo #241 / B00 の保留の招待の節に、BFF の __Host- の結び付けの cookie を追記"
     },
     {
       "path": "docs/ci/public-ci.md",
@@ -10879,8 +10884,8 @@
     },
     {
       "path": "docs/legal/asset-inventory.csv",
-      "sha256": "be9cb5b812dca7d3830421ebb298ae0bfd2615c281f88fb971e23b1d431203d8",
-      "origin": "Photo #193 / C00 の契約確定に伴い監査。既存backendの即時purgeとPhoto製品未接続の区別、抽出した合成fixtureの権利・出典または対象型検査を記録。内部URL・実写真・資格情報を含まない。\n変更理由: レビュー反映後の合成型負例のexact hashとサイズを更新\n変更理由: 競合ID取得の合成fixtureの現行公開sourceとexact hashを追加監査し元の抽出記録を保持"
+      "sha256": "f43a8ac737efaaf3a888614b0614f3463dea2594a46b38d3a7d8c9b4411c776d",
+      "origin": "Photo #193 / C00 の契約確定に伴い監査。既存backendの即時purgeとPhoto製品未接続の区別、抽出した合成fixtureの権利・出典または対象型検査を記録。内部URL・実写真・資格情報を含まない。\n変更理由: レビュー反映後の合成型負例のexact hashとサイズを更新\n変更理由: 競合ID取得の合成fixtureの現行公開sourceとexact hashを追加監査し元の抽出記録を保持\n変更理由: B00の合成fixtureを公開資産台帳へ追加。\n変更理由: B00の追加合成fixtureの出所hashと公開判定を記録。\n変更理由: Photo #241 / B00 の合成fixture（B12の提案を反映）の資産台帳の行を更新\n変更理由: Photo #241 / B00 の合成fixture（招待の保留・memberCount）の資産台帳の行を更新"
     },
     {
       "path": "docs/lens-adjustments.md",
@@ -10929,13 +10934,13 @@
     },
     {
       "path": "package-lock.json",
-      "sha256": "1142f7e619ba7112b5624c3621e9def0ff328a6f5d71127cd7b675034ad99036",
-      "origin": "公開SDKのReact 19型consumer smokeだけで使う開発依存のlockfile。runtime依存を変更しない。\n変更理由: 依存追加なしでPhoto session workspace linkとpackage metadataをnpmで同期\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02・SDK profileのmain lockを保持し、検証済みPhoto Webの3 lock entryとworkspace登録だけを統合。\n変更理由: C02の公開workspaceと固定hashおよびIndexedDB試験依存をintegrityで固定する\n変更理由: 既存固定依存だけで本人補正同期workspaceを登録\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定"
+      "sha256": "f36ad10b14dcf939915adf82b40ef0d66b69f4670e8aa6260b9dd6c94a8cb587",
+      "origin": "公開SDKのReact 19型consumer smokeだけで使う開発依存のlockfile。runtime依存を変更しない。\n変更理由: 依存追加なしでPhoto session workspace linkとpackage metadataをnpmで同期\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02・SDK profileのmain lockを保持し、検証済みPhoto Webの3 lock entryとworkspace登録だけを統合。\n変更理由: C02の公開workspaceと固定hashおよびIndexedDB試験依存をintegrityで固定する\n変更理由: 既存固定依存だけで本人補正同期workspaceを登録\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: 共有契約packageとworkspace依存をlockへ登録。"
     },
     {
       "path": "package.json",
-      "sha256": "7c2079a578737fefcabbc1f8b584554d15095b5a1dd25cab4a591865c7257554",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK release set生成・検証・外部consumer smoke入口を追加。\n変更理由: Issue #112の実WASMとNode契約smoke入口を追加\n変更理由: Issue #113のMac candidate build・data-only検証・fixture test入口を追加。\n変更理由: rootの重いnpm scriptをMac miniで開始前に停止する。\n変更理由: React 19型のSDK consumer検証依存を追加\n変更理由: Photo専用session packageをroot workspaceへ登録して共通検証対象に追加\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: mainのC02・個人契約workspaceとC06のPhoto Web workspaceを同時に保持して通常mergeを解消。\n変更理由: 完全補正の永続同期coreを公開workspaceへ登録\n変更理由: C08: Photo Web formal release publisherとsynthetic workflow/包材検証をCIに接続\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定"
+      "sha256": "a4f120d7177520be4efe965436b9b40bda91eeb9a7df5e8238eb28e794255326",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK release set生成・検証・外部consumer smoke入口を追加。\n変更理由: Issue #112の実WASMとNode契約smoke入口を追加\n変更理由: Issue #113のMac candidate build・data-only検証・fixture test入口を追加。\n変更理由: rootの重いnpm scriptをMac miniで開始前に停止する。\n変更理由: React 19型のSDK consumer検証依存を追加\n変更理由: Photo専用session packageをroot workspaceへ登録して共通検証対象に追加\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: mainのC02・個人契約workspaceとC06のPhoto Web workspaceを同時に保持して通常mergeを解消。\n変更理由: 完全補正の永続同期coreを公開workspaceへ登録\n変更理由: C08: Photo Web formal release publisherとsynthetic workflow/包材検証をCIに接続\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: 共有契約workspaceとPhoto editing CI scopeを登録。"
     },
     {
       "path": "packages/desktop-account/Cargo.lock",
@@ -10948,24 +10953,24 @@
       "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: NIHO app-connectのJSON HTTPとprivate file storeに必要な公開依存だけを残し、末尾空行を整理。"
     },
     {
-      "path": "packages/desktop-account/contract/native-account-v2.json",
-      "sha256": "38c5289fa6e981afcfed18d8e2e4b806f67b4477bd96b92470bc3594f55c6a4f",
-      "origin": "NIHO app-connectの公開wire contractと採用済み仕様に基づき独立新規作成。private server実装・実token・実個人情報を含まない。"
-    },
-    {
       "path": "packages/desktop-account/LICENSES.md",
       "sha256": "3c408d5890a1307e14130c6550b7bfbb1278745b3c1ebf95b81b34b4ee1bdee8",
       "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。"
     },
     {
-      "path": "packages/desktop-account/public-ci.json",
-      "sha256": "c184b6a649bfe23ecc385da20816986ebce737235c02caca3c8d51f96bea3e10",
-      "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。"
-    },
-    {
       "path": "packages/desktop-account/README.md",
       "sha256": "03a741115f0f9f06715def50fb3c15762d611d23d62f98260a1be72b9e0f27f6",
       "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: 取消はUI状態と保存を直ちに無効化し、送信済みHTTP workerは最大10秒で終了する境界を明記。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: 公式公開keyの出典・release設定とsmokeの留保、logoutの接続DELETEの扱いを明記。"
+    },
+    {
+      "path": "packages/desktop-account/contract/native-account-v2.json",
+      "sha256": "38c5289fa6e981afcfed18d8e2e4b806f67b4477bd96b92470bc3594f55c6a4f",
+      "origin": "NIHO app-connectの公開wire contractと採用済み仕様に基づき独立新規作成。private server実装・実token・実個人情報を含まない。"
+    },
+    {
+      "path": "packages/desktop-account/public-ci.json",
+      "sha256": "c184b6a649bfe23ecc385da20816986ebce737235c02caca3c8d51f96bea3e10",
+      "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。"
     },
     {
       "path": "packages/desktop-account/rustfmt.toml",
@@ -11053,19 +11058,14 @@
       "origin": "Issue #5のため独立作成。公開仕様から拡張子・MIME・UTType・magic bytes・処理段階の能力レジストリと権利安全な合成signatureテストを実装。外部コード・画像・個体metadataを含まない。\n変更理由: Issue #5親レビューに従い形式検査・エラー保持・実decoder公開CI回帰を補強。\n変更理由: AVIFをHEICと誤認しない拡張子不一致回帰を追加。\n変更理由: 並行testの一時directory名をatomic連番でも分離しclock分解能によるfixture削除衝突を防ぐ。"
     },
     {
-      "path": "packages/desktop-photo/src/mask_surfaces_tests.rs",
-      "sha256": "697f992eab6061b6fb63bc442cbb3342fd39b3ce8d9016979f4d76da46e1c69f",
-      "origin": "Issue #68の公開仕様と手作りの合成PNGだけから新規作成した、マスクの面の置き場の往復・壊れたファイル・パスの検査・上限の回帰。実写真・非公開コード・私有参照出力を含まない。\n変更理由: 部分補正（マスク）#68: 局所の値が全体で潰れて描かれない層は、その面も要らない（Codex 指摘）。"
-    },
-    {
       "path": "packages/desktop-photo/src/mask_surfaces.rs",
       "sha256": "ea1606bb1fd2948dceff6eef3166f264daeb5490f5c931199309b914477bf8b1",
       "origin": "Issue #68の公開仕様 docs/local-adjustments.md だけから新規作成した、Macの写真ごとのマスクの面の置き場（ヘッダー検査・sha256・原子的な書き込み・上限と掃除）のRust実装。実写真・非公開コード・私有参照出力を含まない。\n変更理由: 部分補正（マスク）#68: 局所の値が全体で潰れて描かれない層は、その面も要らない（Codex 指摘）。\n変更理由: Preserve mask surfaces in saved versions"
     },
     {
-      "path": "packages/desktop-photo/src/saved_flags_tests.rs",
-      "sha256": "5be4ccf4e08c7a4270f021f842508b3699d722a8e6bb86e6cfe1d514172de8f6",
-      "origin": "niho-photo#47 のため新規作成。選別のフラグの置き場の test（一時フォルダと合成のファイルだけを使用）。"
+      "path": "packages/desktop-photo/src/mask_surfaces_tests.rs",
+      "sha256": "697f992eab6061b6fb63bc442cbb3342fd39b3ce8d9016979f4d76da46e1c69f",
+      "origin": "Issue #68の公開仕様と手作りの合成PNGだけから新規作成した、マスクの面の置き場の往復・壊れたファイル・パスの検査・上限の回帰。実写真・非公開コード・私有参照出力を含まない。\n変更理由: 部分補正（マスク）#68: 局所の値が全体で潰れて描かれない層は、その面も要らない（Codex 指摘）。"
     },
     {
       "path": "packages/desktop-photo/src/saved_flags.rs",
@@ -11073,9 +11073,9 @@
       "origin": "niho-photo#47 のため新規作成。選別のフラグ（採用 / 却下）の置き場（名前・大きさ・更新日時の SHA-256 を鍵にした 1 つの JSON。フォルダ 0700・ファイル 0600・一時ファイル＋rename・上限）。外部コード・実データを含まない。"
     },
     {
-      "path": "packages/desktop-photo/src/saved_versions_tests.rs",
-      "sha256": "a9a01080bfe5276ded3df6cc1c292d9e429a14a61783d378a79d0d498240c4b0",
-      "origin": "niho-photo#42 のため新規作成。版のファイルの往復・権限・壊れた / 大きすぎる / 知らない形式・上限・失敗した書き込み・記録と一緒に消す掃除・旧版の NIHO が触れない名前の test。一時フォルダと合成の値だけを使用。"
+      "path": "packages/desktop-photo/src/saved_flags_tests.rs",
+      "sha256": "5be4ccf4e08c7a4270f021f842508b3699d722a8e6bb86e6cfe1d514172de8f6",
+      "origin": "niho-photo#47 のため新規作成。選別のフラグの置き場の test（一時フォルダと合成のファイルだけを使用）。"
     },
     {
       "path": "packages/desktop-photo/src/saved_versions.rs",
@@ -11083,9 +11083,54 @@
       "origin": "niho-photo#42 のため新規作成。補正の版を補正の記録の隣の別ファイル（<キー>.versions.json）に読み書きする（形の検証・上限・revision の照合・0600 と一時ファイル＋rename）。外部コード・実データを含まない。"
     },
     {
+      "path": "packages/desktop-photo/src/saved_versions_tests.rs",
+      "sha256": "a9a01080bfe5276ded3df6cc1c292d9e429a14a61783d378a79d0d498240c4b0",
+      "origin": "niho-photo#42 のため新規作成。版のファイルの往復・権限・壊れた / 大きすぎる / 知らない形式・上限・失敗した書き込み・記録と一緒に消す掃除・旧版の NIHO が触れない名前の test。一時フォルダと合成の値だけを使用。"
+    },
+    {
+      "path": "packages/develop-engine/LICENSES.md",
+      "sha256": "0dbb93355f1f261db39d729cc37a50901f9e16303127ce940f192cb5934f3ee0",
+      "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。\n変更理由: 部分補正（マスク）#68: niho-develop が png・sha2 を直接使う用途を記録する\n変更理由: #148: threads feature で使う rayon と依存の用途を明記。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
+    },
+    {
+      "path": "packages/develop-engine/NIHO12.md",
+      "sha256": "34c99d15785449ad6b33f0ecdde6819a1fece63bca54a0fba0e3cab6e1516384",
+      "origin": "公開Issue #29 のため公開済み数式・既存primitiveから独立実装したengine・合成テスト・計測コード・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。\n変更理由: PR #90: niho-13への新規既定切替とniho-12互換の関係を記録。"
+    },
+    {
+      "path": "packages/develop-engine/NIHO13.md",
+      "sha256": "798a1b00a4d1ca14c59e6a7d533e3c776b92516981989ac62d0d565b7500e6e3",
+      "origin": "公開Issue #27 のため公開済み数式・既存primitiveから独立実装したengine・合成テスト・計測コード・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。\n変更理由: PR #90: niho-13のWB処理・性能結果・制約を記録。\n変更理由: Bump crate version for mask surface WASM\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ"
+    },
+    {
+      "path": "packages/develop-engine/NIHO14.md",
+      "sha256": "ff9b20ccd88b24964bba71e00b46047fd7cef9cc12fa0898a82e296a3b52855b",
+      "origin": "公開Issue #89 のため公開済み数式・既存primitiveから独立実装したengine・合成テスト・計測コード・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。\n変更理由: #141 crate 0.27.0 の manifest の置き場を書く"
+    },
+    {
+      "path": "packages/develop-engine/NIHO8.md",
+      "sha256": "22e18b9400c2fcea1f1f4b1af7f26c4d8431caed08aa3c599aa5aef51a12d9aa",
+      "origin": "公開Issue #26/#27/#29 のため公開済み数式・既存primitiveから独立実装した研究用コード・合成テスト・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。\n変更理由: 実測に基づくWB節点別fit、旧版を維持する候補のnative/wasm固定hashと再現可能な性能計測を整備。\n変更理由: Studio実測の段差・WB gate未達・wasm初期解析と継続編集の性能をsource SHA付きで記録。\n変更理由: 57場面のfloat対比較と6場面の原理式Bのgate未達を、匿名数値・残作業として記録。\n変更理由: Issue #29: 新規既定へ昇格したniho-12との関係を明記し、niho-8の画素は変えない\n変更理由: PR #74: #80 統合後に float-cube の変更を重ね、最終ハッシュを反映。"
+    },
+    {
+      "path": "packages/develop-engine/README.md",
+      "sha256": "6bd23d6413980a69831a03056aa7290d1d53b3698c722e90b5d197c2f58974c5",
+      "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。\n変更理由: 公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。\n変更理由: Issue #29: niho-12を新規既定として案内し、忠実度に階調の段差と教師比較の数値を追記\n変更理由: PR #74: #80 統合後に float-cube の変更を重ね、最終ハッシュを反映。\n変更理由: PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。\n変更理由: Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ\n変更理由: #148: 並列化の画素一致の規則と確認コマンドを追加。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: 署名SDKのmedia互換producer契約と実sourceの版照合を記録"
+    },
+    {
+      "path": "packages/develop-engine/RESEARCH26-27.md",
+      "sha256": "fbe6b5f23e3b6bd1776f173b7a0c9c97b5909e3659eec4f7a6b49db726b5d3b5",
+      "origin": "公開Issue #26/#27/#29 のため公開済み数式・既存primitiveから独立実装した研究用コード・合成テスト・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。\n変更理由: 暗所A/Bで現行niho-6を基準とし、H/S以外の色・黒レベル等を同じ数式で比較する。\n変更理由: 実測に基づくWB節点別fit、旧版を維持する候補のnative/wasm固定hashと再現可能な性能計測を整備。\n変更理由: 非公開出力をrepository外へ限定しsealed独立評価を拒否する、匿名集計の再現手順を追加。\n変更理由: Studio実測の段差・WB gate未達・wasm初期解析と継続編集の性能をsource SHA付きで記録。\n変更理由: 57場面のfloat対比較と6場面の原理式Bのgate未達を、匿名数値・残作業として記録。\n変更理由: 教師上の次候補fitとownerの撮影作業を区別し、独立評価前の未達判定であることを明確化。\n変更理由: PR #84: #74 squash後のmainへ解析候補を再統合し、公開ハッシュを更新。\n変更理由: #26 案C（写真特徴から写真ごとの強さを予測）の交差検証前の採否規則・fold外の結果・niho-6 撮影日CVとの比較・不採用の理由を記録し、独立評価の撮影条件と評価toolの版を明確化\n変更理由: #26 案C′ の目的関数・目標・採否規則を交差検証の前に記録\n変更理由: PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。\n変更理由: PR #95: 最新mainのWB変更と案C′の交差検証結果を統合。\n変更理由: #26 案C′ の fold外の結果・niho-6 撮影日CVとの比較・不採用と原因を記録"
+    },
+    {
       "path": "packages/develop-engine/build-macos-native.mjs",
       "sha256": "b0b4a3e63a4318c33b7df2ca47795e825fc241dfdd548c6c8bfe71b2a6988a51",
       "origin": "Issue #113のSDK native build closure用に公開sourceだけから独立作成。固定Rust/lock/target、隔離環境、3 native toolのversion・system dylib・calibration registry/hash検査を実装し、signing key・credential・private sourceを含まない。\n変更理由: native helperの実装レビューで不要importとindentを整理。\n変更理由: 独立native builderでSDK sourceとtool lockを事前照合し、既定Rust toolchainの保存先を隔離HOMEから独立して保持。\n変更理由: macOSの別名一時pathから実行してもnative CLIが起動するよう実pathでentrypointを照合。\n変更理由: Swift packageの製品buildでも解決されるtest targetとfixtureをSDK source closureに含める\n変更理由: Swiftのfile/debug prefix mapとRustの別名path・実path mapを追加し公開artifactからbuild pathを除く\n変更理由: System絶対pathのdylibだけを使うnative toolから未使用のSwiftPM探索pathを削除しad-hoc再署名する"
+    },
+    {
+      "path": "packages/develop-engine/crates/niho-base-raw/README.md",
+      "sha256": "1e72064d9d7f3b85e6fc8efa504533661e3ebd7c92b6dfcd3e34bad59ec192ad",
+      "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。"
     },
     {
       "path": "packages/develop-engine/crates/niho-base-raw/profiles/panasonic-dc-s5/niho-dc-s5-independent-v1.dcp",
@@ -11095,11 +11140,6 @@
     {
       "path": "packages/develop-engine/crates/niho-base-raw/profiles/panasonic-dc-s5/niho-dc-s5-independent-v1.spec.json",
       "sha256": "30dc8eb8306489e39be5c495c53adb8b49ac473fbf9cbe8c411a38ed13e91b43",
-      "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。"
-    },
-    {
-      "path": "packages/develop-engine/crates/niho-base-raw/README.md",
-      "sha256": "1e72064d9d7f3b85e6fc8efa504533661e3ebd7c92b6dfcd3e34bad59ec192ad",
       "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。"
     },
     {
@@ -11388,14 +11428,14 @@
       "origin": "niho-photo#46 のため新規作成。合成画像で、逆写像どおりの再標本化・恒等の値での bit 一致・Session の描き直し・余白を埋める出力サイズ・native と wasm の hash 一致・XMP の読み書きと適用量を確かめる test。実写真・実 RAW を使わない。\n変更理由: niho-photo#44 前半で v8 が読める版になったため、未知の版の例を v9 に変えた。\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。"
     },
     {
-      "path": "packages/develop-engine/crates/niho-develop/tests/heal_full_size.rs",
-      "sha256": "bfb8702723b7e9688210705b10b072c859ef8f297663f40c5d4fcb2e8d914700",
-      "origin": "Issue #133 のため新規作成。数式で作る合成の芝で、24MP・61MP の修復の時間とヒープを測る ignored test。実写真を含まない。"
-    },
-    {
       "path": "packages/develop-engine/crates/niho-develop/tests/heal.rs",
       "origin": "niho-photo#44 前半のため新規作成。合成の空と電線・縞と格子と煉瓦の壁・単色の背景・芝と看板で、消す・写す・縁・幾何との組み合わせ・Session のキャッシュ・作業コピー・設定・プリセット・native と wasm の一致を確かめる test。実写真・実 RAW を使わない。\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: niho-photo#44の修復印XMP未対応通知のRust回帰テストを更新。\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。",
       "sha256": "e53d1ebfd5cbb3059a101f951ea5315e6fd73c9fd529f834211642243e67afd0"
+    },
+    {
+      "path": "packages/develop-engine/crates/niho-develop/tests/heal_full_size.rs",
+      "sha256": "bfb8702723b7e9688210705b10b072c859ef8f297663f40c5d4fcb2e8d914700",
+      "origin": "Issue #133 のため新規作成。数式で作る合成の芝で、24MP・61MP の修復の時間とヒープを測る ignored test。実写真を含まない。"
     },
     {
       "path": "packages/develop-engine/crates/niho-develop/tests/lens.rs",
@@ -11643,49 +11683,14 @@
       "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。\n変更理由: 未解釈ヘッダーbytesをゼロ化して私有情報の継承を防止"
     },
     {
-      "path": "packages/develop-engine/LICENSES.md",
-      "sha256": "0dbb93355f1f261db39d729cc37a50901f9e16303127ce940f192cb5934f3ee0",
-      "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。\n変更理由: 部分補正（マスク）#68: niho-develop が png・sha2 を直接使う用途を記録する\n変更理由: #148: threads feature で使う rayon と依存の用途を明記。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新"
-    },
-    {
       "path": "packages/develop-engine/licenses/Adobe-DNG-SDK-LICENSE.txt",
       "sha256": "7d79b475bc595c1d7744bc06ea16c2a298828260a991f57c71389cabf1a64b5f",
       "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。"
     },
     {
-      "path": "packages/develop-engine/NIHO12.md",
-      "sha256": "34c99d15785449ad6b33f0ecdde6819a1fece63bca54a0fba0e3cab6e1516384",
-      "origin": "公開Issue #29 のため公開済み数式・既存primitiveから独立実装したengine・合成テスト・計測コード・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。\n変更理由: PR #90: niho-13への新規既定切替とniho-12互換の関係を記録。"
-    },
-    {
-      "path": "packages/develop-engine/NIHO13.md",
-      "sha256": "798a1b00a4d1ca14c59e6a7d533e3c776b92516981989ac62d0d565b7500e6e3",
-      "origin": "公開Issue #27 のため公開済み数式・既存primitiveから独立実装したengine・合成テスト・計測コード・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。\n変更理由: PR #90: niho-13のWB処理・性能結果・制約を記録。\n変更理由: Bump crate version for mask surface WASM\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ"
-    },
-    {
-      "path": "packages/develop-engine/NIHO14.md",
-      "sha256": "ff9b20ccd88b24964bba71e00b46047fd7cef9cc12fa0898a82e296a3b52855b",
-      "origin": "公開Issue #89 のため公開済み数式・既存primitiveから独立実装したengine・合成テスト・計測コード・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。\n変更理由: #141 crate 0.27.0 の manifest の置き場を書く"
-    },
-    {
-      "path": "packages/develop-engine/NIHO8.md",
-      "sha256": "22e18b9400c2fcea1f1f4b1af7f26c4d8431caed08aa3c599aa5aef51a12d9aa",
-      "origin": "公開Issue #26/#27/#29 のため公開済み数式・既存primitiveから独立実装した研究用コード・合成テスト・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。\n変更理由: 実測に基づくWB節点別fit、旧版を維持する候補のnative/wasm固定hashと再現可能な性能計測を整備。\n変更理由: Studio実測の段差・WB gate未達・wasm初期解析と継続編集の性能をsource SHA付きで記録。\n変更理由: 57場面のfloat対比較と6場面の原理式Bのgate未達を、匿名数値・残作業として記録。\n変更理由: Issue #29: 新規既定へ昇格したniho-12との関係を明記し、niho-8の画素は変えない\n変更理由: PR #74: #80 統合後に float-cube の変更を重ね、最終ハッシュを反映。"
-    },
-    {
       "path": "packages/develop-engine/public-ci.json",
       "sha256": "037b44592b92776d7de822c5d90c376a3d1d27092ed1b4749434155b64eda8cb",
       "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。\n変更理由: Issue #5親レビューに従い形式検査・エラー保持・実decoder公開CI回帰を補強。\n変更理由: Swift regressionをmacOS 26専用jobへ分離し、macOS 14のnative scopeはRust/WASM検査だけにする。\n統合元の由来: #9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。"
-    },
-    {
-      "path": "packages/develop-engine/README.md",
-      "sha256": "6bd23d6413980a69831a03056aa7290d1d53b3698c722e90b5d197c2f58974c5",
-      "origin": "#9で独立作成。所有測定対・metadataを除いた所有RAW/参照画像、検証tool、公開build/test契約または第三者license全文。詳細はdocs/migration/raw-engine.mdと資産台帳に記録。\n変更理由: 公開Issue #26/#27/#29: 旧版を保つfloat cube候補、研究用WB/H-Sプローブ、合成検証と計測契約を追加。\n変更理由: Issue #29: niho-12を新規既定として案内し、忠実度に階調の段差と教師比較の数値を追記\n変更理由: PR #74: #80 統合後に float-cube の変更を重ね、最終ハッシュを反映。\n変更理由: PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。\n変更理由: Issue #89: H/S応答の解析の画素を変えない高速化とniho-14（軽い解析）を新規既定にし、crate 0.26.0へ版上げ\n変更理由: #148: 並列化の画素一致の規則と確認コマンドを追加。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: 署名SDKのmedia互換producer契約と実sourceの版照合を記録"
-    },
-    {
-      "path": "packages/develop-engine/RESEARCH26-27.md",
-      "sha256": "fbe6b5f23e3b6bd1776f173b7a0c9c97b5909e3659eec4f7a6b49db726b5d3b5",
-      "origin": "公開Issue #26/#27/#29 のため公開済み数式・既存primitiveから独立実装した研究用コード・合成テスト・日本語手順。非公開の写真・参照画素・パス・履歴・第三者ソースを含まない。\n変更理由: 暗所A/Bで現行niho-6を基準とし、H/S以外の色・黒レベル等を同じ数式で比較する。\n変更理由: 実測に基づくWB節点別fit、旧版を維持する候補のnative/wasm固定hashと再現可能な性能計測を整備。\n変更理由: 非公開出力をrepository外へ限定しsealed独立評価を拒否する、匿名集計の再現手順を追加。\n変更理由: Studio実測の段差・WB gate未達・wasm初期解析と継続編集の性能をsource SHA付きで記録。\n変更理由: 57場面のfloat対比較と6場面の原理式Bのgate未達を、匿名数値・残作業として記録。\n変更理由: 教師上の次候補fitとownerの撮影作業を区別し、独立評価前の未達判定であることを明確化。\n変更理由: PR #84: #74 squash後のmainへ解析候補を再統合し、公開ハッシュを更新。\n変更理由: #26 案C（写真特徴から写真ごとの強さを予測）の交差検証前の採否規則・fold外の結果・niho-6 撮影日CVとの比較・不採用の理由を記録し、独立評価の撮影条件と評価toolの版を明確化\n変更理由: #26 案C′ の目的関数・目標・採否規則を交差検証の前に記録\n変更理由: PR #90: niho-13のWB先行適用とdetail連携cacheを#84後のmainへ統合。\n変更理由: PR #95: 最新mainのWB変更と案C′の交差検証結果を統合。\n変更理由: #26 案C′ の fold外の結果・niho-6 撮影日CVとの比較・不採用と原因を記録"
     },
     {
       "path": "packages/develop-engine/tools/asset-audit/sanitize_rw2.py",
@@ -11793,6 +11798,11 @@
       "origin": "Issue #135のため独立作成。合成画像だけで surface の引数・正規形の PNG・EXIF の向きと縮小・推論の前の失敗を確かめる Swift テスト。実写真を含まない。"
     },
     {
+      "path": "packages/develop-engine/tools/sky-mask-train/README.md",
+      "sha256": "5d345d169989a48079729703fe4f1ac8620a7582ef18a12585f2a1d48d22d740",
+      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。 変更理由: 学習時に露出メタデータ件数を照合し、スナップショットの欠落を検出する。 変更理由: 件数照合が有効な ev100 を数えることを明記。\n変更理由: #158 入力設定・抽出の重み・生成証跡の説明を足す\n変更理由: #158 入力設定・チャネル幅・抽出の重み・合成電線の増強・生成証跡の説明を足す\n変更理由: #158 rgb-ev の digest に露出の JSON が入ることを書く\n変更理由: #158 枝越しの空を足す正解の補いと、空なし素材・後処理の説明を足す\n変更理由: #158 隙間の周りの模様を調べる範囲の修正前後を書く\n変更理由: #158 推論後の補いと枝・窓枠の増強の説明を足す\n変更理由: #158 二段の閾値の説明を足す\n変更理由: #158 照合用の固定データと reference_forward.py の説明を足す"
+    },
+    {
       "path": "packages/develop-engine/tools/sky-mask-train/evaluate.py",
       "sha256": "a6ec276743c5543f4a641a6f20b6f04e018f3240a0fdec2f4e546af33e406d38",
       "origin": "Issue #158 で NIHO が作成した非公開研究コードを公開用に整理。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。 変更理由: 空なし写真での誤検出件数を評価出力へ明示。"
@@ -11801,11 +11811,6 @@
       "path": "packages/develop-engine/tools/sky-mask-train/label_fill.py",
       "sha256": "87178fe2f7a5986d2e01ca138f980aff1bc4b04d315b487ca06beccff3a98792",
       "origin": "Issue #158 で NIHO が作成した研究コード。学習用の空の正解に、枝越し・建物の間の空の候補を色で足す汎用処理のみ。写真・正解マスク・学習済み重み・個体情報を含まない。"
-    },
-    {
-      "path": "packages/develop-engine/tools/sky-mask-train/README.md",
-      "sha256": "5d345d169989a48079729703fe4f1ac8620a7582ef18a12585f2a1d48d22d740",
-      "origin": "Issue #158 の空マスク研究用に新規作成。独自学習・評価の汎用コードのみ。写真・正解マスク・学習済み重み・個体情報を含まない。 変更理由: 学習時に露出メタデータ件数を照合し、スナップショットの欠落を検出する。 変更理由: 件数照合が有効な ev100 を数えることを明記。\n変更理由: #158 入力設定・抽出の重み・生成証跡の説明を足す\n変更理由: #158 入力設定・チャネル幅・抽出の重み・合成電線の増強・生成証跡の説明を足す\n変更理由: #158 rgb-ev の digest に露出の JSON が入ることを書く\n変更理由: #158 枝越しの空を足す正解の補いと、空なし素材・後処理の説明を足す\n変更理由: #158 隙間の周りの模様を調べる範囲の修正前後を書く\n変更理由: #158 推論後の補いと枝・窓枠の増強の説明を足す\n変更理由: #158 二段の閾値の説明を足す\n変更理由: #158 照合用の固定データと reference_forward.py の説明を足す"
     },
     {
       "path": "packages/develop-engine/tools/sky-mask-train/reference_forward.py",
@@ -11838,19 +11843,19 @@
       "origin": "公開 Issue #150 のため新規作成。単一 wasm の段別計測を実行する補助スクリプト。実写真や第三者のコードを含まない。\n変更理由: Issue #150: 現像の重い段を画素不変で並列化し、main の最新実装と統合"
     },
     {
+      "path": "packages/photo-cloud-library/README.md",
+      "sha256": "365934ae4a59eecd05e0b9bfe48aeae17715711bfda65951f88bcef6d4f19e9b",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: C03実HTTPと狭いprotocol共有口および編集未有効の境界を記述\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。\n変更理由: 失効時に本人scopeだけをfenceして転送journalを消去し、通常disposeの再開情報保持を分離する\n変更理由: 曖昧なconnection teardownと確定的session失効を分け、再開可能journalを保護する"
+    },
+    {
       "path": "packages/photo-cloud-library/eslint.config.mjs",
       "sha256": "453b778645cb9b6572c968b04ec05d505a2abd1dbf7d606e2ccaac8e8fbb6bf3",
       "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/photo-cloud-library/package.json",
-      "sha256": "1b4e7bea92d59e88d9fce54a7a03495684e8c51b45d7f797aa9101a607d0a440",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02の増分SHAと送信前journal試験依存、browserとserver exportを固定する\n変更理由: 同期core用の狭いprotocol共有exportを追加"
-    },
-    {
-      "path": "packages/photo-cloud-library/README.md",
-      "sha256": "365934ae4a59eecd05e0b9bfe48aeae17715711bfda65951f88bcef6d4f19e9b",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: C03実HTTPと狭いprotocol共有口および編集未有効の境界を記述\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。\n変更理由: 失効時に本人scopeだけをfenceして転送journalを消去し、通常disposeの再開情報保持を分離する\n変更理由: 曖昧なconnection teardownと確定的session失効を分け、再開可能journalを保護する"
+      "sha256": "a3dddcb6f749181496b7a48518f3426c8d750fc5dd8e87f9047a57feffbac7c3",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02の増分SHAと送信前journal試験依存、browserとserver exportを固定する\n変更理由: 同期core用の狭いprotocol共有exportを追加\n変更理由: photo-cloud-libraryから共有契約packageを参照。"
     },
     {
       "path": "packages/photo-cloud-library/src/adapter.ts",
@@ -12003,6 +12008,11 @@
       "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。"
     },
     {
+      "path": "packages/photo-cloud-media/README.md",
+      "sha256": "5104c3b15a404f56f3a4758e5ba469f603b7d30b854148a3ecd3f31f4a20661a",
+      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定"
+    },
+    {
       "path": "packages/photo-cloud-media/acceptance.md",
       "sha256": "812d4786068bcd410ae5e71c8b9d245be4ee4ad6918393ec7fc38cd7e3e65e65",
       "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
@@ -12025,11 +12035,6 @@
     {
       "path": "packages/photo-cloud-media/provenance.json",
       "sha256": "899eab9e64210a02cf886a6a34f0d968c42ec5138291fd97f553274aa1214b04",
-      "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定"
-    },
-    {
-      "path": "packages/photo-cloud-media/README.md",
-      "sha256": "5104c3b15a404f56f3a4758e5ba469f603b7d30b854148a3ecd3f31f4a20661a",
       "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定"
     },
     {
@@ -12133,6 +12138,11 @@
       "origin": "NIHO所有C04公開source d2d943eb59100cbc768d9a7aa5781596e7461619。監査済みpublic sourceと公式SDK0.1.7固定provider。元commit/path/hashはpackage内provenanceに固定、実storage/端末受入は別途。"
     },
     {
+      "path": "packages/photo-cloud-session/README.md",
+      "sha256": "238373ad515f2f18f384d5f9deb949ea0492b6ce8da66399adc4627ea010e65a",
+      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
+    },
+    {
       "path": "packages/photo-cloud-session/eslint.config.mjs",
       "sha256": "453b778645cb9b6572c968b04ec05d505a2abd1dbf7d606e2ccaac8e8fbb6bf3",
       "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
@@ -12145,11 +12155,6 @@
     {
       "path": "packages/photo-cloud-session/provenance.json",
       "sha256": "260c82437aa83a119eb39dea62453d1a0c1f045a0fc31c3fc306ab21f9cf1815",
-      "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-session/README.md",
-      "sha256": "238373ad515f2f18f384d5f9deb949ea0492b6ce8da66399adc4627ea010e65a",
       "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
     },
     {
@@ -12243,6 +12248,11 @@
       "origin": "NIHO所有の新規Photo認証consumer/session bridge。公開Editor sourceから監査移管したhelperの元commit/path/hashはpackages/photo-cloud-session/provenance.jsonに固定。B担当PR #205のsourceを変更せずA/C08が共有登録。合成fixtureのみで実credential・写真・内部URLを含まない。"
     },
     {
+      "path": "packages/photo-cloud-sync/README.md",
+      "sha256": "b47e033fe60fb4f73c0780f529d8b10412ab5fea4c9a4708eab69b6b1892054c",
+      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: Restore retained conflicts and discover terminal draft fences"
+    },
+    {
       "path": "packages/photo-cloud-sync/eslint.config.mjs",
       "sha256": "453b778645cb9b6572c968b04ec05d505a2abd1dbf7d606e2ccaac8e8fbb6bf3",
       "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。"
@@ -12251,11 +12261,6 @@
       "path": "packages/photo-cloud-sync/package.json",
       "sha256": "e2e0b2d73c13f36e49415b144ede7cd980a65aefdb52a4fde8f9430bfdf2bbbd",
       "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。"
-    },
-    {
-      "path": "packages/photo-cloud-sync/README.md",
-      "sha256": "b47e033fe60fb4f73c0780f529d8b10412ab5fea4c9a4708eab69b6b1892054c",
-      "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: Restore retained conflicts and discover terminal draft fences"
     },
     {
       "path": "packages/photo-cloud-sync/src/binding.ts",
@@ -13273,6 +13278,11 @@
       "origin": "niho-photo#47 のため新規作成。選別のフラグの付け外しの hook（読み込んだ一覧への楽観更新と失敗時の巻き戻し）。外部コードを含まない。\n変更理由: PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。\n変更理由: Add backwards-compatible personal photo library scope key\n変更理由: Add backwards-compatible personal photo library scope key"
     },
     {
+      "path": "packages/photo-library-contract/README.md",
+      "sha256": "4021f5b12baa1b8ab2210776e872bccd2d906b15dd476e8da2dace02cb3ad74c",
+      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
       "path": "packages/photo-library-contract/eslint.config.mjs",
       "sha256": "453b778645cb9b6572c968b04ec05d505a2abd1dbf7d606e2ccaac8e8fbb6bf3",
       "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。"
@@ -13308,11 +13318,6 @@
       "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
-      "path": "packages/photo-library-contract/README.md",
-      "sha256": "4021f5b12baa1b8ab2210776e872bccd2d906b15dd476e8da2dace02cb3ad74c",
-      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
       "path": "packages/photo-library-contract/src/v2.ts",
       "sha256": "c0dca5fed75867db8edccfd66aa7a2a57c0b920d0756c2ed3b99bb954f618e08",
       "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。 公開済み niho-life/niho-editor source 9c57b4698e755e025ab4bb53361a42421557722c の packages/photo-library-contract/src/v1.ts (SHA-256 63b2209fb0b03c42f19f16ab0b18b168fa6c540d6b8064b3f2ed1476a29502c0) を一度監査抽出し、Photo v2・即時purge・200MiB/30分/60件・transport非依存へ変更。以後Photo側だけで保守する。\n変更理由: retry/CASを伴うmutationの冪等keyと捕捉scopeを型で必須化する\n変更理由: server由来session世代と削除冪等性を明記しcontentをdomain rangeとbounded streamへ統一\n変更理由: 既存backendのopaque IDと親session失効世代を明記し通常refresh時のscope維持を確定\n変更理由: 履歴ページ数に依存しない競合ID取得operationを追加"
@@ -13321,6 +13326,76 @@
       "path": "packages/photo-library-contract/tsconfig.json",
       "sha256": "b8514042cec4c0493cd61cce2c9e1ecaae878c563586ea53873459471536eb2c",
       "origin": "Photo #193 / C00 の契約確定に伴い監査。既存backendの即時purgeとPhoto製品未接続の区別、抽出した合成fixtureの権利・出典または対象型検査を記録。内部URL・実写真・資格情報を含まない。\n変更理由: client portのAbortSignalをDOM型定義で検査する"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/README.md",
+      "sha256": "432dcb87ea4f8cb9eb388ecd6a8c41c17f7daeb60f583b3fc2e872c0bbebce45",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/eslint.config.mjs",
+      "sha256": "453b778645cb9b6572c968b04ec05d505a2abd1dbf7d606e2ccaac8e8fbb6bf3",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/fixtures/security-cases.json",
+      "sha256": "2762c7c5e98ff6d38aafbe6f7e560594adf6f330c7e957256acc147712e0b931",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 控えackが未到達の場合と一致後のfixtureを追加。\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/fixtures/type-boundary.ts",
+      "sha256": "29f0f6005c4d2bc1d81b2ac123dc03a874515dc63e4fe53fdde7e7ab9eeeb32a",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/fixtures/v1.ts",
+      "sha256": "8adad34917ee31c553bc20025d7f7a9eb97e633221fe70675b089bae5a837231",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 追加したupload operationの合成応答を登録。\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/operation-coverage.json",
+      "sha256": "65270141bb81ce9d3c5aacd02450505097202b7b7ad6fd8c3d747f8ceaabb974",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 追加operationの担当Issueと未接続状態を記録。\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/package.json",
+      "sha256": "9902ef24623ff394d770d2ee7afce8a963c4f53c500c1bec5b7e971151b706cd",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/src/compat-v2.ts",
+      "sha256": "209d32c5cea249b3722bc99316b26e31335ce75c78bb64f7ab7699b362364828",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/src/policy.ts",
+      "sha256": "e5ed5bf006d9c35d5a6ab47051a23861a69ee97dbf91ca2b8c9b94f66050ffc0",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 控えの現在性をheartbeatでなくacknowledgedRevisionで判定。\n変更理由: 控えの現在性をheartbeatでなくacknowledgedRevisionで判定。\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/src/routes.ts",
+      "sha256": "9f47cbd42dc995c49b260a812f613f94bbffc0b438985d18261752940e0e99ca",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 経路decodeが配置と余分なfieldのみを検査する旨を明記。\n変更理由: portable export取得とworking copy uploadのrouteを追加。\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/src/v1.ts",
+      "sha256": "475ac657a833a1a2c90cb222b7dcb98c8f94060423497be54bc9a6a642992ea0",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: portable content streamと世代束縛uploadを追加。\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/test/contract.test.mjs",
+      "sha256": "69284089ac4f03c9a99692abd94b913bdd312e682c8717c913ad7796039dcbc6",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: レシピ保存のreplica状態をacknowledgedRevisionで照合。\n変更理由: レシピ保存のreplica状態をacknowledgedRevisionで照合。\n変更理由: portable export streamを契約fixture検査から除外。\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/test/routes.test.mjs",
+      "sha256": "2d34d02487802e24b75da35594e933eb662e28e13780d1631d509cb479e78d55",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 追加routeの閉じたrequest roundtripを検証。\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加"
+    },
+    {
+      "path": "packages/photo-library-sharing-contract/tsconfig.json",
+      "sha256": "b8514042cec4c0493cd61cce2c9e1ecaae878c563586ea53873459471536eb2c",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "packages/ui/src/app-dialog.test.ts",
@@ -13339,13 +13414,13 @@
     },
     {
       "path": "scripts/candidate/mac-candidate-lib.mjs",
-      "sha256": "2fe9268c8a68a67f9bc8cb66e912f87caeeef27ad140b81b082b1b0956ffdbc7",
-      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate-lib.mjs / 元SHA-256 ca11db7292461c7735162da788075be51c2ec418085c4e337a33f11b86cdcb26。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: DMG作成前にapp inventoryを検証し、既知の不一致をhdiutilより前にfail closedする\n変更理由: Support SDK schema 3 candidate proofs"
+      "sha256": "c4b91dc719fa1796c2eee58280c1487c636376618532bc9fd5d0455d42c25736",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate-lib.mjs / 元SHA-256 ca11db7292461c7735162da788075be51c2ec418085c4e337a33f11b86cdcb26。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: DMG作成前にapp inventoryを検証し、既知の不一致をhdiutilより前にfail closedする\n変更理由: Support SDK schema 3 candidate proofs\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
     },
     {
       "path": "scripts/candidate/mac-candidate.test.mjs",
-      "sha256": "dccfb4cc0d68bb9849a561778255654d1dbdaecd4a65b5d95b0d23ff4fa2df04",
-      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate.test.mjs / 元SHA-256 317e82bf2949f90503f248a3ea8886e71fd3aa6b19c73b9e7a21196bd3140d95。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: 実DMGの隠しpayload fixtureでmacOS予約の.Trashesを避け、hdiutil検証後にroot拒否を照合\n変更理由: Support SDK schema 3 candidate proofs\n変更理由: Support SDK schema 3 candidate proofs"
+      "sha256": "8ab01557170218518fb4fe122af2804558e2be76e8a41a924e3b4ebbb6d37af1",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate.test.mjs / 元SHA-256 317e82bf2949f90503f248a3ea8886e71fd3aa6b19c73b9e7a21196bd3140d95。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: 実DMGの隠しpayload fixtureでmacOS予約の.Trashesを避け、hdiutil検証後にroot拒否を照合\n変更理由: Support SDK schema 3 candidate proofs\n変更理由: Support SDK schema 3 candidate proofs\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
     },
     {
       "path": "scripts/candidate/prepare-published-sdk.mjs",
@@ -13434,13 +13509,13 @@
     },
     {
       "path": "scripts/ci/scopes.mjs",
-      "sha256": "2e78763ab09a18e3a0b2fda373b76cf4f6280f2db070b35af7c435c998a21d0d",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK所有source変更範囲を選択\n変更理由: Issue #113のMac candidate変更範囲selectorを追加。\n変更理由: Mac candidateが直接依存するrelease evidence helper変更でもproof CIを起動する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: 本人Photo契約v2の単独変更でも既存Photo editing型検査を必須にする\n変更理由: Photo sessionとPhoto Web変更で既存Ubuntu scopeから型検査・対象試験・lintを実行\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02とPhoto Webを同じ公開photo-editing検証scopeへ残し、双方のworkspace実行を維持。\n変更理由: 補正同期coreを公開scopeの必須三検証へ追加\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。"
+      "sha256": "a594c7807994bcbc0d1f58b710a608b4b610e110b598901d9b65d87440a857cd",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK所有source変更範囲を選択\n変更理由: Issue #113のMac candidate変更範囲selectorを追加。\n変更理由: Mac candidateが直接依存するrelease evidence helper変更でもproof CIを起動する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: 本人Photo契約v2の単独変更でも既存Photo editing型検査を必須にする\n変更理由: Photo sessionとPhoto Web変更で既存Ubuntu scopeから型検査・対象試験・lintを実行\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02とPhoto Webを同じ公開photo-editing検証scopeへ残し、双方のworkspace実行を維持。\n変更理由: 補正同期coreを公開scopeの必須三検証へ追加\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。\n変更理由: 共有契約package変更をPhoto editing CI scopeへ追加。\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
     },
     {
       "path": "scripts/ci/scopes.test.mjs",
-      "sha256": "0f39dadfd67c77656019a68d13c055871b304aca4168cc23299795b56deeee7c",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: PR #81 のマスク描画を最新mainの変更と統合。\n変更理由: PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: Upright自動推定を作者更新後の遠近crate v0.23.0へ統合\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: Issue #112のSDK変更範囲とaggregateを回帰検証\n変更理由: Issue #113のcandidate selectorとrequired aggregate回帰を追加。\n変更理由: release evidence helper単独変更でもMac candidate proofが選択される回帰例を追加する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。\n変更理由: niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。\n変更理由: #148: threads feature と render_identity の公開CI選択を検証。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: 本人Photo契約v2のCI対象選択を回帰検査する\n変更理由: Photo sessionとPhoto Web単独変更をCI対象から漏らさない選択回帰を追加\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02・SDKのmain scope回帰とPhoto Webの実行到達回帰をどちらも保持して通常mergeを解消。\n変更理由: 同期source変更が実typecheck test lintへ届くことを検証\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。\n変更理由: native validatorのSDK ownership配下のpathをscope回帰で検証"
+      "sha256": "5ef87334eb68c06a3b5e5e40ca9d6dc8ddd3240b25ff19477b6fe20249177e19",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: PR #81 のマスク描画を最新mainの変更と統合。\n変更理由: PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: Upright自動推定を作者更新後の遠近crate v0.23.0へ統合\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: Issue #112のSDK変更範囲とaggregateを回帰検証\n変更理由: Issue #113のcandidate selectorとrequired aggregate回帰を追加。\n変更理由: release evidence helper単独変更でもMac candidate proofが選択される回帰例を追加する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。\n変更理由: niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。\n変更理由: #148: threads feature と render_identity の公開CI選択を検証。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: 本人Photo契約v2のCI対象選択を回帰検査する\n変更理由: Photo sessionとPhoto Web単独変更をCI対象から漏らさない選択回帰を追加\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02・SDKのmain scope回帰とPhoto Webの実行到達回帰をどちらも保持して通常mergeを解消。\n変更理由: 同期source変更が実typecheck test lintへ届くことを検証\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。\n変更理由: native validatorのSDK ownership配下のpathをscope回帰で検証\n変更理由: 共有契約packageのCI scope選択を検査。\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
     },
     {
       "path": "scripts/ci/seat.test.mjs",
@@ -13483,6 +13558,11 @@
       "origin": "NIHO所有の新規作成。Photo cloud B担当の調査・試験準備と、合成データによる受入記録の検査。実写真・認証値・第三者資産を含まない。Refs #194 / #197 / #199 / #200。"
     },
     {
+      "path": "scripts/photo-web/README.md",
+      "sha256": "250b62d62aad1a2d956c4ecf67d282169c1cdf2abd5fa5947d169d28b84064dd",
+      "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定"
+    },
+    {
       "path": "scripts/photo-web/create-release.mjs",
       "sha256": "d7bdedf6ad3dec25d089953c9ab00c71d10efc354981ad17e6d126aa5806a73d",
       "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定"
@@ -13490,11 +13570,6 @@
     {
       "path": "scripts/photo-web/prepare-sdk-attestation.mjs",
       "sha256": "edda5e8adf42e288ae6b499d65b98ad489e511a8b4a8bb531ab10e8ebd8817de",
-      "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定"
-    },
-    {
-      "path": "scripts/photo-web/README.md",
-      "sha256": "250b62d62aad1a2d956c4ecf67d282169c1cdf2abd5fa5947d169d28b84064dd",
       "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定"
     },
     {
@@ -13513,16 +13588,6 @@
       "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/build-develop-engine-runtime.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: #141 空のモデルの層の見出しと重みを engine runtime の files に足す"
     },
     {
-      "path": "scripts/sdk/native_renderer_artifact_test.py",
-      "sha256": "82bb6e143246670b52315843dc236b5eb126b7c186247d61764c23d0bea8d0cf",
-      "origin": "公開 Issue #236 のレビュー修正として新規作成。artifact metadata identity、固定API呼出、実ZIP digestと悪意entry拒否を合成bytesだけで検査するoffline unit test。実写真・非公開情報を含まない。"
-    },
-    {
-      "path": "scripts/sdk/native_renderer_artifact.py",
-      "sha256": "640724f8fa8c73e795ad6a7ae5487a773264a941f118aa74c1ca90057b06bad8",
-      "origin": "公開 Issue #236 のレビュー修正として新規作成。固定repositoryのartifact metadataとraw ZIP実SHA-256を照合し、exact 2通常fileだけをDATAとして安全に展開するPython標準ライブラリhelper。実写真・非公開情報・秘密を含まない。"
-    },
-    {
       "path": "scripts/sdk/native-renderer.mjs",
       "sha256": "148dbd00526b43c8a3d6f63898f0cc0e890424a722daac9865858e92e32ec7d3",
       "origin": "公開 Issue #236 のため新規作成。公開Rust rendererの隔離build、binary検査、決定的tar生成、DATA-only release manifest検証を行うhelper。標準ライブラリと公開sourceだけを使い、実写真・非公開情報を含まない。\n変更理由: native cfg flagsの暗黙上書きを拒否しRUSTFLAGSをCargo互換で保持\n変更理由: publisherのbuild digest検証とrenderer metadata検証を正しい層へ分離\n変更理由: 採用済み公開sourceのCLI capability契約でneutral recipeの合成smokeを実施"
@@ -13538,14 +13603,24 @@
       "origin": "公開 Issue #236 のため新規作成。native renderer workflowの権限、固定Action、source checkout、artifact、attestation、上書き禁止を検査する静的guard。実写真・非公開情報を含まない。\n変更理由: bash既定とtrusted artifact helperのexact invocation・identity入力・順序を固定しdownload Actionを拒否。"
     },
     {
+      "path": "scripts/sdk/native_renderer_artifact.py",
+      "sha256": "640724f8fa8c73e795ad6a7ae5487a773264a941f118aa74c1ca90057b06bad8",
+      "origin": "公開 Issue #236 のレビュー修正として新規作成。固定repositoryのartifact metadataとraw ZIP実SHA-256を照合し、exact 2通常fileだけをDATAとして安全に展開するPython標準ライブラリhelper。実写真・非公開情報・秘密を含まない。"
+    },
+    {
+      "path": "scripts/sdk/native_renderer_artifact_test.py",
+      "sha256": "82bb6e143246670b52315843dc236b5eb126b7c186247d61764c23d0bea8d0cf",
+      "origin": "公開 Issue #236 のレビュー修正として新規作成。artifact metadata identity、固定API呼出、実ZIP digestと悪意entry拒否を合成bytesだけで検査するoffline unit test。実写真・非公開情報を含まない。"
+    },
+    {
       "path": "scripts/sdk/release-set-lib.mjs",
-      "sha256": "061bc2b11d754dd7930d2f53f9651a609103d9e4a9630a2580d49381a8862179",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加"
+      "sha256": "c1ee90e406bfc372cd6bfa1151f14d45e1db0cca7d9dcf3272f899093a20708e",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
     },
     {
       "path": "scripts/sdk/release-set.test.mjs",
-      "sha256": "82e604643212609849fcf9cf49058ce3d3986a55428112409d20c651fa331da0",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set.test.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: #141 空のモデルの runtime のファイル名と置き場の試験を足す\n変更理由: 型宣言exportとconsumer closureを検証\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加"
+      "sha256": "1e2b66989814d06f4bb9dc6f5323ae85c399aa83a4e1ca73a80e5ed8d29be38b",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set.test.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: #141 空のモデルの runtime のファイル名と置き場の試験を足す\n変更理由: 型宣言exportとconsumer closureを検証\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
     },
     {
       "path": "scripts/sdk/runtime-references.test.mjs",
@@ -13569,8 +13644,8 @@
     },
     {
       "path": "scripts/sdk/verify-release-artifact.mjs",
-      "sha256": "00276ac14a7a66a8183431d9d73739ff445eff935936839d3dce78e40d02eae3",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/verify-release-artifact.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加"
+      "sha256": "77e64d2bee53d2d8a7aa69f179384d3599cff39e8fc9c4e86b910c196fd10336",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/verify-release-artifact.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
     },
     {
       "path": "scripts/seat.mjs",
@@ -13579,13 +13654,13 @@
     },
     {
       "path": "sdk/README.md",
-      "sha256": "1c395028ef8b29c5dd33206cc33974246be69b63bbbb49dab4b297a03f444267",
-      "origin": "NIHO photo SDKの書込field/feature能力判定と合成回帰として新規作成（niho-photo#190）。既存readerと画素は変更しない。\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する"
+      "sha256": "711eb665dcbe18d9113ef92ea0978046dd7ee43a78fae569650a948d4e4b9c77",
+      "origin": "NIHO photo SDKの書込field/feature能力判定と合成回帰として新規作成（niho-photo#190）。既存readerと画素は変更しない。\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
     },
     {
       "path": "sdk/release-set.json",
-      "sha256": "3a6bfc8a566f9f88404e68eded455421bd26de4cccb89b696ab274b18af0260d",
-      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: 最新の共有マスク・初期proof・readonly presetを不変な新しい正式SDK 0.1.10として発行する。\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加"
+      "sha256": "012d9319fb1d8246ccdfea927d89b5a037960ff3453c7fba65f8436ad0fe7ffe",
+      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: 最新の共有マスク・初期proof・readonly presetを不変な新しい正式SDK 0.1.10として発行する。\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
     }
   ],
   "excludedSources": [

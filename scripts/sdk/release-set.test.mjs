@@ -277,23 +277,37 @@ test("展開先のdirectoryがsymlinkでもnative CLIを実行する", () => {
 test("release-set 定義は package/path/version の改変を拒否する", () => {
   const config = JSON.parse(readFileSync(path.join(realRoot, "sdk/release-set.json"), "utf8"));
   assert.equal(validateConfig(config), config);
+  assert.equal(config.schemaVersion, 4);
+  const withoutSharing = (value) => value.packages.filter(({ id }) => id !== "sharing-contract");
   const legacy = structuredClone(config);
   legacy.schemaVersion = 1;
   legacy.version = "0.1.7";
-  legacy.packages = legacy.packages.filter(({ id }) => id !== "personal-cloud-contract");
-  legacy.ownedSourcePaths = legacy.ownedSourcePaths.slice(0, -2);
+  legacy.packages = withoutSharing(legacy).filter(({ id }) => id !== "personal-cloud-contract");
+  legacy.ownedSourcePaths = legacy.ownedSourcePaths.slice(0, -3);
   assert.equal(validateConfig(legacy), legacy);
   const previous = structuredClone(config);
   previous.schemaVersion = 2;
-  previous.ownedSourcePaths = previous.ownedSourcePaths.slice(0, -1);
+  previous.packages = withoutSharing(previous);
+  previous.ownedSourcePaths = previous.ownedSourcePaths.slice(0, -2);
   assert.equal(validateConfig(previous), previous);
-  for (const invalid of ["1", "2", "3", "__proto__", "constructor", null, true, Object.create({ toString: () => "3" })]) {
+  const third = structuredClone(config);
+  third.schemaVersion = 3;
+  third.packages = withoutSharing(third);
+  third.ownedSourcePaths = third.ownedSourcePaths.slice(0, -1);
+  assert.equal(validateConfig(third), third, "the published schema 3 profile stays as it was");
+  for (const mixed of [
+    { ...third, packages: config.packages },
+    { ...third, ownedSourcePaths: config.ownedSourcePaths },
+    { ...config, packages: third.packages },
+    { ...config, ownedSourcePaths: third.ownedSourcePaths },
+  ]) assert.throws(() => validateConfig(mixed), "schema 3 and 4 are not mixed");
+  for (const invalid of ["1", "2", "3", "4", "__proto__", "constructor", null, true, Object.create({ toString: () => "4" })]) {
     const basis = invalid === "1" ? legacy : config;
     assert.throws(() => validateConfig({ ...basis, schemaVersion: invalid }), /schema profile/u);
   }
   assert.throws(() => validateConfig({ ...config, repository: "niho-coliving/niho-photo" }), /基本契約/);
   assert.throws(() => validateConfig({ ...config, version: "latest" }), /semver/);
-  assert.throws(() => validateConfig({ ...config, schemaVersion: 4 }), /schema profile/);
+  assert.throws(() => validateConfig({ ...config, schemaVersion: 5 }), /schema profile/);
   const escaped = structuredClone(config);
   escaped.packages[0].sourceRoot = "../niho-app";
   assert.throws(() => validateConfig(escaped), /package profile/);
@@ -302,6 +316,10 @@ test("release-set 定義は package/path/version の改変を拒否する", () =
     (value) => { value.packages.find(({ id }) => id === "personal-cloud-contract").include = ["src/**"]; },
     (value) => { value.packages.find(({ id }) => id === "personal-cloud-contract").sourceRoot = "packages/photo-editing"; },
     (value) => { value.packages.find(({ id }) => id === "personal-cloud-contract").unexpected = true; },
+    (value) => { value.packages.find(({ id }) => id === "sharing-contract").entry = "photo-library-sharing-contract/src/compat-v2.ts"; },
+    (value) => { value.packages.find(({ id }) => id === "sharing-contract").include.push("photo-library-sharing-contract/fixtures/v1.ts"); },
+    (value) => { value.packages.find(({ id }) => id === "sharing-contract").sourceRoot = "packages/photo-library-sharing-contract"; },
+    (value) => { value.packages.find(({ id }) => id === "sharing-contract").name = "niho-photo-sharing"; },
     (value) => { value.ownedSourcePaths = value.ownedSourcePaths.slice(0, -1); },
   ]) {
     const changed = structuredClone(config);
@@ -378,9 +396,9 @@ test("clean Git object から決定的 tarball を作り repo 外 consumer で T
   const one = await packReleaseSet({ repoRoot: fixture.root, outputDirectory: first, assetDirectory: fixture.assets });
   const two = await packReleaseSet({ repoRoot: fixture.root, outputDirectory: second, assetDirectory: fixture.assets });
   assert.deepEqual(one.manifest.packages, two.manifest.packages);
-  assert.equal(one.manifest.schemaVersion, 3);
-  assert.equal(one.manifest.packages.length, 7);
-  assert.equal(one.manifest.sourceOwnership.paths.length, 20);
+  assert.equal(one.manifest.schemaVersion, 4);
+  assert.equal(one.manifest.packages.length, 8);
+  assert.equal(one.manifest.sourceOwnership.paths.length, 21);
   assert.equal(one.manifest.releaseReady, true);
   assert.deepEqual(one.manifest.recipeCompatibility.supportedVersions, [1, 2, 3, 4, 5, 6, 7, 8, 9]);
   assert.ok(one.manifest.recipeCompatibility.engineIdentifiers.includes("niho-13"));
@@ -488,6 +506,68 @@ test("clean Git object から決定的 tarball を作り repo 外 consumer で T
     const diagnostics = ts.getPreEmitDiagnostics(program).filter(({ category }) => category === ts.DiagnosticCategory.Error);
     assert.deepEqual(diagnostics.map(({ messageText }) => ts.flattenDiagnosticMessageText(messageText, " ")), []);
   }
+  // 保管場所・共有アルバム・完成写真の契約 v1（B00 #241）: サーバーが経路・型・decode・判定を import できる
+  const sharingRecord = one.manifest.packages.find(({ id }) => id === "sharing-contract");
+  assert.equal(sharingRecord.name, "niho-photo-library-sharing-contract");
+  const sharingExtracted = temp("niho-photo-library-sharing-contract-");
+  execFileSync("tar", ["-xzf", path.join(first, sharingRecord.file), "-C", sharingExtracted]);
+  const sharingRoot = path.join(sharingExtracted, "package");
+  const sharingFiles = execFileSync("tar", ["-tzf", path.join(first, sharingRecord.file)], { encoding: "utf8" });
+  assert.doesNotMatch(sharingFiles, /(?:fixture|test|compat-v2|security-cases)/iu, "fixtures, tests and the v2 adapter stay out");
+  const sharingPackage = JSON.parse(readFileSync(path.join(sharingRoot, "package.json"), "utf8"));
+  assert.equal(sharingPackage.dependencies, undefined);
+  assert.deepEqual(Object.keys(sharingPackage.exports), [".", "./policy", "./routes", "./package.json"]);
+  const sharingImport = (name) => import(`${pathToFileURL(path.join(sharingRoot, `dist/${name}.js`)).href}?fixture=${Date.now()}`);
+  const sharingTypes = await sharingImport("index");
+  const sharingRoutes = await sharingImport("routes");
+  const sharingPolicy = await sharingImport("policy");
+  assert.equal(sharingTypes.SHARING_LIMITS.claimPreferMaxPhotos, 60);
+  assert.equal(sharingRoutes.CONNECTOR_ROUTES["renderJobs.claim"].path, "/jobs/claim");
+  assert.ok(sharingRoutes.SHARING_ROUTES["albums.list"]);
+  assert.ok(sharingRoutes.USER_RENDER_ROUTES["renderJobs.renewOutput"]);
+  assert.equal(typeof sharingRoutes.decodeSharingRequest, "function");
+  assert.equal(typeof sharingPolicy.decideRenderCommit, "function");
+  const emittedSharing = ["dist/index.js", "dist/routes.js", "dist/policy.d.ts", "dist/photo-library-sharing-contract/src/routes.js"]
+    .map((name) => readFileSync(path.join(sharingRoot, name), "utf8"))
+    .join("\n");
+  assert.doesNotMatch(emittedSharing, /(?:from|export\s+\*)\s+["'][^"']+\.ts["']/u);
+  assert.doesNotMatch(emittedSharing, /(?:private\/var\/|\/Users\/)/u);
+  for (const [consumerName, libs, types] of [
+    ["node", ["lib.es2022.d.ts"], ["node"]],
+    ["browser", ["lib.es2022.d.ts", "lib.dom.d.ts"], []],
+  ]) {
+    const consumer = temp(`niho-photo-b00-${consumerName}-consumer-`);
+    put(consumer, "package.json", '{"type":"module"}\n');
+    mkdirSync(path.join(consumer, "node_modules"), { recursive: true });
+    symlinkSync(sharingRoot, path.join(consumer, "node_modules/niho-photo-library-sharing-contract"), "dir");
+    put(consumer, "index.ts", [
+      'import { SHARING_LIMITS, type RenderJob, type SharingOperation } from "niho-photo-library-sharing-contract";',
+      'import { CONNECTOR_ROUTES, SHARING_ROUTES, USER_RENDER_ROUTES, decodeSharingRequest } from "niho-photo-library-sharing-contract/routes";',
+      'import { decideRenderCommit } from "niho-photo-library-sharing-contract/policy";',
+      "export const operations: SharingOperation[] = Object.keys(SHARING_ROUTES) as SharingOperation[];",
+      "export const paths = [CONNECTOR_ROUTES[\"renderJobs.claim\"].path, USER_RENDER_ROUTES[\"renderJobs.claim\"].path] as const;",
+      "export const expected = (job: RenderJob) => job.expectedOutput;",
+      "export const limits = SHARING_LIMITS.claimPreferMaxPhotos;",
+      "export { decideRenderCommit, decodeSharingRequest };",
+      "",
+    ].join("\n"));
+    const program = ts.createProgram({
+      rootNames: [path.join(consumer, "index.ts")],
+      options: {
+        lib: libs,
+        module: ts.ModuleKind.NodeNext,
+        moduleResolution: ts.ModuleResolutionKind.NodeNext,
+        noEmit: true,
+        skipLibCheck: false,
+        strict: true,
+        target: ts.ScriptTarget.ES2022,
+        typeRoots: [path.join(realRoot, "node_modules/@types")],
+        types,
+      },
+    });
+    const diagnostics = ts.getPreEmitDiagnostics(program).filter(({ category }) => category === ts.DiagnosticCategory.Error);
+    assert.deepEqual(diagnostics.map(({ messageText }) => ts.flattenDiagnosticMessageText(messageText, " ")), [], consumerName);
+  }
   const manifestPath = path.join(first, one.manifestName);
   assert.deepEqual(verifyReleaseManifestFiles(manifestPath).packages, one.manifest.packages);
   // Mac の candidate が同梱する runtimeFiles は 1 本だけ。スレッドの版は threads に分ける。
@@ -503,16 +583,27 @@ test("clean Git object から決定的 tarball を作り repo 外 consumer で T
   const legacyManifest = structuredClone(one.manifest);
   legacyManifest.schemaVersion = 1;
   legacyManifest.version = "0.1.7";
-  legacyManifest.packages = legacyManifest.packages.filter(({ id }) => id !== "personal-cloud-contract");
-  legacyManifest.sourceOwnership.paths = legacyManifest.sourceOwnership.paths.slice(0, -2);
+  legacyManifest.packages = legacyManifest.packages.filter(({ id }) => id !== "personal-cloud-contract" && id !== "sharing-contract");
+  legacyManifest.sourceOwnership.paths = legacyManifest.sourceOwnership.paths.slice(0, -3);
   legacyManifest.sourceOwnership.digest = createHash("sha256").update(legacyManifest.sourceOwnership.paths.map(({ path: name, sha256: digest, files }) => `${name}\0${digest}\0${files}\n`).join("")).digest("hex");
   assert.equal(validateReleaseManifest(legacyManifest, fixture.source.commit).schemaVersion, 1);
+  const ownershipOf = (paths) => createHash("sha256").update(paths.flatMap(({ path: name, sha256: digest, files }) => [name, String.fromCharCode(0), digest, String.fromCharCode(0), String(files), String.fromCharCode(10)]).join("")).digest("hex");
   const previousManifest = structuredClone(one.manifest);
   previousManifest.schemaVersion = 2;
-  previousManifest.sourceOwnership.paths.pop();
-  previousManifest.sourceOwnership.digest = createHash("sha256").update(previousManifest.sourceOwnership.paths.flatMap(({ path: name, sha256: digest, files }) => [name, String.fromCharCode(0), digest, String.fromCharCode(0), String(files), String.fromCharCode(10)]).join("")).digest("hex");
+  previousManifest.packages = previousManifest.packages.filter(({ id }) => id !== "sharing-contract");
+  previousManifest.sourceOwnership.paths = previousManifest.sourceOwnership.paths.slice(0, -2);
+  previousManifest.sourceOwnership.digest = ownershipOf(previousManifest.sourceOwnership.paths);
   assert.equal(validateReleaseManifest(previousManifest, fixture.source.commit).schemaVersion, 2);
-  for (const invalid of ["1", "2", "3", "__proto__", "constructor", null, true, Object.create({ toString: () => "3" })]) {
+  // 公開済みの schema 3（0.1.9・0.1.10）はそのまま検証できる。schema 4 の package を混ぜた manifest は通さない
+  const thirdManifest = structuredClone(one.manifest);
+  thirdManifest.schemaVersion = 3;
+  thirdManifest.packages = thirdManifest.packages.filter(({ id }) => id !== "sharing-contract");
+  thirdManifest.sourceOwnership.paths = thirdManifest.sourceOwnership.paths.slice(0, -1);
+  thirdManifest.sourceOwnership.digest = ownershipOf(thirdManifest.sourceOwnership.paths);
+  assert.equal(validateReleaseManifest(thirdManifest, fixture.source.commit).schemaVersion, 3);
+  assert.throws(() => validateReleaseManifest({ ...thirdManifest, packages: one.manifest.packages }, fixture.source.commit), /package/u);
+  assert.throws(() => validateReleaseManifest({ ...one.manifest, packages: thirdManifest.packages }, fixture.source.commit), /package/u);
+  for (const invalid of ["1", "2", "3", "4", "__proto__", "constructor", null, true, Object.create({ toString: () => "4" })]) {
     const basis = invalid === "1" ? legacyManifest : one.manifest;
     assert.throws(() => validateReleaseManifest({ ...basis, schemaVersion: invalid }, fixture.source.commit), /schema profile/u);
   }

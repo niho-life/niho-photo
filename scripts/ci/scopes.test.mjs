@@ -15,6 +15,7 @@ test("文書変更でもpublicationはworkflow側で常時実行、package実行
   assert.deepEqual(selected(["packages/ui/src/cn.ts"]), ["photo-editing", "camera", "desktop-photo", "desktop-account"]);
   assert.deepEqual(selected(["packages/niho-cloud-contract/src/v1.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-library-contract/src/v2.ts"]), ["photo-editing"]);
+  assert.deepEqual(selected(["packages/photo-library-sharing-contract/src/v1.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-cloud-session/src/server/service.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-cloud-library/src/index.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-cloud-sync/src/index.ts"]), ["photo-editing"]);
@@ -30,7 +31,7 @@ test("文書変更でもpublicationはworkflow側で常時実行、package実行
 });
 
 test("SDK実buildは所有sourceと生成器だけを選択する", () => {
-  for (const name of ["packages/photo-editing/src/index.ts", "packages/ui/src/cn.ts", "packages/niho-cloud-contract/src/v1.ts", "packages/develop-engine/Cargo.toml", "packages/desktop-photo/Cargo.toml", "sdk/release-set.json", "scripts/sdk/release-set-lib.mjs", "scripts/sdk/native-renderer.mjs", "package.json", "package-lock.json", "LICENSE.md", ".github/workflows/photo-sdk-release.yml", ".github/workflows/photo-renderer-release.yml", "scripts/sdk/native-workflow-lib.mjs"]) assert.equal(selectPhotoSdk([name]), true, name);
+  for (const name of ["packages/photo-editing/src/index.ts", "packages/ui/src/cn.ts", "packages/niho-cloud-contract/src/v1.ts", "packages/photo-library-contract/src/v2.ts", "packages/photo-library-sharing-contract/src/routes.ts", "packages/develop-engine/Cargo.toml", "packages/desktop-photo/Cargo.toml", "sdk/release-set.json", "scripts/sdk/release-set-lib.mjs", "scripts/sdk/native-renderer.mjs", "package.json", "package-lock.json", "LICENSE.md", ".github/workflows/photo-sdk-release.yml", ".github/workflows/photo-renderer-release.yml", "scripts/sdk/native-workflow-lib.mjs"]) assert.equal(selectPhotoSdk([name]), true, name);
   for (const name of ["apps/camera/src/main.ts", "packages/desktop-account/Cargo.toml", "README.md"]) assert.equal(selectPhotoSdk([name]), false, name);
 });
 

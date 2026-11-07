@@ -67,6 +67,17 @@ const PACKAGE_DEFINITIONS = Object.freeze({
     id: "personal-cloud-contract", name: "niho-photo-personal-cloud-contract", sourceRoot: "packages/photo-library-contract", kind: "node-contract",
     entry: "src/v2.ts", include: ["src/v2.ts"], exclude: [],
   }),
+  // 保管場所・共有アルバム・完成写真の契約 v1（B00 #241）。v1 は本人クラウド v2 の上限・型を相対 import するので、2 つの
+  // package の親を sourceRoot にし、入れるファイルを列挙する（fixture・試験・v2 互換 adapter は入れない）。
+  "sharing-contract": Object.freeze({
+    id: "sharing-contract", name: "niho-photo-library-sharing-contract", sourceRoot: "packages", kind: "node-contract",
+    entry: "photo-library-sharing-contract/src/routes.ts",
+    include: [
+      "photo-library-sharing-contract/src/v1.ts", "photo-library-sharing-contract/src/policy.ts", "photo-library-sharing-contract/src/routes.ts",
+      "photo-library-contract/src/v2.ts",
+    ],
+    exclude: [],
+  }),
   "develop-engine-source": Object.freeze({
     id: "develop-engine-source", name: "niho-photo-develop-engine-source", sourceRoot: "packages/develop-engine", kind: "rust-source",
     include: [
@@ -83,7 +94,25 @@ const CONFIG_PACKAGE_IDS = Object.freeze({
   1: Object.freeze(["ui", "photo-editing", "cloud-contract", "photo-contract", "develop-engine-source"]),
   2: Object.freeze(["ui", "photo-editing", "cloud-contract", "photo-contract", "personal-cloud-contract", "develop-engine-source"]),
   3: Object.freeze(["ui", "photo-editing", "cloud-contract", "photo-contract", "personal-cloud-contract", "develop-engine-source"]),
+  4: Object.freeze(["ui", "photo-editing", "cloud-contract", "photo-contract", "personal-cloud-contract", "sharing-contract", "develop-engine-source"]),
 });
+/** Node contract の入口（package の export → 生成する入口の source）。既定は `.` だけ。 */
+const NODE_CONTRACT_ENTRIES = Object.freeze({
+  "personal-cloud-contract": Object.freeze({ ".": 'export * from "./src/v2.js";\n' }),
+  // workspace の `@niho/photo-library-sharing-contract` と同じ `.`・`./policy`・`./routes`
+  "sharing-contract": Object.freeze({
+    ".": 'export * from "./photo-library-sharing-contract/src/v1.js";\n',
+    "./policy": 'export * from "./photo-library-sharing-contract/src/policy.js";\n',
+    "./routes": 'export * from "./photo-library-sharing-contract/src/routes.js";\n',
+  }),
+});
+const NODE_CONTRACT_DESCRIPTIONS = Object.freeze({
+  "personal-cloud-contract": "NIHO photo personal cloud v2 contract for Node.js and browser consumers",
+  "sharing-contract": "NIHO photo library sharing v1 contract (types, routes, policy) for Node.js and browser consumers",
+  "photo-contract": "NIHO photo recipe contract for plain Node.js ESM consumers",
+});
+/** export 名 → dist の入口の名前（`.` は index）。 */
+const nodeContractEntryName = (exportName) => (exportName === "." ? "index" : exportName.slice(2));
 
 // スレッドの wasm（#151。crossOriginIsolated の画面だけが読む）の build の指定。build と release set の検証が
 // 同じ値を使う。共有メモリの上限は 1 本の wasm と同じ wasm32 の 4GiB（大きな書き出しで 1 本より先に足りなく
@@ -221,7 +250,7 @@ export function validateConfig(config) {
     assertRelativePath(definition.sourceRoot, "sourceRoot");
     if (!Array.isArray(definition.include) || !definition.include.length || !Array.isArray(definition.exclude)) throw new SdkReleaseError("package include/exclude が不正です");
     for (const pattern of [...definition.include, ...definition.exclude]) globRegex(pattern);
-    if (definition.kind === "node-contract" && (!["photo-contract", "personal-cloud-contract"].includes(definition.id) || !assertRelativePath(definition.entry, "Node contract entry") || !definition.include.some((pattern) => globRegex(pattern).test(definition.entry)))) throw new SdkReleaseError("Node contract 定義が不正です");
+    if (definition.kind === "node-contract" && (!["photo-contract", "personal-cloud-contract", "sharing-contract"].includes(definition.id) || !assertRelativePath(definition.entry, "Node contract entry") || !definition.include.some((pattern) => globRegex(pattern).test(definition.entry)))) throw new SdkReleaseError("Node contract 定義が不正です");
     for (const [from, to] of Object.entries(definition.rewritePackageImports ?? {})) {
       if (!PACKAGE_NAME.test(from) || !PACKAGE_NAME.test(to) || from === to) throw new SdkReleaseError("package import rewrite が不正です");
     }
@@ -319,16 +348,21 @@ function rewriteImports(bytes, rewrites, specifierRewrites, file) {
 function packageManifest(definition, original, config) {
   const rootNotices = ROOT_NOTICE_FILES;
   if (definition.kind === "node-contract") {
+    const exportNames = Object.keys(NODE_CONTRACT_ENTRIES[definition.id] ?? { ".": "" });
     return {
       name: definition.name,
       version: config.version,
-      description: definition.id === "personal-cloud-contract"
-        ? "NIHO photo personal cloud v2 contract for Node.js and browser consumers"
-        : "NIHO photo recipe contract for plain Node.js ESM consumers",
+      description: NODE_CONTRACT_DESCRIPTIONS[definition.id],
       type: "module",
       license: "UNLICENSED",
       files: ["dist", ...rootNotices],
-      exports: { ".": { types: "./dist/index.d.ts", import: "./dist/index.js" }, "./package.json": "./package.json" },
+      exports: {
+        ...Object.fromEntries(exportNames.map((name) => {
+          const entry = nodeContractEntryName(name);
+          return [name, { types: `./dist/${entry}.d.ts`, import: `./dist/${entry}.js` }];
+        })),
+        "./package.json": "./package.json",
+      },
       engines: { node: "24.x" },
     };
   }
@@ -630,8 +664,9 @@ function stageNodeContractPackage({ repoRoot, commit, config, definition, stage,
   mkdirSync(sourceRoot, { recursive: true, mode: 0o755 });
   put(buildRoot, "package.json", jsonBytes({ type: "module" }));
   for (const [relative, text] of collectNodeContractSources(repoRoot, commit, definition)) put(sourceRoot, relative, Buffer.from(text));
-  const entry = definition.id === "personal-cloud-contract"
-    ? 'export * from "./src/v2.js";\n'
+  const entries = NODE_CONTRACT_ENTRIES[definition.id];
+  const entry = entries
+    ? entries["."]
     : [
       "export {",
       "  DEVELOP_SETTINGS_ENGINE, DEVELOP_SETTINGS_LOOK, DEVELOP_SETTINGS_LOOKS, DEVELOP_SETTINGS_LOOK_WHEN_MISSING,",
@@ -650,6 +685,9 @@ function stageNodeContractPackage({ repoRoot, commit, config, definition, stage,
       "",
     ].join("\n");
   put(sourceRoot, "index.ts", Buffer.from(entry));
+  for (const [name, source] of Object.entries(entries ?? {})) {
+    if (name !== ".") put(sourceRoot, `${nodeContractEntryName(name)}.ts`, Buffer.from(source));
+  }
   const rootNames = ["index.ts", ...collectFiles(sourceRoot).filter((name) => name.endsWith(".ts"))]
     .filter((name, index, values) => values.indexOf(name) === index)
     .map((name) => path.join(sourceRoot, name));
@@ -658,14 +696,14 @@ function stageNodeContractPackage({ repoRoot, commit, config, definition, stage,
     options: {
       declaration: true,
       esModuleInterop: false,
-      lib: definition.id === "personal-cloud-contract" ? ["lib.es2022.d.ts", "lib.dom.d.ts"] : ["lib.es2022.d.ts"],
+      lib: definition.id === "photo-contract" ? ["lib.es2022.d.ts"] : ["lib.es2022.d.ts", "lib.dom.d.ts"],
       module: ts.ModuleKind.NodeNext,
       moduleResolution: ts.ModuleResolutionKind.NodeNext,
       newLine: ts.NewLineKind.LineFeed,
       noEmitOnError: true,
       outDir: outputRoot,
       rootDir: sourceRoot,
-      skipLibCheck: definition.id !== "personal-cloud-contract",
+      skipLibCheck: definition.id === "photo-contract",
       sourceMap: false,
       strict: true,
       target: ts.ScriptTarget.ES2022,
