@@ -230,7 +230,7 @@ function candidateFixture(sdkManifestSchemaVersion = 1) {
     overlays: candidateContract.overlayPaths.map((name) => ({ path: name, beforeSha256: "1".repeat(64), afterSha256: "2".repeat(64) })),
     app: {
       identity: { product: "NIHO photo", bundleId: "life.niho.camera", version, deepLink: "niho-camera" },
-      updater: { feed: candidateContract.updaterFeed, publicKeySha256: candidateContract.updaterPublicKeySha256, officialUpdates: true },
+      updater: { feed: candidateContract.updaterFeed, publicKeySha256: candidateContract.updaterPublicKeySha256, requireSignedVersion: candidateContract.updaterRequiresSignedVersion, officialUpdates: true },
       files,
       executable: { ...files.find((item) => item.path === "Contents/MacOS/niho-camera") },
       notices,

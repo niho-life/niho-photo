@@ -16,6 +16,8 @@ export function workflowFailures(workflow) {
   if (/\$\{\{[^}]*\b(?:secrets|vars)\b[^}]*\}\}|\bid-token\b|pull_request_target/.test(JSON.stringify(workflow))) fail("secret/権限付きcontextは禁止");
   const aggregate = workflow.jobs?.aggregate;
   if (aggregate?.name !== "Public CI required" || aggregate.if !== "always()") fail("安定aggregate checkが必要");
+  const releaseTests = workflow.jobs?.publication?.steps?.filter((step) => step.run === "node --test scripts/ci/*.test.mjs scripts/photo-web/*.test.mjs scripts/release/*.test.mjs") ?? [];
+  if (releaseTests.length !== 1) fail("Mac updater releaseのdata検証testを公開CIで実行する必要があります");
   if (Object.keys(workflow.jobs ?? {}).filter((name) => name !== "aggregate").sort().join(",") !== [...(aggregate?.needs ?? [])].sort().join(",")) fail("aggregateは全jobに依存する必要あり");
   const dependencyReview = workflow.jobs?.dependencies?.steps?.filter((step) => step.uses?.startsWith("actions/dependency-review-action@")) ?? [];
   const reviewInputs = {

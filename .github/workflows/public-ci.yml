@@ -67,7 +67,7 @@
           }
         },
         {
-          "run": "node --test scripts/ci/*.test.mjs scripts/photo-web/*.test.mjs"
+          "run": "node --test scripts/ci/*.test.mjs scripts/photo-web/*.test.mjs scripts/release/*.test.mjs"
         },
         {
           "id": "contract-source",

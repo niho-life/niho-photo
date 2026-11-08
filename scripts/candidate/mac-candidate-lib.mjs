@@ -35,7 +35,8 @@ const MAX_ASSET_BYTES = 250 * 1024 * 1024;
 const PRODUCT = "NIHO photo";
 const BUNDLE_ID = "life.niho.camera";
 const DEEP_LINK = "niho-camera";
-const UPDATER_FEED = "https://niho.life/camera/updater/latest.json";
+const UPDATER_FEED = "https://github.com/niho-life/niho-photo/releases/latest/download/latest.json";
+const UPDATER_REQUIRES_SIGNED_VERSION = true;
 const EXPECTED_UPDATER_PUBLIC_KEY = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBNzVDN0FCNkY2QzBCN0UKUldSK0MyeHZxOGQxcW1vY3MyZlVFVjVXWjFJcjRpRGRHVnZmUy83UHZCR1FyQ05zSFZwVHVIaW0K";
 const NOTICE_SOURCES = Object.freeze({
   "LICENSE.md": "LICENSE.md",
@@ -426,6 +427,10 @@ export function verifyBuiltApp({ appPath, workspace, version, sdkManifest, nativ
   if (plistValue(plist, "CFBundleIdentifier") !== BUNDLE_ID || plistValue(plist, "CFBundleShortVersionString") !== version || plistValue(plist, "CFBundleVersion") !== version || !plist.includes(`<string>${DEEP_LINK}</string>`)) throw new CandidateError("app plist identity/version/deep linkが不正です");
   const executableName = plistValue(plist, "CFBundleExecutable");
   if (!executableName) throw new CandidateError("app executable identityがありません");
+  let updaterConfig;
+  try { updaterConfig = JSON.parse(readFileSync(path.join(workspace, "apps/camera/src-tauri/tauri.conf.json"), "utf8"))?.plugins?.updater; }
+  catch { throw new CandidateError("app updater設定がJSONではありません"); }
+  if (JSON.stringify(updaterConfig?.endpoints) !== JSON.stringify([UPDATER_FEED]) || updaterConfig?.pubkey !== EXPECTED_UPDATER_PUBLIC_KEY || updaterConfig?.requireSignedVersion !== UPDATER_REQUIRES_SIGNED_VERSION) throw new CandidateError("app updater feed・public key・signed version契約が不正です");
   const executable = path.join(contents, "MacOS", executableName);
   const executableBytes = readFileSync(executable);
   verifyRuntimeAssetBundle(machoRuntimeSection(executableBytes), sdkManifest);
@@ -474,7 +479,7 @@ export function verifyBuiltApp({ appPath, workspace, version, sdkManifest, nativ
   const notices = verifyAppNoticeResources(appPath, expectedNotices);
   return {
     identity: { product: PRODUCT, bundleId: BUNDLE_ID, version, deepLink: DEEP_LINK },
-    updater: { feed: UPDATER_FEED, publicKeySha256: sha256(Buffer.from(EXPECTED_UPDATER_PUBLIC_KEY)), officialUpdates: true },
+    updater: { feed: UPDATER_FEED, publicKeySha256: sha256(Buffer.from(EXPECTED_UPDATER_PUBLIC_KEY)), requireSignedVersion: UPDATER_REQUIRES_SIGNED_VERSION, officialUpdates: true },
     signing: { mode: "ad-hoc", verified: true, detailSha256: sha256(Buffer.from(signing)) },
     executable: { path: `Contents/MacOS/${executableName}`, sha256: sha256(executableBytes), bytes: executableBytes.length },
     native,
@@ -572,7 +577,7 @@ function validateCandidateManifest(manifest, fileName) {
   const sdkManifestSchemaVersion = candidateSdkManifestSchemaVersion(manifest?.sdk);
   const sdkProfile = sdkReleaseProfile(sdkManifestSchemaVersion);
   const sdkKeys = ["mode", "version", "source", "manifestFile", "manifestSha256", "packages", ...(sdkManifestSchemaVersion >= 2 ? ["sdkManifestSchemaVersion"] : [])].sort();
-  if (JSON.stringify(Object.keys(manifest?.sdk ?? {}).sort()) !== JSON.stringify(sdkKeys) || manifest?.schemaVersion !== 1 || !RELEASE_REPOSITORIES.has(manifest.repository) || manifest.product !== PRODUCT || manifest.bundleId !== BUNDLE_ID || !COMMIT.test(manifest.source?.commit ?? "") || !COMMIT.test(manifest.source?.tree ?? "") || !["published", "local-validation"].includes(manifest.sdk?.mode) || !SAFE_ASSET.test(manifest.sdk?.manifestFile ?? "") || !SHA256.test(manifest.sdk?.manifestSha256 ?? "") || !COMMIT.test(manifest.sdk?.source?.commit ?? "") || !COMMIT.test(manifest.sdk?.source?.tree ?? "") || (manifest.sdk.mode === "local-validation" && manifest.sdk.source.commit !== manifest.source.commit) || manifest.sourceOwnership?.algorithm !== "sha256-git-file-set-v1" || !SHA256.test(manifest.sourceOwnership?.digest ?? "") || manifest.sourceOwnership.digest !== ownershipDigest(manifest.sourceOwnership.paths ?? []) || JSON.stringify((manifest.sourceOwnership.paths ?? []).map(({ path: name }) => name)) !== JSON.stringify(sdkProfile.ownedSourcePaths) || manifest.sourceOwnership.paths.some((item) => !SHA256.test(item.sha256 ?? "") || !Number.isSafeInteger(item.files) || item.files <= 0) || manifest.publicAccountConfig?.name !== "NIHO_PHOTO_PUBLIC_FIREBASE_WEB_API_KEY" || !SHA256.test(manifest.publicAccountConfig?.sha256 ?? "") || manifest.publicAccountConfig?.included !== true || manifest.build?.officialUpdates !== true || manifest.build?.updaterArtifacts !== false || manifest.build?.signing !== "ad-hoc" || manifest.build?.toolchain?.target !== "aarch64-apple-darwin" || !String(manifest.build?.toolchain?.rust ?? "").startsWith("rustc 1.98.1 ") || !["node", "swift", "tauri"].every((key) => typeof manifest.build?.toolchain?.[key] === "string" && manifest.build.toolchain[key].length > 2) || manifest.app?.identity?.product !== PRODUCT || manifest.app?.identity?.bundleId !== BUNDLE_ID || manifest.app?.identity?.version !== manifest.version || manifest.app?.identity?.deepLink !== DEEP_LINK || manifest.app?.updater?.feed !== UPDATER_FEED || manifest.app?.updater?.publicKeySha256 !== candidateContract.updaterPublicKeySha256 || manifest.app?.updater?.officialUpdates !== true || !Array.isArray(manifest.app?.files) || !manifest.app.files.length || !Array.isArray(manifest.overlays) || manifest.overlays.map(({ path: name }) => name).join("\0") !== OVERLAY_PATHS.join("\0") || manifest.overlays.some(({ beforeSha256, afterSha256 }) => !SHA256.test(beforeSha256 ?? "") || !SHA256.test(afterSha256 ?? "") || beforeSha256 === afterSha256)) throw new CandidateError("candidate manifest基本契約が不正です");
+  if (JSON.stringify(Object.keys(manifest?.sdk ?? {}).sort()) !== JSON.stringify(sdkKeys) || manifest?.schemaVersion !== 1 || !RELEASE_REPOSITORIES.has(manifest.repository) || manifest.product !== PRODUCT || manifest.bundleId !== BUNDLE_ID || !COMMIT.test(manifest.source?.commit ?? "") || !COMMIT.test(manifest.source?.tree ?? "") || !["published", "local-validation"].includes(manifest.sdk?.mode) || !SAFE_ASSET.test(manifest.sdk?.manifestFile ?? "") || !SHA256.test(manifest.sdk?.manifestSha256 ?? "") || !COMMIT.test(manifest.sdk?.source?.commit ?? "") || !COMMIT.test(manifest.sdk?.source?.tree ?? "") || (manifest.sdk.mode === "local-validation" && manifest.sdk.source.commit !== manifest.source.commit) || manifest.sourceOwnership?.algorithm !== "sha256-git-file-set-v1" || !SHA256.test(manifest.sourceOwnership?.digest ?? "") || manifest.sourceOwnership.digest !== ownershipDigest(manifest.sourceOwnership.paths ?? []) || JSON.stringify((manifest.sourceOwnership.paths ?? []).map(({ path: name }) => name)) !== JSON.stringify(sdkProfile.ownedSourcePaths) || manifest.sourceOwnership.paths.some((item) => !SHA256.test(item.sha256 ?? "") || !Number.isSafeInteger(item.files) || item.files <= 0) || manifest.publicAccountConfig?.name !== "NIHO_PHOTO_PUBLIC_FIREBASE_WEB_API_KEY" || !SHA256.test(manifest.publicAccountConfig?.sha256 ?? "") || manifest.publicAccountConfig?.included !== true || manifest.build?.officialUpdates !== true || manifest.build?.updaterArtifacts !== false || manifest.build?.signing !== "ad-hoc" || manifest.build?.toolchain?.target !== "aarch64-apple-darwin" || !String(manifest.build?.toolchain?.rust ?? "").startsWith("rustc 1.98.1 ") || !["node", "swift", "tauri"].every((key) => typeof manifest.build?.toolchain?.[key] === "string" && manifest.build.toolchain[key].length > 2) || manifest.app?.identity?.product !== PRODUCT || manifest.app?.identity?.bundleId !== BUNDLE_ID || manifest.app?.identity?.version !== manifest.version || manifest.app?.identity?.deepLink !== DEEP_LINK || manifest.app?.updater?.feed !== UPDATER_FEED || manifest.app?.updater?.publicKeySha256 !== candidateContract.updaterPublicKeySha256 || manifest.app?.updater?.requireSignedVersion !== UPDATER_REQUIRES_SIGNED_VERSION || manifest.app?.updater?.officialUpdates !== true || !Array.isArray(manifest.app?.files) || !manifest.app.files.length || !Array.isArray(manifest.overlays) || manifest.overlays.map(({ path: name }) => name).join("\0") !== OVERLAY_PATHS.join("\0") || manifest.overlays.some(({ beforeSha256, afterSha256 }) => !SHA256.test(beforeSha256 ?? "") || !SHA256.test(afterSha256 ?? "") || beforeSha256 === afterSha256)) throw new CandidateError("candidate manifest基本契約が不正です");
   assertStrictVersion(manifest.sdk.version);
   const packageIds = sdkProfile.packages.map(([id]) => id);
   if (!Array.isArray(manifest.sdk.packages) || JSON.stringify(manifest.sdk.packages.map(({ id }) => id).sort()) !== JSON.stringify(packageIds.sort()) || manifest.sdk.packages.some((item) => !SAFE_ASSET.test(item.file ?? "") || !SHA256.test(item.sha256 ?? "") || !Number.isSafeInteger(item.bytes) || item.bytes <= 0 || item.bytes > MAX_ASSET_BYTES)) throw new CandidateError("candidate SDK package pinが不正です");
@@ -718,6 +723,7 @@ export const candidateContract = Object.freeze({
   bundleId: BUNDLE_ID,
   deepLink: DEEP_LINK,
   updaterFeed: UPDATER_FEED,
+  updaterRequiresSignedVersion: UPDATER_REQUIRES_SIGNED_VERSION,
   updaterPublicKeySha256: sha256(Buffer.from(EXPECTED_UPDATER_PUBLIC_KEY)),
   overlayPaths: OVERLAY_PATHS,
   noticePaths: Object.keys(NOTICE_SOURCES),

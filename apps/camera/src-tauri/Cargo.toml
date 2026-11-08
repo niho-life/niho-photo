@@ -32,7 +32,7 @@ serde_json = "1.0"
 serde_jcs = "0.2"
 tauri = { version = "2.11.2", features = [] }
 rfd = "0.15"
-# 自動更新（C5 #18393。NIHO Desktop・NIHO docs と同じ plugin。https://niho.life/camera/updater/latest.json を見て、署名を確かめて
+# 自動更新（C5 #18393。NIHO Desktop・NIHO docs と同じ plugin。Photo の GitHub Release latest.json を見て、署名を確かめて
 # 差し替える。src/updater.rs）
 tauri-plugin-updater = "2"
 tauri-plugin-deep-link = "2"

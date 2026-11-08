@@ -3948,13 +3948,14 @@
         "path": "apps/camera/src-tauri/Cargo.toml",
         "sha256": "698e7a0710d11006400920a5844e8ae1206cc37fbf7e7cd3c449658bfb2e255d"
       },
-      "outputSha256": "965b8b3bd116c3dc6e1cccf6ada0a17c0fceff455c6a982efdd114e824ac23ab",
+      "outputSha256": "2626c06f30aff65da43a63533f33b921534097c4333af03219ebf3674422283d",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #3のpublic OAuth/PKCE、ローカル専用UI、安全契約と公開依存を新規接続。実issuer・署名検証器が未契約のため本番接続は無効。",
         "Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。",
         "repository URLをniho-lifeへ移管",
-        "本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映"
+        "本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映",
+        "コメントをPhoto自己管理updater feedへ更新"
       ]
     },
     {
@@ -4453,9 +4454,11 @@
         "path": "apps/camera/src-tauri/src/updater.rs",
         "sha256": "0e02006eb4e16ed3ecc8831bdce43e557e06c4e7aa1b44a53e6d1714b6e2c629"
       },
-      "outputSha256": "ce1fbd3929f2867d802eda7f901b4017c8c574a37c6cdcc093b212116451ec64",
+      "outputSha256": "7d913575628ff7b8c9e8a5c0b47634043d5ad0016f32d038367e033b632aed68",
       "modifications": [
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "updater feedと署名version設定の契約テストを更新",
+        "GitHub Release feed・署名versionのupdater契約テストを整合"
       ]
     },
     {
@@ -4466,13 +4469,15 @@
         "path": "apps/camera/src-tauri/tauri.conf.json",
         "sha256": "7db852216a552cff994a2e1a60d83b445db318b438ad6f11d60e90da725c211f"
       },
-      "outputSha256": "21f914b8bbc2ccec8a9690dad0cc8f4f90ee9813f64501bca242eccf17d9672e",
+      "outputSha256": "2061dc91ddc69dee556419b3760863328c4df84f2904ea3ca9b78ec8d5fb9115",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。",
         "Issue #49の統合確認: 窓のbackgroundColorを画面の地（#FCFBF9）に揃える。",
         "niho-photo#152: Mac アプリの現像を native の sidecar（niho-develop-render serve）で描く口（niho-develop://・native の glue・E2E）を足す。",
-        "niho-photo#152: Mac アプリの現像を native sidecar に接続"
+        "niho-photo#152: Mac アプリの現像を native sidecar に接続",
+        "updater feedをPhoto Release latest.jsonへ変更し、signed version確認を必須化",
+        "Photo GitHub Release updater feedとrequireSignedVersionを設定"
       ]
     },
     {
@@ -10134,8 +10139,8 @@
     },
     {
       "path": ".github/workflows/public-ci.yml",
-      "sha256": "ea7398639d502eeb525cbd16cec0e80a4e7737b0caab3548909a83955b0d6a68",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK packageとrepo外consumer smokeをPublic CIへ追加。\n変更理由: Issue #112の実WASM SDK buildをrequired CIへ追加\n変更理由: Issue #113のrequired Mac candidate実build proof jobを追加。\n変更理由: Issue #113のcandidate manifestをapp version入力にも固定。\n変更理由: PR proofのダミー公開値を実行時生成し、app版は通常形式0.0.0に固定。\n変更理由: repository allowlistをniho-lifeへ移管\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: native（Client）の job の timeout を 30 分から 45 分へ（macos-26 で develop-engine が 30 分を超えて取り消されるため）。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: macOS 26のnative全scope検証が45分上限に達したため、実測に合わせて上限を90分へ変更\n変更理由: C08: Photo Web formal release publisherとsynthetic workflow/包材検証をCIに接続\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定"
+      "sha256": "ad536e1b2fa0580453582620ca4152e11bbf0b38e0d040e72c9693f59b836685",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK packageとrepo外consumer smokeをPublic CIへ追加。\n変更理由: Issue #112の実WASM SDK buildをrequired CIへ追加\n変更理由: Issue #113のrequired Mac candidate実build proof jobを追加。\n変更理由: Issue #113のcandidate manifestをapp version入力にも固定。\n変更理由: PR proofのダミー公開値を実行時生成し、app版は通常形式0.0.0に固定。\n変更理由: repository allowlistをniho-lifeへ移管\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: native（Client）の job の timeout を 30 分から 45 分へ（macos-26 で develop-engine が 30 分を超えて取り消されるため）。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: macOS 26のnative全scope検証が45分上限に達したため、実測に合わせて上限を90分へ変更\n変更理由: C08: Photo Web formal release publisherとsynthetic workflow/包材検証をCIに接続\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: updater release data testsを公開CIへ追加"
     },
     {
       "path": "AGENTS.md",
@@ -10839,8 +10844,8 @@
     },
     {
       "path": "docs/ci/public-ci.md",
-      "sha256": "7494f56fa41fe3bcdc46f2fd4ac510f2469a15c89ac7119818862b85421362c8",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #113のcandidate proof selectorとvalidation-only成果物との差を追記。\n変更理由: 現行Issue URLをniho-lifeへ移管\n変更理由: Mac miniの重処理ガードとStudioでの先行検証手順を記録する。\n変更理由: mainのC02・SDK profile説明とPhoto Web検証説明を両方保持して通常mergeを解消。\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。"
+      "sha256": "10bde0290cebafc513420c46213291a1ad90d3ffe0d8d680f457e371c258025f",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #113のcandidate proof selectorとvalidation-only成果物との差を追記。\n変更理由: 現行Issue URLをniho-lifeへ移管\n変更理由: Mac miniの重処理ガードとStudioでの先行検証手順を記録する。\n変更理由: mainのC02・SDK profile説明とPhoto Web検証説明を両方保持して通常mergeを解消。\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。\n変更理由: candidateと署名Releaseの責務境界を更新"
     },
     {
       "path": "docs/cloud/client-acceptance-preparation.md",
@@ -10924,8 +10929,8 @@
     },
     {
       "path": "docs/releases/public-artifact-contract.md",
-      "sha256": "a7e3d0a3f88952d04d539526f46bd31b81abf72045abb69e38c0692bc57dc9af",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #113のcandidate prereleaseと旧validation-only artifactの境界を追記。\n変更理由: repository移管と旧成果物互換を明記\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: main の Public CI: #174 で増えた probe の Cargo.lock を公開成果物の lockfile 収録範囲に足し、PR で一致を検査する"
+      "sha256": "87dea50fc283f27659dfb3f7f029ce34bb27ecdec9c05dd9593a994a5534f1f2",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #113のcandidate prereleaseと旧validation-only artifactの境界を追記。\n変更理由: repository移管と旧成果物互換を明記\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: main の Public CI: #174 で増えた probe の Cargo.lock を公開成果物の lockfile 収録範囲に足し、PR で一致を検査する\n変更理由: source検証成果物とowner-local updater Releaseを区別"
     },
     {
       "path": "docs/security/public-sdk-dependency-receipt.json",
@@ -10934,8 +10939,8 @@
     },
     {
       "path": "docs/security/publication-gates.md",
-      "sha256": "ba3c5bce07e2320e01db682aa1af52e185f9ca5c4c768ec1680c77c9cd93d9aa",
-      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:docs/security/publication-gates.md / 元SHA-256 ffc75e84325b8755a36d27a486a31f6bb86792e57fdd5475449fb4b702eccf41。C08の公式SDK依存契約に合わせて編集。初回の台帳登録であり、非公開履歴の取込みではない。\n変更理由: C04公式SDKの公開tarをconsumer・両digest・source・proof・lockへ固定して必須検証\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+      "sha256": "44973f7a4f827ce245258e96d07144e5be1592923bc1f6ea0d407bd33a196700",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:docs/security/publication-gates.md / 元SHA-256 ffc75e84325b8755a36d27a486a31f6bb86792e57fdd5475449fb4b702eccf41。C08の公式SDK依存契約に合わせて編集。初回の台帳登録であり、非公開履歴の取込みではない。\n変更理由: C04公式SDKの公開tarをconsumer・両digest・source・proof・lockへ固定して必須検証\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: owner-local署名したTauri updater Releaseの限定例外を定義"
     },
     {
       "path": "docs/security/publication-policy.json",
@@ -10949,8 +10954,8 @@
     },
     {
       "path": "package.json",
-      "sha256": "daf3eb4e678cce11708745b4f4e3cb9dd130e9110c2d54a57d8f0cd11a5547fa",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK release set生成・検証・外部consumer smoke入口を追加。\n変更理由: Issue #112の実WASMとNode契約smoke入口を追加\n変更理由: Issue #113のMac candidate build・data-only検証・fixture test入口を追加。\n変更理由: rootの重いnpm scriptをMac miniで開始前に停止する。\n変更理由: React 19型のSDK consumer検証依存を追加\n変更理由: Photo専用session packageをroot workspaceへ登録して共通検証対象に追加\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: mainのC02・個人契約workspaceとC06のPhoto Web workspaceを同時に保持して通常mergeを解消。\n変更理由: 完全補正の永続同期coreを公開workspaceへ登録\n変更理由: C08: Photo Web formal release publisherとsynthetic workflow/包材検証をCIに接続\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: 共有契約workspaceとPhoto editing CI scopeを登録。\n変更理由: B01 #242 の常設Macライブラリcore packageをroot workspace・Photo editing CI scopeへ登録。"
+      "sha256": "aaec29ee3e3f3cbab33d8fb4254872d17dfa7ff0ca217e10621e57565fb1e224",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK release set生成・検証・外部consumer smoke入口を追加。\n変更理由: Issue #112の実WASMとNode契約smoke入口を追加\n変更理由: Issue #113のMac candidate build・data-only検証・fixture test入口を追加。\n変更理由: rootの重いnpm scriptをMac miniで開始前に停止する。\n変更理由: React 19型のSDK consumer検証依存を追加\n変更理由: Photo専用session packageをroot workspaceへ登録して共通検証対象に追加\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: mainのC02・個人契約workspaceとC06のPhoto Web workspaceを同時に保持して通常mergeを解消。\n変更理由: 完全補正の永続同期coreを公開workspaceへ登録\n変更理由: C08: Photo Web formal release publisherとsynthetic workflow/包材検証をCIに接続\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: 共有契約workspaceとPhoto editing CI scopeを登録。\n変更理由: B01 #242 の常設Macライブラリcore packageをroot workspace・Photo editing CI scopeへ登録。\n変更理由: owner-local updater Release prepare/testコマンドを追加\n変更理由: Studioでの署名Release準備・read-back検証コマンドを追加"
     },
     {
       "path": "packages/desktop-account/Cargo.lock",
@@ -13574,13 +13579,13 @@
     },
     {
       "path": "scripts/candidate/mac-candidate-lib.mjs",
-      "sha256": "c4b91dc719fa1796c2eee58280c1487c636376618532bc9fd5d0455d42c25736",
-      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate-lib.mjs / 元SHA-256 ca11db7292461c7735162da788075be51c2ec418085c4e337a33f11b86cdcb26。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: DMG作成前にapp inventoryを検証し、既知の不一致をhdiutilより前にfail closedする\n変更理由: Support SDK schema 3 candidate proofs\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
+      "sha256": "b40a562b5dfcc286f00ca65301d0746c75cc399701af42820ee8f52b6736f957",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate-lib.mjs / 元SHA-256 ca11db7292461c7735162da788075be51c2ec418085c4e337a33f11b86cdcb26。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: DMG作成前にapp inventoryを検証し、既知の不一致をhdiutilより前にfail closedする\n変更理由: Support SDK schema 3 candidate proofs\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: candidate検証へPhoto Release feedとsigned version契約を追加\n変更理由: candidate build/verifierにPhoto Release feedとversion署名必須契約を追加"
     },
     {
       "path": "scripts/candidate/mac-candidate.test.mjs",
-      "sha256": "8ab01557170218518fb4fe122af2804558e2be76e8a41a924e3b4ebbb6d37af1",
-      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate.test.mjs / 元SHA-256 317e82bf2949f90503f248a3ea8886e71fd3aa6b19c73b9e7a21196bd3140d95。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: 実DMGの隠しpayload fixtureでmacOS予約の.Trashesを避け、hdiutil検証後にroot拒否を照合\n変更理由: Support SDK schema 3 candidate proofs\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
+      "sha256": "c05a367472df421e65556f6bb4118b350412f4da986c171d2a220430d2b7e44d",
+      "origin": "NIHO既存公開source 90fea8fd258d84429b55e2cc1d6fb70febd0c48c:scripts/candidate/mac-candidate.test.mjs / 元SHA-256 317e82bf2949f90503f248a3ea8886e71fd3aa6b19c73b9e7a21196bd3140d95。公式SDKの依存proofを既存の配布SBOMへ接続。公開sourceのみを編集し、非公開履歴・秘密を含まない。\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: 実DMGの隠しpayload fixtureでmacOS予約の.Trashesを避け、hdiutil検証後にroot拒否を照合\n変更理由: Support SDK schema 3 candidate proofs\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: candidate manifest fixtureにsigned version契約を反映\n変更理由: candidate manifest fixtureへversion署名契約を反映"
     },
     {
       "path": "scripts/candidate/prepare-published-sdk.mjs",
@@ -13689,13 +13694,13 @@
     },
     {
       "path": "scripts/ci/workflow-lib.mjs",
-      "sha256": "c7b8dddb34005f7798f3a1ee60ad627aad9e768c68f0403534a0836b359a0c54",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK consumer smoke必須契約をPublic CI guardへ追加。\n変更理由: Issue #112の実WASM SDK jobを必須契約へ追加\n変更理由: Issue #113のrequired Mac candidate proof静的guardを追加。\n変更理由: Issue #113のcandidate proof app version照合を静的guardへ追加。\n変更理由: PR proofのダミー公開値の実行時生成と通常形式app版を契約に固定。\n変更理由: workflow repository allowlistを移管\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: native（Client）の job の timeout を 30 分から 45 分へ（macos-26 で develop-engine が 30 分を超えて取り消されるため）。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: native jobの許容上限を90分へ広げ、workflow契約検査へ反映"
+      "sha256": "203cb013232c4b11a1914f549f5fcd20e6aa077f24a3a43302ffa0210586dd47",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK consumer smoke必須契約をPublic CI guardへ追加。\n変更理由: Issue #112の実WASM SDK jobを必須契約へ追加\n変更理由: Issue #113のrequired Mac candidate proof静的guardを追加。\n変更理由: Issue #113のcandidate proof app version照合を静的guardへ追加。\n変更理由: PR proofのダミー公開値の実行時生成と通常形式app版を契約に固定。\n変更理由: workflow repository allowlistを移管\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: native（Client）の job の timeout を 30 分から 45 分へ（macos-26 で develop-engine が 30 分を超えて取り消されるため）。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: native jobの許容上限を90分へ広げ、workflow契約検査へ反映\n変更理由: updater release data testsの公開CI実行を必須化"
     },
     {
       "path": "scripts/ci/workflow.test.mjs",
-      "sha256": "f583d413fca046a0121a92cf11628ef9639725a577f1b348b7c8fbb4f6009567",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK consumer smoke省略を拒否する回帰testを追加。\n変更理由: Issue #112の実engine smoke省略を拒否する検査を追加\n変更理由: Issue #113のcandidate proof省略を拒否する回帰を追加。\n変更理由: ダミー公開値をliteralとして履歴へ入れず実行時生成し、PR proofのapp版を通常形式にする回帰検査。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: native（Client）の job の timeout を 30 分から 45 分へ（macos-26 で develop-engine が 30 分を超えて取り消されるため）。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: native jobの90分上限と超過拒否を検証する契約テストへ更新"
+      "sha256": "79b4446e3dffd1c8d5a17b441615374ecae1599b05d3226321485790bea1f87c",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK consumer smoke省略を拒否する回帰testを追加。\n変更理由: Issue #112の実engine smoke省略を拒否する検査を追加\n変更理由: Issue #113のcandidate proof省略を拒否する回帰を追加。\n変更理由: ダミー公開値をliteralとして履歴へ入れず実行時生成し、PR proofのapp版を通常形式にする回帰検査。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: native（Client）の job の timeout を 30 分から 45 分へ（macos-26 で develop-engine が 30 分を超えて取り消されるため）。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: native jobの90分上限と超過拒否を検証する契約テストへ更新\n変更理由: updater release tests欠落を公開workflow検査で拒否"
     },
     {
       "path": "scripts/ci/write-artifact-receipt.mjs",
@@ -13821,6 +13826,26 @@
       "path": "sdk/release-set.json",
       "sha256": "012d9319fb1d8246ccdfea927d89b5a037960ff3453c7fba65f8436ad0fe7ffe",
       "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: 最新の共有マスク・初期proof・readonly presetを不変な新しい正式SDK 0.1.10として発行する。\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
+    },
+    {
+      "path": "scripts/release/mac-updater-release-lib.mjs",
+      "sha256": "571064a9edce38611b8a24dd8b1cadc2bf24babbcd6f12b7bc61089ed90d152a",
+      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: candidate attestation・transport proof・static manifest verifierを仕上げ\n変更理由: candidate Release assetのpath traversalとsize超過をdownload前に拒否"
+    },
+    {
+      "path": "scripts/release/mac-updater-release-lib.test.mjs",
+      "sha256": "0e4ec6a436af09ad2719b0f4839017e3a4ac141adc27cfceacc8dd2c734fb9db",
+      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: 署名manifestとattestation parserの対象testを追加\n変更理由: updater設定のfeed公開鍵version署名契約を公開CIテストで固定\n変更理由: candidate Releaseの不正asset名sizedraft拒否を検証"
+    },
+    {
+      "path": "scripts/release/prepare-mac-updater-release.mjs",
+      "sha256": "3f253def91acf3b7e9b1ad186e5fecf9b1abf25ec99b3ef1b73fdaddb211df39",
+      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: Studio owner-local署名とdraft asset生成の安全検査を仕上げ\n変更理由: 公開検査がSSH形式remoteを非公開参照と誤判定する問題を避けHTTPS remoteに限定\n変更理由: 候補Release metadataの事前検証を署名準備に適用"
+    },
+    {
+      "path": "scripts/release/verify-mac-updater-release.mjs",
+      "sha256": "90901c8aa9ffe8b29cd6d756e7b67edfdf3462018203b930f347fcc5919907e3",
+      "origin": "2026-11-08 NIHO photo updater Releaseとlatest.jsonの公開後read-back検証のため新規作成。\n変更理由: 公開Releaseとlatest.jsonのread-back検査を実装"
     }
   ],
   "excludedSources": [

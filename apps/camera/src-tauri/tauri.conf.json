@@ -67,8 +67,9 @@
   "plugins": {
     "updater": {
       "endpoints": [
-        "https://niho.life/camera/updater/latest.json"
+        "https://github.com/niho-life/niho-photo/releases/latest/download/latest.json"
       ],
+      "requireSignedVersion": true,
       "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBNzVDN0FCNkY2QzBCN0UKUldSK0MyeHZxOGQxcW1vY3MyZlVFVjVXWjFJcjRpRGRHVnZmUy83UHZCR1FyQ05zSFZwVHVIaW0K"
     },
     "deep-link": {
