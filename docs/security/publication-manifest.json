@@ -13659,8 +13659,8 @@
     },
     {
       "path": "scripts/ci/release-evidence-lib.mjs",
-      "sha256": "a1a14ef4088a07700bca8644033963108a42734caacdb4ebc7c9c914f7be8c0a",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: 検出値を表示せず非公開参照の種別だけを診断に加え、既存の公開拒否条件を維持する\n変更理由: 新repositoryの成果物metadataへ移管\n変更理由: main の Public CI: #174 で増えた probe の Cargo.lock を公開成果物の lockfile 収録範囲に足し、PR で一致を検査する\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証"
+      "sha256": "ee2d60d28647ba728e4803dfd3c88f858ad7551ecb12d93e4a713d00e5525a09",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: 検出値を表示せず非公開参照の種別だけを診断に加え、既存の公開拒否条件を維持する\n変更理由: 新repositoryの成果物metadataへ移管\n変更理由: main の Public CI: #174 で増えた probe の Cargo.lock を公開成果物の lockfile 収録範囲に足し、PR で一致を検査する\n変更理由: C04公式SDKの固定proofを公開guard・配布SBOM・候補検証で共有し拒否境界を検証\n変更理由: Minisign verifier lockfileを公開SBOMと全lockfile契約へ含める"
     },
     {
       "path": "scripts/ci/release-evidence.mjs",
