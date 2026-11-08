@@ -7,6 +7,7 @@ import path from "node:path";
 import { fileURLToPath } from "node:url";
 
 import { PHOTO_UPDATER_RELEASE, PhotoUpdaterReleaseError } from "./mac-updater-release-lib.mjs";
+import { readPinnedUpdaterKey, verifyUpdaterArchiveSignature } from "./updater-signature.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const APP_TAG = /^photo-app-v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u;
@@ -88,16 +89,34 @@ async function main(argv) {
       if (bytes.length !== asset.bytes || sha256(bytes) !== asset.sha256) fail("published assetがowner-reviewed bytesと一致しません");
     }
 
+    const signatureName = names.find((name) => name.endsWith(".app.tar.gz.sig"));
+    const archiveName = evidence.assets.find((asset) => asset.name.endsWith(".app.tar.gz"))?.name;
+    const candidateManifestName = names.find((name) => name.endsWith(".candidate.json"));
+    if (!signatureName || !archiveName || !candidateManifestName) fail("published updater署名の検証assetが不足しています");
+    const candidateManifest = parseJson(regularFile(path.join(temporary, candidateManifestName), "published candidate manifest", 8 * 1024 * 1024), "published candidate manifest");
+    const updaterKey = readPinnedUpdaterKey(root);
+    if (candidateManifest.version !== evidence.version || candidateManifest.app?.updater?.publicKeySha256 !== updaterKey.sha256) {
+      fail("公開candidateの固定updater keyが現在のapp設定と一致しません");
+    }
+    try {
+      verifyUpdaterArchiveSignature({
+        root,
+        publicKeyText: updaterKey.publicKeyText,
+        archivePath: path.join(temporary, archiveName),
+        signaturePath: path.join(temporary, signatureName),
+        version: evidence.version,
+      });
+    } catch {
+      fail("公開signatureがappの固定updater key・archive・versionに一致しません");
+    }
+
     const served = await fetch(PHOTO_UPDATER_RELEASE.feedUrl, { redirect: "follow", cache: "no-store" });
     if (!served.ok) fail("Photo updater latest.json endpointがHTTP successではありません");
     const remoteManifestBytes = Buffer.from(await served.arrayBuffer());
     const localManifestBytes = regularFile(path.join(directory, "latest.json"), "prepared updater manifest", 64 * 1024);
     if (!remoteManifestBytes.equals(localManifestBytes)) fail("公開latest.jsonがprepared manifestと一致しません");
     const manifest = parseJson(remoteManifestBytes, "served updater manifest");
-    const signatureName = names.find((name) => name.endsWith(".app.tar.gz.sig"));
-    if (!signatureName) fail("prepared updater signatureがありません");
     const signatureBytes = regularFile(path.join(directory, signatureName), "prepared updater signature", 16 * 1024);
-    const archiveName = evidence.assets.find((asset) => asset.name.endsWith(".app.tar.gz"))?.name;
     const platform = manifest.platforms?.[PHOTO_UPDATER_RELEASE.target];
     if (manifest.version !== evidence.version || platform?.signature !== signatureBytes.toString("utf8").trim()
       || typeof archiveName !== "string"

@@ -88,12 +88,13 @@ npm run photo:release:prepare -- \
 helperはcurrent mainに含まれる固定workflowのattestation、run、source SHA、SDK proof、candidate manifestと全asset hashを照合します。
 取得したcandidateのprogram・script・verifierは実行せず、tar/DMGも展開せずにdataとして検査します。署名対象のtarはmanifestに
 hash固定された同じbytesです。秘密鍵の内容を引数・env・ログへ出さず、ローカルkey fileから直接Tauri署名します。
+署名後はTauri updaterと同じMinisign verifierでtarと署名を検証し、appに固定した公開鍵と署名内のversionが一致するまで配布assetを作りません。
 
 署名後は、元のDMG/app tar/SBOM/manifest、SDK proof、輸送receipt/provenance、`.sig` とTauri static updater用 `latest.json` を
 新規output directoryへ作ります。helperはGitHubへ書き込まず、`publish-draft-instructions.txt` を出力します。assetとnotesを確認後、
 instructionsに沿ってGitHub Releaseのdraftを作り、draft内の全assetを読み返してから `--draft=false --latest` で公開します。
 一度確保したtag/versionは再利用しません。途中で失敗した版は捨て、より大きいapp versionで作り直します。
-公開後は `npm run photo:release:verify -- --release-tag photo-app-v1.2.3 --prepared-dir /tmp/niho-photo-release-v1.2.3` を実行し、GitHub上のlatest Release・全asset hash・配信中の `latest.json` をprepared bytesへread-back照合します。
+公開後は `npm run photo:release:verify -- --release-tag photo-app-v1.2.3 --prepared-dir /tmp/niho-photo-release-v1.2.3` を実行し、GitHub上のlatest Release・全asset hash・配信中の `latest.json` をprepared bytesへread-back照合します。downloadしたapp tarと署名も固定公開鍵・versionで再検証します。
 
 通常のapp Releaseは `photo-app-v<version>` とし、Photo updaterの `latest.json` URLに解決されるようrepositoryの最新Releaseにします。
 SDK/Web/renderer/candidate Releaseは引き続き `--latest=false` のままです。GitHub Releaseのimmutable settingを有効にしてから

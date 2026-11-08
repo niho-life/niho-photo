@@ -16,6 +16,7 @@ import {
   verifySdkProofForRelease,
   validateCandidateReleaseMetadata,
 } from "./mac-updater-release-lib.mjs";
+import { readPinnedUpdaterKey, verifyUpdaterArchiveSignature } from "./updater-signature.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const REPOSITORY_URLS = new Set(["https://github.com/niho-life/niho-photo.git"]);
@@ -220,11 +221,18 @@ function main(argv) {
 
     const archiveName = candidate.manifest.assets.find((asset) => asset.name.endsWith(".app.tar.gz"))?.name;
     if (!archiveName) fail("Tauri updater archiveがありません");
+    const updaterKey = readPinnedUpdaterKey(root);
+    if (candidate.manifest.app?.updater?.publicKeySha256 !== updaterKey.sha256) fail("candidateの固定updater keyが現在のapp設定と一致しません");
     const archivePath = path.join(candidateDirectory, archiveName);
     const signaturePath = `${archivePath}.sig`;
     if (lstatSync(signaturePath, { throwIfNoEntry: false })) fail("signature outputが既に存在します");
     run("npm", ["--prefix", "apps/camera", "run", "tauri", "--", "signer", "sign", "--private-key-path", keyPath, "--app-version", candidate.manifest.version, archivePath], { stdio: "inherit" });
     const signatureBytes = readOrdinaryFile(signaturePath, MAX_SIGNATURE_BYTES, "Tauri signature");
+    try {
+      verifyUpdaterArchiveSignature({ root, publicKeyText: updaterKey.publicKeyText, archivePath, signaturePath, version: candidate.manifest.version });
+    } catch {
+      fail("生成signatureがappの固定updater key・archive・versionに一致しません");
+    }
     const signature = signatureBytes.toString("utf8").trim();
     const updaterManifest = buildUpdaterManifest({ version: candidate.manifest.version, signature, archiveName });
     const releaseTag = `photo-app-v${candidate.manifest.version}`;

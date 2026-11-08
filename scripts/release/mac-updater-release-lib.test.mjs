@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { readFileSync } from "node:fs";
 import { test } from "node:test";
+import { fileURLToPath } from "node:url";
 
 import {
   PHOTO_UPDATER_RELEASE,
@@ -10,6 +11,7 @@ import {
   verifyCandidateAttestation,
 } from "./mac-updater-release-lib.mjs";
 import { candidateContract } from "../candidate/mac-candidate-lib.mjs";
+import { readPinnedUpdaterKey } from "./updater-signature.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 
@@ -97,8 +99,11 @@ test("static updater manifestはversion署名をPhoto app releaseへ結び付け
 test("配布appは公式Release feed・固定鍵・version署名必須を持つ", () => {
   const config = JSON.parse(readFileSync(new URL("../../apps/camera/src-tauri/tauri.conf.json", import.meta.url), "utf8"));
   const updater = config.plugins.updater;
+  const pinned = readPinnedUpdaterKey(fileURLToPath(new URL("../..", import.meta.url)));
   assert.deepEqual(updater.endpoints, [PHOTO_UPDATER_RELEASE.feedUrl]);
   assert.equal(sha256(Buffer.from(updater.pubkey)), candidateContract.updaterPublicKeySha256);
+  assert.equal(pinned.sha256, candidateContract.updaterPublicKeySha256);
+  assert.equal(Buffer.from(updater.pubkey, "base64").toString("utf8"), pinned.publicKeyText);
   assert.equal(updater.requireSignedVersion, true);
 });
 
