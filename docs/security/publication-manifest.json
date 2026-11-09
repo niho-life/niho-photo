@@ -3935,13 +3935,14 @@
         "path": "apps/camera/src-tauri/Cargo.lock",
         "sha256": "5a40bc09ad023f58a6c8eb39e44303fed357ea0bb865b1274d9eef2b43df69f3"
       },
-      "outputSha256": "684da916a1aeb984f3bc160b3624b47aa2fe4bf7ff2da9e235d7fed02a13ed43",
+      "outputSha256": "ed45480effe73f4443e830cadf0087e4c04d321fbea6bcc58c7784c738d60d41",
       "modifications": [
         "認証crateを除いた公開Cargo.tomlに従い公開registryの依存lockを再生成。",
         "Issue #3のpublic OAuth/PKCE、ローカル専用UI、安全契約と公開依存を新規接続。実issuer・署名検証器が未契約のため本番接続は無効。",
         "Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。",
         "本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映",
-        "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加"
+        "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加",
+        "Critical zip advisoryを修正したtauri-plugin-updater 2.14.1を固定"
       ]
     },
     {
