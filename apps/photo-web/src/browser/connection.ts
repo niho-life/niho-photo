@@ -30,6 +30,9 @@ import { IndexedDbRecipeSyncJournal } from "@niho/photo-cloud-sync/browser";
 import type { RecipeJournalScope, RecipeSyncLocks } from "@niho/photo-cloud-sync";
 import { createPhotoWebCloudFetch } from "./auth-fetch.ts";
 import { createCapturedPhotoWebCloudClient, createPhotoWebCloudIdentity } from "./session-client.ts";
+import { photoWebInviteUrl, photoWebOriginalsNote, savePhotoWebDownload } from "./shared-albums.ts";
+import { createBrowserSharedAlbumScreensPort } from "@niho/photo-cloud-library/sharing";
+import type { PhotoSharedAlbumPort } from "niho-photo-editing/shared-album/photo-shared-album-port";
 import {
   createPhotoWebMaskSurfaceValidator,
   probePhotoWebRenderer,
@@ -428,6 +431,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
       let transferController: BrowserPersonalPhotoTransferController | null = null;
       let maskSurfaceValidator: PhotoWebMaskSurfaceValidator | null = null;
       let previewLibrary: { readonly library: PhotoLibrary; dispose(): void } | null = null;
+      let sharedAlbums: PhotoSharedAlbumPort | null = null;
       let disposed = false;
       let transferOperations = 0;
       let pendingTransfers: boolean | null = null;
@@ -536,6 +540,22 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
         const library = previewLibrary.library;
         await library.capabilities({ signal: input.signal });
         const rollout = await library.rollout({ signal: input.signal });
+        // Shared albums stay closed unless the library's rollout opens them (fail closed: absent or unreadable = closed).
+        if (rollout.sharedAlbums === true) {
+          sharedAlbums = createBrowserSharedAlbumScreensPort({
+            identity: cloudIdentity,
+            fetch: bffFetch,
+            ...(factoryOptions.providerFetch === undefined ? {} : { providerFetch: factoryOptions.providerFetch }),
+            ...(factoryOptions.now === undefined ? {} : { now: factoryOptions.now }),
+            inviteUrl: (secret) => photoWebInviteUrl(factoryOptions.origin, secret),
+            saveFile: (name, file) => savePhotoWebDownload(name, file),
+            originalsNote: photoWebOriginalsNote(identity.userId),
+            storageLocations: async () => [{
+              locationId: "nihoCloud", kind: "nihoCloud", name: null, hostedMacStatus: null,
+              usage: { usedBytes: usage.usedBytes, quotaBytes: usage.quotaBytes },
+            }],
+          });
+        }
         usage = snapshotUsage(await handle.usage({ signal: input.signal }));
         const refreshUsage = (): Promise<void> => {
           usageRefreshRequested = true;
@@ -637,6 +657,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
           disableCloudDelete: initialCloud.state !== "active",
           usage,
           ...(transfer === undefined ? {} : { transfer }),
+          ...(sharedAlbums === null ? {} : { sharedAlbums }),
         });
 
         const unsubscribeDrafts = durable.subscribe(() => { void refreshPendingDrafts(); });
@@ -678,6 +699,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
             listeners.clear();
             try { transferController?.dispose(); } catch { /* The identity fence already rejects late results. */ }
             try { previewLibrary?.dispose(); } catch { /* Continue releasing the shared library resources. */ }
+            try { sharedAlbums?.dispose(); } catch { /* Thumbnails and clients are released with the scope. */ }
             try { maskSurfaceValidator?.dispose(); } catch { /* Continue provider disposal. */ }
             try { handle?.releasePreviewResources(); } catch { /* Continue provider disposal. */ }
             try { handle?.dispose(); } catch { /* Continue client disposal. */ }
@@ -693,6 +715,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
       } catch (error) {
         try { transferController?.dispose(); } catch { /* Best effort for partial construction. */ }
         try { previewLibrary?.dispose(); } catch { /* Best effort for partial construction. */ }
+        try { sharedAlbums?.dispose(); } catch { /* Best effort for partial construction. */ }
         try { maskSurfaceValidator?.dispose(); } catch { /* Best effort for partial construction. */ }
         try { handle?.releasePreviewResources(); } catch { /* Best effort for partial construction. */ }
         try { handle?.dispose(); } catch { /* Best effort for partial construction. */ }

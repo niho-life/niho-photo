@@ -396,6 +396,11 @@ export type PhotoLibraryRollout = {
   crop: boolean;
   /** スマホ（1024px 未満）で写真を直す面 */
   mobileEditing: boolean;
+  /**
+   * 「共有アルバム」と設定の「保存先」（Epic #240 B08 #249）。省略・読めない = 出さない（受入まで閉じる。本物の server と BFF の
+   * 接続後に拠点ごとに開く）
+   */
+  sharedAlbums?: boolean;
 };
 
 export type PhotoLibraryEngineAssets = {
