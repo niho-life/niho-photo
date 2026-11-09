@@ -80,6 +80,7 @@ import { supportsDevelopSettingsWrite as supportsClientWrite, type DevelopSettin
 import type { PhotoLibrary } from "niho-photo-editing/library/photo-library";
 import { PhotoEditingDialogHost } from "niho-photo-editing/sdk-dialog-host";
 import { readDevelopSettings, supportsDevelopSettingsWrite, type DevelopSettings as NodeDevelopSettings } from "niho-photo-contract";
+import { buildMetadataManifest, parsePortableManifest, planRestore, type ReplicaStore } from "niho-photo-hosted-library";
 import "niho-photo-ui/styles/tokens.css";
 
 const engine = createDevelopEngine();
@@ -89,6 +90,8 @@ const nodeCanWrite: boolean = supportsDevelopSettingsWrite(recipe);
 const sdk = { BrowserPhotoEditingWorkbench, PhotoEditingDialogHost, engine, recipe, nodeRecipe, nodeCanWrite, supportsClientWrite, PHOTO_EDITING_PRIMARY_BUTTON_CLASS_NAME };
 document.body.dataset.sdkExports = Object.keys(sdk).sort().join(",");
 export type PhotoLibraryContract = PhotoLibrary;
+export type HostedLibraryStore = ReplicaStore;
+export const hostedExports = [buildMetadataManifest, parsePortableManifest, planRestore];
 `);
     writeFileSync(path.join(consumer, "index.html"), '<!doctype html><html><body><script type="module" src="/src/main.tsx"></script></body></html>\n');
     writeFileSync(path.join(consumer, "tsconfig.json"), `${JSON.stringify({
@@ -163,6 +166,7 @@ import {
   supportedDevelopSettingsVersions,
   supportsDevelopSettingsWrite,
 } from "niho-photo-contract";
+import { buildMetadataManifest, parsePortableManifest, planRestore, HostedLibraryError } from "niho-photo-hosted-library";
 
 assert.deepEqual([...supportedDevelopSettingsVersions], [1, 2, 3, 4, 5, 6, 7, 8, 9]);
 assert.ok(developSettingsEngineIdentifiers.includes("niho-13"));
@@ -196,6 +200,16 @@ for (const invalid of [
 const existing = developSettingsOnWorkingCopy({ v: 1, engine: "niho-1", futureTopLevel: 1 }, "raster.d1");
 assert.equal(existing.engine, "niho-1");
 assert.equal(existing.futureTopLevel, 1);
+const store = {
+  revision: async () => 1,
+  async *records() {},
+};
+const portable = await buildMetadataManifest({ store, library: { id: "synthetic-library" }, createdAt: "2026-11-09T00:00:00.000Z", signal: new AbortController().signal });
+assert.deepEqual(parsePortableManifest(portable), portable);
+assert.throws(() => parsePortableManifest({ ...portable, accessToken: "synthetic" }), (error) => error instanceof HostedLibraryError && error.code === "invalid_request");
+const restore = planRestore({ manifest: portable, actorId: "synthetic-owner", target: { libraryId: "synthetic-library", ownerId: "synthetic-owner", lifecycle: "active" }, current: { photo: () => null, album: () => null }, newId: () => "unused" });
+assert.equal(restore.ok, true);
+assert.equal(restore.report.membershipsRestored, 0);
 `);
     writeFileSync(path.join(consumer, "src/dialog-singleton.test.tsx"), `
 import { act } from "react";

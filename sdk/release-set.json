@@ -1,6 +1,6 @@
 {
-  "schemaVersion": 4,
-  "version": "0.1.11",
+  "schemaVersion": 5,
+  "version": "0.1.12",
   "repository": "niho-life/niho-photo",
   "packages": [
     {
@@ -86,6 +86,26 @@
       "exclude": []
     },
     {
+      "id": "hosted-library",
+      "name": "niho-photo-hosted-library",
+      "sourceRoot": "packages/photo-hosted-library",
+      "kind": "node-contract",
+      "entry": "src/index.ts",
+      "include": [
+        "src/index.ts",
+        "src/shared.ts",
+        "src/replica.ts",
+        "src/index-recovery.ts",
+        "src/portability.ts"
+      ],
+      "exclude": [],
+      "rewriteSpecifiers": {
+        "../../photo-library-sharing-contract/src/v1.ts": "niho-photo-library-sharing-contract",
+        "../../photo-library-sharing-contract/src/policy.ts": "niho-photo-library-sharing-contract/policy",
+        "../../photo-library-contract/src/v2.ts": "niho-photo-personal-cloud-contract"
+      }
+    },
+    {
       "id": "develop-engine-source",
       "name": "niho-photo-develop-engine-source",
       "sourceRoot": "packages/develop-engine",
@@ -139,7 +159,8 @@
     "THIRD_PARTY_NOTICES.md",
     "packages/photo-library-contract",
     "scripts/ci/photo-web-workflow-lib.mjs",
-    "packages/photo-library-sharing-contract"
+    "packages/photo-library-sharing-contract",
+    "packages/photo-hosted-library"
   ],
   "buildToolingPaths": [
     "package.json",

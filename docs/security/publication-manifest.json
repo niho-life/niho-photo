@@ -13462,13 +13462,13 @@
     },
     {
       "path": "scripts/ci/scopes.mjs",
-      "sha256": "6124a617e21f1c21481001ac702c1b7ac39cc3bacf63dbc81a4c6f21d200c836",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK所有source変更範囲を選択\n変更理由: Issue #113のMac candidate変更範囲selectorを追加。\n変更理由: Mac candidateが直接依存するrelease evidence helper変更でもproof CIを起動する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: 本人Photo契約v2の単独変更でも既存Photo editing型検査を必須にする\n変更理由: Photo sessionとPhoto Web変更で既存Ubuntu scopeから型検査・対象試験・lintを実行\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02とPhoto Webを同じ公開photo-editing検証scopeへ残し、双方のworkspace実行を維持。\n変更理由: 補正同期coreを公開scopeの必須三検証へ追加\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。\n変更理由: 共有契約package変更をPhoto editing CI scopeへ追加。\n変更理由: B01 #242 の常設Macライブラリcore packageをroot workspace・Photo editing CI scopeへ登録。\n変更理由: Photo #244 / B03 の常設Mac接続用ソフト core（photo-hosted-connector）を workspace・lock・Photo editing CI scope へ登録\n変更理由: Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加\n変更理由: Photo #244 / B03 へ B01（B00 の B12 の提案・photo-sdk の対象登録を含む）を取り込む"
+      "sha256": "3ba368d77c5175b7057545adfa959bba2e177a4c186ed5682d1177f59ac2ad7e",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK所有source変更範囲を選択\n変更理由: Issue #113のMac candidate変更範囲selectorを追加。\n変更理由: Mac candidateが直接依存するrelease evidence helper変更でもproof CIを起動する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: 本人Photo契約v2の単独変更でも既存Photo editing型検査を必須にする\n変更理由: Photo sessionとPhoto Web変更で既存Ubuntu scopeから型検査・対象試験・lintを実行\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02とPhoto Webを同じ公開photo-editing検証scopeへ残し、双方のworkspace実行を維持。\n変更理由: 補正同期coreを公開scopeの必須三検証へ追加\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。\n変更理由: 共有契約package変更をPhoto editing CI scopeへ追加。\n変更理由: B01 #242 の常設Macライブラリcore packageをroot workspace・Photo editing CI scopeへ登録。\n変更理由: Photo #244 / B03 の常設Mac接続用ソフト core（photo-hosted-connector）を workspace・lock・Photo editing CI scope へ登録\n変更理由: Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加\n変更理由: Photo #244 / B03 へ B01（B00 の B12 の提案・photo-sdk の対象登録を含む）を取り込む\n変更理由: 常設Macライブラリcore変更時のSDKとMac candidate proofを選択"
     },
     {
       "path": "scripts/ci/scopes.test.mjs",
-      "sha256": "1cb2fb91d65f87d7f7eb6325a0672767a73e1fc4ba39628de8b3bf44e0c50883",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: PR #81 のマスク描画を最新mainの変更と統合。\n変更理由: PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: Upright自動推定を作者更新後の遠近crate v0.23.0へ統合\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: Issue #112のSDK変更範囲とaggregateを回帰検証\n変更理由: Issue #113のcandidate selectorとrequired aggregate回帰を追加。\n変更理由: release evidence helper単独変更でもMac candidate proofが選択される回帰例を追加する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。\n変更理由: niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。\n変更理由: #148: threads feature と render_identity の公開CI選択を検証。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: 本人Photo契約v2のCI対象選択を回帰検査する\n変更理由: Photo sessionとPhoto Web単独変更をCI対象から漏らさない選択回帰を追加\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02・SDKのmain scope回帰とPhoto Webの実行到達回帰をどちらも保持して通常mergeを解消。\n変更理由: 同期source変更が実typecheck test lintへ届くことを検証\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。\n変更理由: native validatorのSDK ownership配下のpathをscope回帰で検証\n変更理由: 共有契約packageのCI scope選択を検査。\n変更理由: B01 #242 の常設Macライブラリcore packageをroot workspace・Photo editing CI scopeへ登録。\n変更理由: Photo #244 / B03 の常設Mac接続用ソフト core（photo-hosted-connector）を workspace・lock・Photo editing CI scope へ登録\n変更理由: Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加\n変更理由: Photo #244 / B03 へ B01（B00 の B12 の提案・photo-sdk の対象登録を含む）を取り込む"
+      "sha256": "6b5cd0d5a264973fb56dde79f5d61e58ee430c7dcb240e2e3475b3eb8c9da4e3",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: PR #81 のマスク描画を最新mainの変更と統合。\n変更理由: PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: Upright自動推定を作者更新後の遠近crate v0.23.0へ統合\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: Issue #112のSDK変更範囲とaggregateを回帰検証\n変更理由: Issue #113のcandidate selectorとrequired aggregate回帰を追加。\n変更理由: release evidence helper単独変更でもMac candidate proofが選択される回帰例を追加する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。\n変更理由: niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。\n変更理由: #148: threads feature と render_identity の公開CI選択を検証。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: 本人Photo契約v2のCI対象選択を回帰検査する\n変更理由: Photo sessionとPhoto Web単独変更をCI対象から漏らさない選択回帰を追加\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02・SDKのmain scope回帰とPhoto Webの実行到達回帰をどちらも保持して通常mergeを解消。\n変更理由: 同期source変更が実typecheck test lintへ届くことを検証\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。\n変更理由: native validatorのSDK ownership配下のpathをscope回帰で検証\n変更理由: 共有契約packageのCI scope選択を検査。\n変更理由: B01 #242 の常設Macライブラリcore packageをroot workspace・Photo editing CI scopeへ登録。\n変更理由: Photo #244 / B03 の常設Mac接続用ソフト core（photo-hosted-connector）を workspace・lock・Photo editing CI scope へ登録\n変更理由: Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加\n変更理由: Photo #244 / B03 へ B01（B00 の B12 の提案・photo-sdk の対象登録を含む）を取り込む\n変更理由: 常設Macライブラリcore変更時の公開CI選択を回帰検査"
     },
     {
       "path": "scripts/ci/seat.test.mjs",
@@ -13567,13 +13567,13 @@
     },
     {
       "path": "scripts/sdk/release-set-lib.mjs",
-      "sha256": "c1ee90e406bfc372cd6bfa1151f14d45e1db0cca7d9dcf3272f899093a20708e",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
+      "sha256": "32c72ca6225cd42814b793d288b6ce1d2afad9babbabbb931c138226d116b3cf",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set-lib.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: SDK tarballへTypeScript宣言を同梱\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: 常設Macライブラリcoreを最小閉包でビルドし共有契約importを公開packageへ変換\n変更理由: 常設Macライブラリcoreの公開sourceを宣言済み5ファイルへ限定"
     },
     {
       "path": "scripts/sdk/release-set.test.mjs",
-      "sha256": "1e2b66989814d06f4bb9dc6f5323ae85c399aa83a4e1ca73a80e5ed8d29be38b",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set.test.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: #141 空のモデルの runtime のファイル名と置き場の試験を足す\n変更理由: 型宣言exportとconsumer closureを検証\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
+      "sha256": "cd3174df50f6493ac89168cca6381187ae12be87751734b3078ddd2b1f58c07a",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/release-set.test.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: #141 空のモデルの runtime のファイル名と置き場の試験を足す\n変更理由: 型宣言exportとconsumer closureを検証\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: SDK schema 5の決定的packと常設Macライブラリartifact閉包を回帰検査\n変更理由: 常設Mac公開packageの依存importを含む生成物検査を補正\n変更理由: 常設Mac公開packageの依存importを含む生成物検査を補正\n変更理由: 常設Macライブラリartifactの全生成物にmonorepo相対importが無いことを検査"
     },
     {
       "path": "scripts/sdk/runtime-references.test.mjs",
@@ -13582,8 +13582,8 @@
     },
     {
       "path": "scripts/sdk/smoke-consumer.mjs",
-      "sha256": "4e74d5f6b53180e762aec67ea75283616af31a18d24507358fa4614839cd8f8b",
-      "origin": "公開SDKの外部consumer smoke。React 19 declarationsと型export境界の検証を追加。\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する"
+      "sha256": "4be1e0f5992655b584c41bbf0db7931124f29d63132668b069e96f342666ca45",
+      "origin": "公開SDKの外部consumer smoke。React 19 declarationsと型export境界の検証を追加。\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: repo外consumerが公開artifactのmanifest検査とrestore計画を実行"
     },
     {
       "path": "scripts/sdk/smoke-real-engine.mjs",
@@ -13597,8 +13597,8 @@
     },
     {
       "path": "scripts/sdk/verify-release-artifact.mjs",
-      "sha256": "77e64d2bee53d2d8a7aa69f179384d3599cff39e8fc9c4e86b910c196fd10336",
-      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/verify-release-artifact.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
+      "sha256": "a729436051570607c6c00ee747af74cf88a8d8c57534c78fc7240b5a39e0dde1",
+      "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/verify-release-artifact.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: 既存profileを保持してSDK schema 5の成果物集合と所有sourceを検証"
     },
     {
       "path": "scripts/seat.mjs",
@@ -13607,13 +13607,13 @@
     },
     {
       "path": "sdk/README.md",
-      "sha256": "711eb665dcbe18d9113ef92ea0978046dd7ee43a78fae569650a948d4e4b9c77",
-      "origin": "NIHO photo SDKの書込field/feature能力判定と合成回帰として新規作成（niho-photo#190）。既存readerと画素は変更しない。\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
+      "sha256": "91289fa09a9367a87c30d0b6d20fecd822be17a35a761754e127133b44e20fb5",
+      "origin": "NIHO photo SDKの書込field/feature能力判定と合成回帰として新規作成（niho-photo#190）。既存readerと画素は変更しない。\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: SDK 0.1.12の常設Macライブラリcore配布とNIHOapp責務境界を説明"
     },
     {
       "path": "sdk/release-set.json",
-      "sha256": "012d9319fb1d8246ccdfea927d89b5a037960ff3453c7fba65f8436ad0fe7ffe",
-      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: 最新の共有マスク・初期proof・readonly presetを不変な新しい正式SDK 0.1.10として発行する。\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録"
+      "sha256": "ab66e8cc62aff5bc7b8e96a1a4143c5eb114cde01f3980013c030347f72519db",
+      "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: 最新の共有マスク・初期proof・readonly presetを不変な新しい正式SDK 0.1.10として発行する。\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: SDK 0.1.12 schema 5へ常設Macライブラリcoreの公開packageを追加"
     },
     {
       "path": "packages/photo-hosted-library/README.md",
