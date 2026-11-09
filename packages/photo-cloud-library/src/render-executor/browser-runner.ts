@@ -13,17 +13,30 @@
  */
 import type { DevelopEngine } from "niho-photo-editing/develop-engine/develop-engine-client";
 
-import type { PersonalPhotoCloudIdentity, PersonalPhotoCloudLibraryHandle } from "../types";
+import type {
+  PersonalPhotoCloudIdentity,
+  PersonalPhotoCloudLibraryHandle,
+} from "../types";
 
 import type { RenderCapability } from "./contract";
 import { createDevelopEngineDeviceRenderer } from "./engine-renderer";
 import { createPersonalCloudRenderSource } from "./personal-cloud-source";
 import { createBrowserRenderJobClient } from "./render-client";
-import { createSourceDeviceRenderExecutor, type SourceDeviceRenderExecutor } from "./render-executor";
+import {
+  createSourceDeviceRenderExecutor,
+  type SourceDeviceRenderExecutor,
+} from "./render-executor";
 import { SourceDeviceRenderFailure } from "./render-output";
 import { createTicketUploader } from "./ticket-upload";
 
-type RunnerEngine = Pick<DevelopEngine, "ready" | "exportJpeg" | "exportWorkingCopyJpeg" | "withCaptureExif" | "dispose">;
+type RunnerEngine = Pick<
+  DevelopEngine,
+  | "ready"
+  | "exportJpeg"
+  | "exportWorkingCopyJpeg"
+  | "withCaptureExif"
+  | "dispose"
+>;
 
 export interface CreateBrowserRenderJobRunnerOptions {
   /** The verified session; render jobs are this user's own device's only. */
@@ -35,8 +48,14 @@ export interface CreateBrowserRenderJobRunnerOptions {
   readonly providerFetch?: typeof fetch;
   /** The user's NIHO cloud library the originals are read from. */
   readonly libraryId: string;
-  readonly handle: Pick<PersonalPhotoCloudLibraryHandle, "rawPhoto" | "readAsset">;
-  readonly loadMaskSurface?: (photoId: string, surfaceId: string) => Promise<Uint8Array | null>;
+  readonly handle: Pick<
+    PersonalPhotoCloudLibraryHandle,
+    "rawPhoto" | "readAsset"
+  >;
+  readonly loadMaskSurface?: (
+    photoId: string,
+    surfaceId: string,
+  ) => Promise<Uint8Array | null>;
   /** The probed renderer this bundle pins (jobs bound to another manifest are reported, never rendered). */
   readonly capability: RenderCapability;
   /** Creates the pinned engine when there is work. */
@@ -52,13 +71,17 @@ export interface BrowserRenderJobRunner {
   /** New jobs may be waiting for this device. */
   wake(): void;
   /** This device's own photos on screen: claimed and started first. */
-  prioritize(photos: readonly { readonly libraryId: string; readonly photoId: string }[]): void;
+  prioritize(
+    photos: readonly { readonly libraryId: string; readonly photoId: string }[],
+  ): void;
   /** Resolves when no drain is running (tests and orderly shutdown). */
   idle(): Promise<void>;
   dispose(): void;
 }
 
-export function createBrowserRenderJobRunner(options: CreateBrowserRenderJobRunnerOptions): BrowserRenderJobRunner {
+export function createBrowserRenderJobRunner(
+  options: CreateBrowserRenderJobRunnerOptions,
+): BrowserRenderJobRunner {
   const lifetime = new AbortController();
   const stop = (): void => lifetime.abort(options.scopeSignal.reason);
   if (options.scopeSignal.aborted) stop();
@@ -88,10 +111,16 @@ export function createBrowserRenderJobRunner(options: CreateBrowserRenderJobRunn
     }
   };
   // The renderer asks for the engine only when a job is actually rendered.
-  const lazyEngine: Pick<DevelopEngine, "exportJpeg" | "exportWorkingCopyJpeg" | "withCaptureExif"> = {
-    exportJpeg: async (...parameters) => await (await openEngine()).exportJpeg(...parameters),
-    exportWorkingCopyJpeg: async (...parameters) => await (await openEngine()).exportWorkingCopyJpeg(...parameters),
-    withCaptureExif: async (...parameters) => await (await openEngine()).withCaptureExif(...parameters),
+  const lazyEngine: Pick<
+    DevelopEngine,
+    "exportJpeg" | "exportWorkingCopyJpeg" | "withCaptureExif"
+  > = {
+    exportJpeg: async (...parameters) =>
+      await (await openEngine()).exportJpeg(...parameters),
+    exportWorkingCopyJpeg: async (...parameters) =>
+      await (await openEngine()).exportWorkingCopyJpeg(...parameters),
+    withCaptureExif: async (...parameters) =>
+      await (await openEngine()).withCaptureExif(...parameters),
   };
 
   const client = createBrowserRenderJobClient({
@@ -99,16 +128,26 @@ export function createBrowserRenderJobRunner(options: CreateBrowserRenderJobRunn
     ...(options.fetch ? { fetch: options.fetch } : {}),
     ...(options.now ? { now: options.now } : {}),
   });
-  const executor: SourceDeviceRenderExecutor = (options.createExecutor ?? createSourceDeviceRenderExecutor)({
+  const executor: SourceDeviceRenderExecutor = (
+    options.createExecutor ?? createSourceDeviceRenderExecutor
+  )({
     transport: client,
     executor: { kind: "userDevice", userId: options.userId },
-    renderer: createDevelopEngineDeviceRenderer({ engine: lazyEngine, capability: options.capability }),
+    renderer: createDevelopEngineDeviceRenderer({
+      engine: lazyEngine,
+      capability: options.capability,
+    }),
     sources: createPersonalCloudRenderSource({
       libraryId: options.libraryId,
       handle: options.handle,
-      ...(options.loadMaskSurface ? { loadMaskSurface: options.loadMaskSurface } : {}),
+      ...(options.loadMaskSurface
+        ? { loadMaskSurface: options.loadMaskSurface }
+        : {}),
     }),
-    uploader: createTicketUploader(options.providerFetch ? { fetch: options.providerFetch } : {}),
+    uploader: createTicketUploader({
+      ...(options.providerFetch ? { fetch: options.providerFetch } : {}),
+      ...(options.now ? { now: options.now } : {}),
+    }),
     ...(options.now ? { now: options.now } : {}),
   });
 
@@ -141,7 +180,9 @@ export function createBrowserRenderJobRunner(options: CreateBrowserRenderJobRunn
     },
     prioritize(photos) {
       if (disposed) return;
-      executor.prioritize(photos.filter((photo) => photo.libraryId === options.libraryId));
+      executor.prioritize(
+        photos.filter((photo) => photo.libraryId === options.libraryId),
+      );
     },
     async idle() {
       while (draining !== null) await draining;

@@ -12070,8 +12070,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/render-executor/browser-runner.ts",
-      "sha256": "b451526eb8230b3d3918f1e7b1c41e3fd2fc0d4a294c5ea887c174b425aa75e8",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B07 #248・B08 #249 の、本人の端末（Web）で共有アルバムの写真を描く描画 job の通信（契約の USER_RENDER_ROUTES の client と応答の検査）、BFF の中継、Web の実行部と回帰試験。合成の ID・画像・recipe・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "7b8f0943a5af53d97e15cb8dc21ea4146231f2a3ee80cdb9d02cb70ecdd05d28",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B07 #248・B08 #249 の、本人の端末（Web）で共有アルバムの写真を描く描画 job の通信（契約の USER_RENDER_ROUTES の client と応答の検査）、BFF の中継、Web の実行部と回帰試験。合成の ID・画像・recipe・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: render runnerのticket uploaderにrunnerのnowを渡し、テスト時の固定時計でticket期限切れを防ぐ"
     },
     {
       "path": "packages/photo-cloud-library/src/render-executor/contract.ts",
@@ -12265,8 +12265,8 @@
     },
     {
       "path": "packages/photo-cloud-library/test/render-browser-runner.test.ts",
-      "sha256": "a70a86e5423cbf47e9084d6374ce2074e04fe42c9abe2775c31a8bfad0de32eb",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B07 #248・B08 #249 の、本人の端末（Web）で共有アルバムの写真を描く描画 job の通信（契約の USER_RENDER_ROUTES の client と応答の検査）、BFF の中継、Web の実行部と回帰試験。合成の ID・画像・recipe・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "f5cdab7c25dad0637db21bb3eaf8a4c74871d1ce3ed2d2996275b4dc80d97f21",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B07 #248・B08 #249 の、本人の端末（Web）で共有アルバムの写真を描く描画 job の通信（契約の USER_RENDER_ROUTES の client と応答の検査）、BFF の中継、Web の実行部と回帰試験。合成の ID・画像・recipe・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: render runnerのテストをフォーマット\n変更理由: render runnerのテストをフォーマット"
     },
     {
       "path": "packages/photo-cloud-library/test/render-executor.test.ts",
@@ -15755,12 +15755,7 @@
     }
   ],
   "deferredScopes": [],
-  "issues": [
-    5,
-    7,
-    9,
-    11
-  ],
+  "issues": [5, 7, 9, 11],
   "independentProfiles": [
     {
       "path": "packages/develop-engine/crates/niho-base-raw/profiles/panasonic-dc-s5/niho-dc-s5-independent-v1.dcp",
