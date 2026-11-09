@@ -1,0 +1,18 @@
+{
+  "name": "@niho/photo-hosted-library",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "常設Macライブラリの控え同期・索引復旧・export/restoreの共通core。登録・常駐・走査・本番接続を含まない",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "test": "node --test test/*.test.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "lint": "eslint ."
+  },
+  "engines": {
+    "node": "24.x"
+  }
+}

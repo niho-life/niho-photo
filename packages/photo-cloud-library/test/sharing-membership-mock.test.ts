@@ -319,7 +319,6 @@ describe("shared album membership mock (B05)", () => {
     await t.owner.request("members.changeRole", { albumId: album.id, membershipId: promoted.id, expectedRevision: promoted.revision, role: "viewer" }, t.key());
 
     expect(await rejection(t.staff1.request("albumItems.commitUpload", { albumId: album.id, uploadId: removedAdd.upload?.upload.id as string }, t.key()))).toBe("not_found");
-    // Demotion ends the member's unpublished adds on the server, so the commit finds the add removed.
     expect(await rejection(t.staff2.request("albumItems.commitUpload", { albumId: album.id, uploadId: demotedAdd.upload?.upload.id as string }, t.key()))).toBe("item_removed");
     const ownerView = await t.owner.request("albumItems.list", { albumId: album.id }, t.read);
     expect(ownerView.items).toEqual([]);

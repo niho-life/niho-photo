@@ -34,6 +34,27 @@ cargo test --locked --manifest-path packages/desktop-photo/Cargo.toml
 
 アプリ名と既存 `camera` パス・端末内データの互換方針は [移植計画](../../docs/migration/mac-client.md) を参照してください。
 
+## 常設 Mac の接続用ソフト（Epic #240 / B03 #244）
+
+所有者の常設 Mac にある既存の写真フォルダを、その場で NIHO のライブラリにする接続用ソフトの Mac の部分です。core（登録・端末資格・索引・hash・控え・描画 job）は OS に依存しない [`@niho/photo-hosted-connector`](../../packages/photo-hosted-connector/) で、ここはその OS の口と常駐を持ちます。
+
+- **常駐（launchd）**: 最初のフォルダを登録すると、.app に同梱した LaunchAgent（`src-tauri/launchd/life.niho.camera.hosted-connector.plist`、`Contents/Library/LaunchAgents/`）を `SMAppService` で登録します。初回は「ログイン項目」で許可が要り、許可待ちならその画面を開きます。launchd はログイン時に `--hosted-connector` 付きで起動し、落ちたら起動し直します（正常に終了したら次のログインまで起動しません）。その起動では main 窓を作らず Dock にも出しません。アプリを開き直すと main 窓を出し、main 窓を閉じると Dock から消えて裏で続けます。最後のフォルダを外すと登録を外します。
+- **接続用ソフトの窓**: 表示しない窓（`hosted-connector.html`）で core を動かします。隠れていても止まらないよう WebKit の throttling を外します。この窓のコマンド（`camera_hosted_connector_*`）は `capabilities/hosted-connector.json` でこの窓だけに許し、main 窓には許しません（`command_acl_tests.rs`）。動かす process は 1 つだけで（Application Support の `hosted-connector/connector.lock` の advisory lock）、launchd の常駐と開いた画面の process が重なったら、lock を取れなかった方は取った方が終わるまで待って引き継ぎます。登録したフォルダが変わったら窓を読み直して組み立て直し、窓を閉じた・読み直したときは、その窓の休止の抑止と開いたファイルを native が全部外します。
+- **ファイルの読み出し**: 登録したフォルダは real path と device・inode に固定し、差し替え・symlink への置き換え・未 mount を「届かない」として扱います。その下は directory の descriptor から 1 要素ずつ `openat(O_NOFOLLOW)` で辿り、`..`・symlink・通常ファイル以外を拒みます。書き込み・command の実行はしません。索引の SHA-256 は native で読み、開いた時と読み終えた時の大きさ・device と inode・ns 精度の mtime と ctime が違えば捨てます（原本の bytes は画面へ渡しません。描画 job の executor だけが読みます）。path は native の外へ出しません。
+- **端末資格**: core の vault（端末資格・登録中と回転中の秘密・`localKey` の salt）を Keychain の 1 項目に置きます。
+- **休止**: job・同期・走査の間だけ `PreventUserIdleSystemSleep` の assertion を持ちます。休止の前は接続用ソフトへ ticket 付きで知らせ、同じ ticket の答え（NIHO へ `sleeping` を送り終えた）を最長 8 秒待ってから休止を許し、復帰したら続きから（控えは差分だけ）進めます。
+- **フォルダの登録**: main 窓の header の入口から、既存の copy 定数だけで一覧・追加（ネイティブの選択ダイアログ）・外すを行います。接続先を持つ trusted host が `hostedFolders` を渡したときだけ出します。
+
+| コマンド | 窓 | 用途 |
+| --- | --- | --- |
+| `camera_hosted_folders_list` / `_add` / `_remove` | main | 登録したフォルダの ID・名前・今読めるか、追加、外す |
+| `camera_hosted_agent_status` | main | LaunchAgent の登録の状態 |
+| `camera_hosted_connector_roots` / `_root_status` / `_list` / `_stat` / `_open` / `_read` / `_close` / `_hash` | 接続用ソフト | 登録したフォルダの下を read-only で読む |
+| `camera_hosted_connector_vault_read` / `_vault_write` | 接続用ソフト | Keychain の vault |
+| `camera_hosted_connector_power_hold` / `_power_release` / `_sleep_ready` | 接続用ソフト | 休止の抑止と、休止の知らせへの答え |
+
+公開の build は接続先（正本 API の transport）と保存先（索引・控え）を持たないので、接続用ソフトは動かず、登録の入口も出しません。これらと描画の executor（B07 #248）は、それぞれが揃った後に `startMacHostedConnector` へ渡します。
+
 ## 現像の native の口（#152）
 
 Mac アプリの WKWebView は独自の scheme（`tauri://localhost`）の画面で `SharedArrayBuffer` を出さず、共有メモリを Worker へ渡せないので、wasm のスレッドを使えません（#148・#173）。COOP / COEP を付けても、WebKit が共有メモリを許す process へ切り替えるのは NetworkProcess を通る http(s) の読み込みだけで、`WKURLSchemeHandler` の読み込みは通りません。macOS 27 では画面と URL の Worker の `crossOriginIsolated` が true になっても共有メモリは渡せません。確かめる道具は [webview-isolation-probe](tools/webview-isolation-probe/README.md) です。代わりに、現像の Worker が読む glue（wasm-bindgen の口と同じ形）を native に差し替え、同梱の `niho-develop-render serve` で描きます。

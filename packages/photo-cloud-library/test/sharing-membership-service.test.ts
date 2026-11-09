@@ -209,4 +209,45 @@ describe("shared album membership actions (B05)", () => {
     await expect(service.leave("a", t.signal)).rejects.toMatchObject({ error: { code: "temporarily_unavailable" } });
     expect(keys).toEqual(["key-2", "key-2", "key-2"]);
   });
+
+  it("resumes an invite creation with its original key after every automatic response is lost", async () => {
+    const oldLink = {
+      id: "lost-link", albumId: "a", role: "contributor", createdAt: "2026-11-07T00:00:00.000Z",
+      expiresAt: "2026-11-08T00:00:00.000Z", revokedAt: null,
+    };
+    const newLink = { ...oldLink, id: "usable-link" };
+    const keys: string[] = [];
+    let createAttempts = 0;
+    const client: SharedAlbumMembershipTransport = {
+      async request(operation, _request, requestOptions) {
+        const key = "idempotencyKey" in requestOptions ? (requestOptions.idempotencyKey ?? "") : "";
+        keys.push(`${operation}:${key}`);
+        if (operation === "invites.create") {
+          createAttempts += 1;
+          if (createAttempts <= 3) throw new TypeError("synthetic response loss");
+          return (key === "key-1"
+            ? { value: { link: oldLink, secret: null }, replayed: true }
+            : { value: { link: newLink, secret: "synthetic-secret" }, replayed: false }) as never;
+        }
+        if (operation === "invites.revoke") return { value: { ...oldLink, revokedAt: "2026-11-07T00:01:00.000Z" }, replayed: false } as never;
+        throw new Error(`unexpected operation: ${operation}`);
+      },
+      joinPending: async () => await Promise.reject(new Error("unused")),
+    };
+    let generated = 0;
+    const service = createSharedAlbumMembership({
+      client,
+      newIdempotencyKey: () => `key-${++generated}`,
+      sleep: async () => undefined,
+    });
+
+    await expect(service.createInvite("a", "contributor", new AbortController().signal)).rejects.toBeInstanceOf(TypeError);
+    const resumed = await service.createInvite("a", "contributor", new AbortController().signal);
+
+    expect(resumed).toEqual({ link: newLink, secret: "synthetic-secret" });
+    expect(keys).toEqual([
+      "invites.create:key-1", "invites.create:key-1", "invites.create:key-1",
+      "invites.create:key-1", "invites.revoke:key-2", "invites.create:key-3",
+    ]);
+  });
 });

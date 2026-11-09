@@ -73,7 +73,7 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 - 追加は 3 種類。自分のライブラリの写真（`addLibraryPhotos`。元データを持つ端末が B07 で描く）、端末で描いた写真（`addDevicePhoto`。`renderFinishedOutput` の結果を `deviceRenderFile` で渡す）、完成済みの JPEG（`addFile`。`prepareAlbumFile` が端末で撮影日時以外の metadata を落とす。向きの tag に頼る JPEG は受け取らない）。
 - 呼び出しごとに冪等 key を持ち、応答が失われたら同じ key で再送する。ticket のない再送の応答を受けたら、その upload を取り消して同じ項目へ同じ内容を出し直し、項目を二重に作らない。始めた upload は確定か解放で終わる（中断・確定の拒否・取消で予約を返し、公開されなかった追加は消す）。
 - 差し替え（`replaceFile`・`replaceDeviceRender`）、複数選択の削除（`removeItems`）と保存（`saveItems`。原寸を hash と照合して渡す）。
-- 合成 server は項目の状態、追加者の端末の描画 job、確定時の作り直し（許可した metadata だけ）、オーナーへの容量の算入と解放、補正の保存による自動差し替え、端末の休止、メンバーの解除・降格で公開前の追加を落とすことを持つ。画面への組み込みは B00・B08 の merge 後。
+- 合成 server は項目の状態、追加者の端末の描画 job、確定時の作り直し（許可した metadata だけ）、オーナーへの容量の算入と解放、補正の保存による自動差し替え、端末の休止、メンバーの解除・退会・降格後に未公開の追加を破棄することを持つ。画面への組み込みは B00・B08 の merge 後。
 
 ## 完全補正の同期core
 

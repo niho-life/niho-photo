@@ -54,12 +54,14 @@ for (const [name, mutate] of [
   ["aggregate bypass", (w) => { w.jobs.aggregate.needs = ["plan"]; }],
   ["concurrency disabled", (w) => { w.concurrency["cancel-in-progress"] = false; }],
   ["unreviewed advisory exception", (w) => { w.jobs.dependencies.steps[1].with["allow-ghsas"] += ",GHSA-0000-0000-0000"; }],
+  ["Photo updater release tests omitted", (w) => { w.jobs.publication.steps.find((step) => step.run?.startsWith("node --test scripts/ci/" )).run = "node --test scripts/ci/*.test.mjs"; }],
   ["weaker vulnerability threshold", (w) => { w.jobs.dependencies.steps[1].with["fail-on-severity"] = "high"; }],
   ["SDK consumer smoke omitted", (w) => { w.jobs["photo-editing"].steps = w.jobs["photo-editing"].steps.filter((step) => step.run !== "npm run sdk:test"); }],
   ["SDK rust-src omitted", (w) => { const step = w.jobs["photo-sdk"].steps.find((item) => item.name === "固定Rust/WASM toolchainを準備"); step.run = step.run.replace(" --component rust-src", ""); }],
   ["SDK real engine smoke omitted", (w) => { w.jobs["photo-sdk"].steps.find((step) => step.name === "実WASM・pack・repo外consumerを検証").run = "npm run sdk:smoke"; }],
   ["candidate proof skipped", (w) => { w.jobs["photo-candidate"].if = "false"; }],
   ["candidate fixture omitted", (w) => { w.jobs["photo-candidate"].steps = w.jobs["photo-candidate"].steps.filter((step) => step.name !== "candidate data fixtureを検証"); }],
+  ["updater signature verifier omitted", (w) => { w.jobs["photo-candidate"].steps = w.jobs["photo-candidate"].steps.filter((step) => step.name !== "pinned updater signature verifierを検証"); }],
   ["candidate local SDK pin omitted", (w) => { w.jobs["photo-candidate"].steps.find((step) => step.name === "current SHAから完全Mac candidateを実build").run = "npm run candidate:build"; }],
 ]) test(`workflowの危険な変更を拒否: ${name}`, () => {
   const changed = structuredClone(workflow);

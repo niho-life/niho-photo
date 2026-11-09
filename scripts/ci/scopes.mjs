@@ -4,8 +4,9 @@ import { fileURLToPath } from "node:url";
 import path from "node:path";
 
 export const scopes = {
-  "photo-editing": { paths: ["packages/photo-editing/", "packages/photo-library-contract/", "packages/photo-library-sharing-contract/", "packages/photo-cloud-session/", "packages/photo-cloud-library/", "packages/photo-cloud-sync/", "packages/photo-cloud-media/", "apps/photo-web/", "packages/niho-cloud-contract/", "packages/ui/"], root: "packages/photo-editing", runner: "ubuntu-24.04", kind: "npm", workspaces: ["packages/ui", "packages/photo-editing", "packages/photo-cloud-session", "packages/photo-library-contract", "packages/photo-library-sharing-contract", "packages/photo-cloud-library", "packages/photo-cloud-sync", "packages/photo-cloud-media", "apps/photo-web"] },
-  camera: { paths: ["apps/camera/", "packages/desktop-account/", "packages/desktop-photo/", "packages/photo-editing/", "packages/ui/", "packages/develop-engine/"], root: "apps/camera", runner: "macos-26", kind: "npm", workspaces: ["apps/camera"], native: true },
+  "photo-editing": { paths: ["packages/photo-editing/", "packages/photo-library-contract/", "packages/photo-library-sharing-contract/", "packages/photo-hosted-library/", "packages/photo-hosted-connector/", "packages/photo-cloud-session/", "packages/photo-cloud-library/", "packages/photo-cloud-sync/", "packages/photo-cloud-media/", "apps/photo-web/", "packages/niho-cloud-contract/", "packages/ui/"], root: "packages/photo-editing", runner: "ubuntu-24.04", kind: "npm", workspaces: ["packages/ui", "packages/photo-editing", "packages/photo-cloud-session", "packages/photo-library-contract", "packages/photo-library-sharing-contract", "packages/photo-hosted-library", "packages/photo-hosted-connector", "packages/photo-cloud-library", "packages/photo-cloud-sync", "packages/photo-cloud-media", "apps/photo-web"] },
+  // camera は常設Mac connector と共有描画executorを画面の型検査・bundleに含める
+  camera: { paths: ["apps/camera/", "packages/desktop-account/", "packages/desktop-photo/", "packages/photo-editing/", "packages/ui/", "packages/develop-engine/", "packages/photo-cloud-library/", "packages/photo-hosted-connector/", "packages/photo-hosted-library/", "packages/photo-library-sharing-contract/"], root: "apps/camera", runner: "macos-26", kind: "npm", workspaces: ["apps/camera"], native: true },
   "desktop-photo": { paths: ["packages/desktop-photo/", "packages/desktop-account/", "packages/photo-editing/", "packages/ui/", "packages/develop-engine/"], root: "packages/desktop-photo", runner: "macos-26", kind: "native" },
   "desktop-account": { paths: ["packages/desktop-account/", "packages/ui/"], root: "packages/desktop-account", runner: "macos-26", kind: "hybrid", workspaces: ["packages/desktop-account/ts"] },
   // cutout-brush-parity.json は niho-camera-cutout の Swift 試験も読む（TS の筆との照合）
@@ -13,9 +14,9 @@ export const scopes = {
 };
 
 // 本人クラウド v2（photo-library-contract）と共有の契約 v1（photo-library-sharing-contract）も SDK の node contract に入る
-const photoSdkPrefixes = ["packages/photo-editing/", "packages/ui/", "packages/niho-cloud-contract/", "packages/photo-library-contract/", "packages/photo-library-sharing-contract/", "packages/develop-engine/", "packages/desktop-photo/", "sdk/", "scripts/sdk/"];
+const photoSdkPrefixes = ["packages/photo-editing/", "packages/ui/", "packages/niho-cloud-contract/", "packages/photo-library-contract/", "packages/photo-library-sharing-contract/", "packages/photo-hosted-library/", "packages/develop-engine/", "packages/desktop-photo/", "sdk/", "scripts/sdk/"];
 const photoSdkFiles = new Set(["package.json", "package-lock.json", "LICENSE.md", "ASSET_LICENSE.md", "TRADEMARKS.md", "THIRD_PARTY_NOTICES.md"]);
-const photoCandidatePrefixes = ["apps/camera/", "packages/photo-editing/", "packages/ui/", "packages/niho-cloud-contract/", "packages/develop-engine/", "packages/desktop-photo/", "packages/desktop-account/", "sdk/", "scripts/sdk/", "scripts/candidate/"];
+const photoCandidatePrefixes = ["apps/camera/", "packages/photo-editing/", "packages/ui/", "packages/niho-cloud-contract/", "packages/photo-hosted-library/", "packages/develop-engine/", "packages/desktop-photo/", "packages/desktop-account/", "sdk/", "scripts/sdk/", "scripts/candidate/"];
 const photoCandidateFiles = new Set(["package.json", "package-lock.json", "LICENSE.md", "ASSET_LICENSE.md", "TRADEMARKS.md", "THIRD_PARTY_NOTICES.md"]);
 
 export function selectPhotoSdk(changed) {

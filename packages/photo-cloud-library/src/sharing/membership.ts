@@ -3,6 +3,7 @@
  *
  * - One idempotency key per user action. A lost response (network, header timeout, 503, short rate limit) is replayed
  *   with the same key and payload, so a join or an invite is never applied twice and the owner is notified once.
+ *   If all automatic attempts are exhausted, calling the same operation again with the same payload resumes that key.
  * - Invite secrets are returned once by the server. They stay in this object's memory only (never storage, logs or
  *   URLs it builds) so "copy link" can reuse a usable link. A replayed create has no secret; that link is revoked and a
  *   new one created, as the contract prescribes.
@@ -91,6 +92,8 @@ export function createSharedAlbumMembership(options: CreateSharedAlbumMembership
   const sleep = options.sleep ?? abortableSleep;
   const now = options.now ?? Date.now;
   const secrets = new Map<InviteLinkId, { readonly albumId: AlbumId; readonly secret: InviteSecret; readonly expiresAtMs: number }>();
+  /** Ambiguous mutations survive a failed call so the same action can resume with its original key. */
+  const pendingMutationKeys = new Map<string, string>();
   /** A held secret, dropped as soon as its link has expired (revocations elsewhere are dropped on the next listing). */
   const held = (linkId: InviteLinkId): { readonly albumId: AlbumId; readonly secret: InviteSecret } | null => {
     const entry = secrets.get(linkId);
@@ -109,12 +112,19 @@ export function createSharedAlbumMembership(options: CreateSharedAlbumMembership
     signal: AbortSignal,
     mutation: boolean,
   ): Promise<SharingOperationMap[K]["response"]> {
-    const key = mutation ? newKey() : null;
+    const identity = mutation ? JSON.stringify([operation, request]) : null;
+    const key = identity === null ? null : (pendingMutationKeys.get(identity) ?? newKey());
     for (let attempt = 1; ; attempt += 1) {
       const requestOptions = (key === null ? { signal } : { signal, idempotencyKey: key }) as unknown as SharingRequestOptions<K>;
       try {
-        return await options.client.request(operation, request, requestOptions);
+        const response = await options.client.request(operation, request, requestOptions);
+        if (identity !== null) pendingMutationKeys.delete(identity);
+        return response;
       } catch (error) {
+        if (identity !== null && key !== null) {
+          if (signal.aborted || isAmbiguousMutationFailure(error)) pendingMutationKeys.set(identity, key);
+          else pendingMutationKeys.delete(identity);
+        }
         if (signal.aborted || attempt >= maxAttempts) throw error;
         const wait = replayDelay(error, attempt, maxRetryAfter);
         if (wait === null) throw error;
@@ -187,7 +197,10 @@ export function createSharedAlbumMembership(options: CreateSharedAlbumMembership
       for (const [linkId, held] of secrets) if (held.albumId === albumId) secrets.delete(linkId);
       return membership;
     },
-    forgetSecrets: () => secrets.clear(),
+    forgetSecrets: () => {
+      secrets.clear();
+      pendingMutationKeys.clear();
+    },
   };
 }
 
@@ -217,6 +230,15 @@ export function replayDelay(error: unknown, attempt: number, maxRetryAfterSecond
   if (error instanceof PersonalPhotoCloudError) return error.code === "unavailable" ? RETRY_BASE_MS * attempt : null;
   if (error instanceof TypeError) return RETRY_BASE_MS * attempt;
   return null;
+}
+
+/** Whether a mutation may have committed even though this caller did not receive its receipt. */
+function isAmbiguousMutationFailure(error: unknown): boolean {
+  if (isSharingErrorEnvelope(error)) {
+    return error.error.retryable && SHARING_ERROR_RECOVERY[error.error.code] === "retrySameKey";
+  }
+  if (error instanceof PersonalPhotoCloudError) return error.code === "unavailable";
+  return error instanceof TypeError;
 }
 
 export async function abortableSleep(milliseconds: number, signal: AbortSignal): Promise<void> {

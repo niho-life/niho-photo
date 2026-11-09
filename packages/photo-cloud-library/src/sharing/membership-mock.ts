@@ -415,9 +415,8 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
     return removed;
   }
   /**
-   * The adder can no longer add (removed, left, or made a viewer): adds that never published can never commit, so
-   * they are dropped with their jobs and reservations; published items stay (Epic §3) and keep their last rendition,
-   * pending updates included.
+   * The adder left, was removed, or lost add/replace permission: unpublished additions are dropped with their jobs
+   * and reservations; published items stay (Epic §3) and keep their last rendition, pending updates included.
    */
   function endUnpublishedAdds(albumId: string, userId: UserId): void {
     for (const item of items.values()) {

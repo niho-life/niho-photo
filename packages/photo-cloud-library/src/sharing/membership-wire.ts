@@ -32,8 +32,8 @@ import {
   type PersonLabel,
   type SharingErrorCode,
   type SharingErrorEnvelope,
-  type SharingOperation,
   type SharingOperationMap,
+  type SharingOperation,
   type SharingRouteMethod,
 } from "./contract";
 
@@ -76,7 +76,7 @@ export function isSharedAlbumMembershipMutation(operation: SharedAlbumMembership
   return MUTATIONS.has(operation);
 }
 
-export interface EncodedSharingRequest<Op extends string = SharedAlbumMembershipOperation> {
+export interface EncodedSharingRequest<Op extends string = SharedAlbumMembershipOperation | "invites.joinPending"> {
   readonly operation: Op;
   readonly method: SharingRouteMethod;
   /** Full same-origin path, with the encoded query when the route has one. */
@@ -86,17 +86,7 @@ export interface EncodedSharingRequest<Op extends string = SharedAlbumMembership
   readonly idempotencyKey: string | null;
 }
 
-/**
- * Validates and encodes one request. A malformed request is never sent; like the personal v2 wire it fails locally
- * with `PersonalPhotoCloudError("invalid_response")`. Operations outside B05 fail with `unsupported`.
- */
-export function encodeMembershipRequest(operation: string, request: unknown, idempotencyKey: string | undefined): EncodedSharingRequest {
-  if (!isSharedAlbumMembershipOperation(operation)) throw new PersonalPhotoCloudError("unsupported");
-  validateMembershipRequest(operation, request);
-  return encodeRoutedRequest(operation, request, MUTATIONS.has(operation), idempotencyKey);
-}
-
-/** A validated request placed by the contract's route table; mutations carry their key, reads none. */
+/** Encode one operation from the shared route table; album item wire reuses the same closed route encoder. */
 export function encodeRoutedRequest<Op extends SharingOperation>(
   operation: Op,
   request: unknown,
@@ -107,6 +97,32 @@ export function encodeRoutedRequest<Op extends SharingOperation>(
   let route: ReturnType<typeof encodeSharingRequest>;
   try {
     route = encodeSharingRequest(operation, request as SharingOperationMap[Op]["request"]);
+  } catch (error) {
+    if (error instanceof SharingRouteError) invalidRequest();
+    throw error;
+  }
+  if (route.idempotencyKey !== mutation) invalidRequest();
+  return {
+    operation,
+    method: route.method,
+    path: route.query === "" ? route.path : `${route.path}?${route.query}`,
+    body: route.body === null ? null : textEncoder.encode(JSON.stringify(route.body)),
+    idempotencyKey: mutation ? (idempotencyKey as string) : null,
+  };
+}
+
+/**
+ * Validates and encodes one request. A malformed request is never sent; like the personal v2 wire it fails locally
+ * with `PersonalPhotoCloudError("invalid_response")`. Operations outside B05 fail with `unsupported`.
+ */
+export function encodeMembershipRequest(operation: string, request: unknown, idempotencyKey: string | undefined): EncodedSharingRequest {
+  if (!isSharedAlbumMembershipOperation(operation)) throw new PersonalPhotoCloudError("unsupported");
+  const mutation = MUTATIONS.has(operation);
+  if (mutation ? !isValidIdempotencyKey(idempotencyKey) : idempotencyKey !== undefined) invalidRequest();
+  validateMembershipRequest(operation, request);
+  let route: ReturnType<typeof encodeSharingRequest>;
+  try {
+    route = encodeSharingRequest(operation, request as SharingOperationMap[typeof operation]["request"]);
   } catch (error) {
     if (error instanceof SharingRouteError) invalidRequest();
     throw error;
@@ -126,7 +142,7 @@ export function encodeRoutedRequest<Op extends SharingOperation>(
  * `invites.joinPending` (B00 `PENDING_INVITE_ROUTES`): the BFF opens its pending-invite cookie and joins with it. The
  * body is `{}`; the secret never passes through the page again. Not keyed: the cookie is gone after one attempt.
  */
-export function encodePendingInviteJoin(): EncodedSharingRequest<"invites.joinPending"> {
+export function encodePendingInviteJoin(): EncodedSharingRequest {
   const route = encodePendingInviteRequest("invites.joinPending", {});
   if (route.idempotencyKey || route.query !== "" || route.method !== "POST") invalidRequest();
   return {
@@ -358,7 +374,6 @@ export function validateReceipt(value: unknown): { readonly value: unknown; read
 }
 
 // ---------------------------------------------------------------------------------------------------------
-// Shared checks (also used by the album and item wire)
 
 export function exactRecord(value: unknown, allowed: readonly string[], required: readonly string[]): Record<string, unknown> {
   if (!isRecord(value)) invalidResponse();
