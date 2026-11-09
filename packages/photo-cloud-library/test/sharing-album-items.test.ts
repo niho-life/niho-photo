@@ -227,6 +227,41 @@ describe("shared album items (B12)", () => {
     expect((await t.member.listItems(album.id, {}, t.signal)).items.filter((entry) => entry.kind === "memberEdit")).toHaveLength(1);
   });
 
+  it("resumes an add with the original key when every automatic response is lost", async () => {
+    const t = setup();
+    const album = await t.sharedAlbum();
+    const base = t.server.clientFor(MEMBER);
+    let responsesLost = 3;
+    const addKeys: string[] = [];
+    const client: SharedAlbumItemsTransport = {
+      async request(operation, request, requestOptions) {
+        const key = "idempotencyKey" in requestOptions ? requestOptions.idempotencyKey ?? "" : "";
+        if (operation === "albumItems.addFile") addKeys.push(key);
+        const response = await base.request(operation, request, requestOptions);
+        if (operation === "albumItems.addFile" && responsesLost > 0) {
+          responsesLost -= 1;
+          throw new TypeError("synthetic response loss");
+        }
+        return response;
+      },
+      download: (request, signal) => base.download(request, signal),
+    };
+    const actions = createSharedAlbumItems({
+      client,
+      uploader: t.server.uploader,
+      newIdempotencyKey: () => "resume-add-key",
+      sleep: async () => undefined,
+    });
+
+    expect(await rejection(actions.addFile(album.id, FILE, t.signal))).toBe("network");
+    const item = await actions.addFile(album.id, FILE, t.signal);
+
+    expect(addKeys).toEqual(["resume-add-key", "resume-add-key", "resume-add-key", "resume-add-key"]);
+    expect(item.state).toBe("published");
+    expect((await t.owner.listItems(album.id, {}, t.signal)).items).toHaveLength(1);
+    expect(t.server.storageOf(OWNER)).toMatchObject({ reservedBytes: 0 });
+  });
+
   it("renews the ticket of the adder's own reserved upload only (B00 albumItems.renewUpload)", async () => {
     const t = setup();
     const album = await t.sharedAlbum();

@@ -6,6 +6,7 @@
  * - One idempotency key per server call of a user action. A lost response is replayed with the same key, so an add is
  *   never applied twice. An add or replace answer that arrives only as a replay carries no upload ticket: a fresh ticket
  *   for the same upload is asked for (`albumItems.renewUpload`), so no second item or reservation appears.
+ *   If all automatic attempts lose their answers, the next identical request resumes that key.
  * - Every started upload ends committed or released: an interrupted upload, a refused commit or a cancelled action
  *   cancels the upload (the album owner's reservation is released) and removes an add that never published.
  * - Direct files are cleaned on this device before upload (`prepareAlbumFile`): only capture time and its offset are
@@ -45,7 +46,7 @@ import {
   type SharingOperationMap,
   type SharingRequestOptions,
 } from "./contract";
-import { abortableSleep, replayDelay } from "./membership";
+import { abortableSleep, isAmbiguousMutationFailure, replayDelay } from "./membership";
 import { isSharingErrorEnvelope } from "./membership-wire";
 
 export type SharedAlbumItemsTransport = {
@@ -150,6 +151,8 @@ export function createSharedAlbumItems(options: CreateSharedAlbumItemsOptions): 
   const maxAttempts = Math.max(1, Math.floor(options.maxAttempts ?? DEFAULT_ATTEMPTS));
   const maxRetryAfter = options.maxAutomaticRetryAfterSeconds ?? 5;
   const sleep = options.sleep ?? abortableSleep;
+  /** Ambiguous mutations keep their idempotency key until a later request gets a receipt. */
+  const pendingMutationKeys = new Map<string, string>();
 
   /** Replays the same request (and key) while the failure only means "the answer was lost or delayed". */
   async function send<K extends SharedAlbumItemOperation>(
@@ -158,12 +161,19 @@ export function createSharedAlbumItems(options: CreateSharedAlbumItemsOptions): 
     signal: AbortSignal,
     mutation: boolean,
   ): Promise<SharingOperationMap[K]["response"]> {
-    const key = mutation ? newKey() : null;
+    const identity = mutation ? JSON.stringify([operation, request]) : null;
+    const key = identity === null ? null : pendingMutationKeys.get(identity) ?? newKey();
     for (let attempt = 1; ; attempt += 1) {
       const requestOptions = (key === null ? { signal } : { signal, idempotencyKey: key }) as unknown as SharingRequestOptions<K>;
       try {
-        return await options.client.request(operation, request, requestOptions);
+        const response = await options.client.request(operation, request, requestOptions);
+        if (identity !== null) pendingMutationKeys.delete(identity);
+        return response;
       } catch (error) {
+        if (identity !== null && key !== null) {
+          if (signal.aborted || isAmbiguousMutationFailure(error)) pendingMutationKeys.set(identity, key);
+          else pendingMutationKeys.delete(identity);
+        }
         if (signal.aborted || attempt >= maxAttempts) throw error;
         const wait = replayDelay(error, attempt, maxRetryAfter);
         if (wait === null) throw error;

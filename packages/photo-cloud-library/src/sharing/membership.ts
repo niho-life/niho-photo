@@ -233,7 +233,7 @@ export function replayDelay(error: unknown, attempt: number, maxRetryAfterSecond
 }
 
 /** Whether a mutation may have committed even though this caller did not receive its receipt. */
-function isAmbiguousMutationFailure(error: unknown): boolean {
+export function isAmbiguousMutationFailure(error: unknown): boolean {
   if (isSharingErrorEnvelope(error)) {
     return error.error.retryable && SHARING_ERROR_RECOVERY[error.error.code] === "retrySameKey";
   }
