@@ -13834,8 +13834,8 @@
     },
     {
       "path": "scripts/release/mac-updater-release-lib.test.mjs",
-      "sha256": "4f7dab86ca0d33767be679061711bfba4cbbb50079d232b77f39c891190f95af",
-      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: 署名manifestとattestation parserの対象testを追加\n変更理由: updater設定のfeed公開鍵version署名契約を公開CIテストで固定\n変更理由: candidate Releaseの不正asset名sizedraft拒否を検証\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する\n変更理由: candidate publisherとのasset集合不整合とSDK proof正規化の回帰を検出する\n変更理由: SDK prereleaseとbuild metadataの受入と非canonical semver拒否を回帰検証する"
+      "sha256": "3fbdcb93449894cd44acce6ea98a3ec23ad3d3b5890b10bb89dffc732decc522",
+      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: 署名manifestとattestation parserの対象testを追加\n変更理由: updater設定のfeed公開鍵version署名契約を公開CIテストで固定\n変更理由: candidate Releaseの不正asset名sizedraft拒否を検証\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する\n変更理由: candidate publisherとのasset集合不整合とSDK proof正規化の回帰を検出する\n変更理由: SDK prereleaseとbuild metadataの受入と非canonical semver拒否を回帰検証する\n変更理由: Base64とMinisignの境界、元署名の保持と一時file回収を回帰検証する\n変更理由: Tauri署名の正規化とsymlink拒否・元署名保持・一時file回収を検証する"
     },
     {
       "path": "scripts/release/prepare-mac-updater-release.mjs",
@@ -13849,8 +13849,8 @@
     },
     {
       "path": "scripts/release/updater-signature.mjs",
-      "sha256": "b17d4abb08abf2d7cb7c8752e7ffe9149bb171312d5457bdd60b6bbe35dc5ee6",
-      "origin": "2026-11-08 NIHO photo updater署名検証helperを新規作成。公開設定からapp固定公開鍵を取得し、既存のMinisign verifierを呼び出す。秘密鍵や実データを含まない。\n変更理由: signerが生成したarchive署名を公開前後に暗号学的検証する\n変更理由: 固定公開鍵・archive・署名versionの検証境界を強化する"
+      "sha256": "a8b3ab81cbf98bab4c5ed50cb84dc663be8731f397df5b162646314c9f64965e",
+      "origin": "2026-11-08 NIHO photo updater署名検証helperを新規作成。公開設定からapp固定公開鍵を取得し、既存のMinisign verifierを呼び出す。秘密鍵や実データを含まない。\n変更理由: signerが生成したarchive署名を公開前後に暗号学的検証する\n変更理由: 固定公開鍵・archive・署名versionの検証境界を強化する\n変更理由: TauriのBase64署名をMinisign形式へ正規化して既存Rust検証器へ渡す\n変更理由: Base64復号前にも従来の通常file・size・読取中不変ガードを維持する"
     },
     {
       "path": "scripts/release/updater-signature-verify/Cargo.lock",

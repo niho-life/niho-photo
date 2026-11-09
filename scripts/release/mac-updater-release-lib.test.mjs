@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, readFileSync, rmSync, symlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import path from "node:path";
 import { test } from "node:test";
 import { fileURLToPath } from "node:url";
 
@@ -13,9 +15,46 @@ import {
   sdkProofReleaseMetadata,
 } from "./mac-updater-release-lib.mjs";
 import { candidateContract } from "../candidate/mac-candidate-lib.mjs";
-import { readPinnedUpdaterKey } from "./updater-signature.mjs";
+import { decodeUpdaterSignature, readPinnedUpdaterKey, verifyUpdaterArchiveSignature } from "./updater-signature.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+test("Tauri .sigのBase64を復号し、曖昧なencodingと不正UTF-8を拒否する", () => {
+  const raw = "untrusted comment: fixture\nfixture-signature\ntrusted comment: timestamp:1\tversion:1.2.3\nfixture-global-signature\n";
+  const encoded = Buffer.from(raw).toString("base64");
+  assert.equal(decodeUpdaterSignature(`${encoded}\n`), raw);
+  for (const invalid of ["", raw, `${encoded}%`, Buffer.from([0xff]).toString("base64")]) {
+    assert.throws(() => decodeUpdaterSignature(invalid), /canonical Base64/u);
+  }
+});
+
+test("Rust verifierへMinisignテキストを渡し、配布用の元.sigを保持する", () => {
+  const temporary = mkdtempSync(path.join(tmpdir(), "photo-signature-test-"));
+  const previousPath = process.env.PATH;
+  const raw = "untrusted comment: fixture\nfixture-signature\ntrusted comment: timestamp:1\tversion:1.2.3\nfixture-global-signature\n";
+  const encoded = Buffer.from(raw).toString("base64");
+  const signaturePath = path.join(temporary, "archive.sig");
+  const observation = path.join(temporary, "observed.json");
+  const cargo = path.join(temporary, "cargo");
+  try {
+    writeFileSync(signaturePath, encoded);
+    writeFileSync(cargo, `#!${process.execPath}\nconst fs = require("node:fs");\nconst signaturePath = process.argv.at(-2);\nconst text = fs.readFileSync(signaturePath, "utf8");\nif (text !== ${JSON.stringify(raw)}) process.exit(1);\nfs.writeFileSync(${JSON.stringify(observation)}, JSON.stringify({ signaturePath, version: process.argv.at(-1) }));\n`);
+    chmodSync(cargo, 0o700);
+    process.env.PATH = `${temporary}${path.delimiter}${previousPath ?? ""}`;
+    verifyUpdaterArchiveSignature({ root: temporary, publicKeyText: "public fixture", archivePath: path.join(temporary, "archive"), signaturePath, version: "1.2.3" });
+    const observed = JSON.parse(readFileSync(observation, "utf8"));
+    assert.equal(observed.version, "1.2.3");
+    assert.equal(readFileSync(signaturePath, "utf8"), encoded);
+    assert.equal(existsSync(observed.signaturePath), false);
+    const linkedSignature = path.join(temporary, "linked.sig");
+    symlinkSync(signaturePath, linkedSignature);
+    assert.throws(() => verifyUpdaterArchiveSignature({ root: temporary, publicKeyText: "public fixture", archivePath: path.join(temporary, "archive"), signaturePath: linkedSignature, version: "1.2.3" }), /signature does not match/u);
+  } finally {
+    if (previousPath === undefined) delete process.env.PATH;
+    else process.env.PATH = previousPath;
+    rmSync(temporary, { recursive: true, force: true });
+  }
+});
 
 test("署名準備はpublisherの7 assetsを受入れ、SDK証跡をcandidateに要求しない", () => {
   const manifest = {

@@ -1,6 +1,7 @@
 import { execFileSync } from "node:child_process";
 import { createHash } from "node:crypto";
-import { readFileSync } from "node:fs";
+import { lstatSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
 import path from "node:path";
 
 const verifierManifest = path.join("scripts", "release", "updater-signature-verify", "Cargo.toml");
@@ -26,11 +27,30 @@ export function readPinnedUpdaterKey(root) {
   };
 }
 
+export function decodeUpdaterSignature(signatureText) {
+  const encoded = signatureText.trim();
+  const bytes = Buffer.from(encoded, "base64");
+  const decoded = bytes.toString("utf8");
+  if (!encoded || bytes.toString("base64") !== encoded || !Buffer.from(decoded, "utf8").equals(bytes)) {
+    throw new Error("Tauri updater signature must be canonical Base64 UTF-8");
+  }
+  return decoded;
+}
+
 export function verifyUpdaterArchiveSignature({ root, publicKeyText, archivePath, signaturePath, version }) {
+  let temporary;
   try {
+    const metadata = lstatSync(signaturePath);
+    if (!metadata.isFile() || metadata.size <= 0 || metadata.size > 16 * 1024) throw new Error("invalid signature file");
+    const signatureBytes = readFileSync(signaturePath);
+    if (signatureBytes.length !== metadata.size) throw new Error("signature file changed");
+    const signatureText = decodeUpdaterSignature(signatureBytes.toString("utf8"));
+    temporary = mkdtempSync(path.join(tmpdir(), "niho-photo-minisign-"));
+    const decodedSignaturePath = path.join(temporary, "signature.minisig");
+    writeFileSync(decodedSignaturePath, signatureText, { flag: "wx", mode: 0o600 });
     execFileSync("cargo", [
       "run", "--quiet", "--locked", "--manifest-path", verifierManifest, "--",
-      publicKeyText, archivePath, signaturePath, version,
+      publicKeyText, archivePath, decodedSignaturePath, version,
     ], {
       cwd: root,
       encoding: "utf8",
@@ -41,5 +61,7 @@ export function verifyUpdaterArchiveSignature({ root, publicKeyText, archivePath
     });
   } catch {
     throw new Error("updater signature does not match the pinned key, archive, and version");
+  } finally {
+    if (temporary) rmSync(temporary, { recursive: true, force: true });
   }
 }
