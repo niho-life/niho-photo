@@ -290,7 +290,7 @@
         "path": "apps/camera/src-tauri/permissions/camera.toml",
         "sha256": "3dabde32b43f01f12b93d48f2000a51a55abf48cc5866df2daa6dda9f31edae0"
       },
-      "outputSha256": "9e1a9a800515a24bc8cac27bd97a96fadc77d0d6bd1fc16567479df92c0a7e90",
+      "outputSha256": "5501b267bf46be7401e874bdae50a80ff6e7667147d08372003aa8cb827c1ed0",
       "modifications": [
         "共有形式フィルターを使う複数写真pickerと参照削除コマンドを同梱UIの権限内に追加 / 選択写真専用commandのbundle permissionを追加。",
         "Issue #3のpublic OAuth/PKCE、ローカル専用UI、安全契約と公開依存を新規接続。実issuer・署名検証器が未契約のため本番接続は無効。",
@@ -314,7 +314,8 @@
         "PR232のMac接続を単一のdurable mask barrierへ統合し固定keys・scope・実SDK能力を検証",
         "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加",
         "Photo #249 / B08 の Mac の共有アルバムの native 通信（/cloud/sharing/v1、ticket を native に留める upload・照合した download）を追加",
-        "PR #263画面と#264 native通信の統合後hashを固定"
+        "PR #263画面と#264 native通信の統合後hashを固定",
+        "共有アルバムの permission エントリに欠けていた [[permission]] ヘッダを追加"
       ]
     },
     {
