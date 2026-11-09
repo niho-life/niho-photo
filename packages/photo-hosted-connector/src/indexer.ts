@@ -5,7 +5,7 @@
  */
 import { canonical } from "../../photo-library-sharing-contract/src/policy.ts";
 import type { HostConnectorClient, IndexEntry, PhotoFormat, SourceAvailability } from "../../photo-library-sharing-contract/src/v1.ts";
-import { localKeyFor, sha256Text } from "./crypto.ts";
+import { localKeyFor, randomSecret, sha256Text } from "./crypto.ts";
 import type { Clock, LocalIndexEntry, LocalIndexStore, RegisteredRoot, RootFileSystem, StreamHasher } from "./ports.ts";
 
 /** Formats the index registers. Capability to decode or render is decided elsewhere (B07). */
@@ -51,6 +51,8 @@ export interface ConnectorIndexer {
   scanStep(signal: AbortSignal, maxDirectories: number): Promise<{ readonly complete: boolean }>;
   /** Hashes present, unhashed, non-excluded files within the budget, skipping files that change while read. */
   hashStep(signal: AbortSignal, budget: { readonly maxBytes: number; readonly maxFiles: number }): Promise<{ readonly files: number; readonly bytes: number }>;
+  /** Applies canonical exclusions from the current replica before originals are scanned or hashed. */
+  reconcileExclusions(photoIds: ReadonlySet<string>): Promise<void>;
   /** Sends changed identity/availability to NIHO and records photoIds and exclusions. */
   report(client: Pick<HostConnectorClient, "request">, signal: AbortSignal): Promise<{ readonly sent: number }>;
   progress(): Promise<IndexProgress>;
@@ -79,6 +81,12 @@ export function createIndexer(options: {
   let hashRate: number | null = null;
 
   const rootOf = (rootId: string): RegisteredRoot | null => roots.get(rootId) ?? null;
+  const markDirty = (entry: LocalIndexEntry, patch: Partial<LocalIndexEntry> = {}): LocalIndexEntry => ({
+    ...entry,
+    ...patch,
+    dirty: true,
+    reportMutationId: randomSecret(),
+  });
 
   /** Hash of the whole file, or null when it is not the indexed file before and after the read. */
   const hashUnchanged = async (root: RegisteredRoot, entry: LocalIndexEntry, signal: AbortSignal) => {
@@ -109,10 +117,10 @@ export function createIndexer(options: {
     for await (const entry of store.entries()) {
       if (entry.excluded) continue;
       if (unmounted.includes(entry.rootId) || !roots.has(entry.rootId)) {
-        if (entry.state !== "unmounted") updates.push({ ...entry, state: "unmounted", dirty: true });
+        if (entry.state !== "unmounted") updates.push(markDirty(entry, { state: "unmounted" }));
       } else if (entry.seenInScan !== scan && entry.state !== "missing" && !underSkipped(entry)) {
         // Gone from a mounted volume: reported missing, never deleted here or in NIHO.
-        updates.push({ ...entry, state: "missing", dirty: true });
+        updates.push(markDirty(entry, { state: "missing" }));
       }
     }
     if (updates.length) await store.put(updates);
@@ -176,13 +184,15 @@ export function createIndexer(options: {
           if (existing?.excluded) {
             updates.push({ ...existing, seenInScan: checkpoint.scan });
           } else if (existing && sameFile(existing, item)) {
-            updates.push({ ...existing, seenInScan: checkpoint.scan, ...(existing.state !== "present" ? { state: "present" as const, dirty: true } : {}) });
+            updates.push(existing.state !== "present"
+              ? markDirty(existing, { seenInScan: checkpoint.scan, state: "present" })
+              : { ...existing, seenInScan: checkpoint.scan });
           } else {
             // New, changed or replaced bytes: identity unknown until hashed; NIHO keeps the last known one meanwhile.
             updates.push({
               localKey, rootId: root.id, relativePath, fileName: item.name, sizeBytes: item.sizeBytes, mtimeMs: item.mtimeMs,
               fileId: item.fileId, changeToken: item.changeToken, sha256: null, photoId: existing?.photoId ?? null, excluded: false, state: "present",
-              seenInScan: checkpoint.scan, dirty: true, hold: existing?.hold ?? null, verifyAgainst: existing?.verifyAgainst ?? null,
+              seenInScan: checkpoint.scan, dirty: true, reportMutationId: randomSecret(), hold: existing?.hold ?? null, verifyAgainst: existing?.verifyAgainst ?? null,
             });
           }
         }
@@ -209,10 +219,10 @@ export function createIndexer(options: {
         if (!result) continue;
         // After an index rebuild, returning bytes must match NIHO's record or they are held, never relinked.
         if (entry.verifyAgainst !== null && result.sha256 !== entry.verifyAgainst) {
-          await store.put([{ ...entry, hold: "sourceMismatch", verifyAgainst: null, dirty: true }]);
+          await store.put([markDirty(entry, { hold: "sourceMismatch", verifyAgainst: null })]);
           continue;
         }
-        await store.put([{ ...entry, sha256: result.sha256, verifyAgainst: null, dirty: true }]);
+        await store.put([markDirty(entry, { sha256: result.sha256, verifyAgainst: null })]);
         files++;
         bytes += result.bytes;
       }
@@ -223,6 +233,15 @@ export function createIndexer(options: {
       }
       return { files, bytes };
     },
+    async reconcileExclusions(photoIds) {
+      const updates: LocalIndexEntry[] = [];
+      for await (const entry of store.entries()) {
+        if (!entry.excluded && entry.photoId !== null && photoIds.has(entry.photoId)) {
+          updates.push({ ...entry, excluded: true, dirty: false, reportMutationId: null });
+        }
+      }
+      if (updates.length) await store.put(updates);
+    },
     async report(client, signal) {
       let sent = 0;
       for (;;) {
@@ -232,7 +251,10 @@ export function createIndexer(options: {
           if (batch.length >= INDEX_BATCH) break;
         }
         if (!batch.length) return { sent };
-        const entries: IndexEntry[] = batch.map((entry) => ({
+        // Upgrade older local indexes before sending. Persisted mutation IDs survive a lost response/restart.
+        const readyBatch = batch.map((entry) => entry.reportMutationId ? entry : markDirty(entry));
+        if (readyBatch.some((entry, index) => entry !== batch[index])) await store.put(readyBatch);
+        const entries: IndexEntry[] = readyBatch.map((entry) => ({
           localKey: entry.localKey,
           fileName: entry.fileName,
           // Generations are assigned by NIHO; the connector reports bytes, never a generation of its own.
@@ -240,18 +262,22 @@ export function createIndexer(options: {
           capturedAt: null,
           availability: availabilityOf(entry),
         }));
-        // The key is derived from the payload, so a lost response is replayed with the same key and body.
-        const key = `index-${await sha256Text(canonical(entries))}`;
+        // Key the pending mutation IDs, not the payload: A → B → A must be three distinct writes, while a retry
+        // of one persisted mutation reuses its original key and body.
+        const mutations = readyBatch
+          .map((entry) => ({ localKey: entry.localKey, mutationId: entry.reportMutationId as string }))
+          .sort((left, right) => left.localKey.localeCompare(right.localKey));
+        const key = `index-${await sha256Text(canonical(mutations))}`;
         const receipt = await client.request("connector.putIndex", { entries }, { signal, idempotencyKey: key });
         const results = new Map(receipt.value.results.map((result) => [result.localKey, result]));
-        await store.put(batch.map((entry) => {
+        await store.put(readyBatch.map((entry) => {
           const result = results.get(entry.localKey);
           if (!result) return entry;
-          return { ...entry, photoId: result.photoId, excluded: result.state === "excluded", dirty: false };
+          return { ...entry, photoId: result.photoId, excluded: result.state === "excluded", dirty: false, reportMutationId: null };
         }));
-        sent += batch.length;
+        sent += readyBatch.length;
         // An answer that leaves entries unresolved ends this report; they are retried on the next one.
-        if (batch.some((entry) => !results.has(entry.localKey))) return { sent };
+        if (readyBatch.some((entry) => !results.has(entry.localKey))) return { sent };
       }
     },
     async progress() {

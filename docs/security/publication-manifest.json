@@ -13923,8 +13923,8 @@
     },
     {
       "path": "packages/photo-hosted-connector/src/indexer.ts",
-      "sha256": "84e19faff56f53045badc49815ff8dbea94177c2e74f9672d7ffe612a1c6f2ed",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+      "sha256": "5934d16cd5d69e3f8b82f0c64332a77e35411ce53dcc6089febf167a90d134af",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序"
     },
     {
       "path": "packages/photo-hosted-connector/src/jobs.ts",
@@ -13933,13 +13933,13 @@
     },
     {
       "path": "packages/photo-hosted-connector/src/ports.ts",
-      "sha256": "9d9ec9238eb9913335d727124019c0bf2f863f1ed7604be4903e77746d90065c",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+      "sha256": "4a9d157bc8b55229637e70e60854a8414070c4d522f5fcfb2cecef73d2c3fe97",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序"
     },
     {
       "path": "packages/photo-hosted-connector/src/service.ts",
-      "sha256": "f80614d9f8f08e0b9a3e8b073918c8ebce9e2265f8db3086880101095204b277",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+      "sha256": "a2e7f00f71a573b7c0ecf21054329c56e0759b7c782fcfad899d735d4fbe179c",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序"
     },
     {
       "path": "packages/photo-hosted-connector/test-support/fake-niho.ts",
@@ -13963,8 +13963,8 @@
     },
     {
       "path": "packages/photo-hosted-connector/test/indexer.test.mjs",
-      "sha256": "349829b04fef69fc8ba07d82ce63b443bb61df1a58cf232c13dc0ccf43e3d9ab",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+      "sha256": "6850cbf435f71fb0ab97b3015b7c91158a03f75041611fc26ce6bfc79d53fb25",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序"
     },
     {
       "path": "packages/photo-hosted-connector/test/node-fs.test.mjs",

@@ -6,7 +6,7 @@
 import { createHostedReplicaSync, recoverLocalIndex } from "../../photo-hosted-library/src/index.ts";
 import type { ReplicaStatus, ReplicaStore, SourceScanner } from "../../photo-hosted-library/src/index.ts";
 import type { HostConnectorClient } from "../../photo-library-sharing-contract/src/v1.ts";
-import { localKeyFor } from "./crypto.ts";
+import { localKeyFor, randomSecret } from "./crypto.ts";
 import { ConnectorError, createCredentialManager, isUnauthenticated } from "./credentials.ts";
 import { createIndexer, formatOf, isHiddenName, shouldDescend } from "./indexer.ts";
 import type { IndexProgress } from "./indexer.ts";
@@ -193,11 +193,21 @@ export function createHostedConnector(options: HostedConnectorOptions) {
       try {
         const beat = await authenticated(signal, () => heartbeat(client, "online", signal));
         const synced = await authenticated(signal, () => replicaSync.sync({ canonicalRevision: beat.metadataRevision, signal }));
-        await indexer.beginScan(signal);
-        const scanned = await indexer.scanStep(signal, budget.maxDirectories);
-        const hashed = await indexer.hashStep(signal, { maxBytes: budget.maxHashBytes, maxFiles: budget.maxHashFiles });
-        const reported = await authenticated(signal, () => indexer.report(client, signal));
-        const ran = await authenticated(signal, () => jobs.step(client, signal, budget.maxJobs));
+        let scanned = { complete: false };
+        let hashed = { files: 0, bytes: 0 };
+        let reported = { sent: 0 };
+        let ran: JobStepResult = { claimed: 0, committed: 0, failed: 0, dropped: 0, uploadedBytes: 0 };
+        // Do not inspect originals or execute jobs until the replica includes every change visible to this heartbeat.
+        if (synced.replicaRevision >= beat.metadataRevision) {
+          const exclusions = new Set<string>();
+          for await (const exclusion of options.replica.records("exclusion")) exclusions.add(exclusion.id);
+          await indexer.reconcileExclusions(exclusions);
+          await indexer.beginScan(signal);
+          scanned = await indexer.scanStep(signal, budget.maxDirectories);
+          hashed = await indexer.hashStep(signal, { maxBytes: budget.maxHashBytes, maxFiles: budget.maxHashFiles });
+          reported = await authenticated(signal, () => indexer.report(client, signal));
+          ran = await authenticated(signal, () => jobs.step(client, signal, budget.maxJobs));
+        }
         jobTotals = {
           committed: jobTotals.committed + ran.committed,
           failed: jobTotals.failed + ran.failed,
@@ -254,6 +264,7 @@ export function createHostedConnector(options: HostedConnectorOptions) {
           state: meta ? "present" : item.reason === "unmounted" ? "unmounted" : "missing",
           seenInScan: 0,
           dirty: item.state !== "excluded",
+          reportMutationId: item.state !== "excluded" ? randomSecret() : null,
           hold: item.state === "sourceMismatch" ? "sourceMismatch" : null,
           verifyAgainst: item.state === "sourceUnavailable" ? photo.body.source.sha256 : null,
         });
