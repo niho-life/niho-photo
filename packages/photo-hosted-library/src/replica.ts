@@ -109,6 +109,8 @@ export function createHostedReplicaSync(options: CreateHostedReplicaSyncOptions)
   let queue: Promise<unknown> = Promise.resolve();
   /** Highest NIHO revision ever observed; a stale heartbeat never lowers it. */
   let observed = 0;
+  /** A bounded diff may have more pages even when a stale heartbeat equals the applied revision. */
+  let diffPending = false;
 
   const fetchMasks = async (changes: readonly ReplicaChange[], signal: AbortSignal): Promise<Map<string, Uint8Array>> => {
     const bytes = new Map<string, Uint8Array>();
@@ -191,8 +193,11 @@ export function createHostedReplicaSync(options: CreateHostedReplicaSyncOptions)
     // nextRevision: every page must retain sinceRevision 0 and carry its snapshot cursor until the atomic swap.
     if (replica === 0 && canonical > 0) {
       reset = true;
-    } else if (replica !== canonical) {
+    } else if (replica !== canonical || diffPending) {
       mode = "diff";
+      // Keep this set until a complete page arrives. On error or a page bound, the next sync resumes from the
+      // durable replica revision even if the heartbeat has not caught up with NIHO yet.
+      diffPending = true;
       try {
         for (let pages = 0; ; pages++) {
           if (pages >= maxPages) break;
@@ -210,6 +215,7 @@ export function createHostedReplicaSync(options: CreateHostedReplicaSyncOptions)
           }
           if (page.complete) {
             canonical = Math.max(canonical, page.nextRevision);
+            diffPending = false;
             break;
           }
           canonical = Math.max(canonical, replica);
@@ -224,6 +230,7 @@ export function createHostedReplicaSync(options: CreateHostedReplicaSyncOptions)
       const rebuilt = await rebuild(signal);
       replica = rebuilt.revision;
       applied = rebuilt.applied;
+      diffPending = false;
       // The completed snapshot is NIHO's current revision, which may be below a replica that was wrongly ahead.
       canonical = replica;
     }
@@ -243,7 +250,7 @@ export function createHostedReplicaSync(options: CreateHostedReplicaSyncOptions)
       // local validation/storage errors are definitive and must remain visible to the caller.
       if (error instanceof HostedLibraryError || sharingErrorCode(error) !== null) throw error;
     }
-    status = { canonicalRevision: canonical, replicaRevision: replica, state: replica >= canonical ? "current" : "behind" };
+    status = { canonicalRevision: canonical, replicaRevision: replica, state: !diffPending && replica >= canonical ? "current" : "behind" };
     return { mode, canonicalRevision: canonical, replicaRevision: replica, appliedChanges: applied, acknowledged };
   };
 

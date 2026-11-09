@@ -104,6 +104,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 
 - 推測困難な secret（128bit 以上）を作成時の応答で一度だけ返し、一覧・ログ・永続保存に出さない。結果不明の再送では `secret: null` を返すので、そのリンクを無効化して作り直す。
 - 未ログインで開いたリンク（BFF だけ。上流の `invites.join` は変えない）: ブラウザは secret を BFF に一度だけ渡し（`invites.holdPending`）、BFF は暗号化した httpOnly・Secure・SameSite=Lax の cookie（`PENDING_INVITE_COOKIE`、path は `/cloud/sharing/v1/invites/pending`）に15分持つ。JS からは secret も cookie も読めない。ログインから戻った画面は `invites.joinPending` を頼み、BFF は cookie を開いて通常の `invites.join` を上流へ送り、成否に関係なく cookie を消す。期限切れ・使用済み（BFF は使った保留の ID を期限まで覚える）・別の人がログインした（ログイン中に保留したとき）・cookie が無いときは `invite_unavailable`。未ログインのまま頼まれたら `unauthenticated` で cookie は残す（`decidePendingInviteJoin`）。応答を失ったらアルバムの一覧を読み直す。参加の前に確認の画面は挟まず、preview の op は持たない（参加のたびに owner へ通知が届き、すぐ外せる）。
+  - 保留の cookie は path の都合で `__Host-` の名前にできない。兄弟の host から同じ名前の cookie を植えられないよう、BFF は `__Host-` の名前・path `/` の結び付けの cookie も一緒に置き、2つが対になっているときだけ保留を開く（BFF の内部の仕組みで、型と経路は変えない）。
 - 参加はログイン必須で回数制限をかける。未知・期限切れ・無効化済み・削除済みアルバム・削除後の古いリンクは同じ `invite_unavailable`（「このリンクは使えません」）。在籍中の人が使っても役割は変えない。参加のたびに owner へ `MemberJoinedEvent` を通知する。
 - owner が削除した時刻は台帳に album と user ごとに残す（`lastRemovedAt`）。その後に新しいリンクで再参加して離脱しても消えず、削除以前に作られたリンクでは参加できない。
 

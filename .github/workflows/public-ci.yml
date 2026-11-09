@@ -67,7 +67,7 @@
           }
         },
         {
-          "run": "node --test scripts/ci/*.test.mjs scripts/photo-web/*.test.mjs"
+          "run": "node --test scripts/ci/*.test.mjs scripts/photo-web/*.test.mjs scripts/release/*.test.mjs"
         },
         {
           "id": "contract-source",
@@ -252,6 +252,10 @@
         {
           "name": "固定Rust/WASM toolchainを準備",
           "run": "rustup toolchain install 1.98.1 --profile minimal --target wasm32-unknown-unknown --component rust-src\ncargo +1.98.1 install wasm-bindgen-cli --version 0.2.129 --locked"
+        },
+        {
+          "name": "pinned updater signature verifierを検証",
+          "run": "cargo +1.98.1 test --locked --manifest-path scripts/release/updater-signature-verify/Cargo.toml"
         },
         {
           "name": "current SHAから完全Mac candidateを実build",

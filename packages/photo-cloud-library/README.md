@@ -34,6 +34,38 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 
 型確認は共通SDK sourceと同じ `strict` policyを用いる。C00契約packageは独立した既存の厳格な設定を維持する。対象のtypecheck/test/lintをpackage scriptsから実行し、全体検証・native build・実DBは規約に従ってCIへ委譲する。
 
+## 共有アルバムのメンバーと招待（`./sharing`、B05 #246）
+
+`@niho/photo-cloud-library/sharing` は共有アルバムの招待リンク・メンバーの client（`createBrowserSharedAlbumMembershipClient`）、UI向けの操作（`createSharedAlbumMembership`）、開発と試験用の合成 in-memory server（`createSharedAlbumMockServer`）を持つ。契約は `@niho/photo-library-sharing-contract`（B00）が正本で、判定は同 package の `./policy` を使う。本人 v2 の port・認可・5GiB の契約は変えない。
+
+- 本人 v2 の transport を複製せず、同じ部品を使う（`PersonalPhotoScope` を session だけに束縛、capture header、header の期限、bounded JSON、idempotency key の規則）。アルバムは library をまたぐので、scope は library を持たない。
+- wire は契約の利用者の経路の表（`SHARING_ROUTES`、`/cloud/sharing/v1`）に従う。ID は path、`cursor`・`limit` は query、残りは閉じた JSON body、mutation は `Idempotency-Key`。合成 server も同じ表で decode する。capture header は BFF が検証済みの session と照合する fence で、認可の根拠にしない。招待の secret は `POST /invites/join` の body だけに載せ、URL・storage・log に出さない。
+- 応答は厳密に検証し、人は `{displayName, isSelf}` 以外を拒否する。表示用の権限は契約の表と一致しなければ拒否する。
+- 1 操作 1 key。応答喪失は同じ key で再送する（参加の通知は重複しない）。作成時の secret が replay で失われたリンクは毎回無効化してから作り直す。
+- 合成 server は photo 単位のリンク共有（`cloudSharing`）とは別で、共有リンクを招待として受け付けない。実際の権限台帳・資格情報・回数制限は既存の非公開境界に置き、この server を本番で選ばない。
+- 契約 package は package 名で読む（`src/sharing/contract.ts` の 1 箇所）。共有シート・招待画面と 401 の扱いへの接続は後続。
+
+### 共有アルバムの BFF（`@niho/photo-cloud-library/server` の `createSharingCloudProxy`）
+
+`/cloud/sharing/v1` を本人 v2 の proxy と同じ作りで中継する（[本人写真のHTTP転送](../../docs/architecture/personal-photo-transfers.md)）。
+
+- 経路は契約の表（`SHARING_ROUTES`）だけ。表に無い path・method、このpackageが応答を検査できない操作は `not_found`。path の ID は単一の opaque segment の正規の符号化だけを受ける。
+- request は契約で decode し（配置と閉じた形）、client と同じ値の規則で検査してから正規の形に encode し直す。mutation は `Idempotency-Key` が必須、ほかは拒否。`Range` は content の経路だけ。呼び出し側の `Authorization` は拒否し、cookie・header を上流へ渡さない。
+- `withAuthorizedCredential` で本人・親 session・epoch を capture header と照合し、新しい credential を固定の upstream（`NIHO_PRODUCTION_ORIGIN` と非公開の起動設定の prefix）にだけ渡す。同じ suffix を prefix へ写す。
+- JSON は parse の前に byte 数を制限し、client と同じ応答の規則で検査する。error は契約の envelope で status が一致するものだけ。upload ticket は trusted provider の、その upload のものだけ。content は v2 と同じ（200 は全体、206 は要求した範囲、全体の size と SHA-256、正確な長さ、全量を buffer しない）。
+- 公開の前に session をもう一度確かめ、失敗なら上流の body を取り消して 1 byte も出さない。応答はすべて `no-store`。
+- 中継する操作は `SHARING_PROXY_OPERATIONS`（このPRではメンバーと招待）。
+
+### 未ログインで開いた招待（`@niho/photo-cloud-library/server` の `createPendingInviteHandler`）
+
+契約の `PENDING_INVITE_ROUTES` の BFF 側。`POST /cloud/sharing/v1/invites/pending` と `.../pending/join` だけを受け、他は次の handler へ渡す（`null`）。
+
+- 保留: 画面は secret を一度だけ body で渡す。BFF は AES-256-GCM で封じ、`__Secure-niho-photo-pending-invite`（`HttpOnly; Secure; SameSite=Lax; Path=/cloud/sharing/v1/invites/pending; Max-Age=900`）に入れる。JS は secret も cookie も読めない。ログイン中に保留すると、その人だけが使える。
+- 契約の path では `__Host-` を使えないので、親ドメインの別 host が同じ名前の cookie を置ける。保留の ID を host 限定の `__Host-niho-photo-pending-invite-id`（`Path=/`）にも入れ、封じた ID がそれと一致する cookie だけを開く（置かれた cookie は使わず、こちらの cookie も妨げない）。
+- 参加: 検証済みの session で cookie を開き、`decidePendingInviteJoin` で決め、通常の `invites.join` を上流へ送る（key は保留の ID ごと）。session を確かめたあとは成否に関係なく cookie を消す。未ログインなら `unauthenticated` で cookie を残す。応答は `InviteJoinResult`（receipt を外した値）を検証してから返す。
+- 鍵は非公開の運用側から渡す 32 bytes を 1〜2 個（先頭で封じ、どちらでも開く）。値を source・log・エラーに出さない。使った保留の ID は期限までこの process が覚え、別の instance で同じ cookie が使われたときは上流の key の replay（`replayed: true`）を `invite_unavailable` にする。
+- 同一 origin・`Origin` 一致・`Sec-Fetch-Site: same-origin`（ある場合）・`Content-Type: application/json`・query と `Idempotency-Key` なし・閉じた body だけを受ける。
+
 ## 完全補正の同期core
 
 C03は `@niho/photo-cloud-sync` と組み合わせ、`recipes.put` / `recipe-conflicts.list` / `recipe-conflicts.get` / `recipe-conflicts.resolve` を同じ固定HTTP/BFFへ接続する。補正文書1MiB/depth32とPUT envelope2MiBを分離し、両版と選択結果を含む競合応答は4MiBまで検証する。`./protocol` はscope/有限待機/純粋なrecipe投影・比較の狭い共有口で、認証やhashの別正本ではない。
