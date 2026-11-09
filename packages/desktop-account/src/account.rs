@@ -5,12 +5,14 @@ use crate::photo_cloud::{
   read_native_upload_response, stream_verified_content, CapturedPhotoAuthority, HttpPhotoCloud, PhotoHttpTransport,
 };
 use crate::photo_session::{parse_response, parse_strict_iso, HttpPhotoSession, PhotoSessionTransport};
+use crate::photo_sharing::{error_code as sharing_error_code, read_sharing_json, stream_sharing_content};
 use crate::{
   AccountError, Browser, Cancel, ClientId, Config, CredentialStore, ExternalBrowser, HttpTransport, NativeCopyTarget,
   NativeProviderAck, NativeStartUpload, NativeUpload, NativeUploadTicket, PhotoContentMetadata, PhotoDownloadCancel,
   PhotoIdentity, PhotoJsonResponse, PhotoOperation, PhotoRequest, PhotoScopeCapture, Request, Response, Secret,
   SecretKind, Transport, SAFETY_CONTRACT_VERSION,
 };
+use crate::{SharingContentMetadata, SharingJsonResponse, SharingRequest};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::sync::{Arc, Mutex};
@@ -947,6 +949,108 @@ impl Account {
       return Err(AccountError::InvalidResponse);
     }
     Ok(acknowledgement)
+  }
+
+  /// 共有アルバムの通信が build の設定で開いているか（上流の prefix があるか）。
+  pub fn sharing_configured(&self) -> bool {
+    self
+      .adapters
+      .as_ref()
+      .is_some_and(|adapters| adapters.config.sharing_prefix().is_some())
+  }
+
+  /// 共有アルバム（`/cloud/sharing/v1`）の 1 つの要求。宛先は固定の origin と build の設定の prefix だけ。upload の
+  /// ticket は native に取り出し、画面へは代わりを返す（`photo_sharing.rs`）。
+  pub fn photo_sharing_request(
+    &self,
+    capture: &PhotoScopeCapture,
+    request: &SharingRequest,
+  ) -> Result<SharingJsonResponse, AccountError> {
+    if request.is_content() {
+      return Err(AccountError::InvalidResponse);
+    }
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    let authority = self.capture_photo_authority(adapters, capture)?;
+    let native = request.native(&adapters.config, &authority.scope)?;
+    let response = adapters
+      .photo_http
+      .send(&adapters.config, &authority.access, &native, false)?;
+    let response = read_sharing_json(response)?;
+    self.ensure_photo_authority(adapters, &authority)?;
+    if response.status == 401 && sharing_error_code(&response.body) == Some("unauthenticated") {
+      self.invalidate_photo_identity(adapters, authority.generation, AccountError::Expired)?;
+    }
+    Ok(response)
+  }
+
+  /// 共有アルバムの完成写真を、native に留めた ticket の先へ 8MiB ずつ送る（ticket の再開位置から）。
+  pub fn photo_sharing_upload(
+    &self,
+    capture: &PhotoScopeCapture,
+    ticket: &NativeUploadTicket,
+    bytes: &[u8],
+  ) -> Result<(), AccountError> {
+    let total = ticket.size_bytes;
+    if total == 0 || bytes.len() as u64 != total {
+      return Err(AccountError::InvalidResponse);
+    }
+    let mut offset = ticket.resume_offset_bytes;
+    if offset == total {
+      return Ok(());
+    }
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    for _ in 0..64 {
+      self.validate_live_ticket(ticket)?;
+      let authority = self.capture_photo_authority(adapters, capture)?;
+      let end = offset.saturating_add(8 * 1024 * 1024).min(total);
+      let chunk = bytes
+        .get(offset as usize..end as usize)
+        .ok_or(AccountError::InvalidResponse)?;
+      let response = adapters
+        .photo_http
+        .provider_put(&ticket.url, &ticket.content_type, offset, total, chunk)?;
+      self.ensure_photo_authority(adapters, &authority)?;
+      let acknowledgement = provider_ack(response, offset, chunk.len() as u64, total)?;
+      if acknowledgement.complete {
+        return Ok(());
+      }
+      if acknowledgement.next_offset <= offset {
+        return Err(AccountError::Network);
+      }
+      offset = acknowledgement.next_offset;
+    }
+    Err(AccountError::Network)
+  }
+
+  /// 共有アルバムの完成写真・thumbnail を読み、宣言の SHA-256・長さ・形式と照合しながら writer へ書く。
+  pub fn photo_sharing_content<W: Write>(
+    &self,
+    capture: &PhotoScopeCapture,
+    request: &SharingRequest,
+    writer: &mut W,
+    cancel: &PhotoDownloadCancel,
+  ) -> Result<SharingContentMetadata, AccountError> {
+    if !request.is_get() || !request.is_content() {
+      return Err(AccountError::InvalidResponse);
+    }
+    let adapters = self.adapters.as_ref().ok_or(AccountError::NotConfigured)?;
+    let authority = self.capture_photo_authority(adapters, capture)?;
+    let native = request.native(&adapters.config, &authority.scope)?;
+    let response = adapters
+      .photo_http
+      .send(&adapters.config, &authority.access, &native, true)?;
+    if response.status == 401 {
+      self.invalidate_photo_identity(adapters, authority.generation, AccountError::Expired)?;
+      return Err(AccountError::Expired);
+    }
+    if response.status != 200 {
+      return Err(AccountError::Rejected);
+    }
+    let metadata = stream_sharing_content(response, writer, cancel, || {
+      self.ensure_photo_authority(adapters, &authority)
+    })?;
+    self.ensure_photo_authority(adapters, &authority)?;
+    Ok(metadata)
   }
 
   fn send_native_copy(

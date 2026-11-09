@@ -331,6 +331,13 @@ pub fn install(app: &tauri::AppHandle) {
   let configured = option_env!("NIHO_PHOTO_PUBLIC_FIREBASE_WEB_API_KEY")
     .filter(|key| !key.is_empty())
     .and_then(|key| Config::production(ClientId::Camera, key).ok())
+    // 共有アルバムの上流の prefix（build の設定。無い・形が違えば共有だけを閉じる）
+    .and_then(|config| {
+      match option_env!("NIHO_PHOTO_SHARING_API_PREFIX").filter(|prefix| Config::sharing_prefix_is_valid(prefix)) {
+        Some(prefix) => config.with_sharing_prefix(prefix).ok(),
+        None => Some(config),
+      }
+    })
     .and_then(|config| {
       app.path().app_data_dir().ok().and_then(|dir| {
         FileSecretStore::in_data_dir(&dir.join("public-account-v2"))
