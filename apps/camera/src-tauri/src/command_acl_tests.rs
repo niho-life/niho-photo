@@ -14,6 +14,19 @@ use tauri::utils::acl::{manifest::Manifest, ACL_MANIFESTS_FILE_NAME, APP_ACL_KEY
 
 /// `tauri.conf.json` の窓（capabilities/default.json の `windows`）。
 const MAIN_WINDOW_LABEL: &str = "main";
+/// 常設 Mac の接続用ソフトの表示しない窓（capabilities/hosted-connector.json の `windows`）。
+const CONNECTOR_WINDOW_LABEL: &str = crate::hosted_connector::CONNECTOR_WINDOW_LABEL;
+/// 接続用ソフトの窓だけに許すコマンドの接頭辞。
+const CONNECTOR_COMMAND_PREFIX: &str = "camera_hosted_connector_";
+
+/// コマンドを許す窓（接続用ソフトの窓のコマンドは main 窓に許さない）。
+fn window_of(command: &str) -> &'static str {
+  if command.starts_with(CONNECTOR_COMMAND_PREFIX) {
+    CONNECTOR_WINDOW_LABEL
+  } else {
+    MAIN_WINDOW_LABEL
+  }
+}
 
 const ACCOUNT_PLUGIN_COMMANDS: [&str; 5] = [
   "plugin:niho-desktop-account|account_state",
@@ -76,8 +89,9 @@ fn every_registered_command_is_allowed_for_the_bundled_ui() {
   let denied: Vec<String> = registered_commands()
     .into_iter()
     .filter(|command| {
+      let window = window_of(command);
       authority
-        .resolve_access(command, MAIN_WINDOW_LABEL, MAIN_WINDOW_LABEL, &Origin::Local)
+        .resolve_access(command, window, window, &Origin::Local)
         .is_none()
     })
     .collect();
@@ -113,6 +127,44 @@ fn no_command_is_allowed_for_remote_pages_or_other_windows() {
     allowed.is_empty(),
     "同梱の画面（main 窓・local）以外から呼べるコマンドがある。capabilities に remote や窓を足さない: {allowed:#?}"
   );
+}
+
+#[test]
+fn connector_commands_are_only_for_the_hidden_connector_window() {
+  // 接続用ソフトの窓（同梱の hosted-connector.html）だけが vault・ファイル・休止の口を持つ。main 窓はフォルダの登録だけで、
+  // 接続用ソフトの窓は main 窓のコマンドを持たない。どちらも remote の配信元には許さない
+  let mut context = context();
+  let authority = context.runtime_authority_mut();
+  let mut wrong = Vec::new();
+  let commands = registered_commands();
+  assert!(
+    commands
+      .iter()
+      .any(|command| command.starts_with(CONNECTOR_COMMAND_PREFIX)),
+    "接続用ソフトの窓のコマンドが登録されていない"
+  );
+  for command in &commands {
+    let other = if window_of(command) == MAIN_WINDOW_LABEL {
+      CONNECTOR_WINDOW_LABEL
+    } else {
+      MAIN_WINDOW_LABEL
+    };
+    if authority
+      .resolve_access(command, other, other, &Origin::Local)
+      .is_some()
+    {
+      wrong.push(format!("{command} ← 窓 {other}"));
+    }
+    for (label, origin) in foreign_origins() {
+      if authority
+        .resolve_access(command, CONNECTOR_WINDOW_LABEL, CONNECTOR_WINDOW_LABEL, &origin)
+        .is_some()
+      {
+        wrong.push(format!("{command} ← {label}（接続用ソフトの窓）"));
+      }
+    }
+  }
+  assert!(wrong.is_empty(), "窓の分け方が崩れている: {wrong:#?}");
 }
 
 #[test]

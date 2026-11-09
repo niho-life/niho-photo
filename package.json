@@ -12,6 +12,7 @@
     "packages/photo-library-contract",
     "packages/photo-library-sharing-contract",
     "packages/photo-hosted-library",
+    "packages/photo-hosted-connector",
     "packages/photo-cloud-library",
     "packages/photo-cloud-media",
     "apps/photo-web",
@@ -38,9 +39,6 @@
     "candidate:build": "node scripts/candidate/build-mac-candidate.mjs",
     "candidate:verify": "node scripts/candidate/verify-mac-candidate.mjs",
     "candidate:test": "node --test scripts/candidate/*.test.mjs",
-    "photo:release:prepare": "node scripts/release/prepare-mac-updater-release.mjs",
-    "photo:release:verify": "node scripts/release/verify-mac-updater-release.mjs",
-    "photo:release:test": "node --test scripts/release/*.test.mjs",
     "release:evidence": "node scripts/ci/release-evidence.mjs"
   },
   "engines": {

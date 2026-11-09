@@ -15,8 +15,9 @@ test("文書変更でもpublicationはworkflow側で常時実行、package実行
   assert.deepEqual(selected(["packages/ui/src/cn.ts"]), ["photo-editing", "camera", "desktop-photo", "desktop-account"]);
   assert.deepEqual(selected(["packages/niho-cloud-contract/src/v1.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-library-contract/src/v2.ts"]), ["photo-editing"]);
-  assert.deepEqual(selected(["packages/photo-library-sharing-contract/src/v1.ts"]), ["photo-editing"]);
-  assert.deepEqual(selected(["packages/photo-hosted-library/src/replica.ts"]), ["photo-editing"]);
+  assert.deepEqual(selected(["packages/photo-library-sharing-contract/src/v1.ts"]), ["photo-editing", "camera"]);
+  assert.deepEqual(selected(["packages/photo-hosted-library/src/replica.ts"]), ["photo-editing", "camera"]);
+  assert.deepEqual(selected(["packages/photo-hosted-connector/src/service.ts"]), ["photo-editing", "camera"]);
   assert.deepEqual(selected(["packages/photo-cloud-session/src/server/service.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-cloud-library/src/index.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-cloud-sync/src/index.ts"]), ["photo-editing"]);
@@ -37,7 +38,7 @@ test("SDK実buildは所有sourceと生成器だけを選択する", () => {
 });
 
 test("Mac candidate proofはapp・SDK所有source・account・builder契約だけを選択する", () => {
-  for (const name of ["apps/camera/src/main.ts", "packages/photo-editing/src/index.ts", "packages/ui/src/cn.ts", "packages/niho-cloud-contract/src/v1.ts", "packages/develop-engine/build-macos-native.mjs", "packages/desktop-photo/Cargo.toml", "packages/desktop-account/Cargo.toml", "sdk/release-set.json", "scripts/sdk/release-set-lib.mjs", "scripts/candidate/mac-candidate-lib.mjs", "scripts/release/updater-signature-verify/Cargo.toml", "package.json", "package-lock.json", "LICENSE.md", ".github/workflows/photo-candidate-release.yml", ".github/workflows/photo-sdk-release.yml", ".github/workflows/photo-renderer-release.yml", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/sdk/native-workflow-lib.mjs", "scripts/ci/release-evidence-lib.mjs"]) assert.equal(selectPhotoCandidate([name]), true, name);
+  for (const name of ["apps/camera/src/main.ts", "packages/photo-editing/src/index.ts", "packages/ui/src/cn.ts", "packages/niho-cloud-contract/src/v1.ts", "packages/develop-engine/build-macos-native.mjs", "packages/desktop-photo/Cargo.toml", "packages/desktop-account/Cargo.toml", "sdk/release-set.json", "scripts/sdk/release-set-lib.mjs", "scripts/candidate/mac-candidate-lib.mjs", "package.json", "package-lock.json", "LICENSE.md", ".github/workflows/photo-candidate-release.yml", ".github/workflows/photo-sdk-release.yml", ".github/workflows/photo-renderer-release.yml", "scripts/ci/photo-candidate-workflow-lib.mjs", "scripts/sdk/native-workflow-lib.mjs", "scripts/ci/release-evidence-lib.mjs"]) assert.equal(selectPhotoCandidate([name]), true, name);
   for (const name of ["README.md", "docs/ci/public-ci.md", "docs/security/publication-gates.md"]) assert.equal(selectPhotoCandidate([name]), false, name);
 });
 
