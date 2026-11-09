@@ -19,6 +19,7 @@ import {
   sdkProofReleaseMetadata,
 } from "./mac-updater-release-lib.mjs";
 import { readPinnedUpdaterKey, verifyUpdaterArchiveSignature } from "./updater-signature.mjs";
+import { assertStrictVersion } from "../candidate/mac-candidate-lib.mjs";
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../..");
 const REPOSITORY_URLS = new Set(["https://github.com/niho-life/niho-photo.git"]);
@@ -186,8 +187,8 @@ function main(argv) {
       if (!info?.isFile() || info.isSymbolicLink() || info.size <= 0 || info.size > 250 * 1024 * 1024) fail("candidate releaseに通常fileでないassetまたはsize超過があります");
     }
 
-    if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u.test(candidateManifest.sdk.version)
-      || !/^[a-f0-9]{40}$/u.test(candidateManifest.sdk.source?.commit ?? "")) fail("candidate SDK identityが不正です");
+    assertStrictVersion(candidateManifest.sdk.version);
+    if (!/^[a-f0-9]{40}$/u.test(candidateManifest.sdk.source?.commit ?? "")) fail("candidate SDK identityが不正です");
     const sdkTag = `photo-sdk-v${candidateManifest.sdk.version}`;
     const sdkRelease = parseJson(Buffer.from(run("gh", ["api", `repos/${PHOTO_UPDATER_RELEASE.repository}/releases/tags/${sdkTag}`])), "SDK release metadata");
     const sdkTagRef = parseJson(Buffer.from(run("gh", ["api", `repos/${PHOTO_UPDATER_RELEASE.repository}/git/ref/tags/${sdkTag}`])), "SDK tag ref");

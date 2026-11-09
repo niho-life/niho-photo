@@ -13829,18 +13829,18 @@
     },
     {
       "path": "scripts/release/mac-updater-release-lib.mjs",
-      "sha256": "738ee43260f3bf1ef377c61796a0e5abdeed7b7676e15c1b150dd3f6771bcc20",
-      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: candidate attestation・transport proof・static manifest verifierを仕上げ\n変更理由: candidate Release assetのpath traversalとsize超過をdownload前に拒否\n変更理由: candidateの7配布assetとSDK Release証跡を分けて由来hashを照合する"
+      "sha256": "a359b599e27b88b6a47add681490a70480c38fdf274be38f41521b99f180d894",
+      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: candidate attestation・transport proof・static manifest verifierを仕上げ\n変更理由: candidate Release assetのpath traversalとsize超過をdownload前に拒否\n変更理由: candidateの7配布assetとSDK Release証跡を分けて由来hashを照合する\n変更理由: SDKの既存strict semver契約を共用しprereleaseとbuild metadataの互換を保つ"
     },
     {
       "path": "scripts/release/mac-updater-release-lib.test.mjs",
-      "sha256": "f2048eb71554da51f1794ff72f827317be08570ae41e32fd0c3a4975b9fefb68",
-      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: 署名manifestとattestation parserの対象testを追加\n変更理由: updater設定のfeed公開鍵version署名契約を公開CIテストで固定\n変更理由: candidate Releaseの不正asset名sizedraft拒否を検証\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する\n変更理由: candidate publisherとのasset集合不整合とSDK proof正規化の回帰を検出する"
+      "sha256": "4f7dab86ca0d33767be679061711bfba4cbbb50079d232b77f39c891190f95af",
+      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: 署名manifestとattestation parserの対象testを追加\n変更理由: updater設定のfeed公開鍵version署名契約を公開CIテストで固定\n変更理由: candidate Releaseの不正asset名sizedraft拒否を検証\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する\n変更理由: candidate publisherとのasset集合不整合とSDK proof正規化の回帰を検出する\n変更理由: SDK prereleaseとbuild metadataの受入と非canonical semver拒否を回帰検証する"
     },
     {
       "path": "scripts/release/prepare-mac-updater-release.mjs",
-      "sha256": "e4c7ba4d7503f545d5521b75d824e70eff31014deb1f095d6b867507957e2bea",
-      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: Studio owner-local署名とdraft asset生成の安全検査を仕上げ\n変更理由: 公開検査がSSH形式remoteを非公開参照と誤判定する問題を避けHTTPS remoteに限定\n変更理由: 候補Release metadataの事前検証を署名準備に適用\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する\n変更理由: SDK receiptとRelease metadataを固定した公式SDKから取得して署名準備を成立させる"
+      "sha256": "e8a5485b9fea51e4de2768f6dfb9f398bcfcf9bfd427ff853d0bec1004b2edd1",
+      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: Studio owner-local署名とdraft asset生成の安全検査を仕上げ\n変更理由: 公開検査がSSH形式remoteを非公開参照と誤判定する問題を避けHTTPS remoteに限定\n変更理由: 候補Release metadataの事前検証を署名準備に適用\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する\n変更理由: SDK receiptとRelease metadataを固定した公式SDKから取得して署名準備を成立させる\n変更理由: SDK identityは既存strict semver検証を使い既存candidateの契約を保つ"
     },
     {
       "path": "scripts/release/verify-mac-updater-release.mjs",

@@ -53,6 +53,9 @@ test("SDK ReleaseのAPI応答は既存proof形式へ正規化し、由来hashの
   assert.throws(() => sdkProofReleaseMetadata({ ...release, draft: true }, ref), /metadata/u);
   assert.throws(() => sdkProofReleaseMetadata({ ...release, assets: [...release.assets, release.assets[0]] }, ref), /metadata/u);
   assert.throws(() => sdkProofReleaseMetadata({ ...release, assets: [{ name: "../receipt", size: 64, state: "uploaded" }] }, ref), /metadata/u);
+  const previewTag = "photo-sdk-v1.2.3-rc.1+build.7";
+  assert.equal(sdkProofReleaseMetadata({ ...release, tag_name: previewTag }, { ...ref, ref: `refs/tags/${previewTag}` }).tagName, previewTag);
+  assert.throws(() => sdkProofReleaseMetadata({ ...release, tag_name: "photo-sdk-v1.2.3-rc.01" }, ref), /metadata/u);
 });
 
 function attestationFixture() {

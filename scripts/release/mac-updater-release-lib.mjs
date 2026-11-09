@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import path from "node:path";
 
-import { candidateContract, sha256, verifyCandidateDirectory, verifySdkProofDirectory } from "../candidate/mac-candidate-lib.mjs";
+import { assertStrictVersion, candidateContract, sha256, verifyCandidateDirectory, verifySdkProofDirectory } from "../candidate/mac-candidate-lib.mjs";
 
 export const PHOTO_UPDATER_RELEASE = Object.freeze({
   repository: "niho-life/niho-photo",
@@ -36,9 +36,12 @@ export function candidateReleaseAssetNames(manifestFile, manifest) {
 }
 
 export function sdkProofReleaseMetadata(rawRelease, tagRef) {
+  try {
+    if (!rawRelease?.tag_name?.startsWith("photo-sdk-v")) fail("SDK tagが不正です");
+    assertStrictVersion(rawRelease.tag_name.slice("photo-sdk-v".length));
+  } catch { fail("SDK Release/tag/asset metadataが不正です"); }
   if (!Number.isSafeInteger(rawRelease?.id) || rawRelease.id <= 0
     || rawRelease.draft !== false || typeof rawRelease.prerelease !== "boolean"
-    || !/^photo-sdk-v[0-9]+\.[0-9]+\.[0-9]+$/u.test(rawRelease.tag_name ?? "")
     || !FULL_SHA.test(rawRelease.target_commitish ?? "")
     || tagRef?.ref !== `refs/tags/${rawRelease.tag_name}`
     || tagRef.object?.type !== "commit" || tagRef.object.sha !== rawRelease.target_commitish
