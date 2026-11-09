@@ -1,7 +1,7 @@
 # NIHO photo Mac candidate 契約
 
 このdirectoryのhelperは、完全な未公証・ad-hoc署名済みMac candidateを信頼buildで生成し、
-後続のprivate signerへ固定hashを持つdataとして渡します。build・data検証helperはnetworkを使わず、
+後続のowner-local signerへ固定hashを持つdataとして渡します。build・data検証helperはnetworkを使わず、
 公開済みSDKの取得は `prepare-published-sdk.mjs`、candidateのpublishは後述のworkflowが担当します。
 実際のSwift/Rust/Tauri buildはApple Silicon CIで実行します。
 
@@ -39,7 +39,8 @@ SDK全6 tarball、manifest、package hash、source ownershipを先に検証し�
 - `apps/camera/src-tauri/Cargo.lock` の `niho_camera` package
 
 root npm lockはversion合わせのために変更しません。Tauriはrelease、`--locked`、`--bundles app`、
-`official-updates` feature、ad-hoc署名でbuildします。固定bundle ID `life.niho.camera`、product `NIHO photo`、
+`official-updates` feature、ad-hoc署名でbuildします。Tauri updaterはversionも署名対象に含めて照合します。
+固定bundle ID `life.niho.camera`、product `NIHO photo`、
 deep link `niho-camera`、updater feedとpublic key、`camera_app_info` が使うnative crate versionをoverlay結果で固定します。
 
 ## 生成後の検査
@@ -69,32 +70,39 @@ builderは完成DMGもreadonly/no-auto-openでmountし、同じinventoryへ照�
 外側hashも固定し、梱包後の差し替えや改変を拒否します。DMG直下はappと固定Applications linkの2件だけを許可し、
 隠しmetadataを含む追加payloadも拒否します。候補のprogram/scriptは起動しません。
 
-## private signerへのdata-only handoff
+## Mac Studioでのローカル署名・Release公開
 
-public publisherはbuilder outputのmanifest SHA-256、source SHA、run/attemptを指定して次のzero-dependency verifierを実行します。
-private signer側はprivateのtrusted mainに置いた検証処理を使い、public candidateからscriptやverifierを受け取って実行しません。
+`Photo Mac candidate release` は未署名のcandidateをprereleaseへ保存し、manifestをGitHub ActionsのSigstore identityでattestします。
+正式配布は、ownerがMac Studioのcleanな最新 `main` checkoutで次のローカル手順を実行します。
+最初に同じcheckoutでlockfile固定のTauri CLIを用意します。install scriptは実行しません。
 
 ```sh
-npm run candidate:verify -- \
-  --directory /input/candidate \
-  --expected-manifest-sha256 <64hex> \
-  --expected-source <40hex> \
-  --expected-version 1.2.3 \
-  --expected-sdk-mode published \
-  --expected-sdk-version 0.1.1 \
-  --expected-sdk-manifest-sha256 <64hex> \
-  --run-id 123456 --run-attempt 1
+npm ci --ignore-scripts --no-audit --no-fund
+export NIHO_PHOTO_UPDATER_KEY_FILE="<既存Photo updater秘密鍵のローカルpath>"
+npm run photo:release:prepare -- \
+  --candidate-tag photo-candidate-v1.2.3-<source SHA先頭12桁> \
+  --signing-key-path "$NIHO_PHOTO_UPDATER_KEY_FILE" \
+  --output-dir /tmp/niho-photo-release-v1.2.3
 ```
 
-verifierはasset名とexact集合、manifest/version/identity/updater契約、全hash/size、SBOM source pin、app tarのentryを
-dataとして検査します。tarは `NIHO photo.app/` 外、絶対path、`..`、特殊file、symlink（外向きか否かを問わず）を拒否します。
-不足、extra、改ざん、不正version、別bundle ID/updater設定も拒否します。DMGやapp tarを展開・実行せず、署名後工程が
-candidate内容を変更した場合は別成果物として新しいmanifestを作る必要があります。
+helperはcurrent mainに含まれる固定workflowのattestation、run、source SHA、SDK proof、candidate manifestと全asset hashを照合します。
+candidateの7配布assetsにSDK receipt/Release metadataは含まれないため、その2点だけは固定したSDKの公式Release/tagから取得・正規化します。candidateのattested provenanceに記録された両proofのhashへ照合し、sourceやbytesの不一致を受け入れません。
+取得したcandidateのprogram・script・verifierは実行せず、tar/DMGも展開せずにdataとして検査します。署名対象のtarはmanifestに
+hash固定された同じbytesです。秘密鍵の内容を引数・env・ログへ出さず、ローカルkey fileから直接Tauri署名します。
+署名後はTauri updaterと同じMinisign verifierでtarと署名を検証し、appに固定した公開鍵と署名内のversionが一致するまで配布assetを作りません。
 
-各candidate assetとSDK packageは既存のdesktop/proxy上限に合わせて250 MiB以下に固定し、candidate manifestを含む
-全入力は通常fileだけを受け付けます。publisherでは `sdk-proof/` のSDK manifest、SDK release receipt、release metadataも
-指定し、source ownership、SDK version/source/hash、GitHub run/attempt、Actions artifact ID/digestを再照合して
-`photo-candidate-artifact-receipt.json` と `photo-candidate-provenance.json` を作ります。
+署名後は、元のDMG/app tar/SBOM/manifest、SDK proof、輸送receipt/provenance、`.sig` とTauri static updater用 `latest.json` を
+新規output directoryへ作ります。helperはGitHubへ書き込まず、`publish-draft-instructions.txt` を出力します。assetとnotesを確認後、
+instructionsに沿ってGitHub Releaseのdraftを作り、draft内の全assetを読み返してから `--draft=false --latest` で公開します。
+一度確保したtag/versionは再利用しません。途中で失敗した版は捨て、より大きいapp versionで作り直します。
+公開後は `npm run photo:release:verify -- --release-tag photo-app-v1.2.3 --prepared-dir /tmp/niho-photo-release-v1.2.3` を実行し、GitHub上のlatest Release・全asset hash・配信中の `latest.json` をprepared bytesへread-back照合します。downloadしたapp tarと署名も固定公開鍵・versionで再検証します。
+
+通常のapp Releaseは `photo-app-v<version>` とし、Photo updaterの `latest.json` URLに解決されるようrepositoryの最新Releaseにします。
+SDK/Web/renderer/candidate Releaseは引き続き `--latest=false` のままです。GitHub Releaseのimmutable settingを有効にしてから
+最初のapp Releaseを公開します。署名鍵はownerのMac Studio内に留め、公開repo・GitHub Actions・配布assetへ含めません。
+
+このsource版を含むapp releaseを一度は手動でインストールしてください。旧インストール済みappは従来の `niho.life` feedを記録しているので、
+新feedを埋め込んだappへ切り替える最初の一回はDMGから行います。それ以後はPhoto自身のGitHub Releaseから更新します。
 
 ## CIとprerelease
 
@@ -112,10 +120,12 @@ configを使う検証であり、本番loginの認証成功、公式release、�
 read-only macOS builderは公開SDK releaseのtag/target、全6 tarball、manifest、元のartifact receiptを検証してcandidateと
 SDK proofを同runの専用artifactへ保存します。Ubuntu publisherはdispatch時mainのverifierだけを実行し、artifact内codeや
 appを起動せず、`photo-candidate-v<app version>-<app SHA先頭12桁>` の新規tagと `--latest=false` prereleaseを作ります。
-これはcandidate経路だけで、private `camera-v` release、署名成果物、updater feedを変更しません。
+candidate経路は署名済み正式Releaseとは分離されています。candidate build/publish自体ではupdater feedを変更しません。
 
 tagはCASで先に確保し、release作成途中で失敗しても削除・再利用しません。その版は消費済みとして、rollbackまたは再実行は
 **より高い新しいapp version**を指定します。前のsourceへ戻す場合も、保存済みの前source SHAと承認済みSDK hashを入力し、
 高い新versionで新しいcandidateを作ります。既存tag/assetsの上書きやclobberは行いません。
 
-公式publisherは検証済みcandidate manifestを `actions/attest` でattestします。SDK manifestにもSDK専用workflowのattestationがあり、後段は両方の実digest・公式workflow・main ref・tooling SHA・certificate内run/attemptを暗号学的に照合します。公開のSigstore署名用短命identityを使い、private updater秘密鍵や新しいPATは不要です。
+公式publisherは検証済みcandidate manifestを `actions/attest` でattestします。SDK manifestにもSDK専用workflowのattestationがあり、
+Studio側は実digest・公式workflow・main ref・tooling SHA・certificate内run/attemptを暗号学的に照合します。公開のSigstore署名用短命identityを使い、
+private updater秘密鍵や新しいPATは不要です。

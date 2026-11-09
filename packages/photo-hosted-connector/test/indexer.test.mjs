@@ -96,6 +96,35 @@ test("edited or replaced originals get a new generation; edits never reuse an ol
   assert.equal(niho.canonical.photoOf(entry("2026/b.JPG").photoId).source.generation, 1);
 });
 
+test("a pending index mutation reuses its key on retry, but A to B to A uses a new key each time", async () => {
+  const context = await paired(world({ files: { "a.jpg": "synthetic A" } }));
+  const { connector, fs, niho, index } = context;
+  niho.dropNextResponse.add("connector.putIndex");
+  await assert.rejects(connector.tick(signal));
+  const first = niho.requests.filter((request) => request.operation === "connector.putIndex").at(-1);
+  assert.equal(index.all()[0].dirty, true, "the unacknowledged mutation stays pending locally");
+
+  await settle(connector);
+  const attempts = niho.requests.filter((request) => request.operation === "connector.putIndex");
+  assert.equal(attempts[0].key, attempts[1].key, "retry uses the persisted key");
+  assert.deepEqual(attempts[0].body, attempts[1].body, "retry uses the identical body");
+  const photoId = index.all()[0].photoId;
+  assert.equal(niho.canonical.photoOf(photoId).source.generation, 1, "a replay does not apply the index twice");
+
+  fs.modify(ROOT.id, "a.jpg", "synthetic B");
+  await settle(connector);
+  const secondMutation = niho.requests.filter((request) => request.operation === "connector.putIndex").at(-1);
+  fs.modify(ROOT.id, "a.jpg", "synthetic A");
+  await settle(connector);
+  const thirdMutation = niho.requests.filter((request) => request.operation === "connector.putIndex").at(-1);
+
+  assert.notEqual(secondMutation.key, first.key);
+  assert.notEqual(thirdMutation.key, secondMutation.key);
+  assert.notEqual(thirdMutation.key, first.key, "returning to old bytes is a distinct mutation");
+  assert.equal(niho.canonical.photoOf(photoId).source.generation, 3);
+  assert.equal(niho.canonical.photoOf(photoId).source.sha256, index.all()[0].sha256);
+});
+
 test("an excluded photo is never hashed, rendered or re-added, and its original stays", async () => {
   const context = await paired(world({ files: FILES }));
   const { connector, fs, niho, index } = context;
@@ -104,9 +133,11 @@ test("an excluded photo is never hashed, rendered or re-added, and its original 
   niho.canonical.exclude(b.photoId);
   fs.modify(ROOT.id, "2026/b.JPG", "synthetic jpeg two, edited");
   const before = fs.snapshot();
+  const bytesRead = fs.bytesRead;
   await settle(connector);
   const after = index.all().find((item) => item.relativePath === "2026/b.JPG");
   assert.equal(after.excluded, true);
+  assert.equal(fs.bytesRead, bytesRead, "the replica exclusion is applied before hashing changed originals");
   assert.deepEqual(fs.snapshot(), before);
   const revision = niho.canonical.revision;
   await settle(connector);

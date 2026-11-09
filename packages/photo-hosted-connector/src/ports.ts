@@ -106,6 +106,8 @@ export interface LocalIndexEntry {
   readonly seenInScan: number;
   /** True when NIHO has not yet received the current identity/availability. */
   readonly dirty: boolean;
+  /** Stable across retries of this pending index mutation; replaced whenever its reported state changes. */
+  readonly reportMutationId: string | null;
   /**
    * After an index rebuild, bytes that do not match NIHO's record are held: not hashed, reported or rendered until
    * the owner decides. They are never relinked automatically.

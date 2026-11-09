@@ -13,7 +13,7 @@ export const scopes = {
   "develop-engine": { paths: ["packages/develop-engine/", "packages/photo-editing/src/fixtures/cutout-brush-parity.json"], root: "packages/develop-engine", runner: "macos-26", kind: "native", swift: true },
 };
 
-// 本人クラウド・共有契約と常設Macライブラリcoreも SDK の node contract に入る
+// 本人クラウド v2（photo-library-contract）と共有の契約 v1（photo-library-sharing-contract）も SDK の node contract に入る
 const photoSdkPrefixes = ["packages/photo-editing/", "packages/ui/", "packages/niho-cloud-contract/", "packages/photo-library-contract/", "packages/photo-library-sharing-contract/", "packages/photo-hosted-library/", "packages/develop-engine/", "packages/desktop-photo/", "sdk/", "scripts/sdk/"];
 const photoSdkFiles = new Set(["package.json", "package-lock.json", "LICENSE.md", "ASSET_LICENSE.md", "TRADEMARKS.md", "THIRD_PARTY_NOTICES.md"]);
 const photoCandidatePrefixes = ["apps/camera/", "packages/photo-editing/", "packages/ui/", "packages/niho-cloud-contract/", "packages/photo-hosted-library/", "packages/develop-engine/", "packages/desktop-photo/", "packages/desktop-account/", "sdk/", "scripts/sdk/", "scripts/candidate/"];

@@ -1,8 +1,8 @@
 //! 自動更新（C5 #18393。NIHO Desktop・NIHO docs と同じ作法: 次に開いたときに新しい版になる）。
 //!
-//! - 起動時に 1 回だけ `plugins.updater.endpoints`（`https://niho.life/camera/updater/latest.json`。Web の
+//! - 起動時に 1 回だけ `plugins.updater.endpoints`（Photo の GitHub Release `latest.json`。Web の
 //公開移植前の内部構成については docs/migration/mac-client.md を参照。
-//!   署名（`plugins.updater.pubkey`）を確かめて取得する。`.app` の差し替えはアプリを閉じるとき（`RunEvent::Exit`・
+//!   署名（`plugins.updater.pubkey`）と署名対象versionを確かめて取得する。`.app` の差し替えはアプリを閉じるとき（`RunEvent::Exit`・
 //!   `install_staged_on_exit`）にする。起動中に差し替えると、動いている現像（`PhotoDevelop`）が起動時に確かめた版・校正の
 //!   fingerprint のまま、`/Applications/NIHO photo.app/...` の新しい sidecar と校正を起動してしまうため（古い recipe での
 //!   キャッシュ・版の組み合わせの不一致）。閉じるときは sidecar を止めた後（`develop::shutdown`）に差し替える。
@@ -192,13 +192,13 @@ mod tests {
   }
 
   #[test]
-  fn the_feed_is_the_camera_proxy_on_niho_life() {
-    // 公開移植前の内部構成については docs/migration/mac-client.md を参照。
+  fn the_feed_is_the_photo_github_release() {
     let conf: Value = serde_json::from_str(include_str!("../tauri.conf.json")).expect("tauri.conf.json");
     assert_eq!(
       conf["plugins"]["updater"]["endpoints"],
-      json!(["https://niho.life/camera/updater/latest.json"])
+      json!(["https://github.com/niho-life/niho-photo/releases/latest/download/latest.json"])
     );
+    assert_eq!(conf["plugins"]["updater"]["requireSignedVersion"], json!(true));
     assert!(conf["plugins"]["updater"]["pubkey"].is_string());
   }
 

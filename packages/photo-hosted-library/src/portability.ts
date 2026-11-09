@@ -139,7 +139,13 @@ function checkManifest(value: unknown, fail: () => never): PortableLibraryManife
     if (!safe(photo.source?.generation) || !safe(photo.source.sizeBytes) || !(photo.source.sha256 === null || isSha256(photo.source.sha256))) fail();
     if (!safe(photo.recipe?.revision) || !isSha256(photo.recipe.settingsSha256) || !safe(photo.recipeSourceGeneration)) fail();
     const settings = photo.recipe.settings as unknown;
-    if (settings === null || typeof settings !== "object" || isList(settings) || !isList(photo.recipe.maskSurfaceIds)) fail();
+    if (
+      settings === null ||
+      typeof settings !== "object" ||
+      isList(settings) ||
+      !isList(photo.recipe.maskSurfaceIds) ||
+      photo.recipe.maskSurfaceIds.some((surfaceId) => !isSha256(surfaceId))
+    ) fail();
     if (typeof photo.recipe.settings.engine !== "string" || typeof photo.recipe.updatedAt !== "string") fail();
     if (photo.recipeSourceGeneration > photo.source.generation) fail();
     if (!isList(photo.masks) || photo.masks.some((mask) => !isSha256(mask.surfaceId) || !safe(mask.sizeBytes))) fail();
@@ -243,11 +249,15 @@ export async function buildFullExport(input: {
   const source = parsePortableManifest(input.manifest);
   const { signal, sink } = input;
   const missingOriginals: PhotoId[] = [];
-  const missingMasks: string[] = [];
+  const missingMasks = new Set<string>();
   const written = new Set<string>();
   const photos: PortablePhoto[] = [];
   for (const photo of source.photos) {
     assertNotAborted(signal);
+    const declaredMaskIds = new Set(photo.masks.map((mask) => mask.surfaceId));
+    for (const surfaceId of photo.recipe.maskSurfaceIds) {
+      if (!declaredMaskIds.has(surfaceId)) missingMasks.add(surfaceId);
+    }
     const expected = photo.source.sha256;
     const bytes = expected === null ? null : await input.readOriginal(photo, signal);
     const ok = expected !== null && bytes !== null && bytes.byteLength === photo.source.sizeBytes && (await sha256Hex(bytes)) === expected;
@@ -267,15 +277,15 @@ export async function buildFullExport(input: {
         await sink.add(path, maskBytes, signal);
         written.add(path);
       } else {
-        missingMasks.push(mask.surfaceId);
+        missingMasks.add(mask.surfaceId);
       }
     }
     photos.push({ ...photo, original: { included: ok, sha256: expected } });
   }
-  if (missingMasks.length) return { manifest: null, missingOriginals, missingMasks };
+  if (missingMasks.size) return { manifest: null, missingOriginals, missingMasks: [...missingMasks] };
   const manifest: PortableLibraryManifest = { ...source, mode: "full", photos };
   await sink.add("manifest.json", new TextEncoder().encode(`${JSON.stringify(manifest)}\n`), signal);
-  return { manifest, missingOriginals, missingMasks };
+  return { manifest, missingOriginals, missingMasks: [] };
 }
 
 /**
@@ -290,17 +300,25 @@ export async function verifyFullExport(input: {
   const manifest = parsePortableManifest(input.manifest);
   if (manifest.mode !== "full") throw new HostedLibraryError("invalid_request");
   const expected = new Map<string, string>();
+  const invalidReferences = new Set<string>();
   for (const photo of manifest.photos) {
+    const declaredMaskIds = new Set(photo.masks.map((mask) => mask.surfaceId));
     if (photo.original.included && photo.original.sha256) expected.set(`originals/${photo.original.sha256}`, photo.original.sha256);
     for (const mask of photo.masks) expected.set(`masks/${mask.surfaceId}.png`, mask.surfaceId);
+    // Recipes are authoritative too: an omitted mask inventory row must not make an incomplete archive verify clean.
+    for (const surfaceId of photo.recipe.maskSurfaceIds) {
+      const path = `masks/${surfaceId}.png`;
+      expected.set(path, surfaceId);
+      if (!declaredMaskIds.has(surfaceId)) invalidReferences.add(path);
+    }
   }
-  const wrong: string[] = [];
+  const wrong = new Set(invalidReferences);
   for (const [path, sha256] of expected) {
     assertNotAborted(input.signal);
     const bytes = await input.read(path, input.signal);
-    if (!bytes || (await sha256Hex(bytes)) !== sha256) wrong.push(path);
+    if (!bytes || (await sha256Hex(bytes)) !== sha256) wrong.add(path);
   }
-  return wrong;
+  return [...wrong];
 }
 
 /** What NIHO currently holds for the target library; supplied by the canonical side. */
