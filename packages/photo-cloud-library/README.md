@@ -54,7 +54,7 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 - `withAuthorizedCredential` で本人・親 session・epoch を capture header と照合し、新しい credential を固定の upstream（`NIHO_PRODUCTION_ORIGIN` と非公開の起動設定の prefix）にだけ渡す。同じ suffix を prefix へ写す。
 - JSON は parse の前に byte 数を制限し、client と同じ応答の規則で検査する。error は契約の envelope で status が一致するものだけ。upload ticket は trusted provider の、その upload のものだけ。content は v2 と同じ（200 は全体、206 は要求した範囲、全体の size と SHA-256、正確な長さ、全量を buffer しない）。
 - 公開の前に session をもう一度確かめ、失敗なら上流の body を取り消して 1 byte も出さない。応答はすべて `no-store`。
-- 中継する操作は `SHARING_PROXY_OPERATIONS`（このPRではメンバーと招待）。
+- 中継する操作は `SHARING_PROXY_OPERATIONS`: メンバーと招待（B05）、アルバム・項目・オーナーの共有容量・完成写真の download と upload ticket（B12）。家の Mac のライブラリ・書き出し・render job など、応答を検査する client がまだ無い操作は閉じている。
 
 ### 未ログインで開いた招待（`@niho/photo-cloud-library/server` の `createPendingInviteHandler`）
 
@@ -65,6 +65,15 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 - 参加: 検証済みの session で cookie を開き、`decidePendingInviteJoin` で決め、通常の `invites.join` を上流へ送る（key は保留の ID ごと）。session を確かめたあとは成否に関係なく cookie を消す。未ログインなら `unauthenticated` で cookie を残す。応答は `InviteJoinResult`（receipt を外した値）を検証してから返す。
 - 鍵は非公開の運用側から渡す 32 bytes を 1〜2 個（先頭で封じ、どちらでも開く）。値を source・log・エラーに出さない。使った保留の ID は期限までこの process が覚え、別の instance で同じ cookie が使われたときは上流の key の replay（`replayed: true`）を `invite_unavailable` にする。
 - 同一 origin・`Origin` 一致・`Sec-Fetch-Site: same-origin`（ある場合）・`Content-Type: application/json`・query と `Idempotency-Key` なし・閉じた body だけを受ける。
+
+## 共有アルバムの写真（`./sharing`、B12 #254）
+
+同じ `./sharing` に、アルバム・項目・オーナーの共有容量の client（`createBrowserSharedAlbumClient`）と UI 向けの操作（`createSharedAlbumItems`）を置く。B05 の client と同じ HTTP の芯（`sharing-http.ts`）と経路の表を使う。
+
+- 追加は 3 種類。自分のライブラリの写真（`addLibraryPhotos`。元データを持つ端末が B07 で描く）、端末で描いた写真（`addDevicePhoto`。`renderFinishedOutput` の結果を `deviceRenderFile` で渡す）、完成済みの JPEG（`addFile`。`prepareAlbumFile` が端末で撮影日時以外の metadata を落とす。向きの tag に頼る JPEG は受け取らない）。
+- 呼び出しごとに冪等 key を持ち、応答が失われたら同じ key で再送する。ticket のない再送の応答を受けたら、その upload を取り消して同じ項目へ同じ内容を出し直し、項目を二重に作らない。始めた upload は確定か解放で終わる（中断・確定の拒否・取消で予約を返し、公開されなかった追加は消す）。
+- 差し替え（`replaceFile`・`replaceDeviceRender`）、複数選択の削除（`removeItems`）と保存（`saveItems`。原寸を hash と照合して渡す）。
+- 合成 server は項目の状態、追加者の端末の描画 job、確定時の作り直し（許可した metadata だけ）、オーナーへの容量の算入と解放、補正の保存による自動差し替え、端末の休止、メンバーの解除・退会・降格後に未公開の追加を破棄することを持つ。画面への組み込みは B00・B08 の merge 後。
 
 ## 完全補正の同期core
 

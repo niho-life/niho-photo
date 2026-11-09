@@ -151,9 +151,10 @@ async function readJsonResponse(response: Response, operation: WireOperation, si
   throw parsePhotoError(value, response.status);
 }
 
-async function parseContentResponse(
+/** Bounded, hash-labelled content stream (also used for shared-album downloads, which share the content headers). */
+export async function parseContentResponse(
   response: Response,
-  request: PhotoOperationMap["content.get"]["request"],
+  request: Pick<PhotoOperationMap["content.get"]["request"], "range">,
   scope: ReturnType<PersonalPhotoScope["begin"]>,
   controller: AbortController,
   disposeTransport: () => void,

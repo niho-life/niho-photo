@@ -10183,6 +10183,11 @@
       "origin": "公開Macクライアント #7 のため新規作成。秘密なしunsignedビルド・公開CI・ライセンス・lint契約を明示。"
     },
     {
+      "path": "apps/camera/hosted-connector.html",
+      "sha256": "25cbae380b03f8c733323c1230f2b9f1475bce170d2d0e41f93ceb186e7fd409",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
       "path": "apps/camera/public-ci.json",
       "sha256": "c4674751c6bc4a37ca2f90a9b9a205f18ecea9a94c423a7813ed082ed7d255ea",
       "origin": "公開Macクライアント #7 のため新規作成。秘密なしunsignedビルド・公開CI・ライセンス・lint契約を明示。"
@@ -10258,6 +10263,16 @@
       "origin": "公開Issue #210のE2E runner entrypoint。アプリのe2e featureだけで利用する写真pickerの一時試験を呼び出す。"
     },
     {
+      "path": "apps/camera/src-tauri/capabilities/hosted-connector.json",
+      "sha256": "7bf4eee8330375afd2e5b60c0db7831117b473773f0519bdadd49bbe43a861b0",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "apps/camera/src-tauri/launchd/life.niho.camera.hosted-connector.plist",
+      "sha256": "3508761db79d208827eb72e9e789e0aaff229199dc28f56785d4311658e29731",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
       "path": "apps/camera/src-tauri/src/account.rs",
       "sha256": "9a0339b5e37b1074e1b4baefc8f817284572b6aa4f3f1fa47ab12aeef8f6e87d",
       "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: Camera限定の安全な本人写真session読取と即時失効を実接続し、旧session遅着と保存待ちを隔離する\n変更理由: ログアウト後の本人写真session読取と並行refreshによる失効解除を防止\n変更理由: ログアウト失効フェンスとTauri account command境界を修正\n変更理由: ログアウト中のsession失効とstale observer競合を防止\n変更理由: ログアウト失効フェンスの回帰testを整備\n変更理由: 公開commandの型可視性をcrate境界に限定\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する\n変更理由: 親のterminal logout fenceとcache TTLを合成しC00読取の開始と公開直前を同じnative世代へ束縛する\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: 正式Mac bootstrapの依存を通常mergeし、mainの共有編集面と固定native transportを保持\n変更理由: 本人Photoの実bootstrap・検証済み原本保存・失効と確定の排他・PNGのEOF検証を追加。\n変更理由: MacBearer transport enumの値を使いlogout時commit拒否テストのRust型不整合を修正"
@@ -10291,6 +10306,26 @@
       "path": "apps/camera/src-tauri/src/flags_tests.rs",
       "sha256": "9a0c6c37940c91a45f7b6f596472d112779640965a54f9afc9846792e3625583",
       "origin": "niho-photo#47 のため新規作成。選別のフラグのコマンドと一覧の印の test（一時フォルダと合成のファイルだけを使用）。"
+    },
+    {
+      "path": "apps/camera/src-tauri/src/hosted_connector.rs",
+      "sha256": "4057e57174ea1c793a2c03af25ae6303f36992455d3e2dfbff2b4bf098c7a54d",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "apps/camera/src-tauri/src/hosted_connector_fs.rs",
+      "sha256": "fbb24893f01857caef5e0e52fa3efe0b8cf12bf0fd88437fcfee37d348bfae2f",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "apps/camera/src-tauri/src/hosted_connector_fs_tests.rs",
+      "sha256": "2758c488069ef19d944a6b3960b863bec6c1ba4da371f6e5dea2f20e78a77a91",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "apps/camera/src-tauri/src/hosted_connector_system.rs",
+      "sha256": "5d73091aa46c6a8e596c4b249c6104a70d43e8f6fe13676fc2547377c91ee2af",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "apps/camera/src-tauri/src/mask_detection.rs",
@@ -10366,6 +10401,36 @@
       "path": "apps/camera/src/cloud-build-proof.ts",
       "sha256": "63bad849bf32087f838fa31facba64041fb7a2da1676283fd1e4adfadfadbd45",
       "origin": "NIHO所有の新規実装。正式Mac candidateが検証済みSDK source/runtime proofをcompile時に固定し、未設定・未知の宣言ではcloudを閉じる。実写真・private source・第三者資産を含まない。"
+    },
+    {
+      "path": "apps/camera/src/hosted-connector/connector-page.ts",
+      "sha256": "92f64e395cccfeb8194ade2517128195ad24f1401f3bd6048c4b3d531f31a567",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "apps/camera/src/hosted-connector/hosted-folders.test.tsx",
+      "sha256": "f80d4d1483f374189675f32e209dbde5683211f7cf3bd6bf97c87c2d61263597",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "apps/camera/src/hosted-connector/hosted-folders.tsx",
+      "sha256": "44812ed844315f36f8694591d5db9956a33056a29516cc8d774ca75401d79692",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "apps/camera/src/hosted-connector/mac-hosted-connector.ts",
+      "sha256": "9f3e4e436938fdca52049a0b81ecf4e29205d8472be12256b5167252dfca83ca",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "apps/camera/src/hosted-connector/native-ports.test.ts",
+      "sha256": "da184b1ff8a799c4fe6c6b2aad78b03416b0ee3c0c147028718d6d2e7678742e",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "apps/camera/src/hosted-connector/native-ports.ts",
+      "sha256": "1ff663213d7899eb83bf4b72a8db6cd749f9fc5a7d2711be6418cd048214f860",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     },
     {
       "path": "apps/camera/src/local-library/local-photo-library-mask-surfaces.test.ts",
@@ -11874,8 +11939,8 @@
     },
     {
       "path": "packages/photo-cloud-library/README.md",
-      "sha256": "9675ad33caa445bd7a3816141a068abf4f0e1284dd53c752460cbd9bcb14f443",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: C03実HTTPと狭いprotocol共有口および編集未有効の境界を記述\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。\n変更理由: 失効時に本人scopeだけをfenceして転送journalを消去し、通常disposeの再開情報保持を分離する\n変更理由: 曖昧なconnection teardownと確定的session失効を分け、再開可能journalを保護する\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: README.md を更新\n変更理由: B12共有APIとB07描画executorのREADMEを統合"
+      "sha256": "0e8be55bd7f7088f3f5ad2ff04fb33c7dfc17438ed8590c1acdf36f190cb26a0",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: C03実HTTPと狭いprotocol共有口および編集未有効の境界を記述\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。\n変更理由: 失効時に本人scopeだけをfenceして転送journalを消去し、通常disposeの再開情報保持を分離する\n変更理由: 曖昧なconnection teardownと確定的session失効を分け、再開可能journalを保護する\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: README.md を更新\n変更理由: B12共有APIとB07描画executorのREADMEを統合\n変更理由: 共有アルバムの統合仕様とB00の権限契約を反映"
     },
     {
       "path": "packages/photo-cloud-library/eslint.config.mjs",
@@ -11899,8 +11964,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/browser/client.ts",
-      "sha256": "1a4a2207df82ecee16a0da324b70cd6b0d71641f12770b7224e7fd5a0524ca86",
-      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 公開CIの厳格型に合わせ、所有ArrayBufferと非同期callbackの非null snapshotを明示する\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: client.ts を更新"
+      "sha256": "b0de0ca70ba4caf78bb833145908672059551da14aed0c6a62f058312567d22f",
+      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: 公開CIの厳格型に合わせ、所有ArrayBufferと非同期callbackの非null snapshotを明示する\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: client.ts を更新\n変更理由: 共有アルバムの原寸取得でも共通の範囲・hash検証を使う"
     },
     {
       "path": "packages/photo-cloud-library/src/browser/index.ts",
@@ -11958,14 +12023,59 @@
       "origin": "NIHO所有の本人補正同期coreの新規実装。公開済みC02/共通編集面と既存SDKを再利用し、認証・原本・quotaの別正本を作らない。合成fixtureのみ。\n変更理由: マスクPNGの永続保存、writer保護とSTORED確認後のrecipe同期を接続\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。"
     },
     {
+      "path": "packages/photo-cloud-library/src/render-executor/contract.ts",
+      "sha256": "bf02903c513b5e5905b3ad6ad331d3b4520450173088fd7bdfab37dbf9ac79dc",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/engine-renderer.ts",
+      "sha256": "8f84da10956a05110eabe916f18b4793a2454af25539dc5b722218a43b61e3f4",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/index.ts",
+      "sha256": "53f6c5db0d83ab59657b031a56b9903f88a714477b778e1e4b36bb85b4ec0a17",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/jpeg-metadata.ts",
+      "sha256": "46f0bc325f84ca5aa6c5df0280b2536335c9938b5024c13f64d800afb8c53f4e",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/personal-cloud-source.ts",
+      "sha256": "3f27c60a756d2dd9162fe9950feea5dfe17fa683dadd34b8b111b38c639536c0",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/render-executor.ts",
+      "sha256": "d3c4b19265381d7bdbb598b5285d5f97b772b24a05bdc7ea714c3df5c200d99a",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/render-mock.ts",
+      "sha256": "a23cd91902db292eea4ae8276ba00169c78c5c65422f60a8bfd2d794ece6dcfb",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/render-output.ts",
+      "sha256": "836fffa37e2c894d5a7140c4ba3861028f5fea92ab2b581d7754531bd1ab856f",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/ticket-upload.ts",
+      "sha256": "208168530272644af2fac07e7924059b2095dbd2758c2ea8e838f7f4b3da2002",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
       "path": "packages/photo-cloud-library/src/scope.ts",
       "sha256": "a3780570d1e47dbfc4fd92381530cc41eef6584cc3ac996cf2fb8d8651fca224",
       "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: scope.ts を更新"
     },
     {
       "path": "packages/photo-cloud-library/src/server/index.ts",
-      "sha256": "f9200747a23fe49872df26d441165fd73da08f857780683d1340656ac4b7138f",
-      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。"
+      "sha256": "8da7cd273766770fbf6889a835716d2da1449878c4fc4746037b5ab233a4c7b0",
+      "origin": "NIHO所有のC02本人クラウドHTTP/BFF・送信前journal・明示コピーと合成試験/接続契約。既存公開C00/C01境界を再利用し、非公開履歴・内部URL・資格情報・実写真は含まない。増分hashは外部MIT依存と告知を保持する。\n変更理由: B12の検証済み中継操作を公開する"
     },
     {
       "path": "packages/photo-cloud-library/src/server/pending-invite.ts",
@@ -11979,8 +12089,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/server/sharing-operations.ts",
-      "sha256": "7616dac80a767e64e91bd74c21a8f79cb9a3d0d7fd0c5eabe918c5d7bc79f113",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムのBFF（/cloud/sharing/v1 を契約の経路の表で中継し、本人・session・epochの検証、固定の上流、byte数の上限、応答の検査、content streamとupload ticketの検査を本人v2と同じ規則で行う）と回帰試験。上流のprefixは非公開の運用設定から渡し、値を含まない。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "4f34e8fda19b3a80a8df89fec5af5e3672ff8f32f728494f160b3464f22d3f0b",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムのBFF（/cloud/sharing/v1 を契約の経路の表で中継し、本人・session・epochの検証、固定の上流、byte数の上限、応答の検査、content streamとupload ticketの検査を本人v2と同じ規則で行う）と回帰試験。上流のprefixは非公開の運用設定から渡し、値を含まない。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: B05とB12の中継検証を統合する"
     },
     {
       "path": "packages/photo-cloud-library/src/server/sharing-proxy.ts",
@@ -11988,14 +12098,29 @@
       "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムのBFF（/cloud/sharing/v1 を契約の経路の表で中継し、本人・session・epochの検証、固定の上流、byte数の上限、応答の検査、content streamとupload ticketの検査を本人v2と同じ規則で行う）と回帰試験。上流のprefixは非公開の運用設定から渡し、値を含まない。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
+      "path": "packages/photo-cloud-library/src/sharing/album-client.ts",
+      "sha256": "d31acec1b66a07730afec2f4a14b352bfa5882593a6ba4291983b7fe1db196d5",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/sharing/album-items.ts",
+      "sha256": "3bfc14b8dc44f36e411b9cb28b5c5498af202797cc28d53113a4d5884a75065c",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 曖昧なupload開始応答の再試行で同じ冪等keyを再利用する"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/sharing/album-wire.ts",
+      "sha256": "333ae34dfcf798c0f2e8fb78d036c3061d38b4343d6e22c58025b583cd2360d3",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
       "path": "packages/photo-cloud-library/src/sharing/contract.ts",
-      "sha256": "ccdb7ca0f31b6914da7c3333854ee38e8e59705b4668bb856ccd87f259d204dc",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "d6193cc1b1035962ca8edeabdd72f95195b6501cab5b8a15c25441d5825b07a3",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: B12の共有契約型とpolicyを再公開する"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/index.ts",
-      "sha256": "d98d0a8635409b64b5f7ff02ec91b97d3bf68e5c26300d72e2857ca7afbd9b47",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "ea966b834e11cc245095a864be99761a8b854660d110dbee7f3c60c334f461a1",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: B12 clientと項目操作を共有口から公開する"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/membership-client.ts",
@@ -12004,18 +12129,23 @@
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/membership-mock.ts",
-      "sha256": "613c4755031d1de0c9bdc199e68c6f223c69410a23738cd797b3b0ac629c80d5",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "5d7c0c1ed02d1af917b12b5d15fe92930365a01d2d751ddf310bed14c5f9b77d",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: B00契約に沿い降格時のjobと容量予約を解放する"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/membership-wire.ts",
-      "sha256": "dd4de8532e64405da42c528f7b3ceec3266dfe07e346d578f7a1e45b421f06c4",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "7655798c6a69befc8aa21b4b8c324c9126dc856d0089358b493c476d000839f7",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: アルバム項目wireが共通route validatorを再利用する"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/membership.ts",
-      "sha256": "d4fd733950e5ca5dc1a3472c0a3e95f78a161f025110bbeff6115c4dce39e880",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 応答喪失後も同じ冪等キーで操作を再開"
+      "sha256": "2bca45369ad6f4f25359e0aba42a202302dcdbc8b12d9399d631cccf72a18791",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 応答喪失後も同じ冪等キーで操作を再開\n変更理由: 項目操作が共通のretry helperを再利用する\n変更理由: 共有操作間で曖昧失敗判定を共通化する"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/sharing/sharing-http.ts",
+      "sha256": "b90229dc7c7dde4255f74de33a9c1971aa15ab9b63588b335dd73f75b3e647a7",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
     },
     {
       "path": "packages/photo-cloud-library/src/types.ts",
@@ -12063,9 +12193,34 @@
       "origin": "NIHO所有のC02同時プレビュー取得と個別取消しの合成回帰試験。実写真・資格情報・内部URLを含まない。"
     },
     {
+      "path": "packages/photo-cloud-library/test/render-adapters.test.ts",
+      "sha256": "732c7d47991f78669e2da16ea66ede6cf74326bf1b49b939f74eeed0cd0d20fe",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/render-executor.test.ts",
+      "sha256": "985a9092167ac1870d079d246c903c7184b932b552f904de6b29a8048a5e09bb",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/render-support.ts",
+      "sha256": "06132e497fe747d096ac0566d2848a5e043bc52676babc9ecce917fb042c7b35",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
       "path": "packages/photo-cloud-library/test/resumable-upload.test.ts",
       "sha256": "252bbc0bcb3f2829516efd268784ced51a13ecabf6bbd772e7fe00d31dccf402",
       "origin": "NIHO所有のC02/C03本人写真cloudにおける共通resumable runner、同一IDBのmask PNG永続化、および合成fixtureによる回帰試験。既存公開契約とMIT hash依存を再利用し、資格情報・内部URL・実写真・非公開履歴を含まない。\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する\n変更理由: マスクPNGの永続保存、writer保護とSTORED確認後のrecipe同期を接続"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/sharing-album-client.test.ts",
+      "sha256": "86f322781e2021a7ce5a9d33e95d15c1e17b31ca6c1bd3260428dae9483da112",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/sharing-album-items.test.ts",
+      "sha256": "f8f0d449ce71b8d505930007486bee9385ad8b36041bff80152412abe8a66366",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 再試行全回の応答喪失後もuploadを重複生成しないことを検証する"
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-membership-client.test.ts",
@@ -12074,8 +12229,8 @@
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-membership-mock.test.ts",
-      "sha256": "cd38ed048876d6980b0f46393179922272a60af0191c5b90b20c423f4190ce87",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "69268eb51f6a3552b80c58a4575c32c8b762111b7ee2ae6e5d28fd8ab55b4ffc",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 降格後の未公開追加を契約どおり削除する"
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-membership-service.test.ts",
@@ -12089,8 +12244,8 @@
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-proxy.test.ts",
-      "sha256": "8244ce0e76b3965b738bd4080f18ab0f2c47842a33fadfdf9adf79a02f66ba31",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムのBFF（/cloud/sharing/v1 を契約の経路の表で中継し、本人・session・epochの検証、固定の上流、byte数の上限、応答の検査、content streamとupload ticketの検査を本人v2と同じ規則で行う）と回帰試験。上流のprefixは非公開の運用設定から渡し、値を含まない。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "96efcb7969c0cb387989e1904a70ad3b6032c8bf82f68b1366e51978b6e1d51b",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムのBFF（/cloud/sharing/v1 を契約の経路の表で中継し、本人・session・epochの検証、固定の上流、byte数の上限、応答の検査、content streamとupload ticketの検査を本人v2と同じ規則で行う）と回帰試験。上流のprefixは非公開の運用設定から渡し、値を含まない。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: B12のticketと原寸download中継を検証する"
     },
     {
       "path": "packages/photo-cloud-library/test/support.ts",
@@ -13378,6 +13533,116 @@
       "origin": "niho-photo#47 のため新規作成。選別のフラグの付け外しの hook（読み込んだ一覧への楽観更新と失敗時の巻き戻し）。外部コードを含まない。\n変更理由: PR #98を#91マージ後の最新mainへ積み直し、選別保存中の二重操作ガードを保持。\n変更理由: Add backwards-compatible personal photo library scope key"
     },
     {
+      "path": "packages/photo-hosted-connector/README.md",
+      "sha256": "453a0bf72023aaf76846b8a9203ace04220e584d6986ec5ca62c64a426645ad1",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/bench/scan-hash.mjs",
+      "sha256": "30941f49c608f21acd4c593083d7c6c3fe35694ee589de8c32ba6d63fd137dc3",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/eslint.config.mjs",
+      "sha256": "453b778645cb9b6572c968b04ec05d505a2abd1dbf7d606e2ccaac8e8fbb6bf3",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/node/index.ts",
+      "sha256": "bfdb26ffa1f40e5b548851312f2339283fff21177e5fdc54d7e45fd2e610590b",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/package.json",
+      "sha256": "81963714231777646ab1c7d8ed7f726d2ff0ed0f174b5675abbf17be0e50cd11",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/src/credentials.ts",
+      "sha256": "4ade72c9180126e0cce47414a24bb51f1ede9cabe5c2b81ef53d825eacc09618",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/src/crypto.ts",
+      "sha256": "0b35e0e83e89583a32c3536d99c475e21d084de3352c24d84c1d8d1f09144046",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/src/index.ts",
+      "sha256": "9479cbea16127961059020bae2fcd7a142639bc6fe5d1c3332eefb33858bb244",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/src/indexer.ts",
+      "sha256": "5934d16cd5d69e3f8b82f0c64332a77e35411ce53dcc6089febf167a90d134af",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序"
+    },
+    {
+      "path": "packages/photo-hosted-connector/src/jobs.ts",
+      "sha256": "9c0cc560175658ef63beaaeebf96b6c7d0e926b68aa1c3745ba7e26af2a6e787",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/src/ports.ts",
+      "sha256": "4a9d157bc8b55229637e70e60854a8414070c4d522f5fcfb2cecef73d2c3fe97",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序"
+    },
+    {
+      "path": "packages/photo-hosted-connector/src/service.ts",
+      "sha256": "a2e7f00f71a573b7c0ecf21054329c56e0759b7c782fcfad899d735d4fbe179c",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序"
+    },
+    {
+      "path": "packages/photo-hosted-connector/test-support/fake-niho.ts",
+      "sha256": "47d47ad2d9b1421d2ab81ceec0d7711a48e62a378ff03f54ed30cb0cbf233511",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/test-support/memory.ts",
+      "sha256": "4834989db7bd7a77395886e968a87fddae3377b15b58f98a6ceeceffc74bc0f6",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/test/credentials.test.mjs",
+      "sha256": "f61d2c79324bcb8eb188bfacd0011ab2461c02c6c6024fd22783e20cc1acf1be",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/test/helpers.mjs",
+      "sha256": "6ef5fc44f9e8ad1fa092c3376da7216f14c520b6f3f3c9b9999a71f765bc113f",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/test/indexer.test.mjs",
+      "sha256": "6850cbf435f71fb0ab97b3015b7c91158a03f75041611fc26ce6bfc79d53fb25",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序"
+    },
+    {
+      "path": "packages/photo-hosted-connector/test/node-fs.test.mjs",
+      "sha256": "61290f2637ccf40c8447f3754bdf2f0f23bf19bc95eca31862ffc684b4405fc5",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/test/regressions.test.mjs",
+      "sha256": "2ba01bfc3db15b0066f05ce63d3408996f81798c0c7859d83d758aaf67a81b9b",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/test/service.test.mjs",
+      "sha256": "bce18a4ebe9425cc780edd0dbc4f78c1032aba0fbda8fced7f33e95364a9f066",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/tsconfig.json",
+      "sha256": "9c2e3b94df58f8e1da6e4a460a596d640c3d289adbb9b308c7fe4c057abfb37a",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-hosted-connector/tsconfig.node.json",
+      "sha256": "5d07a94acc37467818414d3c733db408ad1e32f0527eb5e4b96968facb572d37",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
       "path": "packages/photo-hosted-library/README.md",
       "sha256": "44c83025ed0f583bf0729e66406f5f7122d801e16fdd86bee396001ca9588373",
       "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
@@ -13763,6 +14028,46 @@
       "origin": "生成元: C08 Photo Webの署名付きimmutable release経路と合成検証。実写真・秘密・本番設定を含まない。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: SDK release manifestとengine runtime manifestのhash照合を区別"
     },
     {
+      "path": "scripts/release/mac-updater-release-lib.mjs",
+      "sha256": "a359b599e27b88b6a47add681490a70480c38fdf274be38f41521b99f180d894",
+      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: candidate attestation・transport proof・static manifest verifierを仕上げ\n変更理由: candidate Release assetのpath traversalとsize超過をdownload前に拒否\n変更理由: candidateの7配布assetとSDK Release証跡を分けて由来hashを照合する\n変更理由: SDKの既存strict semver契約を共用しprereleaseとbuild metadataの互換を保つ"
+    },
+    {
+      "path": "scripts/release/mac-updater-release-lib.test.mjs",
+      "sha256": "e0d9ea25439e59b5c5a93e269464611badf4a9c984a512ae679d241220065c0b",
+      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: 署名manifestとattestation parserの対象testを追加\n変更理由: updater設定のfeed公開鍵version署名契約を公開CIテストで固定\n変更理由: candidate Releaseの不正asset名sizedraft拒否を検証\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する\n変更理由: candidate publisherとのasset集合不整合とSDK proof正規化の回帰を検出する\n変更理由: SDK prereleaseとbuild metadataの受入と非canonical semver拒否を回帰検証する\n変更理由: Base64とMinisignの境界、元署名の保持と一時file回収を回帰検証する\n変更理由: Tauri署名の正規化とsymlink拒否・元署名保持・一時file回収を検証する\n変更理由: release feedとcandidate設定の一致を検証"
+    },
+    {
+      "path": "scripts/release/prepare-mac-updater-release.mjs",
+      "sha256": "e8a5485b9fea51e4de2768f6dfb9f398bcfcf9bfd427ff853d0bec1004b2edd1",
+      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: Studio owner-local署名とdraft asset生成の安全検査を仕上げ\n変更理由: 公開検査がSSH形式remoteを非公開参照と誤判定する問題を避けHTTPS remoteに限定\n変更理由: 候補Release metadataの事前検証を署名準備に適用\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する\n変更理由: SDK receiptとRelease metadataを固定した公式SDKから取得して署名準備を成立させる\n変更理由: SDK identityは既存strict semver検証を使い既存candidateの契約を保つ"
+    },
+    {
+      "path": "scripts/release/updater-signature-verify/Cargo.lock",
+      "sha256": "2e00a04fb20b65dbef53a956fa04a00025b426229f9fa763d0ac6dd9b69fd83b",
+      "origin": "2026-11-08 updater署名検証用のstandalone Rust binaryを固定するlockfile。tauri-plugin-updaterが使うminisign-verify 0.3.0だけを固定し、追加の依存を含まない。\n変更理由: CIとowner-local検証で同じ暗号ライブラリを使う"
+    },
+    {
+      "path": "scripts/release/updater-signature-verify/Cargo.toml",
+      "sha256": "72f2ec87d084a9aa8a9aff4f77e4f8e5ee133fb5fb789a6c52bfa0bee5ecc8ba",
+      "origin": "2026-11-08 updater署名検証用のstandalone Rust binaryを新規作成。tauri-plugin-updaterと同じminisign-verify 0.3.0だけを使用する。\n変更理由: CIとowner-local検証で同じ暗号ライブラリを使う"
+    },
+    {
+      "path": "scripts/release/updater-signature-verify/src/main.rs",
+      "sha256": "c420815fdb012350dd4396124ec91751014343bfdbf08292e8fde15754dc6fe1",
+      "origin": "2026-11-08 updater署名検証用のstandalone Rust binaryを新規作成。公開鍵・archive・signatureの照合と署名済みversionの検証を行う。秘密鍵や実データを含まない。\n変更理由: 間違ったsigning keyによる署名を配布前に拒否する\n変更理由: 固定公開鍵・archive・署名versionの検証境界を強化する"
+    },
+    {
+      "path": "scripts/release/updater-signature.mjs",
+      "sha256": "a8b3ab81cbf98bab4c5ed50cb84dc663be8731f397df5b162646314c9f64965e",
+      "origin": "2026-11-08 NIHO photo updater署名検証helperを新規作成。公開設定からapp固定公開鍵を取得し、既存のMinisign verifierを呼び出す。秘密鍵や実データを含まない。\n変更理由: signerが生成したarchive署名を公開前後に暗号学的検証する\n変更理由: 固定公開鍵・archive・署名versionの検証境界を強化する\n変更理由: TauriのBase64署名をMinisign形式へ正規化して既存Rust検証器へ渡す\n変更理由: Base64復号前にも従来の通常file・size・読取中不変ガードを維持する"
+    },
+    {
+      "path": "scripts/release/verify-mac-updater-release.mjs",
+      "sha256": "4899d9ddb1ad93c6c458fc195c1374cb376d09895c0bf0693d73df33a14a32c4",
+      "origin": "2026-11-08 NIHO photo updater Releaseとlatest.jsonの公開後read-back検証のため新規作成。\n変更理由: 公開Releaseとlatest.jsonのread-back検査を実装\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する"
+    },
+    {
       "path": "scripts/sdk/build-develop-engine-runtime.mjs",
       "sha256": "bee0d81423a3b5c8d24665ed44b562216bffb3f860bdaa90c76878edd1b1787b",
       "origin": "公開 Issue #151 のため追加・更新。スレッド版 wasm のビルド、配布、CI または合成ブラウザ検証に使う公開リポジトリ内のコード（scripts/sdk/build-develop-engine-runtime.mjs）。実写真・非公開情報を含まない。\n変更理由: Issue #151: スレッド版 wasm の配布と Worker 選択を #150 統合後に更新\n変更理由: #141 空のモデルの層の見出しと重みを engine runtime の files に足す"
@@ -13841,281 +14146,6 @@
       "path": "sdk/release-set.json",
       "sha256": "ab66e8cc62aff5bc7b8e96a1a4143c5eb114cde01f3980013c030347f72519db",
       "origin": "NIHO所有の公開SDK配布定義。既存配布設定をexact hashの監査対象に追加する。\n変更理由: 個人ライブラリscopeKey対応を含むSDK 0.1.5の固定配布\n変更理由: P13: React19互換declarationの公開peer境界とSDK 0.1.6配布を固定\n変更理由: 未知の編集項目を保持したまま書込みを拒否するSDK能力判定と配布契約を追加\n変更理由: C00 v2契約をSDK0.1.8の閉じた新profileで配布し旧SDKの検証境界を維持する\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: 最新の共有マスク・初期proof・readonly presetを不変な新しい正式SDK 0.1.10として発行する。\n変更理由: SDK schema 3へPhoto Web workflow helperの所有範囲を追加\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: 常設MacライブラリのSDK schema 5に対応"
-    },
-    {
-      "path": "scripts/release/mac-updater-release-lib.mjs",
-      "sha256": "a359b599e27b88b6a47add681490a70480c38fdf274be38f41521b99f180d894",
-      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: candidate attestation・transport proof・static manifest verifierを仕上げ\n変更理由: candidate Release assetのpath traversalとsize超過をdownload前に拒否\n変更理由: candidateの7配布assetとSDK Release証跡を分けて由来hashを照合する\n変更理由: SDKの既存strict semver契約を共用しprereleaseとbuild metadataの互換を保つ"
-    },
-    {
-      "path": "scripts/release/mac-updater-release-lib.test.mjs",
-      "sha256": "e0d9ea25439e59b5c5a93e269464611badf4a9c984a512ae679d241220065c0b",
-      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: 署名manifestとattestation parserの対象testを追加\n変更理由: updater設定のfeed公開鍵version署名契約を公開CIテストで固定\n変更理由: candidate Releaseの不正asset名sizedraft拒否を検証\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する\n変更理由: candidate publisherとのasset集合不整合とSDK proof正規化の回帰を検出する\n変更理由: SDK prereleaseとbuild metadataの受入と非canonical semver拒否を回帰検証する\n変更理由: Base64とMinisignの境界、元署名の保持と一時file回収を回帰検証する\n変更理由: Tauri署名の正規化とsymlink拒否・元署名保持・一時file回収を検証する\n変更理由: release feedとcandidate設定の一致を検証"
-    },
-    {
-      "path": "scripts/release/prepare-mac-updater-release.mjs",
-      "sha256": "e8a5485b9fea51e4de2768f6dfb9f398bcfcf9bfd427ff853d0bec1004b2edd1",
-      "origin": "2026-11-08 NIHO photo updaterのcandidate署名検証、static manifest生成、owner-local Release準備と検証のため新規作成。\n変更理由: Studio owner-local署名とdraft asset生成の安全検査を仕上げ\n変更理由: 公開検査がSSH形式remoteを非公開参照と誤判定する問題を避けHTTPS remoteに限定\n変更理由: 候補Release metadataの事前検証を署名準備に適用\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する\n変更理由: SDK receiptとRelease metadataを固定した公式SDKから取得して署名準備を成立させる\n変更理由: SDK identityは既存strict semver検証を使い既存candidateの契約を保つ"
-    },
-    {
-      "path": "scripts/release/verify-mac-updater-release.mjs",
-      "sha256": "4899d9ddb1ad93c6c458fc195c1374cb376d09895c0bf0693d73df33a14a32c4",
-      "origin": "2026-11-08 NIHO photo updater Releaseとlatest.jsonの公開後read-back検証のため新規作成。\n変更理由: 公開Releaseとlatest.jsonのread-back検査を実装\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する"
-    },
-    {
-      "path": "scripts/release/updater-signature.mjs",
-      "sha256": "a8b3ab81cbf98bab4c5ed50cb84dc663be8731f397df5b162646314c9f64965e",
-      "origin": "2026-11-08 NIHO photo updater署名検証helperを新規作成。公開設定からapp固定公開鍵を取得し、既存のMinisign verifierを呼び出す。秘密鍵や実データを含まない。\n変更理由: signerが生成したarchive署名を公開前後に暗号学的検証する\n変更理由: 固定公開鍵・archive・署名versionの検証境界を強化する\n変更理由: TauriのBase64署名をMinisign形式へ正規化して既存Rust検証器へ渡す\n変更理由: Base64復号前にも従来の通常file・size・読取中不変ガードを維持する"
-    },
-    {
-      "path": "scripts/release/updater-signature-verify/Cargo.lock",
-      "sha256": "2e00a04fb20b65dbef53a956fa04a00025b426229f9fa763d0ac6dd9b69fd83b",
-      "origin": "2026-11-08 updater署名検証用のstandalone Rust binaryを固定するlockfile。tauri-plugin-updaterが使うminisign-verify 0.3.0だけを固定し、追加の依存を含まない。\n変更理由: CIとowner-local検証で同じ暗号ライブラリを使う"
-    },
-    {
-      "path": "scripts/release/updater-signature-verify/Cargo.toml",
-      "sha256": "72f2ec87d084a9aa8a9aff4f77e4f8e5ee133fb5fb789a6c52bfa0bee5ecc8ba",
-      "origin": "2026-11-08 updater署名検証用のstandalone Rust binaryを新規作成。tauri-plugin-updaterと同じminisign-verify 0.3.0だけを使用する。\n変更理由: CIとowner-local検証で同じ暗号ライブラリを使う"
-    },
-    {
-      "path": "scripts/release/updater-signature-verify/src/main.rs",
-      "sha256": "c420815fdb012350dd4396124ec91751014343bfdbf08292e8fde15754dc6fe1",
-      "origin": "2026-11-08 updater署名検証用のstandalone Rust binaryを新規作成。公開鍵・archive・signatureの照合と署名済みversionの検証を行う。秘密鍵や実データを含まない。\n変更理由: 間違ったsigning keyによる署名を配布前に拒否する\n変更理由: 固定公開鍵・archive・署名versionの検証境界を強化する"
-    },
-    {
-      "path": "packages/photo-hosted-connector/README.md",
-      "sha256": "453a0bf72023aaf76846b8a9203ace04220e584d6986ec5ca62c64a426645ad1",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/bench/scan-hash.mjs",
-      "sha256": "30941f49c608f21acd4c593083d7c6c3fe35694ee589de8c32ba6d63fd137dc3",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/eslint.config.mjs",
-      "sha256": "453b778645cb9b6572c968b04ec05d505a2abd1dbf7d606e2ccaac8e8fbb6bf3",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/node/index.ts",
-      "sha256": "bfdb26ffa1f40e5b548851312f2339283fff21177e5fdc54d7e45fd2e610590b",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/package.json",
-      "sha256": "81963714231777646ab1c7d8ed7f726d2ff0ed0f174b5675abbf17be0e50cd11",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/src/credentials.ts",
-      "sha256": "4ade72c9180126e0cce47414a24bb51f1ede9cabe5c2b81ef53d825eacc09618",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/src/crypto.ts",
-      "sha256": "0b35e0e83e89583a32c3536d99c475e21d084de3352c24d84c1d8d1f09144046",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/src/index.ts",
-      "sha256": "9479cbea16127961059020bae2fcd7a142639bc6fe5d1c3332eefb33858bb244",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/src/indexer.ts",
-      "sha256": "5934d16cd5d69e3f8b82f0c64332a77e35411ce53dcc6089febf167a90d134af",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序"
-    },
-    {
-      "path": "packages/photo-hosted-connector/src/jobs.ts",
-      "sha256": "9c0cc560175658ef63beaaeebf96b6c7d0e926b68aa1c3745ba7e26af2a6e787",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/src/ports.ts",
-      "sha256": "4a9d157bc8b55229637e70e60854a8414070c4d522f5fcfb2cecef73d2c3fe97",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序"
-    },
-    {
-      "path": "packages/photo-hosted-connector/src/service.ts",
-      "sha256": "a2e7f00f71a573b7c0ecf21054329c56e0759b7c782fcfad899d735d4fbe179c",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序"
-    },
-    {
-      "path": "packages/photo-hosted-connector/test-support/fake-niho.ts",
-      "sha256": "47d47ad2d9b1421d2ab81ceec0d7711a48e62a378ff03f54ed30cb0cbf233511",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/test-support/memory.ts",
-      "sha256": "4834989db7bd7a77395886e968a87fddae3377b15b58f98a6ceeceffc74bc0f6",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/test/credentials.test.mjs",
-      "sha256": "f61d2c79324bcb8eb188bfacd0011ab2461c02c6c6024fd22783e20cc1acf1be",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/test/helpers.mjs",
-      "sha256": "6ef5fc44f9e8ad1fa092c3376da7216f14c520b6f3f3c9b9999a71f765bc113f",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/test/indexer.test.mjs",
-      "sha256": "6850cbf435f71fb0ab97b3015b7c91158a03f75041611fc26ce6bfc79d53fb25",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序"
-    },
-    {
-      "path": "packages/photo-hosted-connector/test/node-fs.test.mjs",
-      "sha256": "61290f2637ccf40c8447f3754bdf2f0f23bf19bc95eca31862ffc684b4405fc5",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/test/service.test.mjs",
-      "sha256": "bce18a4ebe9425cc780edd0dbc4f78c1032aba0fbda8fced7f33e95364a9f066",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/tsconfig.json",
-      "sha256": "9c2e3b94df58f8e1da6e4a460a596d640c3d289adbb9b308c7fe4c057abfb37a",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/tsconfig.node.json",
-      "sha256": "5d07a94acc37467818414d3c733db408ad1e32f0527eb5e4b96968facb572d37",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-hosted-connector/test/regressions.test.mjs",
-      "sha256": "2ba01bfc3db15b0066f05ce63d3408996f81798c0c7859d83d758aaf67a81b9b",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "apps/camera/hosted-connector.html",
-      "sha256": "25cbae380b03f8c733323c1230f2b9f1475bce170d2d0e41f93ceb186e7fd409",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "apps/camera/src-tauri/capabilities/hosted-connector.json",
-      "sha256": "7bf4eee8330375afd2e5b60c0db7831117b473773f0519bdadd49bbe43a861b0",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "apps/camera/src-tauri/launchd/life.niho.camera.hosted-connector.plist",
-      "sha256": "3508761db79d208827eb72e9e789e0aaff229199dc28f56785d4311658e29731",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "apps/camera/src-tauri/src/hosted_connector.rs",
-      "sha256": "4057e57174ea1c793a2c03af25ae6303f36992455d3e2dfbff2b4bf098c7a54d",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "apps/camera/src-tauri/src/hosted_connector_fs.rs",
-      "sha256": "fbb24893f01857caef5e0e52fa3efe0b8cf12bf0fd88437fcfee37d348bfae2f",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "apps/camera/src-tauri/src/hosted_connector_fs_tests.rs",
-      "sha256": "2758c488069ef19d944a6b3960b863bec6c1ba4da371f6e5dea2f20e78a77a91",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "apps/camera/src-tauri/src/hosted_connector_system.rs",
-      "sha256": "5d73091aa46c6a8e596c4b249c6104a70d43e8f6fe13676fc2547377c91ee2af",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "apps/camera/src/hosted-connector/connector-page.ts",
-      "sha256": "92f64e395cccfeb8194ade2517128195ad24f1401f3bd6048c4b3d531f31a567",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "apps/camera/src/hosted-connector/hosted-folders.test.tsx",
-      "sha256": "f80d4d1483f374189675f32e209dbde5683211f7cf3bd6bf97c87c2d61263597",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "apps/camera/src/hosted-connector/hosted-folders.tsx",
-      "sha256": "44812ed844315f36f8694591d5db9956a33056a29516cc8d774ca75401d79692",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "apps/camera/src/hosted-connector/mac-hosted-connector.ts",
-      "sha256": "9f3e4e436938fdca52049a0b81ecf4e29205d8472be12256b5167252dfca83ca",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "apps/camera/src/hosted-connector/native-ports.test.ts",
-      "sha256": "da184b1ff8a799c4fe6c6b2aad78b03416b0ee3c0c147028718d6d2e7678742e",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "apps/camera/src/hosted-connector/native-ports.ts",
-      "sha256": "1ff663213d7899eb83bf4b72a8db6cd749f9fc5a7d2711be6418cd048214f860",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/contract.ts",
-      "sha256": "bf02903c513b5e5905b3ad6ad331d3b4520450173088fd7bdfab37dbf9ac79dc",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/engine-renderer.ts",
-      "sha256": "8f84da10956a05110eabe916f18b4793a2454af25539dc5b722218a43b61e3f4",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/index.ts",
-      "sha256": "53f6c5db0d83ab59657b031a56b9903f88a714477b778e1e4b36bb85b4ec0a17",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/jpeg-metadata.ts",
-      "sha256": "46f0bc325f84ca5aa6c5df0280b2536335c9938b5024c13f64d800afb8c53f4e",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/personal-cloud-source.ts",
-      "sha256": "3f27c60a756d2dd9162fe9950feea5dfe17fa683dadd34b8b111b38c639536c0",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/render-executor.ts",
-      "sha256": "d3c4b19265381d7bdbb598b5285d5f97b772b24a05bdc7ea714c3df5c200d99a",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/render-mock.ts",
-      "sha256": "a23cd91902db292eea4ae8276ba00169c78c5c65422f60a8bfd2d794ece6dcfb",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/render-output.ts",
-      "sha256": "836fffa37e2c894d5a7140c4ba3861028f5fea92ab2b581d7754531bd1ab856f",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/src/render-executor/ticket-upload.ts",
-      "sha256": "208168530272644af2fac07e7924059b2095dbd2758c2ea8e838f7f4b3da2002",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/test/render-adapters.test.ts",
-      "sha256": "732c7d47991f78669e2da16ea66ede6cf74326bf1b49b939f74eeed0cd0d20fe",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/test/render-executor.test.ts",
-      "sha256": "985a9092167ac1870d079d246c903c7184b932b552f904de6b29a8048a5e09bb",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
-    },
-    {
-      "path": "packages/photo-cloud-library/test/render-support.ts",
-      "sha256": "06132e497fe747d096ac0566d2848a5e043bc52676babc9ecce917fb042c7b35",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     }
   ],
   "excludedSources": [

@@ -33,6 +33,7 @@ import {
   type SharingErrorCode,
   type SharingErrorEnvelope,
   type SharingOperationMap,
+  type SharingOperation,
   type SharingRouteMethod,
 } from "./contract";
 
@@ -75,14 +76,39 @@ export function isSharedAlbumMembershipMutation(operation: SharedAlbumMembership
   return MUTATIONS.has(operation);
 }
 
-export interface EncodedSharingRequest {
-  readonly operation: SharedAlbumMembershipOperation | "invites.joinPending";
+export interface EncodedSharingRequest<Op extends string = SharedAlbumMembershipOperation | "invites.joinPending"> {
+  readonly operation: Op;
   readonly method: SharingRouteMethod;
   /** Full same-origin path, with the encoded query when the route has one. */
   readonly path: string;
   /** The closed JSON body, or null for GET/DELETE routes. */
   readonly body: Uint8Array<ArrayBuffer> | null;
   readonly idempotencyKey: string | null;
+}
+
+/** Encode one operation from the shared route table; album item wire reuses the same closed route encoder. */
+export function encodeRoutedRequest<Op extends SharingOperation>(
+  operation: Op,
+  request: unknown,
+  mutation: boolean,
+  idempotencyKey: string | undefined,
+): EncodedSharingRequest<Op> {
+  if (mutation ? !isValidIdempotencyKey(idempotencyKey) : idempotencyKey !== undefined) invalidRequest();
+  let route: ReturnType<typeof encodeSharingRequest>;
+  try {
+    route = encodeSharingRequest(operation, request as SharingOperationMap[Op]["request"]);
+  } catch (error) {
+    if (error instanceof SharingRouteError) invalidRequest();
+    throw error;
+  }
+  if (route.idempotencyKey !== mutation) invalidRequest();
+  return {
+    operation,
+    method: route.method,
+    path: route.query === "" ? route.path : `${route.path}?${route.query}`,
+    body: route.body === null ? null : textEncoder.encode(JSON.stringify(route.body)),
+    idempotencyKey: mutation ? (idempotencyKey as string) : null,
+  };
 }
 
 /**
@@ -349,32 +375,32 @@ export function validateReceipt(value: unknown): { readonly value: unknown; read
 
 // ---------------------------------------------------------------------------------------------------------
 
-function exactRecord(value: unknown, allowed: readonly string[], required: readonly string[]): Record<string, unknown> {
+export function exactRecord(value: unknown, allowed: readonly string[], required: readonly string[]): Record<string, unknown> {
   if (!isRecord(value)) invalidResponse();
   const keys = new Set(allowed);
   if (Object.keys(value).some((key) => !keys.has(key)) || required.some((key) => !Object.hasOwn(value, key))) invalidResponse();
   return value;
 }
-function isRecord(value: unknown): value is Record<string, unknown> {
+export function isRecord(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 /** An invite secret as the wire accepts it (opaque, at most 512 bytes, no spaces or control characters). */
 export function isSecret(value: unknown): value is string {
   return typeof value === "string" && value.length > 0 && value === value.trim() && textEncoder.encode(value).byteLength <= SECRET_MAX_BYTES && !/[\p{Cc}\p{Cf}\s]/u.test(value);
 }
-function isInstant(value: unknown): value is string {
+export function isInstant(value: unknown): value is string {
   return typeof value === "string" && INSTANT.test(value) && Number.isFinite(Date.parse(value));
 }
-function safeNonNegative(value: unknown): value is number {
+export function safeNonNegative(value: unknown): value is number {
   return typeof value === "number" && Number.isSafeInteger(value) && value >= 0;
 }
-function integerBetween(value: unknown, min: number, max: number): value is number {
+export function integerBetween(value: unknown, min: number, max: number): value is number {
   return safeNonNegative(value) && value >= min && value <= max;
 }
 /** Same local failure as the personal v2 wire for a request that must not be sent. */
-function invalidRequest(): never {
+export function invalidRequest(): never {
   throw new PersonalPhotoCloudError("invalid_response");
 }
-function invalidResponse(): never {
+export function invalidResponse(): never {
   throw new PersonalPhotoCloudError("invalid_response");
 }

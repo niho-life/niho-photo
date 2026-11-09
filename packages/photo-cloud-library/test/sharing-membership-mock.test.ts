@@ -4,10 +4,8 @@ import { createPhotoCloudSharingPreviewClient } from "niho-photo-editing/cloud-s
 
 import { PersonalPhotoCloudError } from "../src/errors";
 import { createSharedAlbumMockServer, type SharedAlbumMockClient } from "../src/sharing";
-import { sha256 } from "@noble/hashes/sha2.js";
-import { bytesToHex } from "@noble/hashes/utils.js";
-
 import type { RenditionUploadRequest, SharingErrorCode } from "../src/sharing/contract";
+import { hex, syntheticJpeg } from "./render-support";
 
 const OWNER = "synthetic-user-owner";
 const STAFF1 = "synthetic-user-staff-1";
@@ -15,10 +13,10 @@ const STAFF2 = "synthetic-user-staff-2";
 const OUTSIDER = "synthetic-user-outsider";
 const START = Date.parse("2026-11-07T00:00:00.000Z");
 const DAY = 24 * 60 * 60 * 1000;
-/** Synthetic bytes standing for a finished file (a commit needs every byte uploaded). */
-const FILE = new Uint8Array(4096).fill(7);
+/** A synthetic finished JPEG; the server re-decodes it at commit. */
+const FILE = syntheticJpeg({ width: 1200, height: 800 });
 const RENDITION: RenditionUploadRequest = {
-  sizeBytes: FILE.length, sha256: bytesToHex(sha256(FILE)), contentType: "image/jpeg", width: 1200, height: 800,
+  sizeBytes: FILE.length, sha256: hex(FILE), contentType: "image/jpeg", width: 1200, height: 800,
   metadata: { capturedAt: null, capturedAtOffset: null, colorProfile: "sRGB", orientation: 1 },
 };
 
@@ -321,9 +319,9 @@ describe("shared album membership mock (B05)", () => {
     await t.owner.request("members.changeRole", { albumId: album.id, membershipId: promoted.id, expectedRevision: promoted.revision, role: "viewer" }, t.key());
 
     expect(await rejection(t.staff1.request("albumItems.commitUpload", { albumId: album.id, uploadId: removedAdd.upload?.upload.id as string }, t.key()))).toBe("not_found");
-    expect(await rejection(t.staff2.request("albumItems.commitUpload", { albumId: album.id, uploadId: demotedAdd.upload?.upload.id as string }, t.key()))).toBe("role_forbidden");
+    expect(await rejection(t.staff2.request("albumItems.commitUpload", { albumId: album.id, uploadId: demotedAdd.upload?.upload.id as string }, t.key()))).toBe("item_removed");
     const ownerView = await t.owner.request("albumItems.list", { albumId: album.id }, t.read);
-    expect(ownerView.items.every((item) => item.state === "preparing")).toBe(true);
+    expect(ownerView.items).toEqual([]);
 
     const leaver = (await t.owner.request("invites.create", { albumId: album.id, role: "contributor" }, t.key())).value;
     await t.outsider.request("invites.join", { secret: leaver.secret as string }, t.key());
