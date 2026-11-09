@@ -183,10 +183,12 @@ test("配布appは公式Release feed・固定鍵・version署名必須を持つ"
   const updater = config.plugins.updater;
   const pinned = readPinnedUpdaterKey(fileURLToPath(new URL("../..", import.meta.url)));
   assert.deepEqual(updater.endpoints, [PHOTO_UPDATER_RELEASE.feedUrl]);
+  assert.equal(candidateContract.updaterFeed, PHOTO_UPDATER_RELEASE.feedUrl);
   assert.equal(sha256(Buffer.from(updater.pubkey)), candidateContract.updaterPublicKeySha256);
   assert.equal(pinned.sha256, candidateContract.updaterPublicKeySha256);
   assert.equal(Buffer.from(updater.pubkey, "base64").toString("utf8"), pinned.publicKeyText);
   assert.equal(updater.requireSignedVersion, true);
+  assert.equal(candidateContract.updaterRequiresSignedVersion, updater.requireSignedVersion);
 });
 
 test("candidateをdownloadする前にRelease asset名とsizeを検証する", () => {

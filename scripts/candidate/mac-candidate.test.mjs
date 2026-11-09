@@ -31,6 +31,7 @@ import {
   verifyRuntimeAssetBundle,
   validateTarEntries,
   verifyAppNoticeResources,
+  verifyUpdaterConfiguration,
   verifyCandidateDirectory,
   verifySdkDirectory,
   verifySdkProofDirectory,
@@ -75,6 +76,31 @@ test("version overlayはcameraの4 fileだけを変更しroot npm lockに触れ�
   assert.match(readFileSync(path.join(workspace, "apps/camera/src-tauri/Cargo.toml"), "utf8"), /version = "2\.3\.4-beta\.1"/u);
   assert.match(readFileSync(path.join(workspace, "apps/camera/src-tauri/Cargo.lock"), "utf8"), /version = "2\.3\.4-beta\.1"/u);
   assert.deepEqual(readFileSync(path.join(workspace, "package-lock.json")), rootLock);
+});
+
+test("candidate updaterは公式feed・固定鍵・version署名必須をTauri設定から検証する", () => {
+  const workspace = temp("niho-photo-updater-config-");
+  const configPath = "apps/camera/src-tauri/tauri.conf.json";
+  const updater = JSON.parse(readFileSync(path.join(root, configPath), "utf8")).plugins.updater;
+  const config = { plugins: { updater: structuredClone(updater) } };
+  put(workspace, configPath, `${JSON.stringify(config)}\n`);
+  assert.deepEqual(verifyUpdaterConfiguration(workspace), {
+    feed: candidateContract.updaterFeed,
+    publicKeySha256: candidateContract.updaterPublicKeySha256,
+    requireSignedVersion: true,
+    officialUpdates: true,
+  });
+
+  for (const mutate of [
+    (updater) => { updater.endpoints = ["https://example.invalid/latest.json"]; },
+    (updater) => { updater.pubkey = "forged"; },
+    (updater) => { updater.requireSignedVersion = false; },
+  ]) {
+    const invalid = structuredClone(config);
+    mutate(invalid.plugins.updater);
+    put(workspace, configPath, `${JSON.stringify(invalid)}\n`);
+    assert.throws(() => verifyUpdaterConfiguration(workspace), /updater feed・public key・signed version/u);
+  }
 });
 
 test("official build環境は公開値だけを追加し秘密・Cargo設定を継承しない", () => {
@@ -230,7 +256,7 @@ function candidateFixture(sdkManifestSchemaVersion = 1) {
     overlays: candidateContract.overlayPaths.map((name) => ({ path: name, beforeSha256: "1".repeat(64), afterSha256: "2".repeat(64) })),
     app: {
       identity: { product: "NIHO photo", bundleId: "life.niho.camera", version, deepLink: "niho-camera" },
-      updater: { feed: candidateContract.updaterFeed, publicKeySha256: candidateContract.updaterPublicKeySha256, officialUpdates: true },
+      updater: { feed: candidateContract.updaterFeed, publicKeySha256: candidateContract.updaterPublicKeySha256, requireSignedVersion: candidateContract.updaterRequiresSignedVersion, officialUpdates: true },
       files,
       executable: { ...files.find((item) => item.path === "Contents/MacOS/niho-camera") },
       notices,
