@@ -213,6 +213,12 @@ function snapshotDownloadBudget(value: unknown): Readonly<CreatePhotoWebRuntimeO
   }
 }
 
+/** Every operation the shared-album screens call (B08 #249). */
+const SHARED_ALBUM_PORT_METHODS = [
+  "listAlbums", "createAlbum", "openAlbum", "people", "copyInviteLink", "revokeInviteLink", "changeRole", "removeMember",
+  "leave", "addFile", "save", "remove", "join", "joinHeld", "storageLocations", "originalsNoteShown", "markOriginalsNoteShown", "dispose",
+] as const;
+
 export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): PhotoWebRuntime {
   const configuredEnvironment = options.environment ?? defaultEnvironment();
   const windowTarget = configuredEnvironment.window;
@@ -516,6 +522,10 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
           transferProjections.set(source, transfer);
         }
       }
+      const sharedAlbums = candidate.sharedAlbums;
+      // Fail closed: a port missing any operation the screens call is not accepted.
+      if (sharedAlbums !== undefined && (typeof sharedAlbums !== "object" || sharedAlbums === null
+        || SHARED_ALBUM_PORT_METHODS.some((method) => typeof (sharedAlbums as unknown as Record<string, unknown>)[method] !== "function"))) return null;
       if (expected !== null && (
         candidate.actorId !== expected.actorId
         || candidate.key !== expected.key
@@ -533,6 +543,7 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
         disableCloudDelete: candidate.disableCloudDelete,
         usage,
         ...(transfer === undefined ? {} : { transfer }),
+        ...(sharedAlbums === undefined ? {} : { sharedAlbums }),
       });
     } catch {
       return null;

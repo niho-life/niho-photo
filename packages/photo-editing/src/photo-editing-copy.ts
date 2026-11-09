@@ -1342,6 +1342,8 @@ export const PHOTO_SHARED_ALBUM_COPY = {
   memberCount: (count: number) => `${count}人`,
   itemCount: (count: number) => `${count}枚`,
   newAlbum: "新しいアルバム",
+  albumName: "アルバム名",
+  create: "作成",
   listEmpty: "共有アルバムはまだありません",
   back: "共有アルバムに戻る",
   add: "追加",
@@ -1452,6 +1454,7 @@ export const PHOTO_SHARED_ALBUM_INVITE_COPY = {
 
 /** 設定の「保存先」。標準は NIHO クラウドで最初に選ばせない。自前サーバー（常設 Mac）はここから足し、日常の画面には出さない。 */
 export const PHOTO_STORAGE_LOCATION_COPY = {
+  settings: "設定",
   heading: "保存先",
   nihoCloud: "NIHO クラウド",
   thisMac: "この Mac",

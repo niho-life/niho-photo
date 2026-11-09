@@ -161,7 +161,7 @@ class Adapter {
       capabilities: (requestOptions) => this.capabilities(requestOptions),
       rollout: async (requestOptions) => {
         await this.capabilities(requestOptions);
-        return { crop: false, mobileEditing: false };
+        return { crop: false, mobileEditing: false, sharedAlbums: false };
       },
       engineAssets: options.engineAssets,
       limits: {
