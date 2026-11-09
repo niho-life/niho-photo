@@ -9,11 +9,54 @@ import {
   buildUpdaterManifest,
   validateCandidateReleaseMetadata,
   verifyCandidateAttestation,
+  candidateReleaseAssetNames,
+  sdkProofReleaseMetadata,
 } from "./mac-updater-release-lib.mjs";
 import { candidateContract } from "../candidate/mac-candidate-lib.mjs";
 import { readPinnedUpdaterKey } from "./updater-signature.mjs";
 
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
+
+test("署名準備はpublisherの7 assetsを受入れ、SDK証跡をcandidateに要求しない", () => {
+  const manifest = {
+    assets: ["photo.dmg", "photo.app.tar.gz", "photo.cdx.json"].map((name) => ({ name })),
+    sdk: { manifestFile: "niho-photo-sdk-1.2.3-source.json" },
+  };
+  const names = candidateReleaseAssetNames("photo.candidate.json", manifest);
+  assert.equal(names.length, 7);
+  assert.ok(!names.includes("photo-sdk-artifact-receipt.json"));
+  assert.ok(!names.includes("photo-sdk-release.json"));
+  const workflow = JSON.parse(readFileSync(new URL("../../.github/workflows/photo-candidate-release.yml", import.meta.url), "utf8"));
+  const publisher = workflow.jobs.publish.steps.find((step) => step.run?.includes("gh release create"));
+  assert.ok(publisher);
+  assert.doesNotMatch(publisher.run, /sdk-proof.*(?:photo-sdk-artifact-receipt|photo-sdk-release)\.json/u);
+});
+
+test("SDK ReleaseのAPI応答は既存proof形式へ正規化し、由来hashの照合を保つ", () => {
+  const sha = "a".repeat(40);
+  const tag = "photo-sdk-v1.2.3";
+  const release = {
+    id: 123, tag_name: tag, target_commitish: sha, draft: false, prerelease: false,
+    published_at: "2026-11-09T00:00:00Z",
+    assets: [{ name: "sdk.json", size: 32, state: "uploaded" },
+      { name: "photo-sdk-artifact-receipt.json", size: 64, state: "uploaded" }],
+  };
+  const ref = { ref: `refs/tags/${tag}`, object: { type: "commit", sha } };
+  const proof = sdkProofReleaseMetadata(release, ref);
+  assert.deepEqual(proof, {
+    schemaVersion: 1, repository: PHOTO_UPDATER_RELEASE.repository,
+    releaseId: 123, tagName: tag, tagSha: sha, targetCommitish: sha,
+    draft: false, prerelease: false, publishedAt: release.published_at,
+    assets: [{ name: "photo-sdk-artifact-receipt.json", bytes: 64 }, { name: "sdk.json", bytes: 32 }],
+  });
+  assert.throws(() => sdkProofReleaseMetadata(release, { ...ref, object: { type: "commit", sha: "b".repeat(40) } }), /metadata/u);
+  assert.throws(() => sdkProofReleaseMetadata({ ...release, draft: true }, ref), /metadata/u);
+  assert.throws(() => sdkProofReleaseMetadata({ ...release, assets: [...release.assets, release.assets[0]] }, ref), /metadata/u);
+  assert.throws(() => sdkProofReleaseMetadata({ ...release, assets: [{ name: "../receipt", size: 64, state: "uploaded" }] }, ref), /metadata/u);
+  const previewTag = "photo-sdk-v1.2.3-rc.1+build.7";
+  assert.equal(sdkProofReleaseMetadata({ ...release, tag_name: previewTag }, { ...ref, ref: `refs/tags/${previewTag}` }).tagName, previewTag);
+  assert.throws(() => sdkProofReleaseMetadata({ ...release, tag_name: "photo-sdk-v1.2.3-rc.01" }, ref), /metadata/u);
+});
 
 function attestationFixture() {
   const workflow = PHOTO_UPDATER_RELEASE.candidateWorkflow;
