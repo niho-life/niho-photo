@@ -21,7 +21,9 @@
 - 本番 token、client secret、Apple 署名・公証・updater の資格情報、秘密鍵、証明書
 - 個人情報、実利用ログ、実ユーザー提供の写真・RAW・音声と不要な位置情報・端末識別metadata
 - 権利未確認の第三者アイコン、フォント、画像、カラープロファイル、モデル、校正入力・派生値
-- 署名済み成果物、本番配布用の権限付き workflow
+- Git履歴や公開CI artifactに置く署名済み成果物、本番配布用の権限付き workflow
+
+例外として、ownerが信頼済みMac Studioで署名したTauri updater asset一式は、sourceとSigstore attestationを検証した後にGitHub Releaseへ手動公開できます。署名鍵はMacのowner-only fileに保ち、公開CI・repo・Issue・PR・ログ・Release assetへ含めません。公開CIは署名・公証・本番配布を行いません。手順とasset契約は [`scripts/candidate/README.md`](../../scripts/candidate/README.md) を参照してください。
 
 機械検査の初期設定は [publication-policy.json](publication-policy.json) に置く。禁止パス・機密拡張子・サイズ上限と、初回移植の出典manifestを求める契約を定義した。所有資産の公開許可はオーナーの包括的な宣言を根拠とし、候補ごとの由来とmetadata検査結果を台帳に残す。大きなRAW等は、公開リポジトリのサイズ上限に収まる最小fixtureか、[#2](https://github.com/niho-life/niho-photo/issues/2)で定義する公開成果物経路へ分ける。
 

@@ -113,7 +113,7 @@ main pushのcamera検証後にrelease modeのad-hoc app、CycloneDX SBOM、exact
 
 この旧来のmain push成果物はsource/contract検証用で、手動candidate prereleaseとは別物です。candidateは公開済みSDKを選び、
 macOS 26で完全native appを作り、SDK proofとActions輸送receiptをGitHub prereleaseへ保存しますが、同じくad-hoc・未公証で、
-private signerやupdaterへ自動接続しません。操作手順とrollbackは [`scripts/candidate/README.md`](../../scripts/candidate/README.md) を参照してください。
+candidate buildは署名Releaseやupdater feedへ自動接続しません。署名・draft確認・公式Release公開はowner-localで行います。操作手順とrollbackは [`scripts/candidate/README.md`](../../scripts/candidate/README.md) を参照してください。
 
 公開済みRust rendererをsource固定のnative専用releaseとして再利用する契約は、[Native renderer成果物の契約](../releases/native-renderer.md) に定義する。これは既存SDK releaseと独立し、SDK versionや既存assetを変更しない。
 

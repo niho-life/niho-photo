@@ -1,10 +1,10 @@
 # 公開検証成果物と固定SHA取り込み契約 v1
 
-Issue #2。公開リポジトリ `niho-life/niho-photo` の完全なcommit SHAを、検証用Mac app、SBOM、lockfile、toolchain、認証・共有contractへ結び付ける。公開mergeによって本番への署名・公証・配布・更新公開は始まらない。非公開側の取り込み実装は別の作業とする。移管前に公開済みの成果物は、manifestに記録された `niho-coliving/niho-photo` を履歴上のsource repositoryとして引き続き検証する。
+Issue #2。公開リポジトリ `niho-life/niho-photo` の完全なcommit SHAを、検証用Mac app、SBOM、lockfile、toolchain、認証・共有contractへ結び付ける。ここで扱うmain push/CI artifactはvalidation-onlyで、公開mergeから署名・公証・本番配布を起動しない。署名済みMac updater Releaseは [`scripts/candidate/README.md`](../../scripts/candidate/README.md) のowner-local手順で別途作成する。移管前に公開済みの成果物は、manifestに記録された `niho-coliving/niho-photo` を履歴上のsource repositoryとして引き続き検証する。
 
 この文書のmain push artifactはvalidation-onlyの旧経路である。Issue #113の手動Mac candidate prereleaseは、公開済みSDKの
 manifest/receipt/release metadata、完全native closure、candidate manifest、Actions artifact receipt/provenanceを追加で固定する
-別経路であり、この3-file artifactを公式candidateへ昇格・流用しない。どちらもprivate `camera-v` releaseやupdater feedを変更しない。
+別経路であり、この3-file artifactを公式candidateへ昇格・流用しない。candidate作成だけではapp Releaseやupdater feedを変更しない。
 
 ## 成果物と識別子
 

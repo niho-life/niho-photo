@@ -56,6 +56,13 @@ export default defineConfig({
     emptyOutDir: true,
     // 画面は .app の中から読む（通信しない）ので、1 つの bundle の大きさで読み込みは遅くならない
     chunkSizeWarningLimit: 2048,
+    // main 窓の画面と、常設 Mac の接続用ソフトの表示しない窓（src-tauri/src/hosted_connector.rs）
+    rollupOptions: {
+      input: {
+        main: fileURLToPath(new URL("./index.html", import.meta.url)),
+        "hosted-connector": fileURLToPath(new URL("./hosted-connector.html", import.meta.url)),
+      },
+    },
   },
   test: {
     environment: "jsdom",

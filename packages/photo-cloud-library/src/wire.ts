@@ -85,7 +85,7 @@ export function encodeOperation(
     return null;
   };
   const requiredKey = (): string => {
-    if (!boundedOpaque(idempotencyKey, 1, KEY_MAX_BYTES) || idempotencyKey.includes(",") || /[\p{Cc}\p{Cf}]/u.test(idempotencyKey)) invalidRequest();
+    if (!isValidIdempotencyKey(idempotencyKey)) invalidRequest();
     return idempotencyKey;
   };
   if (operation === "library.get") {
@@ -452,7 +452,8 @@ function exactResponseRecord(value: Record<string, unknown>, key: string): unkno
   return value[key];
 }
 function validateTicketShape(value: unknown): UploadTicket { if (!isUploadTicketShape(value)) invalidResponse(); return value; }
-function parseJsonBytes(bytes: Uint8Array): unknown {
+/** UTF-8 JSON with the transport depth limit (bounded bytes are read first). */
+export function parseJsonBytes(bytes: Uint8Array): unknown {
   let text: string;
   try { text = new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { invalidResponse(); }
   try {
@@ -508,6 +509,14 @@ function encodeOpaqueSegment(value: unknown): string { return encodeURIComponent
 function opaque(value: unknown): string { if (!boundedOpaque(value, 1, OPAQUE_ID_MAX_BYTES) || value === "." || value === ".." || value.includes("/") || value.includes("\\") || /[\p{Cc}\p{Cf}]/u.test(value)) invalidRequest(); return value; }
 function decodeSegment(value: string): string | null { try { const decoded = decodeURIComponent(value); return encodeURIComponent(decoded) === value && opaque(decoded) ? decoded : null; } catch { return null; } }
 function decodeRequired(value: string): string { const decoded = decodeSegment(value); if (decoded === null) invalidRequest(); return decoded; }
+/** `Idempotency-Key` header value shared by the personal v2 and shared-album wires: 1..128 bytes, one header value. */
+export function isValidIdempotencyKey(value: unknown): value is string {
+  return boundedOpaque(value, 1, KEY_MAX_BYTES) && !value.includes(",") && !/[\p{Cc}\p{Cf}]/u.test(value);
+}
+/** Opaque server-issued identifier (IDs, cursors) as accepted on the wire. */
+export function isOpaqueWireId(value: unknown): value is string {
+  return boundedOpaque(value, 1, OPAQUE_ID_MAX_BYTES) && value !== "." && value !== ".." && !value.includes("/") && !value.includes("\\") && !/[\p{Cc}\p{Cf}]/u.test(value);
+}
 function boundedOpaque(value: unknown, minimum: number, maximum: number): value is string { return typeof value === "string" && value.length >= minimum && textEncoder.encode(value).byteLength <= maximum && value === value.trim(); }
 function safeNonNegative(value: unknown): value is number { return typeof value === "number" && Number.isSafeInteger(value) && value >= 0; }
 function safePositive(value: unknown): value is number { return safeNonNegative(value) && value > 0; }

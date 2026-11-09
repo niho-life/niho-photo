@@ -31,6 +31,7 @@
     "tailwind-merge": "^3.7.0",
     "niho-desktop-account": "*",
     "@niho/photo-cloud-library": "*",
+    "@niho/photo-hosted-connector": "*",
     "@niho/photo-cloud-session": "*",
     "@niho/photo-cloud-sync": "*",
     "@niho/photo-cloud-media": "*",

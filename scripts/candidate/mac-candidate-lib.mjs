@@ -35,7 +35,8 @@ const MAX_ASSET_BYTES = 250 * 1024 * 1024;
 const PRODUCT = "NIHO photo";
 const BUNDLE_ID = "life.niho.camera";
 const DEEP_LINK = "niho-camera";
-const UPDATER_FEED = "https://niho.life/camera/updater/latest.json";
+const UPDATER_FEED = "https://github.com/niho-life/niho-photo/releases/latest/download/latest.json";
+const UPDATER_REQUIRES_SIGNED_VERSION = true;
 const EXPECTED_UPDATER_PUBLIC_KEY = "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IEFBNzVDN0FCNkY2QzBCN0UKUldSK0MyeHZxOGQxcW1vY3MyZlVFVjVXWjFJcjRpRGRHVnZmUy83UHZCR1FyQ05zSFZwVHVIaW0K";
 const NOTICE_SOURCES = Object.freeze({
   "LICENSE.md": "LICENSE.md",
@@ -162,7 +163,7 @@ function ownershipDigest(records) {
 
 function candidateSdkManifestSchemaVersion(sdk) {
   if (sdk?.sdkManifestSchemaVersion === undefined) return 1;
-  if (![2, 3, 4].includes(sdk.sdkManifestSchemaVersion)) throw new CandidateError("candidate SDK manifest schema profileが不正です");
+  if (![2, 3, 4, 5].includes(sdk.sdkManifestSchemaVersion)) throw new CandidateError("candidate SDK manifest schema profileが不正です");
   return sdk.sdkManifestSchemaVersion;
 }
 
@@ -418,6 +419,23 @@ export function verifyAppNoticeResources(appPath, records) {
   return records;
 }
 
+export function verifyUpdaterConfiguration(workspace) {
+  let updaterConfig;
+  try { updaterConfig = JSON.parse(readFileSync(path.join(workspace, "apps/camera/src-tauri/tauri.conf.json"), "utf8"))?.plugins?.updater; }
+  catch { throw new CandidateError("app updater設定がJSONではありません"); }
+  if (JSON.stringify(updaterConfig?.endpoints) !== JSON.stringify([UPDATER_FEED])
+    || updaterConfig?.pubkey !== EXPECTED_UPDATER_PUBLIC_KEY
+    || updaterConfig?.requireSignedVersion !== UPDATER_REQUIRES_SIGNED_VERSION) {
+    throw new CandidateError("app updater feed・public key・signed version契約が不正です");
+  }
+  return {
+    feed: UPDATER_FEED,
+    publicKeySha256: sha256(Buffer.from(EXPECTED_UPDATER_PUBLIC_KEY)),
+    requireSignedVersion: UPDATER_REQUIRES_SIGNED_VERSION,
+    officialUpdates: true,
+  };
+}
+
 export function verifyBuiltApp({ appPath, workspace, version, sdkManifest, nativeManifest, expectedNotices, allowedPublicFirebaseKey }) {
   assertStrictVersion(version);
   ordinaryDirectory(appPath, "NIHO photo.app");
@@ -426,6 +444,7 @@ export function verifyBuiltApp({ appPath, workspace, version, sdkManifest, nativ
   if (plistValue(plist, "CFBundleIdentifier") !== BUNDLE_ID || plistValue(plist, "CFBundleShortVersionString") !== version || plistValue(plist, "CFBundleVersion") !== version || !plist.includes(`<string>${DEEP_LINK}</string>`)) throw new CandidateError("app plist identity/version/deep linkが不正です");
   const executableName = plistValue(plist, "CFBundleExecutable");
   if (!executableName) throw new CandidateError("app executable identityがありません");
+  const updater = verifyUpdaterConfiguration(workspace);
   const executable = path.join(contents, "MacOS", executableName);
   const executableBytes = readFileSync(executable);
   verifyRuntimeAssetBundle(machoRuntimeSection(executableBytes), sdkManifest);
@@ -474,7 +493,7 @@ export function verifyBuiltApp({ appPath, workspace, version, sdkManifest, nativ
   const notices = verifyAppNoticeResources(appPath, expectedNotices);
   return {
     identity: { product: PRODUCT, bundleId: BUNDLE_ID, version, deepLink: DEEP_LINK },
-    updater: { feed: UPDATER_FEED, publicKeySha256: sha256(Buffer.from(EXPECTED_UPDATER_PUBLIC_KEY)), officialUpdates: true },
+    updater,
     signing: { mode: "ad-hoc", verified: true, detailSha256: sha256(Buffer.from(signing)) },
     executable: { path: `Contents/MacOS/${executableName}`, sha256: sha256(executableBytes), bytes: executableBytes.length },
     native,
@@ -588,6 +607,7 @@ function validateCandidateManifest(manifest, fileName) {
   const proofFiles = [manifest.app.executable, ...manifest.app.native.map((item) => ({ ...item, path: `Contents/MacOS/${item.name}` })), ...(Array.isArray(manifest.app.calibration) ? manifest.app.calibration : []).map((item) => ({ ...item, path: `Contents/Resources/develop-calibration/${item.path}` }))];
   if (!manifest.app.executable || proofFiles.some((item) => !manifest.app.files.some((file) => file.path === item.path && file.sha256 === item.sha256 && file.bytes === item.bytes))) throw new CandidateError("candidate executable/native/calibration proofがapp inventoryと一致しません");
   if (!Array.isArray(manifest.app.calibration) || !manifest.app.calibration.length || manifest.app.calibration.some((item) => typeof item.path !== "string" || item.path.includes("..") || !SHA256.test(item.sha256 ?? "") || !Number.isSafeInteger(item.bytes) || item.bytes <= 0) || !/^niho-[1-9]\d*$/u.test(manifest.app.runtime?.engine ?? "") || !SEMVER.test(manifest.app.runtime?.crateVersion ?? "") || !SHA256.test(manifest.app.runtime?.manifest?.sha256 ?? "") || !Array.isArray(manifest.app.runtime?.files) || !manifest.app.runtime.files.length || manifest.app.runtime.files.some((item) => !SAFE_ASSET.test(item.name ?? "") || !SHA256.test(item.sha256 ?? "") || !Number.isSafeInteger(item.bytes) || item.bytes <= 0)) throw new CandidateError("candidate resource proofが不正です");
+  if (manifest.app?.updater?.requireSignedVersion !== UPDATER_REQUIRES_SIGNED_VERSION) throw new CandidateError("candidate updaterはversion署名必須です");
   assertStrictVersion(manifest.version);
   const base = candidateBaseName({ version: manifest.version, sourceSha: manifest.source.commit, runId: manifest.run.id, runAttempt: manifest.run.attempt });
   if (fileName !== `${base}.candidate.json`) throw new CandidateError("candidate manifest名が不正です");
@@ -718,6 +738,7 @@ export const candidateContract = Object.freeze({
   bundleId: BUNDLE_ID,
   deepLink: DEEP_LINK,
   updaterFeed: UPDATER_FEED,
+  updaterRequiresSignedVersion: UPDATER_REQUIRES_SIGNED_VERSION,
   updaterPublicKeySha256: sha256(Buffer.from(EXPECTED_UPDATER_PUBLIC_KEY)),
   overlayPaths: OVERLAY_PATHS,
   noticePaths: Object.keys(NOTICE_SOURCES),

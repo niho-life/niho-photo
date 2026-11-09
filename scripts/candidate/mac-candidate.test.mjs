@@ -31,6 +31,7 @@ import {
   verifyRuntimeAssetBundle,
   validateTarEntries,
   verifyAppNoticeResources,
+  verifyUpdaterConfiguration,
   verifyCandidateDirectory,
   verifySdkDirectory,
   verifySdkProofDirectory,
@@ -75,6 +76,31 @@ test("version overlayはcameraの4 fileだけを変更しroot npm lockに触れ�
   assert.match(readFileSync(path.join(workspace, "apps/camera/src-tauri/Cargo.toml"), "utf8"), /version = "2\.3\.4-beta\.1"/u);
   assert.match(readFileSync(path.join(workspace, "apps/camera/src-tauri/Cargo.lock"), "utf8"), /version = "2\.3\.4-beta\.1"/u);
   assert.deepEqual(readFileSync(path.join(workspace, "package-lock.json")), rootLock);
+});
+
+test("candidate updaterは公式feed・固定鍵・version署名必須をTauri設定から検証する", () => {
+  const workspace = temp("niho-photo-updater-config-");
+  const configPath = "apps/camera/src-tauri/tauri.conf.json";
+  const updater = JSON.parse(readFileSync(path.join(root, configPath), "utf8")).plugins.updater;
+  const config = { plugins: { updater: structuredClone(updater) } };
+  put(workspace, configPath, `${JSON.stringify(config)}\n`);
+  assert.deepEqual(verifyUpdaterConfiguration(workspace), {
+    feed: candidateContract.updaterFeed,
+    publicKeySha256: candidateContract.updaterPublicKeySha256,
+    requireSignedVersion: true,
+    officialUpdates: true,
+  });
+
+  for (const mutate of [
+    (updater) => { updater.endpoints = ["https://example.invalid/latest.json"]; },
+    (updater) => { updater.pubkey = "forged"; },
+    (updater) => { updater.requireSignedVersion = false; },
+  ]) {
+    const invalid = structuredClone(config);
+    mutate(invalid.plugins.updater);
+    put(workspace, configPath, `${JSON.stringify(invalid)}\n`);
+    assert.throws(() => verifyUpdaterConfiguration(workspace), /updater feed・public key・signed version/u);
+  }
 });
 
 test("official build環境は公開値だけを追加し秘密・Cargo設定を継承しない", () => {
@@ -217,8 +243,8 @@ function candidateFixture(sdkManifestSchemaVersion = 1) {
     run: { id: runId, attempt: runAttempt },
     sdk: {
       mode: "published",
-      version: ({ 1: "0.1.1", 2: "0.1.8", 3: "0.1.10", 4: "0.1.11" })[sdkManifestSchemaVersion],
-      manifestFile: `niho-photo-sdk-${({ 1: "0.1.1", 2: "0.1.8", 3: "0.1.10", 4: "0.1.11" })[sdkManifestSchemaVersion]}-${"1".repeat(40)}.json`,
+      version: ({ 1: "0.1.1", 2: "0.1.8", 3: "0.1.10", 4: "0.1.11", 5: "0.1.12" })[sdkManifestSchemaVersion],
+      manifestFile: `niho-photo-sdk-${({ 1: "0.1.1", 2: "0.1.8", 3: "0.1.10", 4: "0.1.11", 5: "0.1.12" })[sdkManifestSchemaVersion]}-${"1".repeat(40)}.json`,
       manifestSha256: "c".repeat(64),
       source: { commit: "1".repeat(40), tree: "2".repeat(40) },
       packages: sdkPackages,
@@ -230,7 +256,7 @@ function candidateFixture(sdkManifestSchemaVersion = 1) {
     overlays: candidateContract.overlayPaths.map((name) => ({ path: name, beforeSha256: "1".repeat(64), afterSha256: "2".repeat(64) })),
     app: {
       identity: { product: "NIHO photo", bundleId: "life.niho.camera", version, deepLink: "niho-camera" },
-      updater: { feed: candidateContract.updaterFeed, publicKeySha256: candidateContract.updaterPublicKeySha256, officialUpdates: true },
+      updater: { feed: candidateContract.updaterFeed, publicKeySha256: candidateContract.updaterPublicKeySha256, requireSignedVersion: candidateContract.updaterRequiresSignedVersion, officialUpdates: true },
       files,
       executable: { ...files.find((item) => item.path === "Contents/MacOS/niho-camera") },
       notices,
@@ -435,7 +461,7 @@ test("SDK schema 2 candidateは7 package・19 ownership path・明示proofだけ
   }
 });
 
-test("SDK schema 4 candidateは共有の契約を足した8 package・21 ownership pathを固定し、schema 3と混ぜない", () => {
+test("SDK schema 4 candidateは共有の契約を足した8 package・21 ownership pathを固定し、schema 3/5と混ぜない", () => {
   const candidate = candidateFixture(4);
   assert.equal(candidate.manifest.sdk.sdkManifestSchemaVersion, 4);
   assert.equal(candidate.manifest.sdk.packages.length, 8);
@@ -451,12 +477,35 @@ test("SDK schema 4 candidateは共有の契約を足した8 package・21 ownersh
     expectedSdkManifestSha256: candidate.manifest.sdk.manifestSha256,
   });
   assert.equal(verified.manifest.schemaVersion, 4);
-  for (const value of [3, 5]) {
+  for (const value of [3, 5, 6]) {
     const forged = candidateFixture(4);
     forged.manifest.sdk.sdkManifestSchemaVersion = value;
     writeFileSync(path.join(forged.directory, forged.manifestFile), `${JSON.stringify(forged.manifest, null, 2)}\n`);
     assert.throws(() => verifyCandidateDirectory(forged.directory));
   }
+});
+
+test("SDK schema 5 candidateは常設Macライブラリを足した9 package・22 ownership pathを固定する", () => {
+  const candidate = candidateFixture(5);
+  assert.equal(candidate.manifest.sdk.sdkManifestSchemaVersion, 5);
+  assert.equal(candidate.manifest.sdk.version, "0.1.12");
+  assert.equal(candidate.manifest.sdk.packages.length, 9);
+  assert.ok(candidate.manifest.sdk.packages.some(({ id, name }) => id === "hosted-library" && name === "niho-photo-hosted-library"));
+  assert.equal(candidate.manifest.sourceOwnership.paths.length, 22);
+  assert.equal(candidate.manifest.sourceOwnership.paths.at(-1).path, "packages/photo-hosted-library");
+  assert.equal(verifyCandidateDirectory(candidate.directory).manifest.sdk.sdkManifestSchemaVersion, 5);
+  const proof = sdkProofFixture(candidate);
+  const verified = verifySdkProofDirectory({
+    directory: proof.directory,
+    candidateManifest: candidate.manifest,
+    expectedSdkVersion: candidate.manifest.sdk.version,
+    expectedSdkManifestSha256: candidate.manifest.sdk.manifestSha256,
+  });
+  assert.equal(verified.manifest.schemaVersion, 5);
+  const forged = candidateFixture(5);
+  forged.manifest.sdk.sdkManifestSchemaVersion = 4;
+  writeFileSync(path.join(forged.directory, forged.manifestFile), `${JSON.stringify(forged.manifest, null, 2)}\n`);
+  assert.throws(() => verifyCandidateDirectory(forged.directory));
 });
 
 test("SDK schema 3 candidateは7 package・20 ownership pathとtransport proofを固定する", () => {
