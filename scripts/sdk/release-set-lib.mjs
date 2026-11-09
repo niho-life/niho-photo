@@ -78,6 +78,17 @@ const PACKAGE_DEFINITIONS = Object.freeze({
     ],
     exclude: [],
   }),
+  "hosted-library": Object.freeze({
+    id: "hosted-library", name: "niho-photo-hosted-library", sourceRoot: "packages/photo-hosted-library", kind: "node-contract",
+    entry: "src/index.ts",
+    include: ["src/index.ts", "src/shared.ts", "src/replica.ts", "src/index-recovery.ts", "src/portability.ts"],
+    exclude: [],
+    rewriteSpecifiers: {
+      "../../photo-library-sharing-contract/src/v1.ts": "niho-photo-library-sharing-contract",
+      "../../photo-library-sharing-contract/src/policy.ts": "niho-photo-library-sharing-contract/policy",
+      "../../photo-library-contract/src/v2.ts": "niho-photo-personal-cloud-contract",
+    },
+  }),
   "develop-engine-source": Object.freeze({
     id: "develop-engine-source", name: "niho-photo-develop-engine-source", sourceRoot: "packages/develop-engine", kind: "rust-source",
     include: [
@@ -95,6 +106,7 @@ const CONFIG_PACKAGE_IDS = Object.freeze({
   2: Object.freeze(["ui", "photo-editing", "cloud-contract", "photo-contract", "personal-cloud-contract", "develop-engine-source"]),
   3: Object.freeze(["ui", "photo-editing", "cloud-contract", "photo-contract", "personal-cloud-contract", "develop-engine-source"]),
   4: Object.freeze(["ui", "photo-editing", "cloud-contract", "photo-contract", "personal-cloud-contract", "sharing-contract", "develop-engine-source"]),
+  5: Object.freeze(["ui", "photo-editing", "cloud-contract", "photo-contract", "personal-cloud-contract", "sharing-contract", "hosted-library", "develop-engine-source"]),
 });
 /** Node contract の入口（package の export → 生成する入口の source）。既定は `.` だけ。 */
 const NODE_CONTRACT_ENTRIES = Object.freeze({
@@ -105,10 +117,12 @@ const NODE_CONTRACT_ENTRIES = Object.freeze({
     "./policy": 'export * from "./photo-library-sharing-contract/src/policy.js";\n',
     "./routes": 'export * from "./photo-library-sharing-contract/src/routes.js";\n',
   }),
+  "hosted-library": Object.freeze({ ".": 'export * from "./src/index.js";\n' }),
 });
 const NODE_CONTRACT_DESCRIPTIONS = Object.freeze({
   "personal-cloud-contract": "NIHO photo personal cloud v2 contract for Node.js and browser consumers",
   "sharing-contract": "NIHO photo library sharing v1 contract (types, routes, policy) for Node.js and browser consumers",
+  "hosted-library": "NIHO photo hosted library core for Node.js and browser consumers",
   "photo-contract": "NIHO photo recipe contract for plain Node.js ESM consumers",
 });
 /** export 名 → dist の入口の名前（`.` は index）。 */
@@ -250,7 +264,7 @@ export function validateConfig(config) {
     assertRelativePath(definition.sourceRoot, "sourceRoot");
     if (!Array.isArray(definition.include) || !definition.include.length || !Array.isArray(definition.exclude)) throw new SdkReleaseError("package include/exclude が不正です");
     for (const pattern of [...definition.include, ...definition.exclude]) globRegex(pattern);
-    if (definition.kind === "node-contract" && (!["photo-contract", "personal-cloud-contract", "sharing-contract"].includes(definition.id) || !assertRelativePath(definition.entry, "Node contract entry") || !definition.include.some((pattern) => globRegex(pattern).test(definition.entry)))) throw new SdkReleaseError("Node contract 定義が不正です");
+    if (definition.kind === "node-contract" && (!["photo-contract", "personal-cloud-contract", "sharing-contract", "hosted-library"].includes(definition.id) || !assertRelativePath(definition.entry, "Node contract entry") || !definition.include.some((pattern) => globRegex(pattern).test(definition.entry)))) throw new SdkReleaseError("Node contract 定義が不正です");
     for (const [from, to] of Object.entries(definition.rewritePackageImports ?? {})) {
       if (!PACKAGE_NAME.test(from) || !PACKAGE_NAME.test(to) || from === to) throw new SdkReleaseError("package import rewrite が不正です");
     }
@@ -363,6 +377,10 @@ function packageManifest(definition, original, config) {
         })),
         "./package.json": "./package.json",
       },
+      ...(definition.id === "hosted-library" ? { peerDependencies: {
+        "niho-photo-library-sharing-contract": config.version,
+        "niho-photo-personal-cloud-contract": config.version,
+      } } : {}),
       engines: { node: "24.x" },
     };
   }
@@ -643,12 +661,15 @@ function collectNodeContractSources(repoRoot, commit, definition) {
     const relative = queue.shift();
     if (selected.has(relative)) continue;
     const entry = byRelativePath.get(relative);
-    if (!entry || !relative.endsWith(".ts") || relative.endsWith(".d.ts")) throw new SdkReleaseError("Node contract の純粋TypeScript closureが不正です");
+    if (!entry || !relative.endsWith(".ts") || relative.endsWith(".d.ts") || (definition.id === "hosted-library" && !matchesPackagePath(relative, definition))) throw new SdkReleaseError("Node contract の純粋TypeScript closureが不正です");
     const bytes = gitBytes(repoRoot, commit, entry.file);
-    const text = bytes.toString("utf8");
+    const text = rewriteImports(bytes, {}, definition.rewriteSpecifiers ?? {}, relative).toString("utf8");
     selected.set(relative, rewriteNodeImportSpecifiers(text));
     for (const { fileName: specifier } of ts.preProcessFile(text, true, true).importedFiles) {
-      if (!specifier.startsWith(".")) throw new SdkReleaseError("Node contract に外部runtime dependencyがあります");
+      if (!specifier.startsWith(".")) {
+        if (definition.id !== "hosted-library" || !Object.values(definition.rewriteSpecifiers).includes(specifier)) throw new SdkReleaseError("Node contract に外部runtime dependencyがあります");
+        continue;
+      }
       const dependency = resolveRelativeImport(new Set(byRelativePath.keys()), relative, specifier);
       if (!dependency) throw new SdkReleaseError("Node contract dependency closureに欠落があります");
       queue.push(dependency);
@@ -657,12 +678,20 @@ function collectNodeContractSources(repoRoot, commit, definition) {
   return selected;
 }
 
-function stageNodeContractPackage({ repoRoot, commit, config, definition, stage, rootNotices, recipe }) {
+function stageNodeContractPackage({ repoRoot, commit, config, definition, stage, rootNotices, recipe, staged }) {
   const buildRoot = path.join(stage, ".contract-build");
   const sourceRoot = path.join(buildRoot, "source");
   const outputRoot = path.join(stage, "dist");
   mkdirSync(sourceRoot, { recursive: true, mode: 0o755 });
   put(buildRoot, "package.json", jsonBytes({ type: "module" }));
+  if (definition.id === "hosted-library") {
+    const dependencies = ["personal-cloud-contract", "sharing-contract"];
+    for (const id of dependencies) {
+      const dependency = staged.get(id);
+      if (!dependency) throw new SdkReleaseError(`Node contract dependency packageがありません: ${id}`);
+      linkDeclarationDependency(buildRoot, dependency.manifest.name, dependency.stage);
+    }
+  }
   for (const [relative, text] of collectNodeContractSources(repoRoot, commit, definition)) put(sourceRoot, relative, Buffer.from(text));
   const entries = NODE_CONTRACT_ENTRIES[definition.id];
   const entry = entries
@@ -947,7 +976,7 @@ export async function packReleaseSet({ repoRoot, configPath = "sdk/release-set.j
       const stage = path.join(scratch, `stage-${definition.id}`);
       mkdirSync(stage, { mode: 0o755 });
       const manifest = definition.kind === "node-contract"
-        ? stageNodeContractPackage({ repoRoot, commit, config, definition, stage, rootNotices, recipe })
+        ? stageNodeContractPackage({ repoRoot, commit, config, definition, stage, rootNotices, recipe, staged })
         : stageSourcePackage({ repoRoot, commit, config, definition, stage, rootNotices });
       staged.set(definition.id, { definition, stage, manifest });
     }

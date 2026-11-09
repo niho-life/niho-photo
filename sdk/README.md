@@ -1,6 +1,6 @@
 # NIHO photo SDK release set
 
-`sdk/release-set.json` は、NIHOapp が同じ版として固定する写真編集 SDK の構成です。SDK 0.1.11（release manifest schema 4）では次の 8 package を 1 個の release manifest に束ねます（0.1.8〜0.1.10 は `niho-photo-library-sharing-contract` を除く 7 package）。
+`sdk/release-set.json` は、NIHOapp が同じ版として固定する写真編集 SDK の構成です。SDK 0.1.12（release manifest schema 5）では次の 9 package を 1 個の release manifest に束ねます。既存の schema 1〜4 の package 集合は維持します。
 
 - `niho-photo-editing`: PhotoLibrary 境界、editor、develop-engine client と Web Worker の TypeScript source
 - `niho-photo-ui`: SDK 専用名にした editor の UI dependency。React / React DOM は peer dependency のままで、consumer と同じ実体を使う
@@ -8,6 +8,7 @@
 - `niho-photo-contract`: recipe の読取・編集可否・作業コピー接続・signed RAW 判定・neutral 生成を提供する Node ESM JavaScript と `.d.ts`
 - `niho-photo-personal-cloud-contract`: 本人クラウドv2のport・型・上限・error契約を実sourceから生成したNode ESM JavaScriptと`.d.ts`
 - `niho-photo-library-sharing-contract`: 保管場所・共有アルバム・完成写真の契約v1（型・経路・判定）を実sourceから生成したNode ESM JavaScriptと`.d.ts`
+- `niho-photo-hosted-library`: 常設Macライブラリの控え同期・索引復旧・export/restore計画を実sourceから生成したNode ESM JavaScriptと`.d.ts`
 - `niho-photo-develop-engine-source`: 同一 commit の Rust workspace source と、wasm build に必要な埋め込みデータ
 - `niho-photo-develop-engine-runtime`: `manifest-<crate version>.json` が SHA-256 で固定する wasm-bindgen glue、wasm、型定義
 
@@ -111,3 +112,9 @@ SDK 0.1.8のengineは `niho-14`、crate `0.27.0`。画素変更は無い。新�
 - v1 は本人クラウド v2 の上限・型を相対 import するので、`packages` を source root にして `photo-library-sharing-contract/src/{v1,policy,routes}.ts` と `photo-library-contract/src/v2.ts` だけをコンパイルする。合成 fixture・負例・試験・v2 互換 adapter（`compat-v2`）は入れない。
 - 経路の decode は配置と想定外の項目だけを見る。必須の項目・型・権限はサーバーが operation ごとに検査する（[契約の文書](../docs/architecture/photo-library-sharing.md)）。
 - release そのもの（tag・asset・attestation）は、この構成が main に入った後に公式 workflow で行う。
+
+## 常設Macライブラリcore（SDK 0.1.12、schema 5）
+
+schema 5 は schema 4 の8 packageに `niho-photo-hosted-library` を加え、`packages/photo-hosted-library` を ownership に追加した厳密な新profileです。schema 1〜4の検証規則と公開済みartifactは変更しません。`src/{index,shared,replica,index-recovery,portability}.ts` のみをGit objectから取得し、Node ESM JavaScriptと型定義へコンパイルします。test、test-support、接続用ソフト、ローカルパス、source mapは入れません。
+
+公開artifact内の共有契約・本人クラウド契約へのimportは、同じrelease setの `niho-photo-library-sharing-contract` と `niho-photo-personal-cloud-contract` へ置き換えます。NIHOappはmanifestのsource SHA、tarball SHA-256とattestationを固定して取り込みます。公開packageは認可の証明ではありません。actor・tenant context、DB transaction/persistence、GCS、quota ledger、credentialの保存と失効、account lifecycle、deployはNIHOapp側が担い、serverも改変clientも未信頼としてoperationごとに検査します。
