@@ -15,6 +15,8 @@ import {
   verifyCandidateTransportProof,
   verifySdkProofForRelease,
   validateCandidateReleaseMetadata,
+  candidateReleaseAssetNames,
+  sdkProofReleaseMetadata,
 } from "./mac-updater-release-lib.mjs";
 import { readPinnedUpdaterKey, verifyUpdaterArchiveSignature } from "./updater-signature.mjs";
 
@@ -108,18 +110,6 @@ function copyAssetsToProofDirectories({ incoming, candidate, candidateDirectory,
   }
 }
 
-function expectedAssetNames(manifestFile, manifest) {
-  return [
-    ...manifest.assets.map(({ name }) => name),
-    manifestFile,
-    manifest.sdk.manifestFile,
-    "photo-sdk-artifact-receipt.json",
-    "photo-sdk-release.json",
-    "photo-candidate-artifact-receipt.json",
-    "photo-candidate-provenance.json",
-  ].sort();
-}
-
 function releaseNotes({ version, candidateTag, sourceSha, sdkVersion }) {
   return [
     `NIHO photo ${version}`,
@@ -184,7 +174,7 @@ function main(argv) {
       fail("candidate tagとmanifest identityが一致しません");
     }
     if (tagRef?.ref !== `refs/tags/${candidateTag}` || tagRef.object?.type !== "commit" || tagRef.object?.sha !== candidateManifest.source.commit) fail("candidate Git tagがsource commitを指していません");
-    const expected = expectedAssetNames(manifestFile, candidateManifest);
+    const expected = candidateReleaseAssetNames(manifestFile, candidateManifest);
     const actual = readdirSync(incoming).sort();
     const releaseNames = releaseAssetNames;
     if (JSON.stringify(actual) !== JSON.stringify(expected) || JSON.stringify(releaseNames) !== JSON.stringify(expected)) {
@@ -196,6 +186,18 @@ function main(argv) {
       if (!info?.isFile() || info.isSymbolicLink() || info.size <= 0 || info.size > 250 * 1024 * 1024) fail("candidate releaseに通常fileでないassetまたはsize超過があります");
     }
 
+    if (!/^(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/u.test(candidateManifest.sdk.version)
+      || !/^[a-f0-9]{40}$/u.test(candidateManifest.sdk.source?.commit ?? "")) fail("candidate SDK identityが不正です");
+    const sdkTag = `photo-sdk-v${candidateManifest.sdk.version}`;
+    const sdkRelease = parseJson(Buffer.from(run("gh", ["api", `repos/${PHOTO_UPDATER_RELEASE.repository}/releases/tags/${sdkTag}`])), "SDK release metadata");
+    const sdkTagRef = parseJson(Buffer.from(run("gh", ["api", `repos/${PHOTO_UPDATER_RELEASE.repository}/git/ref/tags/${sdkTag}`])), "SDK tag ref");
+    const sdkMetadata = sdkProofReleaseMetadata(sdkRelease, sdkTagRef);
+    if (sdkMetadata.tagSha !== candidateManifest.sdk.source.commit) fail("SDK Release/tagがcandidateのSDK sourceと一致しません");
+    run("gh", ["release", "download", sdkTag, "--repo", PHOTO_UPDATER_RELEASE.repository,
+      "--pattern", "photo-sdk-artifact-receipt.json", "--dir", incoming]);
+    readOrdinaryFile(path.join(incoming, "photo-sdk-artifact-receipt.json"), MAX_METADATA_BYTES, "SDK receipt");
+    writeFileSync(path.join(incoming, "photo-sdk-release.json"), `${JSON.stringify(sdkMetadata, null, 2)}\n`, { flag: "wx", mode: 0o644 });
+    const proofAssets = ["photo-sdk-artifact-receipt.json", "photo-sdk-release.json"];
     copyAssetsToProofDirectories({ incoming, candidate: { manifest: candidateManifest, manifestFile }, candidateDirectory, sdkDirectory });
     const candidate = verifyCandidateDirectoryForRelease(candidateDirectory);
     const sdkProof = verifySdkProofForRelease({ directory: sdkDirectory, candidate });
@@ -236,11 +238,11 @@ function main(argv) {
     const signature = signatureBytes.toString("utf8").trim();
     const updaterManifest = buildUpdaterManifest({ version: candidate.manifest.version, signature, archiveName });
     const releaseTag = `photo-app-v${candidate.manifest.version}`;
-    const outputNames = [...expected, `${archiveName}.sig`, "latest.json"];
+    const outputNames = [...expected, ...proofAssets, `${archiveName}.sig`, "latest.json"];
 
     mkdirSync(outputPath, { mode: 0o700 });
     outputCreated = true;
-    for (const name of expected) copyFileSync(path.join(incoming, name), path.join(outputPath, name));
+    for (const name of [...expected, ...proofAssets]) copyFileSync(path.join(incoming, name), path.join(outputPath, name));
     writeFileSync(path.join(outputPath, `${archiveName}.sig`), signatureBytes, { flag: "wx", mode: 0o644 });
     writeFileSync(path.join(outputPath, "latest.json"), `${JSON.stringify(updaterManifest, null, 2)}\n`, { flag: "wx", mode: 0o644 });
     writeFileSync(path.join(outputPath, "release-notes.md"), releaseNotes({

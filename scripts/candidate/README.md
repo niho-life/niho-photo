@@ -86,6 +86,7 @@ npm run photo:release:prepare -- \
 ```
 
 helperはcurrent mainに含まれる固定workflowのattestation、run、source SHA、SDK proof、candidate manifestと全asset hashを照合します。
+candidateの7配布assetsにSDK receipt/Release metadataは含まれないため、その2点だけは固定したSDKの公式Release/tagから取得・正規化します。candidateのattested provenanceに記録された両proofのhashへ照合し、sourceやbytesの不一致を受け入れません。
 取得したcandidateのprogram・script・verifierは実行せず、tar/DMGも展開せずにdataとして検査します。署名対象のtarはmanifestに
 hash固定された同じbytesです。秘密鍵の内容を引数・env・ログへ出さず、ローカルkey fileから直接Tauri署名します。
 署名後はTauri updaterと同じMinisign verifierでtarと署名を検証し、appに固定した公開鍵と署名内のversionが一致するまで配布assetを作りません。

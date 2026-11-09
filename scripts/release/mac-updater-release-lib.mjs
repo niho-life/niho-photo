@@ -25,6 +25,40 @@ const MAX_ASSET_BYTES = 250 * 1024 * 1024;
 
 export class PhotoUpdaterReleaseError extends Error {}
 
+// The candidate publisher exports seven assets. SDK receipt/metadata belong to
+// the immutable SDK release and are reconstructed separately, then hash-checked
+// against the candidate's attested transport provenance.
+export function candidateReleaseAssetNames(manifestFile, manifest) {
+  return [
+    ...manifest.assets.map(({ name }) => name), manifestFile, manifest.sdk.manifestFile,
+    "photo-candidate-artifact-receipt.json", "photo-candidate-provenance.json",
+  ].sort();
+}
+
+export function sdkProofReleaseMetadata(rawRelease, tagRef) {
+  if (!Number.isSafeInteger(rawRelease?.id) || rawRelease.id <= 0
+    || rawRelease.draft !== false || typeof rawRelease.prerelease !== "boolean"
+    || !/^photo-sdk-v[0-9]+\.[0-9]+\.[0-9]+$/u.test(rawRelease.tag_name ?? "")
+    || !FULL_SHA.test(rawRelease.target_commitish ?? "")
+    || tagRef?.ref !== `refs/tags/${rawRelease.tag_name}`
+    || tagRef.object?.type !== "commit" || tagRef.object.sha !== rawRelease.target_commitish
+    || !/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/u.test(rawRelease.published_at ?? "")
+    || !Array.isArray(rawRelease.assets) || rawRelease.assets.length === 0
+    || rawRelease.assets.some((asset) => !SAFE_ASSET.test(asset?.name ?? "") || asset.state !== "uploaded"
+      || !Number.isSafeInteger(asset.size) || asset.size <= 0 || asset.size > MAX_ASSET_BYTES)
+    || new Set(rawRelease.assets.map(({ name }) => name)).size !== rawRelease.assets.length
+    || !rawRelease.assets.some(({ name, size }) => name === "photo-sdk-artifact-receipt.json" && size <= 8 * 1024 * 1024)) {
+    fail("SDK Release/tag/asset metadataが不正です");
+  }
+  return {
+    schemaVersion: 1, repository: PHOTO_UPDATER_RELEASE.repository,
+    releaseId: rawRelease.id, tagName: rawRelease.tag_name, tagSha: tagRef.object.sha,
+    targetCommitish: rawRelease.target_commitish, draft: false, prerelease: rawRelease.prerelease,
+    publishedAt: rawRelease.published_at,
+    assets: rawRelease.assets.map(({ name, size: bytes }) => ({ name, bytes })).sort((left, right) => left.name.localeCompare(right.name, "en")),
+  };
+}
+
 function fail(message) {
   throw new PhotoUpdaterReleaseError(message);
 }
