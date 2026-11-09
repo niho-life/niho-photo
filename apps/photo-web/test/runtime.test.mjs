@@ -586,7 +586,7 @@ describe("createPhotoWebRuntime", () => {
 
   it("passes a complete shared-album port through and refuses an incomplete one (fail closed)", async () => {
     const methods = ["listAlbums", "createAlbum", "openAlbum", "people", "copyInviteLink", "revokeInviteLink", "changeRole", "removeMember",
-      "leave", "addFile", "save", "remove", "join", "joinHeld", "storageLocations", "originalsNoteShown", "markOriginalsNoteShown", "dispose"];
+      "leave", "addFile", "replaceFile", "save", "remove", "join", "joinHeld", "storageLocations", "originalsNoteShown", "markOriginalsNoteShown", "dispose"];
     const sharedAlbums = Object.fromEntries(methods.map((method) => [method, () => undefined]));
     const complete = harness({ connect: async () => new FakeConnection(binding("owner-a", { sharedAlbums })) });
     await complete.runtime.start();
@@ -604,6 +604,19 @@ describe("createPhotoWebRuntime", () => {
     await invalid.runtime.start();
     assert.equal(invalid.runtime.getSnapshot().binding, null);
     invalid.runtime.dispose();
+
+    // 「写真から選ぶ」: both library operations, or neither.
+    const withLibrary = { ...sharedAlbums, libraryPhotos: () => undefined, addLibraryPhotos: () => undefined };
+    const library = harness({ connect: async () => new FakeConnection(binding("owner-a", { sharedAlbums: withLibrary })) });
+    await library.runtime.start();
+    assert.equal(library.runtime.getSnapshot().binding?.sharedAlbums, withLibrary);
+    library.runtime.dispose();
+    for (const half of [{ ...sharedAlbums, libraryPhotos: () => undefined }, { ...sharedAlbums, addLibraryPhotos: () => undefined }, { ...sharedAlbums, libraryPhotos: 1, addLibraryPhotos: 1 }]) {
+      const refused = harness({ connect: async () => new FakeConnection(binding("owner-a", { sharedAlbums: half })) });
+      await refused.runtime.start();
+      assert.equal(refused.runtime.getSnapshot().binding, null);
+      refused.runtime.dispose();
+    }
   });
 
   it("accepts and normalizes case-insensitive C02 file extensions", async () => {

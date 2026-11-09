@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent } from "react";
-import { AlertCircle, Check, ChevronLeft, CloudUpload, FolderOpen, Images, Moon, Plus, RefreshCw, Users, X } from "lucide-react";
+import { useEffect, useMemo, useRef, useState, type ChangeEvent, type KeyboardEvent as ReactKeyboardEvent, type RefObject } from "react";
+import { AlertCircle, Check, ChevronLeft, CloudUpload, Ellipsis, FolderOpen, ImageUp, Images, Moon, Plus, RefreshCw, Users, X } from "lucide-react";
 
 import { appDialog } from "niho-ui/app-dialog";
 import { cn } from "niho-ui/cn";
@@ -22,6 +22,7 @@ import {
   photoSharedAlbumCanAdd,
   photoSharedAlbumCanRemoveItem,
   photoSharedAlbumItemLabel,
+  photoSharedAlbumItemReplaceable,
   photoSharedAlbumItemSavable,
   photoSharedAlbumItemPause,
   photoSharedAlbumItemStatus,
@@ -50,6 +51,9 @@ const HEADER_TEXT_BUTTON_CLASS_NAME =
 const ON_PHOTO_BADGE_CLASS_NAME =
   "inline-flex max-w-full items-center gap-1 rounded-full bg-black/65 px-2 py-0.5 text-xs font-bold leading-5 text-white shadow-sm";
 const LOADING_TILE_COUNT = 12;
+/** 見出しのメニューの 1 行（44px）。 */
+const MENU_ITEM_CLASS_NAME =
+  "flex h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sub font-bold text-niho-text transition hover:bg-niho-pale/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-niho-accent-ink";
 
 export interface PhotoSharedAlbumViewProps {
   readonly album: PhotoSharedAlbum;
@@ -74,6 +78,8 @@ export interface PhotoSharedAlbumViewProps {
   readonly onSave: (itemIds: readonly string[]) => void;
   /** 選んだ項目をアルバムから外す（外せる項目だけを選んでいるときに出す）。失敗は reject */
   readonly onRemove?: (itemIds: readonly string[]) => Promise<void>;
+  /** 自分が足した完成写真を、選び直した JPEG に差し替える。無ければ選択中の「その他」を出さない */
+  readonly onReplace?: (itemId: string, file: File) => void;
   /** 1 枚を大きく見る。無ければ、タイルを押すと選択を始める */
   readonly onOpenItem?: (itemId: string) => void;
   readonly onRetryUpload: (uploadId: string) => void;
@@ -100,6 +106,10 @@ export function PhotoSharedAlbumView(props: PhotoSharedAlbumViewProps) {
   const [message, setMessage] = useState<string | null>(null);
   const [removing, setRemoving] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+  const replaceInputRef = useRef<HTMLInputElement | null>(null);
+  const moreButtonRef = useRef<HTMLButtonElement>(null);
+  // 差し替えのファイルを選んでいる項目（選択画面が閉じてから届くので、選んだ時点の項目を覚える）
+  const replaceTargetRef = useRef<{ readonly albumId: string; readonly itemId: string } | null>(null);
   const selectButtonRef = useRef<HTMLButtonElement | null>(null);
   const endSelectionButtonRef = useRef<HTMLButtonElement | null>(null);
   const focusAfterModeChangeRef = useRef(false);
@@ -163,6 +173,41 @@ export function PhotoSharedAlbumView(props: PhotoSharedAlbumViewProps) {
   };
 
   const selectedItems = items.filter((item) => selected.has(item.itemId));
+  const replaceable = props.onReplace !== undefined && selectedItems.length === 1 && photoSharedAlbumItemReplaceable(selectedItems[0] as PhotoSharedAlbumItem, album)
+    ? (selectedItems[0] as PhotoSharedAlbumItem)
+    : null;
+  const chooseReplacement = () => {
+    if (replaceable === null) return;
+    replaceTargetRef.current = { albumId: album.albumId, itemId: replaceable.itemId };
+    replaceInputRef.current?.click();
+  };
+  const onReplacementChosen = (event: ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0] ?? null;
+    event.currentTarget.value = "";
+    const target = replaceTargetRef.current;
+    replaceTargetRef.current = null;
+    // 選んでいる間に別のアルバムを開いたら、前のアルバムの項目を差し替えない
+    if (file === null || target === null || target.albumId !== albumIdRef.current || !props.onReplace) {
+      moreButtonRef.current?.focus();
+      return;
+    }
+    props.onReplace(target.itemId, file);
+    // The selection ends; focus goes to 選択, where it started.
+    focusAfterModeChangeRef.current = true;
+    setSelecting(false);
+    setSelected(new Set());
+  };
+  // Closing the file chooser without a file leaves focus nowhere visible: bring it back to その他.
+  useEffect(() => {
+    const input = replaceInputRef.current;
+    if (!input) return;
+    const cancelled = () => {
+      replaceTargetRef.current = null;
+      moreButtonRef.current?.focus();
+    };
+    input.addEventListener("cancel", cancelled);
+    return () => input.removeEventListener("cancel", cancelled);
+  }, []);
   const canRemoveSelection = props.onRemove !== undefined
     && selectedItems.length > 0
     && selectedItems.every((item) => photoSharedAlbumCanRemoveItem(album.role, item));
@@ -281,6 +326,15 @@ export function PhotoSharedAlbumView(props: PhotoSharedAlbumViewProps) {
         aria-hidden
         onChange={onFilesChosen}
       />
+      <input
+        ref={replaceInputRef}
+        type="file"
+        accept="image/jpeg"
+        className="hidden"
+        tabIndex={-1}
+        aria-hidden
+        onChange={onReplacementChosen}
+      />
       <header className="sticky top-0 z-10 flex min-h-14 shrink-0 flex-wrap items-center gap-1 border-b border-niho-border bg-[var(--photo-editing-surface,white)] px-1.5 py-1.5 sm:px-3">
         {selecting ? (
           <>
@@ -293,12 +347,21 @@ export function PhotoSharedAlbumView(props: PhotoSharedAlbumViewProps) {
             >
               <X className="h-5 w-5" aria-hidden />
             </button>
-            <h1 id={`photo-shared-album-title-${album.albumId}`} className="min-w-0 flex-1 truncate px-1 text-body font-bold">
+            {/* With every selection action in the row, 400px 未満 puts the count on its own line (like the album name) */}
+            {replaceable ? <span aria-hidden className="flex-1 min-[400px]:hidden" /> : null}
+            <h1
+              id={`photo-shared-album-title-${album.albumId}`}
+              className={cn(
+                "min-w-0 truncate px-1 text-body font-bold",
+                replaceable ? "order-last w-full px-3 pb-1 min-[400px]:order-none min-[400px]:w-auto min-[400px]:flex-1 min-[400px]:px-1 min-[400px]:pb-0" : "flex-1",
+              )}
+            >
               <span className="sr-only">{album.name}、</span>
               <span aria-live="polite">
                 {selected.size > 0 ? PHOTO_SHARED_ALBUM_COPY.selectedCount(selected.size) : PHOTO_SHARED_ALBUM_COPY.selectPrompt}
               </span>
             </h1>
+            {replaceable ? <PhotoSharedAlbumMoreButton buttonRef={moreButtonRef} disabled={removing} onReplace={chooseReplacement} /> : null}
             {canRemoveSelection ? (
               <button
                 type="button"
@@ -445,6 +508,37 @@ export function PhotoSharedAlbumView(props: PhotoSharedAlbumViewProps) {
   );
 }
 
+/** 選択中の「その他」。今は 1 枚の自分の完成写真の「差し替え」だけ（出せる操作が無いときはボタンごと出さない）。 */
+function PhotoSharedAlbumMoreButton(props: { disabled: boolean; onReplace: () => void; buttonRef: RefObject<HTMLButtonElement> }) {
+  const [open, setOpen] = useState(false);
+  return (
+    <Popover open={open} onOpenChange={setOpen}>
+      <PopoverTrigger asChild>
+        <button ref={props.buttonRef} type="button" disabled={props.disabled} aria-haspopup="menu" aria-label={PHOTO_SHARED_ALBUM_COPY.more} className={HEADER_ICON_BUTTON_CLASS_NAME}>
+          <Ellipsis className="h-5 w-5" aria-hidden />
+        </button>
+      </PopoverTrigger>
+      <PopoverContent align="end" className="w-56 p-1.5">
+        <div role="menu" aria-label={PHOTO_SHARED_ALBUM_COPY.more} className="flex flex-col">
+          <button
+            type="button"
+            role="menuitem"
+            onClick={() => {
+              // iPhone Safari はユーザーの操作の中でしか選択の画面を開かないので、閉じる前に開く
+              props.onReplace();
+              setOpen(false);
+            }}
+            className={MENU_ITEM_CLASS_NAME}
+          >
+            <ImageUp className="h-4 w-4 shrink-0 text-niho-text-sub" aria-hidden />
+            {PHOTO_SHARED_ALBUM_COPY.replace}
+          </button>
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
 /** 「追加」。本人の「写真」から選べるときだけ 2 つの出どころのメニューにし、そうでなければファイルを選ぶだけにする。 */
 function PhotoSharedAlbumAddButton(props: {
   disabled: boolean;
@@ -466,8 +560,7 @@ function PhotoSharedAlbumAddButton(props: {
     );
   }
   const onAddFromLibrary = props.onAddFromLibrary;
-  const itemClassName =
-    "flex h-11 w-full items-center gap-3 rounded-xl px-3 text-left text-sub font-bold text-niho-text transition hover:bg-niho-pale/60 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-niho-accent-ink";
+  const itemClassName = MENU_ITEM_CLASS_NAME;
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
