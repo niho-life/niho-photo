@@ -19,7 +19,8 @@ test("文書変更でもpublicationはworkflow側で常時実行、package実行
   assert.deepEqual(selected(["packages/photo-hosted-library/src/replica.ts"]), ["photo-editing", "camera"]);
   assert.deepEqual(selected(["packages/photo-hosted-connector/src/service.ts"]), ["photo-editing", "camera"]);
   assert.deepEqual(selected(["packages/photo-cloud-session/src/server/service.ts"]), ["photo-editing"]);
-  assert.deepEqual(selected(["packages/photo-cloud-library/src/index.ts"]), ["photo-editing"]);
+  assert.deepEqual(selected(["packages/photo-cloud-library/src/index.ts"]), ["photo-editing", "camera"]);
+  assert.deepEqual(selected(["packages/photo-cloud-library/src/render-executor/render-executor.ts"]), ["photo-editing", "camera"]);
   assert.deepEqual(selected(["packages/photo-cloud-sync/src/index.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["packages/photo-cloud-media/src/index.ts"]), ["photo-editing"]);
   assert.deepEqual(selected(["apps/photo-web/src/server/auth.ts"]), ["photo-editing"]);

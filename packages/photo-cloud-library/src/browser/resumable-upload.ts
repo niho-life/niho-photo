@@ -166,35 +166,16 @@ class BrowserUploadTransport implements PersonalPhotoResumableUploadTransport {
       ticket === undefined || source === undefined || ticket.resumeOffsetBytes !== input.start ||
       Date.parse(ticket.expiresAt) <= this.options.now()
     ) invalid();
-    const endInclusive = input.endExclusive - 1;
-    const providerLink = linkedAbortController(signal);
-    let response: Response;
-    try {
-      response = await awaitBounded(Promise.resolve().then(async () => await this.options.fetch(ticket.url, {
-        method: "PUT",
-        headers: {
-          "Content-Type": input.state.contentType,
-          "Content-Range": `bytes ${input.start}-${endInclusive}/${input.state.sizeBytes}`,
-        },
-        body: source.slice(input.start, input.endExclusive),
-        signal: providerLink.controller.signal,
-        credentials: "omit",
-        referrerPolicy: "no-referrer",
-        cache: "no-store",
-        redirect: "manual",
-      })), {
-        signal,
-        timeoutMs: PROVIDER_ATTEMPT_TIMEOUT_MS,
-        onTimeout: () => providerLink.controller.abort(new PersonalPhotoCloudError("unavailable")),
-        onLateResolve: cancelResponse,
-      });
-    } finally { providerLink.dispose(); }
-    void response.body?.cancel().catch(() => undefined);
-    return {
-      offsetBytes: response.status === 308 && response.type !== "opaqueredirect"
-        ? parseProviderRange(response.headers.get("Range"), input.start, endInclusive, input.state.sizeBytes)
-        : null,
-    };
+    const result = await putProviderChunk({
+      fetch: this.options.fetch,
+      url: ticket.url,
+      contentType: input.state.contentType,
+      source,
+      start: input.start,
+      endExclusive: input.endExclusive,
+      totalBytes: input.state.sizeBytes,
+    }, signal);
+    return { offsetBytes: result.offsetBytes };
   }
 
   async complete(state: PersonalPhotoResumableUploadState, signal: AbortSignal): Promise<Upload> {
@@ -535,6 +516,55 @@ function sameState(left: PersonalPhotoResumableUploadState, right: PersonalPhoto
   return JSON.stringify(left) === JSON.stringify(right);
 }
 function requiredUploadId(state: PersonalPhotoResumableUploadState): string { if (state.uploadId === null) invalid(); return state.uploadId; }
+/**
+ * One `Content-Range` PUT of `source[start, endExclusive)` to a provider upload URL (#195 ticket). Returns the next
+ * offset the provider confirmed with 308 + `Range`, or null with the final status. Shared by personal uploads and
+ * render outputs; credentials and redirects are never sent to the provider.
+ */
+export async function putProviderChunk(
+  input: {
+    readonly fetch: typeof fetch;
+    readonly url: string;
+    readonly contentType: string;
+    readonly source: Blob;
+    readonly start: number;
+    readonly endExclusive: number;
+    readonly totalBytes: number;
+  },
+  signal: AbortSignal,
+): Promise<{ readonly offsetBytes: number | null; readonly status: number }> {
+  const endInclusive = input.endExclusive - 1;
+  const providerLink = linkedAbortController(signal);
+  let response: Response;
+  try {
+    response = await awaitBounded(Promise.resolve().then(async () => await input.fetch(input.url, {
+      method: "PUT",
+      headers: {
+        "Content-Type": input.contentType,
+        "Content-Range": `bytes ${input.start}-${endInclusive}/${input.totalBytes}`,
+      },
+      body: input.source.slice(input.start, input.endExclusive),
+      signal: providerLink.controller.signal,
+      credentials: "omit",
+      referrerPolicy: "no-referrer",
+      cache: "no-store",
+      redirect: "manual",
+    })), {
+      signal,
+      timeoutMs: PROVIDER_ATTEMPT_TIMEOUT_MS,
+      onTimeout: () => providerLink.controller.abort(new PersonalPhotoCloudError("unavailable")),
+      onLateResolve: cancelResponse,
+    });
+  } finally { providerLink.dispose(); }
+  void response.body?.cancel().catch(() => undefined);
+  return {
+    offsetBytes: response.status === 308 && response.type !== "opaqueredirect"
+      ? parseProviderRange(response.headers.get("Range"), input.start, endInclusive, input.totalBytes)
+      : null,
+    status: response.status,
+  };
+}
+
 function parseProviderRange(value: string | null, offset: number, chunkEnd: number, total: number): number | null { if (value === null || value.includes(",")) return null; const match = /^bytes=0-(\d+)$/u.exec(value); if (!match) return null; const last = Number(match[1]); return Number.isSafeInteger(last) && last + 1 >= offset && last <= chunkEnd && last < total ? last + 1 : null; }
 function completionDeadline(deadline: string): number { return Date.parse(deadline) + PHOTO_LIMITS.completionGraceSeconds * 1000; }
 function terminal(phase: PersonalPhotoResumableUploadPhase): boolean { return ["cancelled", "expired", "rejected"].includes(phase); }

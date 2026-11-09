@@ -2355,10 +2355,11 @@
         "path": "packages/photo-editing/src/image-bytes-metadata.ts",
         "sha256": "81b5d16a8fb086c09ae74f920bdb39d0c3914683ae22bf808943b45ec6b64dd2"
       },
-      "outputSha256": "93e99784bda5641402e0817d219ba5c6cb6402355c55ac87f212a4413bc3fe18",
+      "outputSha256": "7a2c1ca4e265cb6cf3b913ed9351b0725f1f4600532bb901605a3f62d62a8d3b",
       "modifications": [
         "非公開ソースのパス・Issue・設計文書参照を公開用コメントへ整理。テストURLを予約済み.testドメインへ変更。",
-        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。"
+        "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
+        "JPEG metadata reader exportをB07から利用"
       ]
     },
     {
@@ -11873,8 +11874,8 @@
     },
     {
       "path": "packages/photo-cloud-library/README.md",
-      "sha256": "0aa38aaca03da3fdab8ed35d51283d94b70ee67898f210effab03cb25027d657",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: C03実HTTPと狭いprotocol共有口および編集未有効の境界を記述\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。\n変更理由: 失効時に本人scopeだけをfenceして転送journalを消去し、通常disposeの再開情報保持を分離する\n変更理由: 曖昧なconnection teardownと確定的session失効を分け、再開可能journalを保護する\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: README.md を更新"
+      "sha256": "9675ad33caa445bd7a3816141a068abf4f0e1284dd53c752460cbd9bcb14f443",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02本人クラウドadapterの参照・削除・資源寿命と厳格な契約型検証を統合する\n変更理由: 取消しと認証失効を分ける回帰試験53件とホストのcache解放責任を記載する\n変更理由: 同時preview取得の個別取消しとURL寿命を説明する\n変更理由: C02の実HTTP境界・確定的取消・bounded journal・実mask照合と回帰試験を最終実装へ整合する\n変更理由: C03実HTTPと狭いprotocol共有口および編集未有効の境界を記述\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: 共有mask保存を同IDBの単一barrierへ統合し、実SDK読取検証と原本copyの安全性を保持する。\n変更理由: 失効時に本人scopeだけをfenceして転送journalを消去し、通常disposeの再開情報保持を分離する\n変更理由: 曖昧なconnection teardownと確定的session失効を分け、再開可能journalを保護する\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: README.md を更新\n変更理由: B12共有APIとB07描画executorのREADMEを統合"
     },
     {
       "path": "packages/photo-cloud-library/eslint.config.mjs",
@@ -11883,8 +11884,8 @@
     },
     {
       "path": "packages/photo-cloud-library/package.json",
-      "sha256": "5e376c709beae249d1254ef3400988d450caf7f58754c1ef19cd2886e452d6c2",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02の増分SHAと送信前journal試験依存、browserとserver exportを固定する\n変更理由: 同期core用の狭いprotocol共有exportを追加\n変更理由: photo-cloud-libraryから共有契約packageを参照。\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: package.json を更新"
+      "sha256": "10d91bfcb34c51a27d42d12971cb2459f99fa7f6afbcc6872b0982cdf60cc2a4",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02の増分SHAと送信前journal試験依存、browserとserver exportを固定する\n変更理由: 同期core用の狭いprotocol共有exportを追加\n変更理由: photo-cloud-libraryから共有契約packageを参照。\n変更理由: B05 #246 招待リンク・役割・解除のclientを経路の表へ合わせるため: package.json を更新\n変更理由: B07 render-executor exportを共有APIと併設"
     },
     {
       "path": "packages/photo-cloud-library/src/adapter.ts",
@@ -11913,8 +11914,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/browser/resumable-upload.ts",
-      "sha256": "184f76bc4f835fae8fb0925244daef3c5fbb0fe1d8080846f292072a03444566",
-      "origin": "NIHO所有のC02/C03本人写真cloudにおける共通resumable runner、同一IDBのmask PNG永続化、および合成fixtureによる回帰試験。既存公開契約とMIT hash依存を再利用し、資格情報・内部URL・実写真・非公開履歴を含まない。\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する\n変更理由: 非同期provider callbackへ渡すURLとBlobをnonnull snapshotとして固定し公開CIの厳格型を満たす\n変更理由: マスクPNGの永続保存、writer保護とSTORED確認後のrecipe同期を接続\n変更理由: 統合reviewと実CIの指摘を修正し旧scope cache回収・明示復旧・接続寿命の回帰を追加"
+      "sha256": "08a39f2826e2f52bb45113339e4f64e05573a44acf2ecb6902028206fde3fbc8",
+      "origin": "NIHO所有のC02/C03本人写真cloudにおける共通resumable runner、同一IDBのmask PNG永続化、および合成fixtureによる回帰試験。既存公開契約とMIT hash依存を再利用し、資格情報・内部URL・実写真・非公開履歴を含まない。\n変更理由: 送信前equal-state durable CAS、原本metadata束縛、同SHA別名の重複排除、未確定upload/競合のPNG保持を補強し合成回帰を追加する\n変更理由: 非同期provider callbackへ渡すURLとBlobをnonnull snapshotとして固定し公開CIの厳格型を満たす\n変更理由: マスクPNGの永続保存、writer保護とSTORED確認後のrecipe同期を接続\n変更理由: 統合reviewと実CIの指摘を修正し旧scope cache回収・明示復旧・接続寿命の回帰を追加\n変更理由: 共有uploadと描画ticketでchunk PUT helperを共有"
     },
     {
       "path": "packages/photo-cloud-library/src/browser/transfer.ts",
@@ -13688,13 +13689,13 @@
     },
     {
       "path": "scripts/ci/scopes.mjs",
-      "sha256": "24f27c77c4be866d416b1cf8d15cda3d86f43b254df970a0d1a6227f51ad7368",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK所有source変更範囲を選択\n変更理由: Issue #113のMac candidate変更範囲selectorを追加。\n変更理由: Mac candidateが直接依存するrelease evidence helper変更でもproof CIを起動する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: 本人Photo契約v2の単独変更でも既存Photo editing型検査を必須にする\n変更理由: Photo sessionとPhoto Web変更で既存Ubuntu scopeから型検査・対象試験・lintを実行\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02とPhoto Webを同じ公開photo-editing検証scopeへ残し、双方のworkspace実行を維持。\n変更理由: 補正同期coreを公開scopeの必須三検証へ追加\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。\n変更理由: 共有契約package変更をPhoto editing CI scopeへ追加。\n変更理由: B01 #242 の常設Macライブラリcore packageをroot workspace・Photo editing CI scopeへ登録。\n変更理由: Photo #244 / B03 の常設Mac接続用ソフト core（photo-hosted-connector）を workspace・lock・Photo editing CI scope へ登録\n変更理由: Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加\n変更理由: Photo #244 / B03 へ B01（B00 の B12 の提案・photo-sdk の対象登録を含む）を取り込む\n変更理由: Photo #242 / B01 へ B00（B12の提案・photo-sdkの対象登録）を取り込む\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する\n変更理由: 常設MacライブラリのSDK schema 5に対応"
+      "sha256": "216006a9e366066a74b11d710cfed0768f51d7a11a3f3d9f113e6f787561de44",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #112のSDK所有source変更範囲を選択\n変更理由: Issue #113のMac candidate変更範囲selectorを追加。\n変更理由: Mac candidateが直接依存するrelease evidence helper変更でもproof CIを起動する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: macos-14 の GitHub-hosted runner が 2026-11-02 に廃止され、その前の brownout で native（Client）の job が runner を得られず取り消されるため、macos-26 へ移す。\n変更理由: 本人Photo契約v2の単独変更でも既存Photo editing型検査を必須にする\n変更理由: Photo sessionとPhoto Web変更で既存Ubuntu scopeから型検査・対象試験・lintを実行\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02とPhoto Webを同じ公開photo-editing検証scopeへ残し、双方のworkspace実行を維持。\n変更理由: 補正同期coreを公開scopeの必須三検証へ追加\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。\n変更理由: 共有契約package変更をPhoto editing CI scopeへ追加。\n変更理由: B01 #242 の常設Macライブラリcore packageをroot workspace・Photo editing CI scopeへ登録。\n変更理由: Photo #244 / B03 の常設Mac接続用ソフト core（photo-hosted-connector）を workspace・lock・Photo editing CI scope へ登録\n変更理由: Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加\n変更理由: Photo #244 / B03 へ B01（B00 の B12 の提案・photo-sdk の対象登録を含む）を取り込む\n変更理由: Photo #242 / B01 へ B00（B12の提案・photo-sdkの対象登録）を取り込む\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する\n変更理由: 常設MacライブラリのSDK schema 5に対応\n変更理由: cloud-library変更でcamera scopeも検証"
     },
     {
       "path": "scripts/ci/scopes.test.mjs",
-      "sha256": "6b5cd0d5a264973fb56dde79f5d61e58ee430c7dcb240e2e3475b3eb8c9da4e3",
-      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: PR #81 のマスク描画を最新mainの変更と統合。\n変更理由: PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: Upright自動推定を作者更新後の遠近crate v0.23.0へ統合\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: Issue #112のSDK変更範囲とaggregateを回帰検証\n変更理由: Issue #113のcandidate selectorとrequired aggregate回帰を追加。\n変更理由: release evidence helper単独変更でもMac candidate proofが選択される回帰例を追加する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。\n変更理由: niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。\n変更理由: #148: threads feature と render_identity の公開CI選択を検証。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: 本人Photo契約v2のCI対象選択を回帰検査する\n変更理由: Photo sessionとPhoto Web単独変更をCI対象から漏らさない選択回帰を追加\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02・SDKのmain scope回帰とPhoto Webの実行到達回帰をどちらも保持して通常mergeを解消。\n変更理由: 同期source変更が実typecheck test lintへ届くことを検証\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。\n変更理由: native validatorのSDK ownership配下のpathをscope回帰で検証\n変更理由: 共有契約packageのCI scope選択を検査。\n変更理由: B01 #242 の常設Macライブラリcore packageをroot workspace・Photo editing CI scopeへ登録。\n変更理由: Photo #244 / B03 の常設Mac接続用ソフト core（photo-hosted-connector）を workspace・lock・Photo editing CI scope へ登録\n変更理由: Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加\n変更理由: Photo #244 / B03 へ B01（B00 の B12 の提案・photo-sdk の対象登録を含む）を取り込む\n変更理由: Photo #242 / B01 へ B00（B12の提案・photo-sdkの対象登録）を取り込む\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する\n変更理由: 常設MacライブラリのSDK schema 5に対応"
+      "sha256": "2bfc9fa3150e40c05682dd3595fbb594920d85306786667a7c423ded06c45d2d",
+      "origin": "Issue #2の公開成果物・SBOM・固定SHA取り込み契約のため独立作成。公開仕様と既存公開CIから生成器・schema・guard・検証・責務境界を定義し、外部コード・秘密・実ユーザーデータを含まない。\n変更理由: Issue #2の公開検証成果物・SBOM・固定SHA取り込み契約と秘密を持たないCI検査を追加。\n変更理由: Issue #2の実装検証で成果物名・輸送receipt・build設定を強化。\n変更理由: Issue #32 detail v6 を、先行する masks v5 と #72 の histogram/Jキー契約に同期する。\n変更理由: PR #81 のマスク描画を最新mainの変更と統合。\n変更理由: PR #76 detailとPR #81 maskを統合し、公開出力ハッシュを更新。\n変更理由: PR #88 main rebase and perspective integration with develop engine 0.22.0\n変更理由: Upright自動推定を作者更新後の遠近crate v0.23.0へ統合\n変更理由: PR #96統合でcrate 0.24・v8対応\n変更理由: PR #101を更新済み#97へ積み直し、レンズ補正をv9として統合。修復併用時の色収差推定は元画から行う。\n変更理由: Issue #112のSDK変更範囲とaggregateを回帰検証\n変更理由: Issue #113のcandidate selectorとrequired aggregate回帰を追加。\n変更理由: release evidence helper単独変更でもMac candidate proofが選択される回帰例を追加する。\n変更理由: 公開 CI で niho-camera-cutout の Swift 試験と Vision の E2E（合成画像）を回す。BrushParityTests を公開版の筆の照合の fixture（5×5 の手計算の値）の形で読む。\n変更理由: 同じ写真の使い回しと H/S の解析の先行 #129: 同じ入力の Developer を保ち、H/S の解析を静かな間に先に作る。画素は変えない。\n変更理由: niho-photo#155: 先回りの解析を補助の worker で作り、描画の worker へ bytes で渡す。\n変更理由: #148: threads feature と render_identity の公開CI選択を検証。\n変更理由: Issue #152 の native 現像接続・共通 API・復旧処理と対象試験を追加。\n変更理由: 本人Photo契約v2のCI対象選択を回帰検査する\n変更理由: Photo sessionとPhoto Web単独変更をCI対象から漏らさない選択回帰を追加\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02・SDKのmain scope回帰とPhoto Webの実行到達回帰をどちらも保持して通常mergeを解消。\n変更理由: 同期source変更が実typecheck test lintへ届くことを検証\n変更理由: Issue #236: source固定native renderer releaseの公開build・DATA検証・CI契約を追加。\n変更理由: native validatorのSDK ownership配下のpathをscope回帰で検証\n変更理由: 共有契約packageのCI scope選択を検査。\n変更理由: B01 #242 の常設Macライブラリcore packageをroot workspace・Photo editing CI scopeへ登録。\n変更理由: Photo #244 / B03 の常設Mac接続用ソフト core（photo-hosted-connector）を workspace・lock・Photo editing CI scope へ登録\n変更理由: Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加\n変更理由: Photo #244 / B03 へ B01（B00 の B12 の提案・photo-sdk の対象登録を含む）を取り込む\n変更理由: Photo #242 / B01 へ B00（B12の提案・photo-sdkの対象登録）を取り込む\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: 署名済みupdater archiveをapp固定公開鍵と署名versionで検証する\n変更理由: 常設MacライブラリのSDK schema 5に対応\n変更理由: cloud-libraryからcamera scopeを選ぶ回帰試験"
     },
     {
       "path": "scripts/ci/seat.test.mjs",
@@ -14055,6 +14056,66 @@
       "path": "apps/camera/src/hosted-connector/native-ports.ts",
       "sha256": "1ff663213d7899eb83bf4b72a8db6cd749f9fc5a7d2711be6418cd048214f860",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/contract.ts",
+      "sha256": "bf02903c513b5e5905b3ad6ad331d3b4520450173088fd7bdfab37dbf9ac79dc",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/engine-renderer.ts",
+      "sha256": "8f84da10956a05110eabe916f18b4793a2454af25539dc5b722218a43b61e3f4",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/index.ts",
+      "sha256": "53f6c5db0d83ab59657b031a56b9903f88a714477b778e1e4b36bb85b4ec0a17",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/jpeg-metadata.ts",
+      "sha256": "46f0bc325f84ca5aa6c5df0280b2536335c9938b5024c13f64d800afb8c53f4e",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/personal-cloud-source.ts",
+      "sha256": "3f27c60a756d2dd9162fe9950feea5dfe17fa683dadd34b8b111b38c639536c0",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/render-executor.ts",
+      "sha256": "d3c4b19265381d7bdbb598b5285d5f97b772b24a05bdc7ea714c3df5c200d99a",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/render-mock.ts",
+      "sha256": "a23cd91902db292eea4ae8276ba00169c78c5c65422f60a8bfd2d794ece6dcfb",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/render-output.ts",
+      "sha256": "836fffa37e2c894d5a7140c4ba3861028f5fea92ab2b581d7754531bd1ab856f",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/src/render-executor/ticket-upload.ts",
+      "sha256": "208168530272644af2fac07e7924059b2095dbd2758c2ea8e838f7f4b3da2002",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/render-adapters.test.ts",
+      "sha256": "732c7d47991f78669e2da16ea66ede6cf74326bf1b49b939f74eeed0cd0d20fe",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/render-executor.test.ts",
+      "sha256": "985a9092167ac1870d079d246c903c7184b932b552f904de6b29a8048a5e09bb",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "packages/photo-cloud-library/test/render-support.ts",
+      "sha256": "06132e497fe747d096ac0566d2848a5e043bc52676babc9ecce917fb042c7b35",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
     }
   ],
   "excludedSources": [
