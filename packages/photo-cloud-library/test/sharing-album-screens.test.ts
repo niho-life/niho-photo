@@ -7,6 +7,9 @@ import {
   createSharedAlbumScreensPort,
   holdBrowserPendingInvite,
 } from "../src/sharing";
+import type { SharedAlbumItems } from "../src/sharing/album-items";
+import type { SharedAlbumMembership } from "../src/sharing/membership";
+import type { Album, AlbumItem, PhotoContent } from "../src/sharing/contract";
 import { cameraExifWithLocation, exifPayload, syntheticJpeg } from "./render-support";
 
 const OWNER = "synthetic-user-owner";
@@ -203,6 +206,80 @@ describe("shared album screens port (B08 on B05/B12)", () => {
     owner.dispose();
     await new Promise((resolve) => setTimeout(resolve, 0));
     expect(new Set(t.revoked)).toEqual(new Set(t.created));
+  });
+
+  it("keeps a previously returned thumbnail alive when the cache evicts it", async () => {
+    const created: string[] = [];
+    const revoked: string[] = [];
+    const album = {
+      id: "synthetic-album-many-thumbnails",
+      owner: { userId: OWNER, displayName: "Synthetic Owner", isSelf: true },
+      name: "Synthetic large album",
+      revision: 1,
+      createdAt: new Date(START).toISOString(),
+      updatedAt: new Date(START).toISOString(),
+      itemCount: 401,
+      memberCount: 1,
+      cover: null,
+      access: {
+        role: "contributor",
+        membershipRevision: 1,
+        permissions: { view: true, download: true, addItem: true, replaceOwnItem: true, removeOwnItem: true, removeOthersItem: false, editOthersPhoto: false, readOthersSource: false, manageInvites: false, changeRole: false, removeMember: false, renameAlbum: false, deleteAlbum: false, leave: true },
+        preparation: null,
+      },
+    } as unknown as Album;
+    const previousAlbum = { ...album, id: "synthetic-album-before", name: "Earlier album", itemCount: 1 };
+    const previousItem = {
+      id: "synthetic-item-before",
+      albumId: previousAlbum.id,
+      kind: "fileUpload",
+      addedBy: { userId: OWNER, displayName: "Synthetic Owner", isSelf: true },
+      addedAt: new Date(START).toISOString(),
+      revision: 1,
+      source: null,
+      state: "published",
+      rendition: { id: "synthetic-rendition-before" },
+    } as unknown as AlbumItem;
+    const items = Array.from({ length: 401 }, (_, index) => ({
+      id: `synthetic-item-${index}`,
+      albumId: album.id,
+      kind: "fileUpload",
+      addedBy: { userId: OWNER, displayName: "Synthetic Owner", isSelf: true },
+      addedAt: new Date(START).toISOString(),
+      revision: 1,
+      source: null,
+      state: "published",
+      rendition: { id: `synthetic-rendition-${index}` },
+    }) as unknown as AlbumItem);
+    const port = createSharedAlbumScreensPort({
+      items: {
+        getAlbum: async (albumId: string) => albumId === previousAlbum.id ? previousAlbum : album,
+        listItems: async (albumId: string) => ({ items: albumId === previousAlbum.id ? [previousItem] : items, nextCursor: null, albumRevision: 1, membershipRevision: 1 }),
+      } as unknown as SharedAlbumItems,
+      membership: { forgetSecrets: () => undefined } as unknown as SharedAlbumMembership,
+      download: async () => ({ body: new Blob(["thumbnail"]).stream(), contentType: "image/jpeg" }) as unknown as PhotoContent,
+      inviteUrl: (secret) => `https://photo.example.test/#invite=${secret}`,
+      saveFile: async () => undefined,
+      objectUrls: {
+        create: () => {
+          const url = `blob:large-album/${created.length + 1}`;
+          created.push(url);
+          return url;
+        },
+        revoke: (url) => { revoked.push(url); },
+      },
+    });
+
+    const previous = await port.openAlbum(previousAlbum.id, new AbortController().signal);
+    expect(previous?.items[0]?.thumbnailUrl).toBe(created[0]);
+    const opened = await port.openAlbum(album.id, new AbortController().signal);
+    expect(opened?.items).toHaveLength(401);
+    expect(opened?.items[0]?.thumbnailUrl).toBe(created[1]);
+    expect(previous?.items[0]?.thumbnailUrl).toBe(created[0]);
+    expect(revoked).toEqual([]);
+    port.dispose();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(new Set(revoked)).toEqual(new Set(created));
   });
 
   it("ends an invite only on a definite refusal; a rate limit is thrown so the same link can be retried", async () => {

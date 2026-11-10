@@ -41,6 +41,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
+  vi.useRealTimers();
   act(() => root.unmount());
   container.remove();
   document.body.innerHTML = "";
@@ -91,6 +92,28 @@ async function pickFiles(files: File[]): Promise<void> {
 }
 
 describe("PhotoSharedAlbumWorkspace", () => {
+  it("refreshes an open album while preparation is pending and stops when it completes", async () => {
+    vi.useFakeTimers();
+    const firstItem = photoSharedAlbumFixtureItems()[0];
+    const pending = opened({
+      album: { ...PHOTO_SHARED_ALBUM_FIXTURE_ALBUM, preparing: { done: 0, total: 1 } },
+      items: firstItem ? [{ ...firstItem, state: "preparing", pendingReason: "rendering" }] : [],
+    });
+    const ready = opened({ album: { ...PHOTO_SHARED_ALBUM_FIXTURE_ALBUM, preparing: null } });
+    const openAlbum = vi.fn().mockResolvedValueOnce(pending).mockResolvedValueOnce(ready);
+    const port = fakePort({ openAlbum });
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} />));
+    await flush();
+    await act(async () => (Array.from(container.querySelectorAll("ul button"))[0] as HTMLButtonElement).click());
+    await flush();
+    expect(openAlbum).toHaveBeenCalledTimes(1);
+
+    await act(async () => { await vi.advanceTimersByTimeAsync(10_000); });
+    expect(openAlbum).toHaveBeenCalledTimes(2);
+    await act(async () => { await vi.advanceTimersByTimeAsync(20_000); });
+    expect(openAlbum).toHaveBeenCalledTimes(2);
+  });
+
   it("opens an album from the list, adds picked files one by one and reloads the album", async () => {
     const port = fakePort();
     await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} now={() => PHOTO_SHARED_ALBUM_FIXTURE_NOW} />));

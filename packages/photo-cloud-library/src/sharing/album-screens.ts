@@ -7,7 +7,8 @@
  *   keeps the view-model unions equal to them.
  * - Operations follow the server's permission table (`Album.access.permissions`), not a local role table.
  * - Thumbnails are the rendition thumbnails, read through the album client and shown as object URLs that are released
- *   on `dispose` (scope or actor change) and when the cache is full.
+ *   on `dispose` (scope or actor change). The current list/album stays pinned in the cache; older entries may be evicted
+ *   without revoking URLs that a mounted view still references.
  * - `isNew` marks items that appeared after this session first saw the album (added by someone else).
  */
 import type {
@@ -169,6 +170,9 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
   let noteShown = false;
   const originalsNote = options.originalsNote ?? { shown: () => noteShown, markShown: () => { noteShown = true; } };
   const thumbnails = new Map<string, Promise<string | null>>();
+  const activeThumbnailIds = new Set<string>();
+  // Evicted URLs can still be referenced by a mounted view, so the scope owns all URLs until it is disposed.
+  const thumbnailUrls = new Set<string>();
   const seen = new Map<string, Set<string>>();
   const newMarks = new Map<string, Set<string>>();
   const loadedItems = new Map<string, readonly AlbumItem[]>();
@@ -180,6 +184,16 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
   const live = (signal: AbortSignal): AbortSignal =>
     typeof AbortSignal.any === "function" ? AbortSignal.any([signal, lifetime.signal]) : signal;
 
+  function pinThumbnails(renditionIds: Iterable<string>): void {
+    activeThumbnailIds.clear();
+    for (const renditionId of renditionIds) activeThumbnailIds.add(renditionId);
+    while (thumbnails.size > MAX_THUMBNAILS) {
+      const oldest = [...thumbnails.keys()].find((renditionId) => !activeThumbnailIds.has(renditionId));
+      if (oldest === undefined) return;
+      thumbnails.delete(oldest);
+    }
+  }
+
   function thumbnail(albumId: string, itemId: string, renditionId: string, signal: AbortSignal): Promise<string | null> {
     const cached = thumbnails.get(renditionId);
     if (cached) return cached;
@@ -188,17 +202,17 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
         const content = await options.download({ albumId, itemId, renditionId, variant: "thumbnail" }, live(signal));
         const blob = await new Response(content.body).blob();
         if (lifetime.signal.aborted) return null;
-        return objectUrls.create(blob.type === "" ? new Blob([blob], { type: content.contentType }) : blob);
+        const url = objectUrls.create(blob.type === "" ? new Blob([blob], { type: content.contentType }) : blob);
+        thumbnailUrls.add(url);
+        return url;
       } catch {
         thumbnails.delete(renditionId);
         return null;
       }
     })();
     thumbnails.set(renditionId, loading);
-    while (thumbnails.size > MAX_THUMBNAILS) {
-      const [oldest, url] = thumbnails.entries().next().value as [string, Promise<string | null>];
-      thumbnails.delete(oldest);
-      void url.then((value) => { if (value) objectUrls.revoke(value); });
+    while (thumbnails.size > MAX_THUMBNAILS && !activeThumbnailIds.has(thumbnails.keys().next().value as string)) {
+      thumbnails.delete(thumbnails.keys().next().value as string);
     }
     return loading;
   }
@@ -278,6 +292,9 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
   return {
     async listAlbums(signal) {
       const albums = await allAlbums(signal);
+      if (!signal.aborted && !lifetime.signal.aborted) {
+        pinThumbnails(albums.flatMap((album) => album.cover ? [album.cover.renditionId] : []));
+      }
       return await Promise.all(albums.map(async (album) => {
         const cover = album.cover ? await thumbnail(album.id, album.cover.itemId, album.cover.renditionId, signal) : null;
         return sharedAlbumSummaryView(album, cover);
@@ -298,6 +315,11 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
         }
         throw error;
       }
+      if (signal.aborted || lifetime.signal.aborted) return null;
+      pinThumbnails([
+        ...items.flatMap((item) => item.rendition ? [item.rendition.id] : []),
+        ...(album.cover ? [album.cover.renditionId] : []),
+      ]);
       loadedItems.set(albumId, items);
       const known = seen.get(albumId);
       const marks = newMarks.get(albumId) ?? new Set<string>();
@@ -411,8 +433,10 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
     dispose() {
       if (lifetime.signal.aborted) return;
       lifetime.abort();
-      for (const url of thumbnails.values()) void url.then((value) => { if (value) objectUrls.revoke(value); });
+      for (const url of thumbnailUrls) objectUrls.revoke(url);
+      thumbnailUrls.clear();
       thumbnails.clear();
+      activeThumbnailIds.clear();
       options.membership.forgetSecrets();
     },
   };

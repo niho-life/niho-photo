@@ -56,6 +56,13 @@ type Screen =
  * attempt, so a re-render or an unmount and mount before the answer must not ask again. Dropped once handled.
  */
 const heldJoins = new WeakMap<PhotoSharedAlbumPort, Promise<PhotoSharedAlbumJoinResult | null>>();
+const PREPARATION_REFRESH_MS = 10_000;
+
+function hasPendingPreparation(opened: PhotoSharedAlbumOpened): boolean {
+  const progress = opened.album.preparing;
+  return (progress !== null && progress.done < progress.total)
+    || opened.items.some((item) => item.state === "preparing" || item.state === "updatePending");
+}
 
 /** An addition belongs to the album it was started in: it is shown and retried there only. */
 type Pending = { readonly albumId: string; readonly upload: PhotoSharedAlbumUpload; readonly file: File };
@@ -169,12 +176,17 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
   useEffect(() => {
     if (albumId === null) return;
     const controller = new AbortController();
+    let refreshTimer: ReturnType<typeof setTimeout> | undefined;
     setAlbumFailed(false);
-    port.openAlbum(albumId, controller.signal).then(
-      (next) => {
+    const load = async (): Promise<void> => {
+      try {
+        const next = await port.openAlbum(albumId, controller.signal);
         if (controller.signal.aborted) return;
         if (next) {
           setOpened(next);
+          if (hasPendingPreparation(next)) {
+            refreshTimer = setTimeout(() => { void load(); }, PREPARATION_REFRESH_MS);
+          }
           return;
         }
         // 見られなくなった: 直前の表示に解除を載せる（追加中の写真は確定しない）
@@ -183,12 +195,15 @@ export function PhotoSharedAlbumWorkspace(props: PhotoSharedAlbumWorkspaceProps)
           : null));
         setShareOpen(false);
         if (!openedRef.current || openedRef.current.album.albumId !== albumId) setScreen({ kind: "list" });
-      },
-      () => {
+      } catch {
         if (!controller.signal.aborted) setAlbumFailed(true);
-      },
-    );
-    return () => controller.abort();
+      }
+    };
+    void load();
+    return () => {
+      controller.abort();
+      if (refreshTimer !== undefined) clearTimeout(refreshTimer);
+    };
   }, [port, albumId, albumToken]);
 
   // 共有シートのメンバーとリンク

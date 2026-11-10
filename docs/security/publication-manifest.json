@@ -12193,8 +12193,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/album-screens.ts",
-      "sha256": "de809d46fefe6cd349ddfdbbdc79faa3a98a37e594b15757fb0bb403f76f3552",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "332611c2248e4abb6bb6cb7839c280a53000c6fe1203d7fc395cce9c37aefe51",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: キャッシュ追い出し後も縮小画像URLをscope破棄まで保持する\n変更理由: 表示中アルバムの縮小画像をcache evictionからpinしscope破棄で解放する\n変更理由: dispose時にpin状態も解放する"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/album-wire.ts",
@@ -12313,8 +12313,8 @@
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-album-screens.test.ts",
-      "sha256": "5d077c463cb5e65ca0b0ca35ac1d922f086619eb942c26b8832fe299f23a77b9",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "0fff8382900963eeb063a5cf56e94027ff91e4fad37f81e5dbe8b3cc24b33043",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 401件の縮小画像URLがキャッシュ追い出しで失効しないことを検証する\n変更理由: 別アルバムへの切替でcache evictされたURLが表示中も有効なことを検証する"
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-membership-client.test.ts",
@@ -13628,13 +13628,13 @@
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-shared-album-workspace.test.tsx",
-      "sha256": "649ae501a65a87416826106fe3829b957ba1e18afb23b48e8b77b33a97b216d5",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "003f6c33155959d7905df48103c7aa7e80ef7da74596847b2a88c4e4f33b7292",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 準備状態の再読込と完了後の停止を検証する\n変更理由: 準備状態の10秒間隔再読込と完了後の停止を検証する"
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-shared-album-workspace.tsx",
-      "sha256": "ca162afce2d787f2948f7f9dd9ee9e07f3e210cc77539486e1be94ac3e1ddc26",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "c494d9611179791904ed01baa68573b0415a6d5cda3cc87dba35ef9fbc0aec65",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B08 #249 の共有アルバムの画面を Web・Mac に組み込む接続（view-model の adapter、操作の口、画面の器、設定の保存先、招待リンク）と回帰試験。合成の ID・表示名・画像だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 準備中と更新待ちのアルバムを完了まで定期再読込する\n変更理由: 準備中と更新待ちのアルバムを10秒ごとに完了まで再読込する"
     },
     {
       "path": "packages/photo-editing/src/shared-album/photo-storage-location-settings.tsx",
