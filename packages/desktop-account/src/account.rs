@@ -5,7 +5,7 @@ use crate::photo_cloud::{
   read_native_upload_response, stream_verified_content, CapturedPhotoAuthority, HttpPhotoCloud, PhotoHttpTransport,
 };
 use crate::photo_session::{parse_response, parse_strict_iso, HttpPhotoSession, PhotoSessionTransport};
-use crate::photo_sharing::{error_code as sharing_error_code, read_sharing_json, stream_sharing_content};
+use crate::photo_sharing::{error_code as sharing_error_code, read_sharing_json_for_request, stream_sharing_content};
 use crate::{
   AccountError, Browser, Cancel, ClientId, Config, CredentialStore, ExternalBrowser, HttpTransport, NativeCopyTarget,
   NativeProviderAck, NativeStartUpload, NativeUpload, NativeUploadTicket, PhotoContentMetadata, PhotoDownloadCancel,
@@ -975,7 +975,7 @@ impl Account {
     let response = adapters
       .photo_http
       .send(&adapters.config, &authority.access, &native, false)?;
-    let response = read_sharing_json(response)?;
+    let response = read_sharing_json_for_request(response, request)?;
     self.ensure_photo_authority(adapters, &authority)?;
     if response.status == 401 && sharing_error_code(&response.body) == Some("unauthenticated") {
       self.invalidate_photo_identity(adapters, authority.generation, AccountError::Expired)?;

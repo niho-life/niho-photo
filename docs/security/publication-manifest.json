@@ -10395,13 +10395,13 @@
     },
     {
       "path": "apps/camera/src/camera-cloud-bootstrap.test.ts",
-      "sha256": "19ca0e064d161e5f594376e8edea5acd29730d12ed10f2bb6e021dbc020395eb",
-      "origin": "NIHO所有の本人Photo Mac bootstrap、実renderer照合、native原本保存の独立実装と合成回帰試験。実写真・秘密・非公開履歴は含まない。\n変更理由: 本人Photo起動接続と原本保存の合成回帰を確定し、fixtureの私有path表記を除外。\n変更理由: 期限切れ後の同一scope identity refreshでnative bindingが再生成される回帰を検証する\n変更理由: 期限切れ同一scopeの再生成回帰とwatcher fixtureの厳密型を固定\n変更理由: 統合reviewと実CIの指摘を修正し旧scope cache回収・明示復旧・接続寿命の回帰を追加\n変更理由: 最後のCI型修復と日付に依存しないscope lifetime・明示復旧の回帰を反映"
+      "sha256": "491ca4010cd96af831dc3dd591da0fe7d8acc55dc9cf7140b72813c8cc897a2e",
+      "origin": "NIHO所有の本人Photo Mac bootstrap、実renderer照合、native原本保存の独立実装と合成回帰試験。実写真・秘密・非公開履歴は含まない。\n変更理由: 本人Photo起動接続と原本保存の合成回帰を確定し、fixtureの私有path表記を除外。\n変更理由: 期限切れ後の同一scope identity refreshでnative bindingが再生成される回帰を検証する\n変更理由: 期限切れ同一scopeの再生成回帰とwatcher fixtureの厳密型を固定\n変更理由: 統合reviewと実CIの指摘を修正し旧scope cache回収・明示復旧・接続寿命の回帰を追加\n変更理由: 最後のCI型修復と日付に依存しないscope lifetime・明示復旧の回帰を反映\n変更理由: niho-photo#248 bootstrap test supplies the explicit shared-albums rollout response"
     },
     {
       "path": "apps/camera/src/camera-cloud-bootstrap.ts",
-      "sha256": "e9c8938873881a03296183b6c04d38ad0c76fe193d9c972ea4a00f9a9a8af54f",
-      "origin": "NIHO所有の本人Photo Mac bootstrap、実renderer照合、native原本保存の独立実装と合成回帰試験。実写真・秘密・非公開履歴は含まない。\n変更理由: 本人Photo起動接続と原本保存の合成回帰を確定し、fixtureの私有path表記を除外。\n変更理由: 期限切れ後の同一session refreshで失効済みnative scopeを再利用せずbindingを再構築する\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: PR232のMac接続を単一のdurable mask barrierへ統合し固定keys・scope・実SDK能力を検証\n変更理由: 統合reviewと実CIの指摘を修正し旧scope cache回収・明示復旧・接続寿命の回帰を追加\n変更理由: #264 を base に追いつかせたマージで manifest を更新"
+      "sha256": "1699b72d73f495b67c896cb9f5977788cc11f6fc1aef60cd27b15dd88eb091fb",
+      "origin": "NIHO所有の本人Photo Mac bootstrap、実renderer照合、native原本保存の独立実装と合成回帰試験。実写真・秘密・非公開履歴は含まない。\n変更理由: 本人Photo起動接続と原本保存の合成回帰を確定し、fixtureの私有path表記を除外。\n変更理由: 期限切れ後の同一session refreshで失効済みnative scopeを再利用せずbindingを再構築する\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: PR232のMac接続を単一のdurable mask barrierへ統合し固定keys・scope・実SDK能力を検証\n変更理由: 統合reviewと実CIの指摘を修正し旧scope cache回収・明示復旧・接続寿命の回帰を追加\n変更理由: #264 を base に追いつかせたマージで manifest を更新\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
     },
     {
       "path": "apps/camera/src/camera-photo-renderer.test.ts",
@@ -11135,8 +11135,8 @@
     },
     {
       "path": "packages/desktop-account/src/account.rs",
-      "sha256": "f5b229f1e2a186d4ab537cc8af465112225314bad44b04da195c9d18fa29df61",
-      "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: pending login の取消時に残存するOS資格情報を削除し、旧資格情報を含む取消テストを追加。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: このMacのlogoutは取得済みID tokenで現在接続のDELETEも試み、ローカル資格削除と別世代の保持を守る。\n変更理由: Camera限定の安全な本人写真session読取と即時失効を実接続し、旧session遅着と保存待ちを隔離する\n変更理由: 自然CIのClippy question_mark指摘に従い同じエラー伝播を?演算子へ機械的に置換\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: 正式Mac bootstrapの依存を通常mergeし、mainの共有編集面と固定native transportを保持\n変更理由: 本人PhotoのMac起動接続・検証済み原本保存とPNG終端検証を追加。\n変更理由: 本人Photoの実bootstrap・検証済み原本保存・失効と確定の排他・PNGのEOF検証を追加。\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: PR230の実CIで検出したoptional fixture型とRust unused import/single_matchを修復\n変更理由: #264 を base に追いつかせたマージで manifest を更新"
+      "sha256": "545bf4199024f15819d94be28a97b617d7302b45b29c1d548955d95e9ad6f028",
+      "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: pending login の取消時に残存するOS資格情報を削除し、旧資格情報を含む取消テストを追加。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: このMacのlogoutは取得済みID tokenで現在接続のDELETEも試み、ローカル資格削除と別世代の保持を守る。\n変更理由: Camera限定の安全な本人写真session読取と即時失効を実接続し、旧session遅着と保存待ちを隔離する\n変更理由: 自然CIのClippy question_mark指摘に従い同じエラー伝播を?演算子へ機械的に置換\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: 正式Mac bootstrapの依存を通常mergeし、mainの共有編集面と固定native transportを保持\n変更理由: 本人PhotoのMac起動接続・検証済み原本保存とPNG終端検証を追加。\n変更理由: 本人Photoの実bootstrap・検証済み原本保存・失効と確定の排他・PNGのEOF検証を追加。\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: SDK正本の初期補正とRGB/RGBA派生PNG検証をnative経路へ接続しCI指摘を修正\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: PR230の実CIで検出したoptional fixture型とRust unused import/single_matchを修復\n変更理由: #264 を base に追いつかせたマージで manifest を更新\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
     },
     {
       "path": "packages/desktop-account/src/connect.rs",
@@ -11145,8 +11145,8 @@
     },
     {
       "path": "packages/desktop-account/src/lib.rs",
-      "sha256": "abc4a25341df913aab695604692b761f7845100c695b789dbd8ee4062e8d1050",
-      "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: Camera限定の安全な本人写真session読取と即時失効を実接続し、旧session遅着と保存待ちを隔離する\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: #264 を base に追いつかせたマージで manifest を更新"
+      "sha256": "736fa9b17b3b5427ef9293e371533ce552df7373dd8ab68b73c5dd54a438208d",
+      "origin": "Issue #3のpublic client契約に従いNIHOが独立新規作成。実token・秘密鍵・個人情報・旧private認証実装を含まない。\n変更理由: Issue #3の公式NIHO app-connect v1契約へ適合。deep link・NIHO接続token/Firebase交換・FileSecretStore・取消と再起動を独立実装し、安全契約をv2へ改版。\n変更理由: Camera限定の安全な本人写真session読取と即時失効を実接続し、旧session遅着と保存待ちを隔離する\n変更理由: Camera限定の固定C00操作と検証済み原本cacheを接続し、取消・失効・期限・JSON保持・chunk境界を固定する\n変更理由: 親mainとのmergeで実ファイルを統合\n変更理由: 本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: #264 を base に追いつかせたマージで manifest を更新\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
     },
     {
       "path": "packages/desktop-account/src/photo_cloud.rs",
@@ -12100,8 +12100,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/render-executor/index.ts",
-      "sha256": "89704554097566a94feee241c49fc23a30d594688d47b3e3ce08be8f56af6f04",
-      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: PR #263画面と#265日常flow/render統合後hashを固定"
+      "sha256": "7148846b73cfe47a4e37eb537121ebb4bd26c924517696c1b7b5d06a70882a0b",
+      "origin": "Photo #248 / B07 の端末側の仕上がり写真job実行・metadata除去・合成job queue・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: PR #263画面と#265日常flow/render統合後hashを固定\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
     },
     {
       "path": "packages/photo-cloud-library/src/render-executor/jpeg-metadata.ts",
@@ -12115,8 +12115,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/render-executor/render-client.ts",
-      "sha256": "7d2b383378329beee69c45a8703ae4177e8bc80887aeccbe4cfe910da6e9860e",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B07 #248・B08 #249 の、本人の端末（Web）で共有アルバムの写真を描く描画 job の通信（契約の USER_RENDER_ROUTES の client と応答の検査）、BFF の中継、Web の実行部と回帰試験。合成の ID・画像・recipe・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "147a003a1afd7c3591ca771cc29d435746fb502cd81305c09559bb7ac5453faa",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B07 #248・B08 #249 の、本人の端末（Web）で共有アルバムの写真を描く描画 job の通信（契約の USER_RENDER_ROUTES の client と応答の検査）、BFF の中継、Web の実行部と回帰試験。合成の ID・画像・recipe・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
     },
     {
       "path": "packages/photo-cloud-library/src/render-executor/render-executor.ts",
@@ -12200,8 +12200,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/index.ts",
-      "sha256": "cdc9c706885c55da794ac479d0b0357b52ec97e56e11cd40a270bae4baf4bf0a",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: B12 clientと項目操作を共有口から公開する\n変更理由: B08 #249 共有アルバムの画面を Web・Mac に組み込むため: index.ts を更新\n変更理由: PR #262 最新main/B12と統合したPR #263最終hashを固定\n変更理由: PR #263画面と#265日常flow/render統合後hashを固定\n変更理由: #264 を base に追いつかせたマージで manifest を更新"
+      "sha256": "09002584bfea0e406aecbb3d133260d14af936b2244e6e600a1a564512cb348f",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B05 #246 の共有アルバムの招待リンク・役割・解除の client、UI向けの操作、開発と試験用の合成 in-memory server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・secret・example.test の URL だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: B12 clientと項目操作を共有口から公開する\n変更理由: B08 #249 共有アルバムの画面を Web・Mac に組み込むため: index.ts を更新\n変更理由: PR #262 最新main/B12と統合したPR #263最終hashを固定\n変更理由: PR #263画面と#265日常flow/render統合後hashを固定\n変更理由: #264 を base に追いつかせたマージで manifest を更新\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/membership-client.ts",
@@ -14275,43 +14275,58 @@
     },
     {
       "path": "apps/camera/src-tauri/src/photo_sharing.rs",
-      "sha256": "7b8b1fa536b583b805ce4096ab02f478573a91d05b1567eded5e6cee091e879e",
-      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)"
+      "sha256": "f1a05fbdc378704d29d990f2f5f4cdbad373b7191bc8e2cd3798a8cf21c979e6",
+      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
     },
     {
       "path": "apps/camera/src/native-photo-sharing.test.ts",
-      "sha256": "b0e791bd6c82befd8c239fd22fc5a4704417dd45534ac86f616883f772978329",
-      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)"
+      "sha256": "c9162d503bde31313b0d8f337471436d2e48b7f9f7ff9b82b3cf2e951383d65e",
+      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
     },
     {
       "path": "apps/camera/src/native-photo-sharing.ts",
-      "sha256": "bcc89ad8a41f14570b39065eae9fb9e6e2addd15803bf3f314c6357ffb4e7c6a",
-      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)"
+      "sha256": "2f4b744992b5db50d4353bfe12e46c348fab58557aedf59619fbb1cffb26b15f",
+      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
     },
     {
       "path": "packages/desktop-account/src/photo_sharing.rs",
-      "sha256": "0a4b56da052bcbcb21ac245b333902aa0cbcf5ed2f5e47a0b7577af2f9336eb8",
-      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)"
+      "sha256": "ccf52296d57bd6e7f061c30be2b0e1ce72045f3ea69f31890f75f0d3ab5c32d7",
+      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
     },
     {
       "path": "packages/desktop-account/src/photo_sharing_tests.rs",
-      "sha256": "3f366a51c017fd21bc0155f31a6f64cfc1dfb7777194338db73df1dad61fed19",
-      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)"
+      "sha256": "76ab95be20456d84e41e3818080433148d317a54ca2eefbc8263a9a84a37e59c",
+      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
     },
     {
       "path": "packages/desktop-account/src/sharing_routes.json",
-      "sha256": "249eb6e0392d5dbf4a2a010cd79a85da3750c97d5fe2b9d913b45868773fd439",
-      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)"
+      "sha256": "9e2ce03e97f54f7affb75feb322f0aaeaf1195246b71fe1b400c42f30127a824",
+      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-native-routes.test.ts",
-      "sha256": "abfd4141064a6cb0e2439b3e12e84726ab11a02e8dda446313bc832e000c7c6a",
-      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)"
+      "sha256": "fed184a47e3adfbfb84bf58c519eef21807d631cf680a0c08f788ca20a9338cf",
+      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-transport.test.ts",
       "sha256": "1ebb4dfde278e88b1ad26832d93192c7a4a877f0fe81dd74656dfc3099eb082d",
       "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)"
+    },
+    {
+      "path": "apps/camera/src/native-photo-render-jobs.ts",
+      "sha256": "6f3cf9717b26a4bffa16aef2ae3f35b77095b9460bdd11fcd7e21b5d42bf0e89",
+      "origin": "NIHO作成 (niho-photo #248): Mac app native render-job runner using the pinned renderer and signed-in transport."
+    },
+    {
+      "path": "apps/camera/src/native-photo-render-jobs.test.ts",
+      "sha256": "8cc586625de86723652fc219a5db569815f9286a2b1fd3de0e5a2f4190315d44",
+      "origin": "NIHO作成 (niho-photo #248): synthetic test for native render-job route, library scope, and lazy renderer."
+    },
+    {
+      "path": "packages/photo-cloud-library/test/render-client-transport.test.ts",
+      "sha256": "884314dd16f0ac1da9d2533febd821a59e9b3f20400e18a8874c7e19fb7f2323",
+      "origin": "NIHO作成 (niho-photo #248): synthetic test for validated render-job requests over native transport."
     }
   ],
   "excludedSources": [

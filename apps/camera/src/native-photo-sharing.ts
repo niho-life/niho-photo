@@ -26,6 +26,7 @@ import type { PhotoSharedAlbumPort } from "niho-photo-editing/shared-album/photo
 
 import type { NativePhotoInvoke } from "./native-photo-client";
 import type { NativePhotoBinaryInvoke } from "./native-photo-mask-uploader";
+import type { NativePhotoRenderJobs } from "./native-photo-render-jobs";
 
 /** `photo_sharing.rs` の raw IPC の添え書き。 */
 export const SHARING_UPLOAD_HEADER = "x-niho-photo-sharing-upload";
@@ -213,6 +214,8 @@ export type CreateMacSharedAlbumsOptions = Readonly<{
   invokeBinary: NativePhotoBinaryInvoke;
   /** 完成写真を保存ダイアログで選んだ場所へ書く（`camera_save_file`）。 */
   saveFile: (bytes: Uint8Array, fileName: string) => Promise<unknown>;
+  /** Created only after native sharing is configured; owned and disposed by the returned screen port. */
+  createRenderJobs?: () => NativePhotoRenderJobs;
   now?: () => number;
 }>;
 
@@ -230,6 +233,8 @@ export async function createMacSharedAlbums(options: CreateMacSharedAlbumsOption
   const transport = createNativeSharingTransport({ identity: options.identity, invoke: options.invoke, ...(options.now ? { now: options.now } : {}) });
   const albumClient = createSharedAlbumClientOnTransport(transport);
   const membershipClient = createSharedAlbumMembershipClientOnTransport(transport);
+  let renderJobs: NativePhotoRenderJobs | null = null;
+  try { renderJobs = options.createRenderJobs?.() ?? null; } catch { /* Keep album browsing available if local rendering is unavailable. */ }
   const port = createSharedAlbumScreensPort({
     items: createSharedAlbumItems({
       client: albumClient,
@@ -242,11 +247,14 @@ export async function createMacSharedAlbums(options: CreateMacSharedAlbumsOption
       await options.saveFile(new Uint8Array(await file.arrayBuffer()), name);
     },
     prepareFile: prepareBrowserAlbumFile,
+    ...(renderJobs === null ? {} : { renderJobs }),
   });
+  renderJobs?.wake();
   return {
     ...port,
     dispose() {
       port.dispose();
+      renderJobs?.dispose();
       albumClient.dispose();
       membershipClient.dispose();
     },

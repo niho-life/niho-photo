@@ -2,7 +2,8 @@ import { invoke as tauriInvoke } from "@tauri-apps/api/core";
 import { createPersonalPhotoCloudLibrary } from "@niho/photo-cloud-sync";
 import { IndexedDbRecipeSyncJournal } from "@niho/photo-cloud-sync/browser";
 import type { PersonalPhotoCloudIdentity } from "@niho/photo-cloud-library";
-import type { VerifiedPhotoActor } from "@niho/photo-personal-cloud-contract";
+import type { PersonalPhotoCloudClient, PhotoOperation, PhotoOperationMap, PhotoRequestOptions, VerifiedPhotoActor } from "@niho/photo-personal-cloud-contract";
+import { createDevelopEngine } from "niho-photo-editing/develop-engine/develop-engine-client";
 import type { PhotoEditingHost } from "niho-photo-editing/library/photo-library-context";
 import type { PhotoLibrary, PhotoLibraryNativeExportResult } from "niho-photo-editing/library/photo-library";
 
@@ -15,6 +16,7 @@ import { createNativePersonalPhotoCloudClient } from "./native-photo-client";
 import { createNativePersonalPhotoCloudMaskUploader, type NativePhotoBinaryInvoke } from "./native-photo-mask-uploader";
 import { createMacPhotoCopyNative } from "./native-photo-copy";
 import { createMacSharedAlbums } from "./native-photo-sharing";
+import { createNativePhotoRenderJobs, type NativePhotoRenderJobs } from "./native-photo-render-jobs";
 import { readNativePhotoIdentity, watchNativePhotoIdentity } from "./native-photo-session";
 import {
   createMacPersonalCloudPhotoBinding,
@@ -24,6 +26,24 @@ import {
 type Dispose = () => void;
 type IdentityReader = (signal: AbortSignal) => Promise<VerifiedPhotoActor | null>;
 type IdentityWatch = typeof watchNativePhotoIdentity;
+
+function notifyRenderJobsAfterRecipeSave(client: PersonalPhotoCloudClient, wake: () => void): PersonalPhotoCloudClient {
+  return {
+    scope: client.scope,
+    async request<K extends PhotoOperation>(
+      operation: K,
+      request: PhotoOperationMap[K]["request"],
+      options: PhotoRequestOptions<K>,
+    ): Promise<PhotoOperationMap[K]["response"]> {
+      const response = await client.request(operation, request, options);
+      if (operation === "recipes.put") {
+        try { wake(); } catch { /* The saved correction remains successful if a render notification fails. */ }
+      }
+      return response;
+    },
+    dispose: () => client.dispose(),
+  };
+}
 
 export type CameraCloudBootstrapSnapshot = Readonly<{ binding?: PersonalCloudPhotoBinding }>;
 
@@ -204,13 +224,15 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
   let libraryHandle: ReturnType<typeof createPersonalPhotoCloudLibrary> | null = null;
   let connection: ReturnType<typeof createMacPersonalCloudPhotoBinding> | null = null;
   let sharedAlbums: Awaited<ReturnType<typeof createMacSharedAlbums>> = null;
+  let renderJobs: NativePhotoRenderJobs | null = null;
   const scopeAbort = new AbortController();
   const invoke = options.invoke ?? ((command, args) => tauriInvoke(command, args));
   const invokeBinary = options.invokeBinary ?? ((command, bytes, headers) => tauriInvoke(command, bytes, { headers }));
   try {
     renderer = await (options.probeRenderer ?? probeCameraPhotoRenderer)({ proof: options.proof, signal: options.signal });
     if (renderer === null || options.signal.aborted) return null;
-    client = await createNativePersonalPhotoCloudClient({ identity: options.identity, invoke, now: options.now });
+    const nativeClient = await createNativePersonalPhotoCloudClient({ identity: options.identity, invoke, now: options.now });
+    client = notifyRenderJobsAfterRecipeSave(nativeClient, () => renderJobs?.wake());
     if (options.signal.aborted) return null;
     maskUploader = createNativePersonalPhotoCloudMaskUploader({ client, identity: options.identity, invokeBinary });
     if (renderer.capability.maskSurfaces) {
@@ -249,14 +271,39 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
       native: createMacPhotoCopyNative(invoke),
     });
     if (connection.state !== "connected") return null;
-    // 共有アルバム（B08 #249）は同じ native の session で開く。build の設定が無ければ（公開の build）出さない
-    sharedAlbums = await createMacSharedAlbums({
-      identity: options.identity,
-      invoke,
-      invokeBinary,
-      saveFile: (bytes, name) => options.commands.saveFile(bytes, name),
-      ...(options.now === undefined ? {} : { now: options.now }),
-    }).catch(() => null);
+    // rollout is fail-closed like Photo Web; native build configuration alone must not open the feature.
+    const rollout = await libraryHandle.library.rollout({ signal: options.signal }).catch(() => null);
+    if (rollout?.sharedAlbums === true) {
+      // 共有アルバム（B08 #249）は同じ native の session で開く。build の設定が無ければ（公開の build）出さない
+      const renderManifestUrl = renderer.engineAssets.manifestUrl();
+      sharedAlbums = await createMacSharedAlbums({
+        identity: options.identity,
+        invoke,
+        invokeBinary,
+        saveFile: (bytes, name) => options.commands.saveFile(bytes, name),
+        ...(renderManifestUrl === null ? {} : {
+          createRenderJobs: () => {
+            renderJobs = createNativePhotoRenderJobs({
+              identity: options.identity,
+              invoke,
+              invokeBinary,
+              userId: options.actor.userId,
+              libraryId: client!.scope.libraryId,
+              handle: libraryHandle!,
+              ...(libraryHandle!.library.loadMaskSurface === undefined ? {} : {
+                loadMaskSurface: async (photoId: string, surfaceId: string) => await libraryHandle!.library.loadMaskSurface?.(photoId, surfaceId) ?? null,
+              }),
+              capability: renderer!.capability,
+              createEngine: () => createDevelopEngine({ manifestUrl: renderManifestUrl, preferNative: false }),
+              scopeSignal: scopeAbort.signal,
+              ...(options.now === undefined ? {} : { now: options.now }),
+            });
+            return renderJobs;
+          },
+        }),
+        ...(options.now === undefined ? {} : { now: options.now }),
+      }).catch(() => null);
+    }
     if (options.signal.aborted) { sharedAlbums?.dispose(); sharedAlbums = null; return null; }
     if (sharedAlbums) connection.binding.sharedAlbums = sharedAlbums;
     let disposed = false;

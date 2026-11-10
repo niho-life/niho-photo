@@ -1,7 +1,7 @@
 /**
  * Shared albums: membership and invite links (B05 #246), albums, items and the owner's shared storage (B12 #254). The
- * same-origin clients, the UI-facing actions and a synthetic in-memory server for development and tests. Not wired
- * into any host yet.
+ * same-origin clients, the UI-facing actions and a synthetic in-memory server for development and tests. Photo Web and
+ * the Mac app provide their own authenticated transports.
  */
 export {
   createBrowserSharedAlbumClient,
