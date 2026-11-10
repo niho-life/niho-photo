@@ -1,5 +1,5 @@
 {
-  "comment": "Shared-album operations the Mac native session may send (generated from @niho/photo-library-sharing-contract SHARING_ROUTES; packages/photo-cloud-library/test/sharing-native-routes.test.ts checks they match).",
+  "comment": "Shared-album and signed-in device render-job operations the Mac native session may send (from @niho/photo-library-sharing-contract SHARING_ROUTES and USER_RENDER_ROUTES; packages/photo-cloud-library/test/sharing-native-routes.test.ts checks them).",
   "routes": [
     {
       "operation": "storage.get",
@@ -223,6 +223,46 @@
       "path": "/albums/{albumId}/leave",
       "query": [],
       "body": [],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "renderJobs.claim",
+      "method": "POST",
+      "path": "/render-jobs/claim",
+      "query": [],
+      "body": ["maxJobs", "purposes", "prefer"],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "renderJobs.startOutput",
+      "method": "POST",
+      "path": "/render-jobs/{jobId}/outputs",
+      "query": [],
+      "body": ["leaseToken", "output"],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "renderJobs.renewOutput",
+      "method": "POST",
+      "path": "/render-jobs/{jobId}/outputs/{uploadId}/renew",
+      "query": [],
+      "body": ["leaseToken"],
+      "idempotencyKey": false
+    },
+    {
+      "operation": "renderJobs.commit",
+      "method": "POST",
+      "path": "/render-jobs/{jobId}/commit",
+      "query": [],
+      "body": ["leaseToken", "uploadId"],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "renderJobs.fail",
+      "method": "POST",
+      "path": "/render-jobs/{jobId}/fail",
+      "query": [],
+      "body": ["leaseToken", "code"],
       "idempotencyKey": true
     }
   ]

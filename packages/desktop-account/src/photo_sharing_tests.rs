@@ -74,6 +74,18 @@ fn requests_are_routes_of_the_table_under_the_fixed_prefix() {
   );
   assert_eq!(native.idempotency_key.as_deref(), Some("synthetic-key"));
 
+  let render = SharingRequest::parse(
+    "POST",
+    "/cloud/sharing/v1/render-jobs/claim",
+    Some(serde_json::json!({ "maxJobs": 1, "purposes": ["albumItem"] })),
+    Some("synthetic-claim-key".into()),
+  )
+  .unwrap();
+  assert_eq!(render.operation(), "renderJobs.claim");
+  let native = render.native(&config, &capture()).unwrap();
+  assert_eq!(native.url.path(), "/api/synthetic-sharing/v1/render-jobs/claim");
+  assert_eq!(native.idempotency_key.as_deref(), Some("synthetic-claim-key"));
+
   // build の設定が無い（公開の build）なら送らない
   let production = Config::production(ClientId::Camera, "synthetic-public-key").unwrap();
   assert_eq!(
@@ -202,6 +214,84 @@ fn upload_tickets_stay_native_and_the_page_gets_a_handle() {
 }
 
 #[test]
+fn render_output_tickets_are_bound_to_the_requested_output_and_job() {
+  let output = serde_json::json!({
+    "kind": "rendition",
+    "sizeBytes": 1024,
+    "sha256": "a".repeat(64),
+    "contentType": "image/jpeg",
+    "width": 800,
+    "height": 600,
+    "metadata": { "capturedAt": null, "orientation": 1, "colorProfile": "sRGB" },
+  });
+  let start = SharingRequest::parse(
+    "POST",
+    "/cloud/sharing/v1/render-jobs/job-1/outputs",
+    Some(serde_json::json!({ "leaseToken": "lease", "output": output })),
+    Some("start-output-key".into()),
+  )
+  .unwrap();
+  assert_eq!(start.operation(), "renderJobs.startOutput");
+  assert_eq!(start.render_job_id(), Some("job-1"));
+  assert_eq!(start.render_upload_id(), None);
+  let expectation = start.output_expectation().unwrap().clone();
+  assert_eq!(
+    expectation,
+    SharingOutputExpectation {
+      content_type: "image/jpeg".into(),
+      size_bytes: 1024
+    }
+  );
+
+  let started = serde_json::json!({
+    "value": { "uploadId": "upload-1", "expiresAt": "2099-01-01T00:00:00.000Z", "ticket": ticket("https://storage.googleapis.com/synthetic-bucket/render") },
+    "replayed": false,
+  });
+  let started = read_sharing_json_for_request(json_response(200, &started), &start).unwrap();
+  assert_eq!(started.tickets.len(), 1);
+  assert_eq!(started.tickets[0].upload_id, "upload-1");
+  assert_eq!(started.tickets[0].ticket.size_bytes, 1024);
+  assert!(sharing_ticket_handle(started.body["value"]["ticket"]["url"].as_str().unwrap()).is_some());
+
+  let mut renew = SharingRequest::parse(
+    "POST",
+    "/cloud/sharing/v1/render-jobs/job-1/outputs/upload-1/renew",
+    Some(serde_json::json!({ "leaseToken": "lease" })),
+    None,
+  )
+  .unwrap();
+  assert_eq!(renew.render_job_id(), Some("job-1"));
+  assert_eq!(renew.render_upload_id(), Some("upload-1"));
+  assert_eq!(
+    read_sharing_json_for_request(json_response(200, &serde_json::json!({
+      "uploadId": "upload-1", "expiresAt": "2099-01-01T00:00:00.000Z", "ticket": ticket("https://storage.googleapis.com/synthetic-bucket/renewed")
+    })), &renew).err(),
+    Some(AccountError::InvalidResponse),
+    "a renewed ticket without the original output expectation must fail closed"
+  );
+  renew.set_output_expectation(expectation).unwrap();
+  let renewed = read_sharing_json_for_request(json_response(200, &serde_json::json!({
+    "uploadId": "upload-1", "expiresAt": "2099-01-01T00:00:00.000Z", "ticket": ticket("https://storage.googleapis.com/synthetic-bucket/renewed")
+  })), &renew).unwrap();
+  assert_eq!(renewed.tickets[0].upload_id, "upload-1");
+  assert_eq!(renewed.tickets[0].ticket.size_bytes, 1024);
+
+  let wrong_upload = serde_json::json!({
+    "uploadId": "other-upload", "expiresAt": "2099-01-01T00:00:00.000Z", "ticket": ticket("https://storage.googleapis.com/synthetic-bucket/other")
+  });
+  assert_eq!(
+    read_sharing_json_for_request(json_response(200, &wrong_upload), &renew).err(),
+    Some(AccountError::InvalidResponse)
+  );
+  assert!(SharingRequest::parse(
+    "POST",
+    "/cloud/sharing/v1/render-jobs/job-1/outputs",
+    Some(serde_json::json!({ "leaseToken": "lease", "output": { "sizeBytes": SHARING_CONTENT_MAX + 1, "contentType": "image/jpeg" } })),
+    Some("too-large-key".into()),
+  ).is_err());
+}
+
+#[test]
 fn untrusted_tickets_and_other_transport_material_are_refused() {
   for value in [
     added(ticket("https://attacker.example/upload")),
@@ -316,9 +406,9 @@ fn the_sharing_prefix_is_a_fixed_api_path() {
 }
 
 #[test]
-fn the_route_table_is_the_shared_album_operations_only() {
+fn the_route_table_is_shared_album_and_user_render_operations_only() {
   let names: Vec<&str> = routes().iter().map(|route| route.operation.as_str()).collect();
-  assert_eq!(names.len(), 24);
+  assert_eq!(names.len(), 29);
   for expected in [
     "albums.list",
     "albumItems.addFile",
@@ -326,6 +416,11 @@ fn the_route_table_is_the_shared_album_operations_only() {
     "albumItems.download",
     "invites.join",
     "members.leave",
+    "renderJobs.claim",
+    "renderJobs.startOutput",
+    "renderJobs.renewOutput",
+    "renderJobs.commit",
+    "renderJobs.fail",
   ] {
     assert!(names.contains(&expected), "{expected}");
   }

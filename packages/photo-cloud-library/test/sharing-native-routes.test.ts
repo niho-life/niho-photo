@@ -1,9 +1,10 @@
 import { readFileSync } from "node:fs";
 
-import { SHARING_ROUTES } from "@niho/photo-library-sharing-contract/routes";
+import { SHARING_ROUTES, USER_RENDER_ROUTES } from "@niho/photo-library-sharing-contract/routes";
 import { describe, expect, it } from "vitest";
 
 import { SHARED_ALBUM_ITEM_OPERATIONS, SHARED_ALBUM_MEMBERSHIP_OPERATIONS } from "../src/sharing";
+import { RENDER_JOB_OPERATIONS } from "../src/render-executor";
 
 /** The Mac native session's allowlist (`packages/desktop-account/src/sharing_routes.json`, read by `photo_sharing.rs`). */
 const NATIVE = JSON.parse(readFileSync(new URL("../../desktop-account/src/sharing_routes.json", import.meta.url), "utf8")) as {
@@ -19,11 +20,13 @@ const NATIVE = JSON.parse(readFileSync(new URL("../../desktop-account/src/sharin
 
 describe("Mac native sharing route table", () => {
   it("is exactly the shared-album operations, with the contract's routes", () => {
-    // JSON operations of the two clients, plus the finished-photo download (bytes, opened by `camera_sharing_content_open`)
-    const operations = [...SHARED_ALBUM_ITEM_OPERATIONS, ...SHARED_ALBUM_MEMBERSHIP_OPERATIONS, "albumItems.download"];
+    // Sharing operations, render-job operations, plus the finished-photo download (bytes, opened by `camera_sharing_content_open`).
+    const operations = [...SHARED_ALBUM_ITEM_OPERATIONS, ...SHARED_ALBUM_MEMBERSHIP_OPERATIONS, "albumItems.download", ...RENDER_JOB_OPERATIONS];
     expect(NATIVE.routes.map((route) => route.operation).sort()).toEqual([...new Set(operations)].sort());
     for (const route of NATIVE.routes) {
-      const contract = SHARING_ROUTES[route.operation as keyof typeof SHARING_ROUTES];
+      const contract = route.operation.startsWith("renderJobs.")
+        ? USER_RENDER_ROUTES[route.operation as keyof typeof USER_RENDER_ROUTES]
+        : SHARING_ROUTES[route.operation as keyof typeof SHARING_ROUTES];
       expect(contract, route.operation).toBeDefined();
       expect(
         { method: route.method, path: route.path, query: route.query, body: route.body, idempotencyKey: route.idempotencyKey },

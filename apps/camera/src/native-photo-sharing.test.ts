@@ -225,9 +225,19 @@ describe("Mac shared albums over the native session", () => {
     expect(await createMacSharedAlbums({ identity: identity().port, invoke: closed, invokeBinary: native.invokeBinary, saveFile: async () => "saved", now: () => NOW })).toBeNull();
     const failing = vi.fn<NativePhotoInvoke>(async () => { throw "not_configured"; });
     expect(await createMacSharedAlbums({ identity: identity().port, invoke: failing, invokeBinary: native.invokeBinary, saveFile: async () => "saved", now: () => NOW })).toBeNull();
-    const port = await createMacSharedAlbums({ identity: identity().port, invoke: native.invoke, invokeBinary: native.invokeBinary, saveFile: async () => "saved", now: () => NOW });
+    const renderJobs = { wake: vi.fn(), prioritize: vi.fn(), idle: async () => undefined, dispose: vi.fn() };
+    const port = await createMacSharedAlbums({
+      identity: identity().port,
+      invoke: native.invoke,
+      invokeBinary: native.invokeBinary,
+      saveFile: async () => "saved",
+      createRenderJobs: () => renderJobs,
+      now: () => NOW,
+    });
     expect(port).not.toBeNull();
+    expect(renderJobs.wake).toHaveBeenCalledOnce();
     port?.dispose();
+    expect(renderJobs.dispose).toHaveBeenCalledOnce();
     expect(PHOTO_WEB_ORIGIN).toBe("https://photo.niho.life");
   });
 });

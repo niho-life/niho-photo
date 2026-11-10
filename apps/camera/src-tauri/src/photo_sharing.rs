@@ -11,7 +11,7 @@
 use crate::account::SharedAccount;
 use niho_desktop_account::{
   photo_ephemeral_id, sharing_ticket_handle, AccountError, NativeUploadTicket, PhotoDownloadCancel, PhotoScopeCapture,
-  SharingContentMetadata, SharingRequest, SharingUploadTicket, SHARING_CONTENT_MAX,
+  SharingContentMetadata, SharingOutputExpectation, SharingRequest, SharingUploadTicket, SHARING_CONTENT_MAX,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -21,6 +21,7 @@ use std::time::{Duration, Instant};
 use tauri::{AppHandle, Manager, State};
 
 const MAX_TICKETS: usize = 16;
+const MAX_RENDER_OUTPUTS: usize = 32;
 const TICKET_TTL: Duration = Duration::from_secs(6 * 60 * 60);
 const MAX_CONTENTS: usize = 4;
 const MAX_CONTENT_HELD: usize = 256 * 1024 * 1024;
@@ -42,6 +43,13 @@ struct HeldTicket {
 struct HeldContent {
   scope: PhotoScopeCapture,
   bytes: Vec<u8>,
+  held_at: Instant,
+}
+
+struct HeldRenderOutput {
+  scope: PhotoScopeCapture,
+  job_id: String,
+  expectation: SharingOutputExpectation,
   held_at: Instant,
 }
 
@@ -89,6 +97,7 @@ impl Drop for GateSlot {
 pub struct PhotoSharingState {
   tickets: Mutex<HashMap<String, HeldTicket>>,
   contents: Mutex<HashMap<String, HeldContent>>,
+  render_outputs: Mutex<HashMap<String, HeldRenderOutput>>,
   content_gate: Arc<Gate>,
   upload_gate: Arc<Gate>,
 }
@@ -98,6 +107,7 @@ impl Default for PhotoSharingState {
     Self {
       tickets: Mutex::default(),
       contents: Mutex::default(),
+      render_outputs: Mutex::default(),
       content_gate: Arc::new(Gate::new(CONTENT_IN_FLIGHT)),
       upload_gate: Arc::new(Gate::new(UPLOAD_IN_FLIGHT)),
     }
@@ -109,6 +119,58 @@ fn lock<T>(mutex: &Mutex<T>) -> MutexGuard<'_, T> {
 }
 
 impl PhotoSharingState {
+  fn render_output_expectation(
+    &self,
+    scope: &PhotoScopeCapture,
+    job_id: &str,
+    upload_id: &str,
+  ) -> Result<SharingOutputExpectation, AccountError> {
+    let mut held = lock(&self.render_outputs);
+    held.retain(|_, output| output.held_at.elapsed() < TICKET_TTL);
+    held
+      .get(upload_id)
+      .filter(|output| &output.scope == scope && output.job_id == job_id)
+      .map(|output| output.expectation.clone())
+      .ok_or(AccountError::InvalidResponse)
+  }
+
+  fn remember_render_output(
+    &self,
+    scope: &PhotoScopeCapture,
+    job_id: &str,
+    upload_id: &str,
+    expectation: &SharingOutputExpectation,
+  ) {
+    let mut held = lock(&self.render_outputs);
+    held
+      .retain(|_, output| output.held_at.elapsed() < TICKET_TTL && (output.scope != *scope || output.job_id != job_id));
+    while held.len() >= MAX_RENDER_OUTPUTS {
+      let oldest = held
+        .iter()
+        .min_by_key(|(_, output)| output.held_at)
+        .map(|(id, _)| id.clone());
+      match oldest {
+        Some(upload_id) => {
+          held.remove(&upload_id);
+        }
+        None => break,
+      }
+    }
+    held.insert(
+      upload_id.to_owned(),
+      HeldRenderOutput {
+        scope: scope.clone(),
+        job_id: job_id.to_owned(),
+        expectation: expectation.clone(),
+        held_at: Instant::now(),
+      },
+    );
+  }
+
+  fn forget_render_outputs(&self, scope: &PhotoScopeCapture, job_id: &str) {
+    lock(&self.render_outputs).retain(|_, output| &output.scope != scope || output.job_id != job_id);
+  }
+
   fn hold_tickets(&self, scope: &PhotoScopeCapture, tickets: &[SharingUploadTicket]) {
     let mut held = lock(&self.tickets);
     held.retain(|_, ticket| ticket.held_at.elapsed() < TICKET_TTL);
@@ -243,7 +305,16 @@ pub async fn camera_sharing_request(
   let generation = account.begin_photo_operation()?;
   let account = Arc::clone(account.inner());
   let state = Arc::clone(state.inner());
-  let request = SharingRequest::parse(&input.method, &input.path, input.body, input.idempotency_key)?;
+  let mut request = SharingRequest::parse(&input.method, &input.path, input.body, input.idempotency_key)?;
+  if request.operation() == "renderJobs.renewOutput" {
+    let job_id = request.render_job_id().ok_or(AccountError::InvalidResponse)?;
+    let upload_id = request.render_upload_id().ok_or(AccountError::InvalidResponse)?;
+    let expectation = state.render_output_expectation(&input.scope, job_id, upload_id)?;
+    request.set_output_expectation(expectation)?;
+  }
+  let operation = request.operation();
+  let render_job_id = request.render_job_id().map(str::to_owned);
+  let output_expectation = request.output_expectation().cloned();
   let scope = input.scope.clone();
   let worker = Arc::clone(&account);
   let response = tauri::async_runtime::spawn_blocking(move || worker.account.photo_sharing_request(&scope, &request))
@@ -259,6 +330,28 @@ pub async fn camera_sharing_request(
       other?
     }
   };
+  if (200..300).contains(&response.status) {
+    match operation {
+      "renderJobs.startOutput" => {
+        let job_id = render_job_id.as_deref().ok_or(AccountError::InvalidResponse)?;
+        let upload_id = response
+          .body
+          .get("value")
+          .and_then(|value| value.get("uploadId"))
+          .and_then(Value::as_str)
+          .filter(|id| !id.is_empty() && id.len() <= 512)
+          .ok_or(AccountError::InvalidResponse)?;
+        let expectation = output_expectation.as_ref().ok_or(AccountError::InvalidResponse)?;
+        state.remember_render_output(&input.scope, job_id, upload_id, expectation);
+      }
+      "renderJobs.commit" | "renderJobs.fail" => {
+        if let Some(job_id) = render_job_id.as_deref() {
+          state.forget_render_outputs(&input.scope, job_id);
+        }
+      }
+      _ => {}
+    }
+  }
   state.hold_tickets(&input.scope, &response.tickets);
   Ok(SharingResponseOutput {
     status: response.status,
@@ -452,6 +545,34 @@ mod tests {
       .filter(|handle| state.read_content(handle, &scope("a"), 0).is_ok())
       .count();
     assert_eq!(live, MAX_CONTENTS);
+  }
+
+  #[test]
+  fn render_output_expectations_are_bound_to_scope_job_and_upload() {
+    let state = PhotoSharingState::default();
+    let owner_scope = scope("owner");
+    let expectation = SharingOutputExpectation {
+      content_type: "image/jpeg".into(),
+      size_bytes: 1024,
+    };
+    state.remember_render_output(&owner_scope, "job-1", "upload-1", &expectation);
+    assert_eq!(
+      state.render_output_expectation(&owner_scope, "job-1", "upload-1"),
+      Ok(expectation.clone())
+    );
+    assert_eq!(
+      state.render_output_expectation(&scope("other"), "job-1", "upload-1"),
+      Err(AccountError::InvalidResponse),
+    );
+    assert_eq!(
+      state.render_output_expectation(&owner_scope, "job-2", "upload-1"),
+      Err(AccountError::InvalidResponse),
+    );
+    state.forget_render_outputs(&owner_scope, "job-1");
+    assert_eq!(
+      state.render_output_expectation(&owner_scope, "job-1", "upload-1"),
+      Err(AccountError::InvalidResponse),
+    );
   }
 
   #[test]

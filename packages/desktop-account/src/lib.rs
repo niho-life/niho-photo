@@ -18,8 +18,8 @@ pub use photo_cloud::{
 };
 pub use photo_session::{PhotoIdentity, PhotoIdentityTransport};
 pub use photo_sharing::{
-  sharing_ticket_handle, SharingContentMetadata, SharingJsonResponse, SharingRequest, SharingUploadTicket,
-  SHARING_CONTENT_MAX, SHARING_ROUTE_PREFIX, SHARING_TICKET_HOST,
+  sharing_ticket_handle, SharingContentMetadata, SharingJsonResponse, SharingOutputExpectation, SharingRequest,
+  SharingUploadTicket, SHARING_CONTENT_MAX, SHARING_ROUTE_PREFIX, SHARING_TICKET_HOST,
 };
 pub use secret::{CredentialStore, FileSecretStore, KeychainStore, Secret, SecretKind};
 use serde::{Deserialize, Serialize};

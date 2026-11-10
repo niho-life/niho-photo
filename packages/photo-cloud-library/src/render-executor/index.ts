@@ -1,7 +1,7 @@
 /**
  * Render jobs on the device that holds the original (B07 #248): the executor, the finished-output pipeline, the
  * engine and personal-cloud adapters for the Mac app and browser, the ticket uploader, and a synthetic queue for
- * development and tests. Not wired into any host yet.
+ * development and tests; the browser and Mac app wire the same core to their own authenticated transports.
  */
 export {
   createSourceDeviceRenderExecutor,
@@ -14,6 +14,7 @@ export {
   type SourceDeviceRenderOutcome,
   type SourceDeviceRenderSummary,
 } from "./render-executor";
+export type { RenderCapability } from "./contract";
 export {
   SOURCE_DEVICE_PREVIEW_MAX_EDGE,
   SourceDeviceRenderFailure,
@@ -44,7 +45,12 @@ export {
 export { createPersonalCloudRenderSource } from "./personal-cloud-source";
 export { createTicketUploader, type CreateTicketUploaderOptions, type RenderOutputUploader } from "./ticket-upload";
 export { createRenderJobMockServer, type CreateRenderJobMockServerOptions, type RenderJobMockItem, type RenderJobMockServer } from "./render-mock";
-export { createBrowserRenderJobClient, type BrowserRenderJobClient } from "./render-client";
+export {
+  createBrowserRenderJobClient,
+  createRenderJobClientOnTransport,
+  type BrowserRenderJobClient,
+  type RenderJobClient,
+} from "./render-client";
 export {
   RENDER_JOB_OPERATIONS,
   encodeRenderJobRequest,

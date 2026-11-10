@@ -9,7 +9,11 @@ import type { NativePhotoIdentityWatch } from "./native-photo-session";
 vi.mock("@niho/photo-cloud-sync", () => ({
   createPersonalPhotoCloudLibrary(options: { maskSurfaceValidator?: { validateMaskSurface(png: Uint8Array): Promise<unknown> } }) {
     return {
-      library: { place: "cloud", saveMaskSurface: (_photoId: string, png: Uint8Array) => options.maskSurfaceValidator!.validateMaskSurface(png) },
+      library: {
+        place: "cloud",
+        rollout: async () => ({ crop: false, mobileEditing: false, sharedAlbums: true }),
+        saveMaskSurface: (_photoId: string, png: Uint8Array) => options.maskSurfaceValidator!.validateMaskSurface(png),
+      },
       dispose() {},
     };
   },

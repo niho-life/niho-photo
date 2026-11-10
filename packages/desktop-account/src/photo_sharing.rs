@@ -37,7 +37,7 @@ const MAX_TICKETS: usize = 4;
 pub const SHARING_CONTENT_MAX: u64 = 200 * 1024 * 1024;
 const SHARING_CONTENT_OPERATION: &str = "albumItems.download";
 
-/// 共有アルバムの操作の経路（契約の `SHARING_ROUTES` から作った表。photo-cloud-library の試験が一致を確かめる）。これ以外は送らない。
+/// 共有アルバムと本人端末の描画jobの経路（`SHARING_ROUTES` / `USER_RENDER_ROUTES`）。これ以外は送らない。
 const SHARING_ROUTES_JSON: &str = include_str!("sharing_routes.json");
 
 #[derive(Deserialize)]
@@ -108,6 +108,16 @@ pub struct SharingRequest {
   query: Option<String>,
   body: Option<Vec<u8>>,
   idempotency_key: Option<String>,
+  render_job_id: Option<String>,
+  render_upload_id: Option<String>,
+  output_expectation: Option<SharingOutputExpectation>,
+}
+
+/// Size and media type bound to a native render-output upload ticket.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct SharingOutputExpectation {
+  pub content_type: String,
+  pub size_bytes: u64,
 }
 
 fn segment_ok(segment: &str) -> bool {
@@ -153,6 +163,107 @@ fn query_ok(query: &str) -> bool {
           .bytes()
           .all(|b| b.is_ascii_alphanumeric() || b"-_.~%+*!'()".contains(&b))
     })
+}
+
+fn decode_segment(segment: &str) -> Result<String, AccountError> {
+  let bytes = segment.as_bytes();
+  let mut decoded = Vec::with_capacity(bytes.len());
+  let mut index = 0;
+  while index < bytes.len() {
+    if bytes[index] == b'%' {
+      let pair = segment.get(index + 1..index + 3).ok_or(AccountError::InvalidResponse)?;
+      if !pair.bytes().all(|byte| byte.is_ascii_hexdigit()) {
+        return Err(AccountError::InvalidResponse);
+      }
+      decoded.push(u8::from_str_radix(pair, 16).map_err(|_| AccountError::InvalidResponse)?);
+      index += 3;
+    } else {
+      decoded.push(bytes[index]);
+      index += 1;
+    }
+  }
+  String::from_utf8(decoded).map_err(|_| AccountError::InvalidResponse)
+}
+
+fn opaque_id(value: Option<&Value>) -> Result<String, AccountError> {
+  let id = value
+    .and_then(Value::as_str)
+    .filter(|id| valid_opaque_id(id))
+    .ok_or(AccountError::InvalidResponse)?;
+  Ok(id.to_owned())
+}
+
+fn valid_opaque_id(id: &str) -> bool {
+  !id.is_empty()
+    && id.len() <= SEGMENT_MAX
+    && id.trim() == id
+    && id != "."
+    && id != ".."
+    && !id
+      .chars()
+      .any(|character| character.is_control() || character == '/' || character == '\\')
+}
+
+fn expected_render_output(body: Option<&Value>) -> Result<SharingOutputExpectation, AccountError> {
+  let output = body
+    .and_then(|value| value.get("output"))
+    .and_then(Value::as_object)
+    .ok_or(AccountError::InvalidResponse)?;
+  let content_type = output
+    .get("contentType")
+    .and_then(Value::as_str)
+    .filter(|content_type| matches!(*content_type, "image/jpeg" | "image/png"))
+    .ok_or(AccountError::InvalidResponse)?;
+  let size_bytes = output
+    .get("sizeBytes")
+    .and_then(Value::as_u64)
+    .filter(|size| *size > 0 && *size <= SHARING_CONTENT_MAX)
+    .ok_or(AccountError::InvalidResponse)?;
+  Ok(SharingOutputExpectation {
+    content_type: content_type.to_owned(),
+    size_bytes,
+  })
+}
+
+#[derive(Default)]
+struct RenderRequestContext {
+  job_id: Option<String>,
+  upload_id: Option<String>,
+  output_expectation: Option<SharingOutputExpectation>,
+}
+
+fn render_context(operation: &str, suffix: &str, body: Option<&Value>) -> Result<RenderRequestContext, AccountError> {
+  if !operation.starts_with("renderJobs.") || operation == "renderJobs.claim" {
+    return Ok(RenderRequestContext::default());
+  }
+  let segments = suffix[1..]
+    .split('/')
+    .map(decode_segment)
+    .collect::<Result<Vec<_>, _>>()?;
+  let job_id = segments
+    .get(1)
+    .filter(|id| valid_opaque_id(id))
+    .cloned()
+    .ok_or(AccountError::InvalidResponse)?;
+  let (upload_id, expectation) = match operation {
+    "renderJobs.startOutput" => (None, Some(expected_render_output(body)?)),
+    "renderJobs.renewOutput" => {
+      let upload_id = segments
+        .get(3)
+        .filter(|id| valid_opaque_id(id))
+        .cloned()
+        .ok_or(AccountError::InvalidResponse)?;
+      (Some(upload_id), None)
+    }
+    "renderJobs.commit" => (Some(opaque_id(body.and_then(|value| value.get("uploadId")))?), None),
+    "renderJobs.fail" => (None, None),
+    _ => return Err(AccountError::InvalidResponse),
+  };
+  Ok(RenderRequestContext {
+    job_id: Some(job_id),
+    upload_id,
+    output_expectation: expectation,
+  })
 }
 
 impl SharingRequest {
@@ -201,6 +312,7 @@ impl SharingRequest {
       (Some(fields), Some(Value::Object(map))) if map.keys().all(|key| fields.contains(key)) => {}
       _ => return Err(AccountError::InvalidResponse),
     }
+    let render_context = render_context(route.operation.as_str(), suffix, body.as_ref())?;
     if route.idempotency_key != idempotency_key.is_some() {
       return Err(AccountError::InvalidResponse);
     }
@@ -229,7 +341,35 @@ impl SharingRequest {
       query: query.map(str::to_owned),
       body,
       idempotency_key,
+      render_job_id: render_context.job_id,
+      render_upload_id: render_context.upload_id,
+      output_expectation: render_context.output_expectation,
     })
+  }
+
+  pub fn render_job_id(&self) -> Option<&str> {
+    self.render_job_id.as_deref()
+  }
+
+  pub fn render_upload_id(&self) -> Option<&str> {
+    self.render_upload_id.as_deref()
+  }
+
+  pub fn output_expectation(&self) -> Option<&SharingOutputExpectation> {
+    self.output_expectation.as_ref()
+  }
+
+  /// Supplies the size/media type remembered from renderJobs.startOutput for a renewed native ticket.
+  pub fn set_output_expectation(&mut self, expectation: SharingOutputExpectation) -> Result<(), AccountError> {
+    if self.operation != "renderJobs.renewOutput"
+      || expectation.size_bytes == 0
+      || expectation.size_bytes > SHARING_CONTENT_MAX
+      || !matches!(expectation.content_type.as_str(), "image/jpeg" | "image/png")
+    {
+      return Err(AccountError::InvalidResponse);
+    }
+    self.output_expectation = Some(expectation);
+    Ok(())
   }
 
   pub fn is_get(&self) -> bool {
@@ -297,33 +437,48 @@ fn placeholder(handle: &str, ticket: &NativeUploadTicket) -> Value {
   })
 }
 
-/// `{ upload: { id, sizeBytes, ... }, ticket: {...} }` の ticket を取り出して null にする（深さは JSON の検査で制限済み）。
-fn take_tickets(value: &mut Value, found: &mut Vec<(String, NativeUploadTicket)>) -> Result<(), AccountError> {
+/// `{ upload: { id, sizeBytes, ... }, ticket: {...} }` と render-job の ticket を取り出して null にする。
+fn take_tickets(
+  value: &mut Value,
+  found: &mut Vec<(String, NativeUploadTicket)>,
+  expectation: Option<&SharingOutputExpectation>,
+  expected_upload_id: Option<&str>,
+) -> Result<(), AccountError> {
   match value {
     Value::Array(values) => {
       for value in values {
-        take_tickets(value, found)?;
+        take_tickets(value, found, expectation, expected_upload_id)?;
       }
     }
     Value::Object(map) => {
       if map.get("ticket").is_some_and(Value::is_object) {
-        let upload = map
-          .get("upload")
-          .and_then(Value::as_object)
-          .ok_or(AccountError::InvalidResponse)?;
-        let upload_id = upload
-          .get("id")
-          .and_then(Value::as_str)
-          .filter(|id| !id.is_empty() && id.len() <= 512)
-          .ok_or(AccountError::InvalidResponse)?
-          .to_owned();
-        let size_bytes = upload
-          .get("sizeBytes")
-          .and_then(Value::as_u64)
-          .filter(|size| *size > 0 && *size <= SHARING_CONTENT_MAX)
-          .ok_or(AccountError::InvalidResponse)?;
+        let (upload_id, size_bytes, content_type) = if let Some(upload) = map.get("upload").and_then(Value::as_object) {
+          let upload_id = upload
+            .get("id")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty() && id.len() <= SEGMENT_MAX)
+            .ok_or(AccountError::InvalidResponse)?
+            .to_owned();
+          let size_bytes = upload
+            .get("sizeBytes")
+            .and_then(Value::as_u64)
+            .filter(|size| *size > 0 && *size <= SHARING_CONTENT_MAX)
+            .ok_or(AccountError::InvalidResponse)?;
+          let raw = map.get("ticket").cloned().unwrap_or(Value::Null);
+          let content_type = ticket_content_type(&raw)?;
+          (upload_id, size_bytes, content_type)
+        } else {
+          let upload_id = map
+            .get("uploadId")
+            .and_then(Value::as_str)
+            .filter(|id| !id.is_empty() && id.len() <= SEGMENT_MAX)
+            .filter(|id| expected_upload_id.is_none_or(|expected| *id == expected))
+            .ok_or(AccountError::InvalidResponse)?
+            .to_owned();
+          let expected = expectation.ok_or(AccountError::InvalidResponse)?;
+          (upload_id, expected.size_bytes, expected.content_type.clone())
+        };
         let raw = map.get("ticket").cloned().unwrap_or(Value::Null);
-        let content_type = ticket_content_type(&raw)?;
         let ticket = parse_ticket(&raw, &content_type, size_bytes)?;
         if found.len() >= MAX_TICKETS {
           return Err(AccountError::InvalidResponse);
@@ -333,7 +488,7 @@ fn take_tickets(value: &mut Value, found: &mut Vec<(String, NativeUploadTicket)>
       }
       for (key, child) in map.iter_mut() {
         if key != "ticket" {
-          take_tickets(child, found)?;
+          take_tickets(child, found, expectation, expected_upload_id)?;
         }
       }
     }
@@ -374,6 +529,7 @@ fn put_placeholders(value: &mut Value, tickets: &[SharingUploadTicket], next: &m
           .and_then(Value::as_object)
           .and_then(|upload| upload.get("id"))
           .and_then(Value::as_str)
+          .or_else(|| map.get("uploadId").and_then(Value::as_str))
           .is_some_and(|id| tickets.get(*next).is_some_and(|ticket| ticket.upload_id == id));
       if carries {
         let ticket = &tickets[*next];
@@ -391,7 +547,23 @@ fn put_placeholders(value: &mut Value, tickets: &[SharingUploadTicket], next: &m
 }
 
 /// 応答の JSON を読み、ticket を native に取り出して代わりを置く。
+#[cfg(test)]
 pub(crate) fn read_sharing_json(response: PhotoHttpResponse) -> Result<SharingJsonResponse, AccountError> {
+  read_sharing_json_for_output(response, None, None)
+}
+
+pub(crate) fn read_sharing_json_for_request(
+  response: PhotoHttpResponse,
+  request: &SharingRequest,
+) -> Result<SharingJsonResponse, AccountError> {
+  read_sharing_json_for_output(response, request.output_expectation(), request.render_upload_id())
+}
+
+fn read_sharing_json_for_output(
+  response: PhotoHttpResponse,
+  expectation: Option<&SharingOutputExpectation>,
+  expected_upload_id: Option<&str>,
+) -> Result<SharingJsonResponse, AccountError> {
   let success = (200..300).contains(&response.status);
   let limit = if success { JSON_MAX } else { ERROR_MAX };
   if response.content_length.is_some_and(|value| value > limit)
@@ -420,7 +592,7 @@ pub(crate) fn read_sharing_json(response: PhotoHttpResponse) -> Result<SharingJs
   let mut tickets = Vec::new();
   if success {
     let mut found = Vec::new();
-    take_tickets(&mut value, &mut found)?;
+    take_tickets(&mut value, &mut found, expectation, expected_upload_id)?;
     for (upload_id, ticket) in found {
       tickets.push(SharingUploadTicket {
         handle: random_handle()?,
