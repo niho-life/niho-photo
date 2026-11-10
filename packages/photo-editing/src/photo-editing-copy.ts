@@ -1342,11 +1342,22 @@ export const PHOTO_SHARED_ALBUM_COPY = {
   memberCount: (count: number) => `${count}人`,
   itemCount: (count: number) => `${count}枚`,
   newAlbum: "新しいアルバム",
+  albumName: "アルバム名",
+  create: "作成",
   listEmpty: "共有アルバムはまだありません",
   back: "共有アルバムに戻る",
   add: "追加",
   addFromLibrary: "写真から選ぶ",
   addFromFiles: "ファイルから選ぶ",
+  /** 本人の「写真」から選ぶ画面 */
+  pickerEmpty: "写真がありません",
+  pickerMore: "もっと見る",
+  pickerFailed: "写真を読み込めませんでした",
+  addSelected: (count: number) => `${count}枚を追加`,
+  /** 選択中の操作の残り（差し替えなど）を開くボタン */
+  more: "その他",
+  /** 自分が足した完成写真を、選び直した JPEG に替える */
+  replace: "差し替え",
   select: "選択",
   endSelection: "選択を終了",
   selectPrompt: "写真を選択",
@@ -1452,6 +1463,7 @@ export const PHOTO_SHARED_ALBUM_INVITE_COPY = {
 
 /** 設定の「保存先」。標準は NIHO クラウドで最初に選ばせない。自前サーバー（常設 Mac）はここから足し、日常の画面には出さない。 */
 export const PHOTO_STORAGE_LOCATION_COPY = {
+  settings: "設定",
   heading: "保存先",
   nihoCloud: "NIHO クラウド",
   thisMac: "この Mac",

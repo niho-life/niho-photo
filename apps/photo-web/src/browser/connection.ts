@@ -30,12 +30,20 @@ import { IndexedDbRecipeSyncJournal } from "@niho/photo-cloud-sync/browser";
 import type { RecipeJournalScope, RecipeSyncLocks } from "@niho/photo-cloud-sync";
 import { createPhotoWebCloudFetch } from "./auth-fetch.ts";
 import { createCapturedPhotoWebCloudClient, createPhotoWebCloudIdentity } from "./session-client.ts";
+import { photoWebInviteUrl, photoWebOriginalsNote, savePhotoWebDownload } from "./shared-albums.ts";
+import { createBrowserSharedAlbumScreensPort } from "@niho/photo-cloud-library/sharing";
+import { createBrowserRenderJobRunner, type BrowserRenderJobRunner } from "@niho/photo-cloud-library/render-executor";
+import { createDevelopEngine } from "niho-photo-editing/develop-engine/develop-engine-client";
+import type { PhotoSharedAlbumPort } from "niho-photo-editing/shared-album/photo-shared-album-port";
 import {
   createPhotoWebMaskSurfaceValidator,
   probePhotoWebRenderer,
   type PhotoWebMaskSurfaceValidator,
   type PhotoWebRendererProof,
 } from "./renderer.ts";
+
+/** Photos per page in 「写真から選ぶ」. */
+const SHARED_ALBUM_PICKER_PAGE_SIZE = 60;
 
 export type PhotoWebRevocationReason = "identity-changed" | "revoked" | "logout-complete" | "expired";
 
@@ -145,7 +153,11 @@ function identityScopeKey(identity: PhotoIdentity): string {
  * enable generated Web working copies. Keep direct rendering available and close that capability
  * until the existing job port is connected.
  */
-function closeUnconnectedMediaJobCapabilities(client: PersonalPhotoCloudClient): PersonalPhotoCloudClient {
+/**
+ * The personal cloud client the library uses: working-copy jobs closed until connected, and a notification when a
+ * correction reached the cloud (`recipes.put` answered), which may queue a shared-album replacement for this device.
+ */
+export function closeUnconnectedMediaJobCapabilities(client: PersonalPhotoCloudClient, onRecipeSaved: () => void = () => undefined): PersonalPhotoCloudClient {
   return {
     scope: client.scope,
     async request<K extends PhotoOperation>(
@@ -154,6 +166,10 @@ function closeUnconnectedMediaJobCapabilities(client: PersonalPhotoCloudClient):
       options: PhotoRequestOptions<K>,
     ): Promise<PhotoOperationMap[K]["response"]> {
       const response = await client.request(operation, request, options);
+      // A correction reached the cloud: the server queues the shared-album replacement for this device to render.
+      if (operation === "recipes.put") {
+        try { onRecipeSaved(); } catch { /* The save result is not changed by the notification. */ }
+      }
       if (operation !== "library.get") return response;
       const library = response as PersonalPhotoLibrary;
       return Object.freeze({
@@ -407,7 +423,9 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
         identity,
         scopeSignal: input.signal,
       });
-      const client = closeUnconnectedMediaJobCapabilities(capturedClient);
+      // Render jobs of this device's own shared-album photos (B07), woken after a correction reached the cloud.
+      let renderJobs: BrowserRenderJobRunner | null = null;
+      const client = closeUnconnectedMediaJobCapabilities(capturedClient, () => renderJobs?.wake());
       const identityKey = identityScopeKey(identity);
       revocationScopes.set(identityKey, Object.freeze({
         transfer: Object.freeze({
@@ -428,6 +446,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
       let transferController: BrowserPersonalPhotoTransferController | null = null;
       let maskSurfaceValidator: PhotoWebMaskSurfaceValidator | null = null;
       let previewLibrary: { readonly library: PhotoLibrary; dispose(): void } | null = null;
+      let sharedAlbums: PhotoSharedAlbumPort | null = null;
       let disposed = false;
       let transferOperations = 0;
       let pendingTransfers: boolean | null = null;
@@ -536,6 +555,58 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
         const library = previewLibrary.library;
         await library.capabilities({ signal: input.signal });
         const rollout = await library.rollout({ signal: input.signal });
+        // Shared albums stay closed unless the library's rollout opens them (fail closed: absent or unreadable = closed).
+        if (rollout.sharedAlbums === true) {
+          const manifestUrl = renderer.engineAssets.manifestUrl();
+          const sourceHandle = handle;
+          if (manifestUrl !== null) {
+            renderJobs = createBrowserRenderJobRunner({
+              identity: cloudIdentity,
+              userId: identity.userId,
+              fetch: bffFetch,
+              ...(factoryOptions.providerFetch === undefined ? {} : { providerFetch: factoryOptions.providerFetch }),
+              libraryId: client.scope.libraryId,
+              handle: sourceHandle,
+              ...(sourceHandle.library.loadMaskSurface === undefined
+                ? {}
+                : { loadMaskSurface: async (photoId: string, surfaceId: string) => await sourceHandle.library.loadMaskSurface?.(photoId, surfaceId) ?? null }),
+              capability: renderer.capability,
+              createEngine: () => createDevelopEngine({ manifestUrl, preferNative: false }),
+              scopeSignal: input.signal,
+              ...(factoryOptions.now === undefined ? {} : { now: factoryOptions.now }),
+            });
+          }
+          sharedAlbums = createBrowserSharedAlbumScreensPort({
+            identity: cloudIdentity,
+            fetch: bffFetch,
+            ...(factoryOptions.providerFetch === undefined ? {} : { providerFetch: factoryOptions.providerFetch }),
+            ...(factoryOptions.now === undefined ? {} : { now: factoryOptions.now }),
+            inviteUrl: (secret) => photoWebInviteUrl(factoryOptions.origin, secret),
+            saveFile: (name, file) => savePhotoWebDownload(name, file),
+            originalsNote: photoWebOriginalsNote(identity.userId),
+            storageLocations: async () => [{
+              locationId: "nihoCloud", kind: "nihoCloud", name: null, hostedMacStatus: null,
+              usage: { usedBytes: usage.usedBytes, quotaBytes: usage.quotaBytes },
+            }],
+            ...(renderJobs === null ? {} : { renderJobs }),
+            // 「写真から選ぶ」 reads the same library as 写真 (photos with originals, newest added first).
+            library: {
+              libraryId: client.scope.libraryId,
+              list: async (cursor, signal) => {
+                const page = await library.list({
+                  ...(cursor === null ? {} : { cursor }),
+                  limit: Math.min(SHARED_ALBUM_PICKER_PAGE_SIZE, library.limits.listPageSize),
+                  sort: "added",
+                  hasOriginal: true,
+                }, { signal });
+                return {
+                  items: page.items.map((item) => ({ photoId: item.id, thumbnailUrl: item.editedPreview?.thumbUrl ?? item.previewUrl, label: item.fileName })),
+                  next: page.next,
+                };
+              },
+            },
+          });
+        }
         usage = snapshotUsage(await handle.usage({ signal: input.signal }));
         const refreshUsage = (): Promise<void> => {
           usageRefreshRequested = true;
@@ -637,6 +708,7 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
           disableCloudDelete: initialCloud.state !== "active",
           usage,
           ...(transfer === undefined ? {} : { transfer }),
+          ...(sharedAlbums === null ? {} : { sharedAlbums }),
         });
 
         const unsubscribeDrafts = durable.subscribe(() => { void refreshPendingDrafts(); });
@@ -678,6 +750,8 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
             listeners.clear();
             try { transferController?.dispose(); } catch { /* The identity fence already rejects late results. */ }
             try { previewLibrary?.dispose(); } catch { /* Continue releasing the shared library resources. */ }
+            try { sharedAlbums?.dispose(); } catch { /* Thumbnails and clients are released with the scope. */ }
+            try { renderJobs?.dispose(); } catch { /* Jobs in flight are interrupted; their leases expire. */ }
             try { maskSurfaceValidator?.dispose(); } catch { /* Continue provider disposal. */ }
             try { handle?.releasePreviewResources(); } catch { /* Continue provider disposal. */ }
             try { handle?.dispose(); } catch { /* Continue client disposal. */ }
@@ -689,10 +763,14 @@ export function createPhotoWebConnectionFactory(options: CreatePhotoWebConnectio
         const replaced = active;
         if (replaced !== null && replaced !== connection) replaced.dispose();
         active = connection;
+        // Jobs queued while no device of this user was open (added elsewhere, corrections saved on another device).
+        renderJobs?.wake();
         return connection;
       } catch (error) {
         try { transferController?.dispose(); } catch { /* Best effort for partial construction. */ }
         try { previewLibrary?.dispose(); } catch { /* Best effort for partial construction. */ }
+        try { sharedAlbums?.dispose(); } catch { /* Best effort for partial construction. */ }
+        try { renderJobs?.dispose(); } catch { /* Best effort for partial construction. */ }
         try { maskSurfaceValidator?.dispose(); } catch { /* Best effort for partial construction. */ }
         try { handle?.releasePreviewResources(); } catch { /* Best effort for partial construction. */ }
         try { handle?.dispose(); } catch { /* Best effort for partial construction. */ }

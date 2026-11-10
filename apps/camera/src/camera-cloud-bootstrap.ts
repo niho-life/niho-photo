@@ -14,6 +14,7 @@ import { createCameraPhotoMaskValidator, probeCameraPhotoRenderer, type CameraPh
 import { createNativePersonalPhotoCloudClient } from "./native-photo-client";
 import { createNativePersonalPhotoCloudMaskUploader, type NativePhotoBinaryInvoke } from "./native-photo-mask-uploader";
 import { createMacPhotoCopyNative } from "./native-photo-copy";
+import { createMacSharedAlbums } from "./native-photo-sharing";
 import { readNativePhotoIdentity, watchNativePhotoIdentity } from "./native-photo-session";
 import {
   createMacPersonalCloudPhotoBinding,
@@ -202,6 +203,7 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
   let maskUploader: ReturnType<typeof createNativePersonalPhotoCloudMaskUploader> | null = null;
   let libraryHandle: ReturnType<typeof createPersonalPhotoCloudLibrary> | null = null;
   let connection: ReturnType<typeof createMacPersonalCloudPhotoBinding> | null = null;
+  let sharedAlbums: Awaited<ReturnType<typeof createMacSharedAlbums>> = null;
   const scopeAbort = new AbortController();
   const invoke = options.invoke ?? ((command, args) => tauriInvoke(command, args));
   const invokeBinary = options.invokeBinary ?? ((command, bytes, headers) => tauriInvoke(command, bytes, { headers }));
@@ -247,6 +249,16 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
       native: createMacPhotoCopyNative(invoke),
     });
     if (connection.state !== "connected") return null;
+    // 共有アルバム（B08 #249）は同じ native の session で開く。build の設定が無ければ（公開の build）出さない
+    sharedAlbums = await createMacSharedAlbums({
+      identity: options.identity,
+      invoke,
+      invokeBinary,
+      saveFile: (bytes, name) => options.commands.saveFile(bytes, name),
+      ...(options.now === undefined ? {} : { now: options.now }),
+    }).catch(() => null);
+    if (options.signal.aborted) { sharedAlbums?.dispose(); sharedAlbums = null; return null; }
+    if (sharedAlbums) connection.binding.sharedAlbums = sharedAlbums;
     let disposed = false;
     return {
       binding: connection.binding,
@@ -254,6 +266,7 @@ async function createLiveBinding(options: CameraCloudBootstrapOptions & {
         if (disposed) return;
         disposed = true;
         scopeAbort.abort();
+        sharedAlbums?.dispose();
         connection?.dispose();
         libraryHandle?.dispose();
         maskUploader?.dispose();

@@ -480,6 +480,12 @@ impl NativeUploadTicket {
   pub fn resume_offset_bytes(&self) -> u64 {
     self.resume_offset_bytes
   }
+  pub fn content_type(&self) -> &str {
+    &self.content_type
+  }
+  pub fn size_bytes(&self) -> u64 {
+    self.size_bytes
+  }
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -603,6 +609,16 @@ pub(crate) trait PhotoHttpTransport: Send + Sync {
 pub(crate) struct ProviderResponse {
   status: u16,
   range: Option<String>,
+}
+
+#[cfg(test)]
+impl ProviderResponse {
+  pub(crate) fn synthetic(status: u16, range: Option<&str>) -> Self {
+    Self {
+      status,
+      range: range.map(str::to_owned),
+    }
+  }
 }
 
 pub(crate) struct HttpPhotoCloud;
@@ -737,9 +753,13 @@ fn header(response: &reqwest::blocking::Response, name: &str) -> Option<String> 
 
 fn valid_fixed_url(config: &Config, url: &url::Url) -> bool {
   let origin = config.api_url("/");
+  let fixed_prefix = url.path().starts_with(&format!("{API_PREFIX}/"))
+    || config
+      .sharing_prefix()
+      .is_some_and(|prefix| url.path().starts_with(&format!("{prefix}/")));
   url.scheme() == "https"
     && url.origin() == origin.origin()
-    && url.path().starts_with(&format!("{API_PREFIX}/"))
+    && fixed_prefix
     && url.fragment().is_none()
     && url.username().is_empty()
     && url.password().is_none()
@@ -1030,7 +1050,11 @@ pub(crate) fn parse_upload_receipt(value: &Value, expected_library: &str) -> Res
   parse_upload(field(value, "value")?, expected_library)
 }
 
-fn parse_ticket(value: &Value, content_type: &str, size_bytes: u64) -> Result<NativeUploadTicket, AccountError> {
+pub(crate) fn parse_ticket(
+  value: &Value,
+  content_type: &str,
+  size_bytes: u64,
+) -> Result<NativeUploadTicket, AccountError> {
   exact(value, &["url", "method", "headers", "expiresAt", "resumeOffsetBytes"])?;
   let item = object(value)?;
   if string(item, "method")? != "PUT" {
@@ -1874,7 +1898,7 @@ fn validate_opaque_json_limit(value: &Value, maximum_bytes: usize) -> Result<(),
   Ok(())
 }
 
-fn validate_json_shape(value: &Value, depth: usize, max_depth: usize) -> Result<(), AccountError> {
+pub(crate) fn validate_json_shape(value: &Value, depth: usize, max_depth: usize) -> Result<(), AccountError> {
   if depth > max_depth {
     return Err(AccountError::InvalidResponse);
   }
@@ -1912,7 +1936,7 @@ fn validate_recipe_settings(value: &Value) -> Result<(), AccountError> {
   Ok(())
 }
 
-fn validate_no_transport_material(value: &Value, opaque: bool) -> Result<(), AccountError> {
+pub(crate) fn validate_no_transport_material(value: &Value, opaque: bool) -> Result<(), AccountError> {
   if opaque {
     return Ok(());
   }
@@ -2020,7 +2044,7 @@ fn valid_id(value: &str) -> Result<(), AccountError> {
   Ok(())
 }
 
-fn valid_key(value: &str) -> bool {
+pub(crate) fn valid_key(value: &str) -> bool {
   !value.contains(',') && value.len() <= 128 && valid_id(value).is_ok()
 }
 
@@ -2061,7 +2085,7 @@ fn strict_u64(value: &str) -> Option<u64> {
   value.parse().ok()
 }
 
-fn valid_content_type(value: &str) -> bool {
+pub(crate) fn valid_content_type(value: &str) -> bool {
   !value.is_empty()
     && value.len() <= 256
     && value.contains('/')

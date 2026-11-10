@@ -1,28 +1,28 @@
 /**
- * Same-origin client for the shared-album membership and invite operations (B05 #246). It reuses the personal v2
- * transport pieces rather than a second implementation: the verified-session scope fence (`PersonalPhotoScope`, bound
- * to the session only because albums span libraries), the capture headers, the header deadline and the bounded JSON
- * reader. Like the v2 client it never retries by itself; `createSharedAlbumMembership` replays with the same key.
+ * Same-origin client for the shared-album membership and invite operations (B05 #246), on the shared HTTP core
+ * (`sharing-http.ts`): the verified-session scope fence, capture headers, header deadline and bounded JSON reader of
+ * the personal v2 transport. It never retries by itself; `createSharedAlbumMembership` replays with the same key.
  */
-import { PersonalPhotoCloudError } from "../errors";
-import { linkedAbortController } from "../await";
-import { fetchWithHeaderDeadline, requestInit } from "../browser/client";
-import { PersonalPhotoScope } from "../scope";
-import type { PersonalPhotoCloudIdentity } from "../types";
-import { JSON_LIMITS, readBoundedJson } from "../wire";
+import { JSON_LIMITS } from "../wire";
 
 import type { InviteJoinResult, SharingOperationMap, SharingRequestOptions, SharingSessionScope } from "./contract";
 import {
   encodeMembershipRequest,
   encodePendingInviteJoin,
-  isSharingErrorEnvelope,
+  isSharedAlbumMembershipOperation,
   membershipResponseLimit,
-  parseSharingError,
   validateJoinResult,
   validateMembershipResponse,
-  type EncodedSharingRequest,
   type SharedAlbumMembershipOperation,
 } from "./membership-wire";
+import {
+  createSharingClientOnTransport,
+  createSharingHttpClient,
+  type CreateSharingHttpClientOptions,
+  type SharingHttpClient,
+  type SharingTransport,
+  type SharingWire,
+} from "./sharing-http";
 
 /** The B05 slice of the contract's `PhotoLibrarySharingClient` (album, item and render operations are other issues). */
 export interface SharedAlbumMembershipClient {
@@ -40,84 +40,39 @@ export interface SharedAlbumMembershipClient {
   dispose(): void;
 }
 
-export interface CreateBrowserSharedAlbumMembershipClientOptions {
-  /** The verified session (the same identity the personal client uses). */
-  readonly identity: PersonalPhotoCloudIdentity;
-  readonly fetch?: typeof fetch;
-  readonly now?: () => number;
-}
+export type CreateBrowserSharedAlbumMembershipClientOptions = CreateSharingHttpClientOptions;
+
+type MembershipWireOperation = SharedAlbumMembershipOperation | "invites.joinPending";
+
+const MEMBERSHIP_WIRE: SharingWire<MembershipWireOperation> = {
+  supports: (operation): operation is MembershipWireOperation => operation === "invites.joinPending" || isSharedAlbumMembershipOperation(operation),
+  encode: (operation, request, key) => (operation === "invites.joinPending" ? encodePendingInviteJoin() : encodeMembershipRequest(operation, request, key)),
+  responseLimit: (operation) => (operation === "invites.joinPending" ? JSON_LIMITS.success : membershipResponseLimit(operation)),
+  validate: (operation, request, raw) => (operation === "invites.joinPending" ? validateJoinResult(raw) : validateMembershipResponse(operation, request as never, raw)),
+};
 
 export function createBrowserSharedAlbumMembershipClient(options: CreateBrowserSharedAlbumMembershipClientOptions): SharedAlbumMembershipClient {
-  const actor = options.identity.getSnapshot();
-  const now = options.now ?? Date.now;
-  if (actor === null || actor.transport !== "browser-session" || Date.parse(actor.expiresAt) <= now()) {
-    throw new PersonalPhotoCloudError("invalid_identity");
-  }
-  const fetchFn = options.fetch ?? ((...parameters: Parameters<typeof fetch>) => globalThis.fetch(...parameters));
-  const lifecycle = new AbortController();
-  let disposed = false;
-  let scope: PersonalPhotoScope<null>;
+  return membershipClientOn(createSharingHttpClient<MembershipWireOperation>(options, MEMBERSHIP_WIRE));
+}
 
-  /** One request under the scope fence, answered by a validated JSON body. */
-  async function exchange<T>(signal: AbortSignal, encode: () => EncodedSharingRequest, limit: number, validate: (raw: unknown) => T): Promise<T> {
-    if (disposed) throw new PersonalPhotoCloudError("disposed");
-    const scoped = scope.begin(signal);
-    const link = linkedAbortController(scoped.signal, lifecycle.signal);
-    try {
-      const encoded = encode();
-      const capture = options.identity.getSnapshot();
-      if (capture === null) throw new PersonalPhotoCloudError("scope_changed");
-      const response = await fetchWithHeaderDeadline(
-        fetchFn,
-        encoded.path,
-        requestInit(capture, encoded.method, encoded.body, null, encoded.idempotencyKey, link.controller.signal),
-        scoped.signal,
-        link.controller,
-      );
-      scoped.assertCurrent();
-      if (response.status < 200 || response.status >= 300) {
-        const { value } = await readBoundedJson(response, JSON_LIMITS.error, scoped.signal);
-        throw parseSharingError(value, response.status);
-      }
-      if (response.status !== 200) throw new PersonalPhotoCloudError("invalid_response");
-      const { value } = await readBoundedJson(response, limit, scoped.signal);
-      scoped.assertCurrent();
-      return validate(value);
-    } catch (error) {
-      // The server no longer accepts this session: fence it so no further request uses the old scope.
-      if (isSharingErrorEnvelope(error) && error.error.code === "unauthenticated") scope.invalidateAuthentication();
-      throw error;
-    } finally {
-      link.dispose();
-      scoped.release();
-    }
-  }
+/**
+ * The same client on another transport (the Mac app's native session). There is no BFF cookie there, so
+ * `joinPending` is refused by that transport (links are opened in the browser).
+ */
+export function createSharedAlbumMembershipClientOnTransport(transport: SharingTransport): SharedAlbumMembershipClient {
+  return membershipClientOn(createSharingClientOnTransport(transport, MEMBERSHIP_WIRE));
+}
 
-  const client: SharedAlbumMembershipClient = {
-    scope: Object.freeze({ actorId: actor.userId, sessionEpoch: actor.sessionEpoch }),
-    async request<K extends SharedAlbumMembershipOperation>(
-      operation: K,
-      request: SharingOperationMap[K]["request"],
-      requestOptions: SharingRequestOptions<K>,
-    ): Promise<SharingOperationMap[K]["response"]> {
+function membershipClientOn(core: SharingHttpClient<MembershipWireOperation>): SharedAlbumMembershipClient {
+  return {
+    scope: core.scope,
+    async request(operation, request, requestOptions) {
       const key = "idempotencyKey" in requestOptions ? requestOptions.idempotencyKey : undefined;
-      return await exchange(
-        requestOptions.signal,
-        () => encodeMembershipRequest(operation, request, key),
-        membershipResponseLimit(operation),
-        (raw) => validateMembershipResponse(operation, request, raw),
-      );
+      return (await core.send(operation, request, requestOptions.signal, key)) as never;
     },
     async joinPending(signal) {
-      return await exchange(signal, encodePendingInviteJoin, JSON_LIMITS.success, validateJoinResult);
+      return (await core.send("invites.joinPending", {}, signal, undefined)) as InviteJoinResult;
     },
-    dispose() {
-      if (disposed) return;
-      disposed = true;
-      lifecycle.abort(new PersonalPhotoCloudError("disposed"));
-      scope.dispose();
-    },
+    dispose: () => core.dispose(),
   };
-  scope = new PersonalPhotoScope<null>(client, options.identity, now);
-  return client;
 }

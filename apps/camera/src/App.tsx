@@ -13,6 +13,10 @@ import {
   PhotoLibraryProvider,
   type PhotoEditingHost,
 } from "niho-photo-editing/library/photo-library-context";
+import { PhotoLibraryScreenTabs, type PhotoLibraryScreen } from "niho-photo-editing/shared-album/photo-shared-album-list";
+import type { PhotoSharedAlbumPort } from "niho-photo-editing/shared-album/photo-shared-album-port";
+import { PhotoSharedAlbumWorkspace } from "niho-photo-editing/shared-album/photo-shared-album-workspace";
+import { PhotoSettingsButton, PhotoStorageSettingsDialog } from "niho-photo-editing/shared-album/photo-storage-settings-dialog";
 import { readLocalStorageItemSafely, removeLocalStorageItemSafely, writeLocalStorageItemSafely } from "niho-ui/local-storage-safe";
 import { AppDialogHost } from "niho-ui/components/app-dialog-host";
 
@@ -45,6 +49,11 @@ export type PersonalCloudPhotoBinding = {
   /** actor/library/session/epoch/transport の衝突しないtuple。認可には使わず、query/editorを論理sessionごとに分ける。 */
   scopeKey?: string;
   copyLocalPhoto?: BrowserPhotoCopyToCloudBinding["copyLocalPhoto"];
+  /**
+   * 「共有アルバム」と設定の「保存先」（B08 #249）。rollout が開いたときだけ host が渡す（無ければ何も出さない）。Mac では
+   * native の session の transport（`native-photo-sharing.ts`）で開き、build の設定が無ければ host は渡さない。
+   */
+  sharedAlbums?: PhotoSharedAlbumPort;
 };
 
 export type AppProps = {
@@ -61,6 +70,8 @@ export type AppProps = {
    * header に出す（公開の build は接続先を持たないので出さない）。
    */
   hostedFolders?: HostedFolderCommands;
+  /** 設定の「保存先」から自前サーバー（常設 Mac）の登録を始める入口（登録の画面は常設 Mac 側。無ければ出さない）。 */
+  onAddHostedMac?: () => void;
 };
 
 type PhotoSource = "local" | "cloud";
@@ -167,7 +178,7 @@ function useTreeHidden() {
  * 編集面は窓の底まで使い（`appearance="fill"`）、版は左の木の底の目立たない 1 行。自動更新で新しい版を入れたときだけ、編集面の上に 1 行の案内
  * （niho-photo#50）。
  */
-export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBinding, hostedFolders }: AppProps) {
+export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBinding, hostedFolders, onAddHostedMac }: AppProps) {
   const native = commands ?? cameraCommands();
   const localLibrary = useMemo(() => createLocalPhotoLibrary(native), [native]);
   const localHost = useMemo(() => createLocalPhotoEditingHost(native), [native]);
@@ -184,12 +195,17 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
   const leaveGuardRef = useRef<PhotoEditingLeaveGuard | null>(null);
   const sourceSwitchRef = useRef(false);
   const sourceSwitchGenerationRef = useRef(0);
+  const [screen, setScreen] = useState<{ readonly current: PhotoLibraryScreen; readonly visited: boolean }>({ current: "photos", visited: false });
+  const [settingsScope, setSettingsScope] = useState<string | null>(null);
   const resetForCloudOwnerChange = useCallback(() => {
     sourceSwitchGenerationRef.current += 1;
     sourceSwitchRef.current = false;
     setSourceSwitching(false);
     setSource("local");
     setOpenCloudPhotoId(null);
+    // Another owner's albums never stay on screen.
+    setScreen({ current: "photos", visited: false });
+    setSettingsScope(null);
   }, []);
   const cloudBindingTransition = useGuardedCloudBinding({
     incoming: incomingCloud,
@@ -242,6 +258,17 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
         void selectSource("cloud", photoId);
       },
     } : undefined, [cloud, cloudBindingTransition.failed, cloudBindingTransition.switching, selectSource]);
+  const sharedAlbums = cloud?.sharedAlbums ?? null;
+  // The settings belong to the cloud scope they were opened in; another scope never sees them (even for one render).
+  const sharedScope = sharedAlbums && cloud ? `${cloud.actorId}:${cloud.scopeKey ?? ""}` : null;
+  const settingsOpen = sharedScope !== null && settingsScope === sharedScope;
+  const setSettingsOpen = useCallback((open: boolean) => setSettingsScope(open ? sharedScope : null), [sharedScope]);
+  const activeScreen: PhotoLibraryScreen = sharedAlbums ? screen.current : "photos";
+  const sharedAlbumsMounted = sharedAlbums !== null && (screen.visited || activeScreen === "sharedAlbums");
+  const loadStorageLocations = useCallback(async (signal: AbortSignal) => [
+    ...(sharedAlbums ? await sharedAlbums.storageLocations(signal) : []),
+    { locationId: "thisMac", kind: "thisMac" as const, name: null, hostedMacStatus: null, usage: null },
+  ], [sharedAlbums]);
   const sourceTabs = cloud ? (
     <PhotoSourceTabs
       source={activeSource}
@@ -286,6 +313,7 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
             <CameraHeaderBreadcrumb />
           </div>
           {hostedFolders ? <HostedFolders commands={hostedFolders} /> : null}
+          {sharedAlbums ? <PhotoSettingsButton onClick={() => setSettingsOpen(true)} /> : null}
           <CameraAccount />
         </header>
         <main className="flex min-h-0 flex-1 flex-col">
@@ -320,8 +348,20 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
                 </button>
               </div>
             ) : null}
-            {sourceTabs}
+            {sharedAlbums ? (
+              <div className="mb-3">
+                <PhotoLibraryScreenTabs current={activeScreen} onChange={(next) => setScreen({ current: next, visited: true })} />
+              </div>
+            ) : null}
+            {activeScreen === "photos" ? sourceTabs : null}
           </div>
+          {sharedAlbumsMounted && sharedAlbums && cloud ? (
+            // Kept mounted after the first visit so additions keep going while 写真 is shown.
+            <div className={activeScreen === "sharedAlbums" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
+              <PhotoSharedAlbumWorkspace key={`${cloud.actorId}:${cloud.scopeKey ?? ""}`} port={sharedAlbums} onOpenStorage={() => setSettingsOpen(true)} />
+            </div>
+          ) : null}
+          <div className={activeScreen === "photos" ? "flex min-h-0 flex-1 flex-col" : "hidden"}>
           <PhotoLibraryProvider key={libraryKey} library={library} host={host}>
             <BrowserPhotoEditingWorkbench
               key={libraryKey}
@@ -330,7 +370,7 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
               actorId={actorId}
               canEdit
               cloudOriginalsAllowed={false}
-              active
+              active={activeScreen === "photos"}
               openCloudPhotoId={activeSource === "cloud" ? openCloudPhotoId : null}
               onOpenCloudPhotoHandled={() => setOpenCloudPhotoId(null)}
               registerRouteLeaveGuard={registerRouteLeaveGuard}
@@ -343,6 +383,16 @@ export function App({ commands, loadAppInfo = readAppInfo, watchUpdate, cloudBin
               copyToCloud={activeSource === "local" ? copyToCloud : undefined}
             />
           </PhotoLibraryProvider>
+          </div>
+          {sharedAlbums ? (
+            <PhotoStorageSettingsDialog
+              key={sharedScope ?? ""}
+              open={settingsOpen}
+              onOpenChange={setSettingsOpen}
+              loadLocations={loadStorageLocations}
+              {...(onAddHostedMac ? { onAddHostedMac } : {})}
+            />
+          ) : null}
         </main>
       </div>
     </QueryClientProvider>

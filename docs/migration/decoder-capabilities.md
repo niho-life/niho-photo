@@ -11,6 +11,28 @@
 | Panasonic RW2 | rw2 | `image/x-panasonic-rw2` / Panasonic RAW UTI | RW2の `IIU\0`。完全decodeは実decoder | decoder, thumbnail, metadata, fullRender |
 | その他登録RAW | dng, cr2, cr3, crw, nef, nrw, arw, srf, sr2, raf, orf, pef, srw, rwl, 3fr, fff, iiq, erf, mef, mos, mrw, x3f, raw, kdc, dcr, gpr | `image/x-raw` / `public.camera-raw-image` | 別の強い形式への偽装を拒否後、実decoderが最終判定 | decoder, thumbnail, metadata, fullRender |
 
+## 配布対象とRAW作業コピーの境界
+
+このEpicの配布対象はmacOSアプリとWeb/PWAです。Windows版は配布せず、Windowsのdecoder・capability・受入を本Epicの完了条件に含めません。
+
+| Host | RAW原本からの作業コピー生成 | 作業コピーの編集 | 対応の根拠とfallback |
+| --- | --- | --- | --- |
+| macOSアプリ | native producerがApple RAW / RAW engineで生成 | NIHO段2のnative engine | 公開CIで実RAWの画素まで検証するのはDC-S5 RW2の1撮影条件。その他は、登録形式やOS decoderが読めるだけでは受入済みにしない。decoder・校正・形式の不一致は既存の明示エラーにする |
+| Web/PWA | ブラウザ/WASMにはRAW decoderがない。原本を直接decodeせず、providerが用意したcanonical作業コピーを使う | NIHO段2のWASM engine | 作業コピーが未生成・未対応なら完了扱いにせず、待機または明示エラーにする。原本からのcloud作業コピー生成とpreviewは [#197](https://github.com/niho-life/niho-photo/issues/197) の担当 |
+| Windows | 配布しない | 配布しない | 対応を表示・宣言しない。実装・検証は本Epicの対象外 |
+
+現行の作業コピー契約はmacOS経路の2560px・16bit・linear ProPhoto・signed RAWを基準にします。WASMは同じ作業コピーを編集する側であり、RAW原本のdecode能力を示すものではありません。各形式を「対応」と表示する条件は、該当hostの実decoder、作業コピー契約、画質gate、性能・メモリ上限を実証し、未対応時のfallbackまで定めることです。実写真と画像由来hashを公開証跡に含めず、owner管理holdoutの非識別集計だけを記録します。
+
+### 現在の性能証拠と未完了の計測
+
+| Host | 既存の証拠 | 残る計測 |
+| --- | --- | --- |
+| macOS | [#63](https://github.com/niho-life/niho-photo/pull/63) はMac Studio M1 Max / 64GBでDC-S5・FX30・ZV-E10M2を各20回測定。編集可能までのcold p50は1,280〜1,291ms、p95は1,295〜1,301ms、warm p95は538〜913ms。これは進捗openの測定で、目標のMacBook Air M2 / 8GB受入の代わりではない | 対象RAW形式ごとの物理メモリ上限と連続処理を測り、MacBook Air M2 / 8GBの既存時間・描画gateを確認する |
+| Web/WASM | WASM段2のnative/WASM画素一致検査はあるが、RAW decoderもRAWからの作業コピー生成経路もない | #197のcanonical作業コピー経路が接続された後、実ブラウザで編集時間・物理メモリ・連続処理を測る。RAW decode性能としては扱わない |
+| Windows | 配布しない | 計測しない |
+
+Sony ZV-E10 II・FX30の別撮影日holdoutは[#212](https://github.com/niho-life/niho-photo/issues/212)で評価中です。受入母数を増やすまで、公開CIで実証済みとする形式・機種はDC-S5 RW2の公開fixtureに限定します。
+
 レジストリへの登録は到達可能なdecoder policyであり、各OS・全カメラ機種の実証済み宣言ではない。一覧では拡張子とmetadataだけを見て全件decodeを避け、実利用時の共通validatorと各実decoderを通す。macOS ImageIOから実UTTypeを取得できたラスタは申告形式と照合するため、TIFF構造を使う未知RAWを一律TIFFとは扱わない。
 
 | 入力・経路 | 実装 | 公開CIの証拠 | 制約 |

@@ -8,6 +8,7 @@ import type { FormatCapability, QuotaUsage } from "../../../../packages/photo-li
 import type { PhotoLibrary } from "niho-photo-editing/library/photo-library";
 import type { PhotoEditingHost } from "niho-photo-editing/library/photo-library-context";
 import type { PhotoEditingLeaveGuardRegistrar } from "niho-photo-editing/editor/browser-photo-editing-model";
+import type { PhotoSharedAlbumOpenedInvite, PhotoSharedAlbumPort } from "niho-photo-editing/shared-album/photo-shared-album-port";
 import type { PhotoPwaUpdateSnapshot } from "../pwa/types";
 
 export interface PhotoWebTransferCopy {
@@ -48,6 +49,8 @@ export interface PhotoWebViewBinding {
   readonly disableCloudDelete: boolean;
   readonly usage: QuotaUsage | null;
   readonly transfer?: PhotoWebTransferBinding;
+  /** 「共有アルバム」と設定の「保存先」。rollout が開いた拠点だけ（無ければ何も出さない） */
+  readonly sharedAlbums?: PhotoSharedAlbumPort;
 }
 
 /** Values will come from shared photo-editing-copy; no product copy strings live in this view. */
@@ -74,6 +77,13 @@ export interface PhotoWebViewCopy {
 }
 
 export interface PhotoWebViewProps {
+  /**
+   * An opened invite, used once when shared albums are open: the link's secret read from the address bar (memory only),
+   * or an invite the BFF holds from before signing in.
+   */
+  readonly invite?: PhotoSharedAlbumOpenedInvite | null;
+  /** The invite was used; the host drops it. */
+  readonly onInviteHandled?: () => void;
   /** Runtime owns clearing/canceling query resources on authority invalidation. */
   readonly queryClient: QueryClient;
   readonly session: PhotoSessionSnapshot;

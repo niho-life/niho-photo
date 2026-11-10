@@ -36,6 +36,8 @@ pub struct Config {
   origin: Url,
   identity_origin: Url,
   public_firebase_web_api_key: String,
+  /// 共有アルバムの上流の prefix（build の設定。無ければ共有の通信を閉じる）。
+  sharing_prefix: Option<String>,
   #[cfg(test)]
   mock_http: bool,
 }
@@ -62,9 +64,32 @@ impl Config {
       origin: Url::parse("https://niho.life").map_err(|_| AccountError::InvalidConfig)?,
       identity_origin: Url::parse("https://identitytoolkit.googleapis.com").map_err(|_| AccountError::InvalidConfig)?,
       public_firebase_web_api_key: public_firebase_web_api_key.into(),
+      sharing_prefix: None,
       #[cfg(test)]
       mock_http: false,
     })
+  }
+  /// 共有アルバム（`/cloud/sharing/v1`）の上流の prefix として使える形か（`/api/` で始まる固定の path）。
+  pub fn sharing_prefix_is_valid(prefix: &str) -> bool {
+    prefix.starts_with("/api/")
+      && !prefix.ends_with('/')
+      && prefix.len() <= 128
+      && !prefix.contains("//")
+      && prefix.split('/').all(|segment| segment != "." && segment != "..")
+      && prefix
+        .bytes()
+        .all(|b| b.is_ascii_lowercase() || b.is_ascii_digit() || b"/-".contains(&b))
+  }
+  /// 共有アルバムの上流の prefix を足す（build の設定）。
+  pub fn with_sharing_prefix(mut self, prefix: &str) -> Result<Self, AccountError> {
+    if !Self::sharing_prefix_is_valid(prefix) {
+      return Err(AccountError::InvalidConfig);
+    }
+    self.sharing_prefix = Some(prefix.to_owned());
+    Ok(self)
+  }
+  pub(crate) fn sharing_prefix(&self) -> Option<&str> {
+    self.sharing_prefix.as_deref()
   }
   #[cfg(test)]
   pub(crate) fn mock(origin: &str) -> Self {
@@ -76,6 +101,7 @@ impl Config {
       identity_origin: origin,
       client: ClientId::Camera,
       public_firebase_web_api_key: "synthetic-public-web-key".into(),
+      sharing_prefix: Some("/api/synthetic-sharing/v1".into()),
       mock_http: true,
     }
   }

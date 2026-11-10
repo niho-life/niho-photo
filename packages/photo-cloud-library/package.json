@@ -10,6 +10,7 @@
     "./server": "./src/server/index.ts",
     "./protocol": "./src/protocol.ts",
     "./sharing": "./src/sharing/index.ts",
+    "./render-executor": "./src/render-executor/index.ts",
     "./render-executor": "./src/render-executor/index.ts"
   },
   "scripts": {

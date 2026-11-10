@@ -741,7 +741,7 @@ export function createLocalPhotoLibrary(commands: CameraCommands, options: Local
         return localCapabilities({ available: false }, cutoutAvailable);
       }
     },
-    rollout: async () => ({ crop: true, mobileEditing: false }),
+    rollout: async () => ({ crop: true, mobileEditing: false, sharedAlbums: false }),
     engineAssets: {
       preferNative: true,
       // 段 2 の wasm は画面に同梱（scripts/stage-develop-engine.mjs）。niho.life から取らない（決まりごと 4）
