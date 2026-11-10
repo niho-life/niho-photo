@@ -99,7 +99,10 @@ describe("PhotoSharedAlbumWorkspace", () => {
       album: { ...PHOTO_SHARED_ALBUM_FIXTURE_ALBUM, preparing: { done: 0, total: 1 } },
       items: firstItem ? [{ ...firstItem, state: "preparing", pendingReason: "rendering" }] : [],
     });
-    const ready = opened({ album: { ...PHOTO_SHARED_ALBUM_FIXTURE_ALBUM, preparing: null } });
+    const ready = opened({
+      album: { ...PHOTO_SHARED_ALBUM_FIXTURE_ALBUM, preparing: null },
+      items: photoSharedAlbumFixtureItems().filter((item) => item.state !== "preparing" && item.state !== "updatePending"),
+    });
     const openAlbum = vi.fn().mockResolvedValueOnce(pending).mockResolvedValueOnce(ready);
     const port = fakePort({ openAlbum });
     await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} />));
