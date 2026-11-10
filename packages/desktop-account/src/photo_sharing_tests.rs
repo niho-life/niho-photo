@@ -406,9 +406,9 @@ fn the_sharing_prefix_is_a_fixed_api_path() {
 }
 
 #[test]
-fn the_route_table_is_the_shared_album_operations_only() {
+fn the_route_table_is_shared_album_and_user_render_operations_only() {
   let names: Vec<&str> = routes().iter().map(|route| route.operation.as_str()).collect();
-  assert_eq!(names.len(), 24);
+  assert_eq!(names.len(), 29);
   for expected in [
     "albums.list",
     "albumItems.addFile",
@@ -416,6 +416,11 @@ fn the_route_table_is_the_shared_album_operations_only() {
     "albumItems.download",
     "invites.join",
     "members.leave",
+    "renderJobs.claim",
+    "renderJobs.startOutput",
+    "renderJobs.renewOutput",
+    "renderJobs.commit",
+    "renderJobs.fail",
   ] {
     assert!(names.contains(&expected), "{expected}");
   }

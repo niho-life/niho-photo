@@ -14290,13 +14290,13 @@
     },
     {
       "path": "packages/desktop-account/src/photo_sharing.rs",
-      "sha256": "ccf52296d57bd6e7f061c30be2b0e1ce72045f3ea69f31890f75f0d3ab5c32d7",
-      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
+      "sha256": "f946142b7df63f062852da393ce2b69efe7f86ae16b200c75b68ee7925a810ff",
+      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加\n変更理由: niho-photo#248 clippyの複雑型とtest専用readerを整理"
     },
     {
       "path": "packages/desktop-account/src/photo_sharing_tests.rs",
-      "sha256": "76ab95be20456d84e41e3818080433148d317a54ca2eefbc8263a9a84a37e59c",
-      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加"
+      "sha256": "c791da2069b8e875e60dd2cb6640ba2cdf4ace2dd60c611f78e6e447b982941f",
+      "origin": "NIHO作成 (#264 Macの共有アルバムnative通信)\n変更理由: niho-photo#248 Mac共有アルバムのnative renderer接続と出力ticket境界を追加\n変更理由: niho-photo#248 native render route 5件を許可表テストへ反映"
     },
     {
       "path": "packages/desktop-account/src/sharing_routes.json",

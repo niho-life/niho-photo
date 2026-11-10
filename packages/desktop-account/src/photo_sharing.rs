@@ -225,13 +225,16 @@ fn expected_render_output(body: Option<&Value>) -> Result<SharingOutputExpectati
   })
 }
 
-fn render_context(
-  operation: &str,
-  suffix: &str,
-  body: Option<&Value>,
-) -> Result<(Option<String>, Option<String>, Option<SharingOutputExpectation>), AccountError> {
+#[derive(Default)]
+struct RenderRequestContext {
+  job_id: Option<String>,
+  upload_id: Option<String>,
+  output_expectation: Option<SharingOutputExpectation>,
+}
+
+fn render_context(operation: &str, suffix: &str, body: Option<&Value>) -> Result<RenderRequestContext, AccountError> {
   if !operation.starts_with("renderJobs.") || operation == "renderJobs.claim" {
-    return Ok((None, None, None));
+    return Ok(RenderRequestContext::default());
   }
   let segments = suffix[1..]
     .split('/')
@@ -256,7 +259,11 @@ fn render_context(
     "renderJobs.fail" => (None, None),
     _ => return Err(AccountError::InvalidResponse),
   };
-  Ok((Some(job_id), upload_id, expectation))
+  Ok(RenderRequestContext {
+    job_id: Some(job_id),
+    upload_id,
+    output_expectation: expectation,
+  })
 }
 
 impl SharingRequest {
@@ -305,8 +312,7 @@ impl SharingRequest {
       (Some(fields), Some(Value::Object(map))) if map.keys().all(|key| fields.contains(key)) => {}
       _ => return Err(AccountError::InvalidResponse),
     }
-    let (render_job_id, render_upload_id, output_expectation) =
-      render_context(route.operation.as_str(), suffix, body.as_ref())?;
+    let render_context = render_context(route.operation.as_str(), suffix, body.as_ref())?;
     if route.idempotency_key != idempotency_key.is_some() {
       return Err(AccountError::InvalidResponse);
     }
@@ -335,9 +341,9 @@ impl SharingRequest {
       query: query.map(str::to_owned),
       body,
       idempotency_key,
-      render_job_id,
-      render_upload_id,
-      output_expectation,
+      render_job_id: render_context.job_id,
+      render_upload_id: render_context.upload_id,
+      output_expectation: render_context.output_expectation,
     })
   }
 
@@ -541,6 +547,7 @@ fn put_placeholders(value: &mut Value, tickets: &[SharingUploadTicket], next: &m
 }
 
 /// 応答の JSON を読み、ticket を native に取り出して代わりを置く。
+#[cfg(test)]
 pub(crate) fn read_sharing_json(response: PhotoHttpResponse) -> Result<SharingJsonResponse, AccountError> {
   read_sharing_json_for_output(response, None, None)
 }
