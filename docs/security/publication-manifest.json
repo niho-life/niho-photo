@@ -10988,6 +10988,11 @@
       "origin": "niho-photo#45 のため新規作成。レンズ補正（手動の歪み・周辺光量、色収差・フリンジの除去。設定 v9）の仕様・式・検証結果の文書（合成画像の結果だけを記載）。\n変更理由: niho-photo#131: 原寸の書き出しの遮断を、niho-develop-render capabilities（描ける設定）で判定する。\n変更理由: #133: フリンジの半径と色収差の解析画を原寸でも画面と同じにした式と、原寸の計測結果を記す。\n変更理由: #141 main の niho-develop-render の版を 0.27.0 に直す"
     },
     {
+      "path": "docs/migration/decoder-capabilities.md",
+      "sha256": "914e8457fc73a91b6a628dd1d32f567cc94b688cd53422dac90a0a9ef70ee4aa",
+      "origin": "#34で独立作成。公開decoder capabilityとRAW受入境界を記録する文書。実写真・実ユーザーデータ・秘密を含まない.\n変更理由: #213でWindowsを配布対象外とし、macOSとWeb/WASMの作業コピー責務を明記\n変更理由: #213: host別の計測状況と未完了gateを追記"
+    },
+    {
       "path": "docs/mockups/niho-photo-lightroom-layout-v1.html",
       "sha256": "ea2193fef151d4b85f311112a0177c4c964b7bd72ba488a64627ed674a8b7ff9",
       "origin": "NIHO所有の画面案を公開用に再作成。出典 niho-app afff6aa10ddc652e8bb4fc69dd561fe02bb1e5c0 の idea/mock/niho-photo-lightroom-layout-v1.html、原本 SHA-256 e751a520f1283f160b20d6c48807abbc9fe7d67825631548b1a7aa97623076bb。個人プロフィール画像と未監査画像を除き、既存公開fixtureとアプリアイコンに置換。認証・保存・写真処理は行わない。"
