@@ -14,6 +14,8 @@ Photoクライアントの所有コード・校正値・写真・RAW fixture等�
 
 Node.js 24 と npm を使い、リポジトリのルートで実行します。
 
+作業座席と topic branch の選び方は [Pane 作業フロー](docs/panes/panes-workflow.md) を参照してください。
+
 ```bash
 npm ci
 npm run verify

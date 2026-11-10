@@ -6,9 +6,9 @@
 
 - 親フォルダに、root の clone `niho-photo/` と、その worktree の座席 `niho-photo-1/`〜`niho-photo-8/` を固定で置く。**新しい clone や worktree を作らない**。座席が足りないときは増やさず owner に相談する
 - root は main 専用。root で branch を切らない・編集しない
-- 1 座席 ＝ 1 セッション。`node scripts/seat.mjs status` で「空き」の座席（branch なし・変更なし）を選び、`node scripts/seat.mjs start <番号> <topic>` で `feature/<topic>` を `origin/main` から切る。作業はその座席の中だけで行う
-- 「使用中」の座席は他のセッションのもの。触らない
-- PR が merge されたら（閉じたら）`node scripts/seat.mjs release <番号>` で座席を空ける。変更が残っている・push していない commit があるときは空かない
+- 1 座席 ＝ 1 セッション。`node scripts/seat.mjs status` で状態を確認し、clean な topic branch がある座席も再利用してよい。`node scripts/seat.mjs start <番号> <topic>` は新しい `feature/<topic>` を `origin/main` から作り、以前の branch ref を残す（上書き・削除しない）。詳細は [座席と topic branch の運用](docs/panes/panes-workflow.md)
+- 未コミット差分のある座席は触らない。branch があるだけでは「使用中」と判定しない。detached HEAD に remote 未到達 commit がある座席は、先に branch を付けて保護する
+- `node scripts/seat.mjs release <番号>` は clean な座席を `origin/main` に detach する。branch ref は削除せず、未 push commit もその ref に保持する
 - stash・force push はしない。push の前に `git fetch` して remote の先頭を取り込む（別のセッションが同じ branch に CI の修正を積むことがある）
 
 ## 共通の決まり

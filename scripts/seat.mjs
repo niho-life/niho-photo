@@ -21,23 +21,19 @@ export function validTopic(value) {
   return typeof value === "string" && TOPIC.test(value);
 }
 
-// branch が無く（origin/main に detach）、変更も、どこにも push していない commit も無い座席だけが空き。
+// dirty な作業差分がなく、branch のない detached commit もなければ再利用できる。
+// clean な topic branch は参照を残したまま別の作業へ切り替えてよい。
 export function isFree({ branch, dirty, ahead = 0 }) {
-  return !branch && !dirty && !(ahead > 0);
+  return !dirty && (Boolean(branch) || !(ahead > 0));
 }
 
-// 空けてよいのは、変更が無く、push していない commit が無いときだけ。`ahead` は upstream があればそれ、無ければ origin/main より先の数。
-// branch の無い（detach した）座席は、どの remote の branch にも無い commit の数。
-export function releaseBlocker({ branch, dirty, upstream, tracked, ahead }) {
-  if (dirty) return "変更が残っています。commit して push してから空けてください。";
+// branch は削除せず detach するため、clean な branch に未 push commit があっても保持できる。
+// branch のない（detach した）座席だけは remote 未到達 commit の喪失を防ぐ。
+export function releaseBlocker({ branch, dirty, ahead }) {
+  if (dirty) return "変更が残っています。内容を commit してから切り替えてください。";
   if (!branch && ahead > 0) {
     return `branch の無い commit が ${ahead} 件あり、どこにも push されていません。branch を作って push してから空けてください。`;
   }
-  if (branch && !upstream && tracked) {
-    return `${branch} の push 先が消えています。PR が merge 済みか確かめてから \`git switch --detach origin/main\` で空けてください。`;
-  }
-  if (branch && !upstream && ahead > 0) return `${branch} が push されていません（commit ${ahead} 件）。`;
-  if (branch && ahead > 0) return `${branch} に push していない commit が ${ahead} 件あります。`;
   return null;
 }
 
@@ -84,9 +80,10 @@ function status(root) {
       continue;
     }
     const state = readSeat(path);
-    const label = isFree(state) ? "空き  " : "使用中";
-    const unpushed = !state.branch && state.ahead > 0 ? `push していない commit ${state.ahead} 件` : "";
-    const detail = [state.branch || "（branch なし）", state.dirty ? "変更あり" : "", unpushed].filter(Boolean).join("  ");
+    const label = state.dirty ? "使用中" : state.branch ? "再利用可" : isFree(state) ? "空き" : "要確認";
+    const unpushed = state.branch && state.ahead > 0 ? `branch に commit ${state.ahead} 件` : "";
+    const detachedCommit = !state.branch && state.ahead > 0 ? `branch のない commit ${state.ahead} 件` : "";
+    const detail = [state.branch || "（branch なし）", state.dirty ? "変更あり" : "", unpushed || detachedCommit].filter(Boolean).join("  ");
     console.log(`${seat}  ${label}  ${detail}`);
   }
 }
@@ -96,7 +93,7 @@ function start(root, seat, topic) {
   if (!existsSync(path)) return fail(`座席 ${seat} がありません。新しく作らず owner に相談してください。`);
   const state = readSeat(path);
   if (!isFree(state)) {
-    const reason = state.branch || (state.dirty ? "変更あり" : `push していない commit ${state.ahead} 件`);
+    const reason = state.dirty ? "変更あり" : `branch のない commit ${state.ahead} 件`;
     return fail(`座席 ${seat} は使用中です（${reason}）。status で空きを探してください。`);
   }
   git(path, ["fetch", "--quiet", "origin"]);
@@ -108,11 +105,12 @@ function start(root, seat, topic) {
 function release(root, seat) {
   const path = seatPath(root, seat);
   if (!existsSync(path)) return fail(`座席 ${seat} がありません。`);
-  const blocker = releaseBlocker(readSeat(path));
+  const state = readSeat(path);
+  const blocker = releaseBlocker(state);
   if (blocker) return fail(`座席 ${seat} を空けられません: ${blocker}`);
   git(path, ["fetch", "--quiet", "origin"]);
   git(path, ["switch", "--quiet", "--detach", "origin/main"]);
-  console.log(`座席 ${seat} を空けました（origin/main に detach）。branch は消していません。`);
+  console.log(`座席 ${seat} を origin/main に戻しました。既存 branch は削除していません。`);
 }
 
 if (process.argv[1] && resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
