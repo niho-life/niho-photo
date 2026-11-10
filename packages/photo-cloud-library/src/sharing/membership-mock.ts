@@ -53,6 +53,8 @@ import {
   holdPendingInvite,
   itemStateAfterAdderRevoked,
   matchPendingInviteRoute,
+  matchUserRenderRoute,
+  decodeUserRenderRequest,
   matchSharingRoute,
   nextAlbumItemState,
   nextPendingReason,
@@ -1226,6 +1228,8 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
     const url = new URL(request.url);
     const pendingRoute = matchPendingInviteRoute(request.method, url.pathname);
     if (pendingRoute !== null) return await handlePending(request, url, pendingRoute);
+    const renderRoute = matchUserRenderRoute(request.method, url.pathname);
+    if (renderRoute !== null) return await handleRender(request, url, renderRoute);
     const matched = matchSharingRoute(request.method, url.pathname);
     if (matched === null || !(isMockOperation(matched.operation) || matched.operation === "albumItems.download")) {
       return jsonResponse(404, { error: { code: "not_found", requestId: nextId("request"), retryable: false } });
@@ -1263,6 +1267,30 @@ export function createSharedAlbumMockServer(options: CreateSharedAlbumMockServer
       throw error;
     }
   };
+
+  /** Render jobs of the signed-in user's own device (`USER_RENDER_ROUTES`), for the browser executor in development. */
+  async function handleRender(request: Request, url: URL, route: NonNullable<ReturnType<typeof matchUserRenderRoute>>): Promise<Response> {
+    const actor = request.headers.get(PHOTO_CAPTURE_HEADERS.actorId);
+    const envelope = (code: SharingErrorCode): Response => jsonResponse(SHARING_ERROR_STATUS[code], { error: { code, requestId: nextId("request"), retryable: false } });
+    if (actor === null) return envelope("unauthenticated");
+    let decoded: unknown;
+    try {
+      const text = await request.text();
+      decoded = decodeUserRenderRequest(route.operation, { params: route.params, query: url.searchParams, body: text === "" ? null : JSON.parse(text), range: null });
+    } catch (error) {
+      if (error instanceof SyntaxError || error instanceof SharingRouteError) return envelope("invalid_request");
+      throw error;
+    }
+    const key = request.headers.get(PHOTO_IDEMPOTENCY_HEADER);
+    try {
+      const options = (key === null ? { signal: request.signal } : { signal: request.signal, idempotencyKey: key }) as never;
+      return jsonResponse(200, await renderTransportFor(actor).request(route.operation, decoded as never, options));
+    } catch (error) {
+      if (error instanceof PersonalPhotoCloudError && error.code === "unavailable") throw new TypeError("Failed to fetch");
+      if (isEnvelope(error)) return jsonResponse(SHARING_ERROR_STATUS[error.error.code], error);
+      throw error;
+    }
+  }
 
   /** The pending-invite routes of the BFF, for the browser client in development (one cookie jar, no encryption). */
   async function handlePending(request: Request, url: URL, route: NonNullable<ReturnType<typeof matchPendingInviteRoute>>): Promise<Response> {

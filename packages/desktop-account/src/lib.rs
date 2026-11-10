@@ -3,6 +3,7 @@ mod account;
 mod connect;
 mod photo_cloud;
 mod photo_session;
+mod photo_sharing;
 mod secret;
 
 pub use account::{Account, AccountPhase, AccountSnapshot};
@@ -16,6 +17,10 @@ pub use photo_cloud::{
   PhotoOperation, PhotoRequest, PhotoScopeCapture,
 };
 pub use photo_session::{PhotoIdentity, PhotoIdentityTransport};
+pub use photo_sharing::{
+  sharing_ticket_handle, SharingContentMetadata, SharingJsonResponse, SharingRequest, SharingUploadTicket,
+  SHARING_CONTENT_MAX, SHARING_ROUTE_PREFIX, SHARING_TICKET_HOST,
+};
 pub use secret::{CredentialStore, FileSecretStore, KeychainStore, Secret, SecretKind};
 use serde::{Deserialize, Serialize};
 use std::fmt;

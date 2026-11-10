@@ -31,7 +31,7 @@ vi.mock("../src/browser/renderer.ts", async () => {
   };
 });
 
-import { createPhotoWebConnectionFactory } from "../src/browser/connection.ts";
+import { closeUnconnectedMediaJobCapabilities, createPhotoWebConnectionFactory } from "../src/browser/connection.ts";
 import { createPhotoWebMaskSurfaceValidator } from "../src/browser/renderer.ts";
 
 const NOW = Date.parse("2026-11-03T00:00:00.000Z");
@@ -541,5 +541,33 @@ describe("Photo Web product composition", () => {
       session.dispose();
       revokeObjectURL.mockRestore();
     }
+  });
+});
+
+describe("personal cloud client of the Photo Web library", () => {
+  it("tells the shared-album render jobs when a correction reached the cloud, and only then", async () => {
+    const saved = vi.fn();
+    let fail = false;
+    const raw = {
+      scope: { actorId: "user", libraryId: "library", sessionEpoch: "epoch" },
+      request: vi.fn(async (operation: string) => {
+        if (fail) throw new Error("synthetic failure");
+        return { operation } as never;
+      }),
+      dispose: vi.fn(),
+    } as unknown as Parameters<typeof closeUnconnectedMediaJobCapabilities>[0];
+    const client = closeUnconnectedMediaJobCapabilities(raw, saved);
+    const signal = new AbortController().signal;
+    await client.request("photos.get", { photoId: "p1" } as never, { signal } as never);
+    expect(saved).not.toHaveBeenCalled();
+    await client.request("recipes.put", {} as never, { signal, idempotencyKey: "k" } as never);
+    expect(saved).toHaveBeenCalledTimes(1);
+    fail = true;
+    await expect(client.request("recipes.put", {} as never, { signal, idempotencyKey: "k2" } as never)).rejects.toThrow("synthetic failure");
+    expect(saved).toHaveBeenCalledTimes(1);
+    // A failing listener never changes the save's result.
+    fail = false;
+    const throwing = closeUnconnectedMediaJobCapabilities(raw, () => { throw new Error("listener"); });
+    await expect(throwing.request("recipes.put", {} as never, { signal, idempotencyKey: "k3" } as never)).resolves.toEqual({ operation: "recipes.put" });
   });
 });

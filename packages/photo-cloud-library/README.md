@@ -75,6 +75,10 @@ File/Blobを要求する共通口だけを明示的な予算内で実体化す�
 - 差し替え（`replaceFile`・`replaceDeviceRender`）、複数選択の削除（`removeItems`）と保存（`saveItems`。原寸を hash と照合して渡す）。
 - 合成 server は項目の状態、追加者の端末の描画 job、確定時の作り直し（許可した metadata だけ）、オーナーへの容量の算入と解放、補正の保存による自動差し替え、端末の休止、メンバーの解除・退会・降格後に未公開の追加を破棄することを持つ。画面への組み込みは B00・B08 の merge 後。
 
+### 別の transport（Mac の native session）
+
+`createSharedAlbumClientOnTransport` と `createSharedAlbumMembershipClientOnTransport` は、browser の session の代わりに `SharingTransport`（route の表で encode した要求を 1 つ送り、status と JSON を返す）で同じ client を動かす。encode・応答の検査・冪等 key は browser の client と同じ（`createSharingClientOnTransport`）。Mac は native の session で使い、upload の ticket を native に留める（`apps/camera` README「共有アルバムの native 通信」）。保留の招待（`joinPending`）は BFF だけなので、その transport では使わない。
+
 ## 完全補正の同期core
 
 C03は `@niho/photo-cloud-sync` と組み合わせ、`recipes.put` / `recipe-conflicts.list` / `recipe-conflicts.get` / `recipe-conflicts.resolve` を同じ固定HTTP/BFFへ接続する。補正文書1MiB/depth32とPUT envelope2MiBを分離し、両版と選択結果を含む競合応答は4MiBまで検証する。`./protocol` はscope/有限待機/純粋なrecipe投影・比較の狭い共有口で、認証やhashの別正本ではない。

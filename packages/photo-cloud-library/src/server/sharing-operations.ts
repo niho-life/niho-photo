@@ -12,6 +12,8 @@ import {
   type SharedAlbumItemOperation,
 } from "../sharing/album-wire";
 import { FILE_UPLOAD_CONTENT_TYPES, SHARING_LIMITS, type SharingOperation } from "../sharing/contract";
+import type { RenderExecutorOperation } from "../render-executor/contract";
+import { RENDER_JOB_OPERATIONS, renderJobResponseLimit, validateRenderJobRequest, validateRenderJobResponse } from "../render-executor/render-wire";
 import {
   SHARED_ALBUM_MEMBERSHIP_OPERATIONS,
   membershipResponseLimit,
@@ -22,7 +24,9 @@ import {
 /** An upload ticket in a success answer: it must point at the trusted provider for exactly this upload. */
 export interface SharingProxyTicket {
   readonly ticket: unknown;
-  readonly contentType: string;
+  /** The only content type the upload may declare (omitted: any image type the ticket check accepts). */
+  readonly contentType?: string;
+  /** The upload's size, or its upper bound when the answer does not carry it. */
   readonly sizeBytes: number;
 }
 
@@ -49,7 +53,7 @@ export interface SharingProxyContentOperation {
 }
 
 export type SharingProxyOperation = SharingProxyJsonOperation | SharingProxyContentOperation;
-export type SharingProxyOperations = Readonly<Partial<Record<SharingOperation, SharingProxyOperation>>>;
+export type SharingProxyOperations = Readonly<Partial<Record<SharingOperation | RenderExecutorOperation, SharingProxyOperation>>>;
 
 /** Membership and invites (B05 #246). */
 export const SHARED_ALBUM_MEMBERSHIP_PROXY_OPERATIONS: SharingProxyOperations = Object.freeze(Object.fromEntries(
@@ -100,8 +104,38 @@ export const SHARED_ALBUM_ITEM_PROXY_OPERATIONS: SharingProxyOperations = Object
   } satisfies SharingProxyContentOperation),
 });
 
+/** The output ticket of a render job: a new output's (the declared size and type) or a renewed one's (bounded). */
+function renderJobTickets(operation: RenderExecutorOperation, request: Record<string, unknown>, raw: unknown): readonly SharingProxyTicket[] {
+  if (operation === "renderJobs.startOutput") {
+    const start = (raw as { readonly value: { readonly ticket: unknown } }).value;
+    // A replay carries no bearer ticket again.
+    if (start.ticket === null) return [];
+    const output = request.output as { readonly sizeBytes: number; readonly contentType: string };
+    return [{ ticket: start.ticket, contentType: output.contentType, sizeBytes: output.sizeBytes }];
+  }
+  if (operation === "renderJobs.renewOutput") {
+    return [{ ticket: (raw as { readonly ticket: unknown }).ticket, sizeBytes: SHARING_LIMITS.fileUploadMaxBytes }];
+  }
+  return [];
+}
+
+/** Render jobs on the signed-in user's own device (B07 #248). */
+export const RENDER_JOB_PROXY_OPERATIONS: SharingProxyOperations = Object.freeze(Object.fromEntries(
+  RENDER_JOB_OPERATIONS.map((operation) => [operation, Object.freeze({
+    kind: "json",
+    validateRequest: (request: Record<string, unknown>) => validateRenderJobRequest(operation, request),
+    requestLimit: SHARING_LIMITS.maxOtherBodyBytes,
+    responseLimit: renderJobResponseLimit(operation),
+    validateResponse: (request: Record<string, unknown>, raw: unknown) => {
+      validateRenderJobResponse(operation, request as never, raw);
+    },
+    tickets: (request: Record<string, unknown>, raw: unknown) => renderJobTickets(operation, request, raw),
+  } satisfies SharingProxyJsonOperation)]),
+));
+
 /** Every operation this package can check, forwarded by default. */
 export const SHARING_PROXY_OPERATIONS: SharingProxyOperations = Object.freeze({
   ...SHARED_ALBUM_MEMBERSHIP_PROXY_OPERATIONS,
   ...SHARED_ALBUM_ITEM_PROXY_OPERATIONS,
+  ...RENDER_JOB_PROXY_OPERATIONS,
 });

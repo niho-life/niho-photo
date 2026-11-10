@@ -9,6 +9,7 @@
     "prebuild": "node scripts/clean-build.mjs",
     "build": "npm run build:web && npm run build:server && npm run build:static",
     "build:web": "vite build",
+    "dev:shared-albums": "vite --config dev/vite.shared-albums.config.ts",
     "build:server": "vite build --config vite.server.config.ts",
     "build:static": "node --experimental-strip-types scripts/prepare-static.mts",
     "start": "node dist/server/entry.mjs",

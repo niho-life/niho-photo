@@ -13,7 +13,14 @@ import {
 } from "./album-wire";
 import type { PhotoContent, SharingOperationMap, SharingRequestOptions, SharingSessionScope } from "./contract";
 import { encodeRoutedRequest } from "./membership-wire";
-import { createSharingHttpClient, type CreateSharingHttpClientOptions } from "./sharing-http";
+import {
+  createSharingClientOnTransport,
+  createSharingHttpClient,
+  type CreateSharingHttpClientOptions,
+  type SharingHttpClient,
+  type SharingTransport,
+  type SharingWire,
+} from "./sharing-http";
 
 export interface SharedAlbumClient {
   readonly scope: SharingSessionScope;
@@ -29,13 +36,23 @@ export interface SharedAlbumClient {
 
 export type CreateBrowserSharedAlbumClientOptions = CreateSharingHttpClientOptions;
 
+const ALBUM_ITEM_WIRE: SharingWire<SharedAlbumItemOperation> = {
+  supports: isSharedAlbumItemOperation,
+  encode: encodeAlbumItemRequest,
+  responseLimit: albumItemResponseLimit,
+  validate: (operation, request, raw) => validateAlbumItemResponse(operation, request as never, raw),
+};
+
 export function createBrowserSharedAlbumClient(options: CreateBrowserSharedAlbumClientOptions): SharedAlbumClient {
-  const core = createSharingHttpClient<SharedAlbumItemOperation>(options, {
-    supports: isSharedAlbumItemOperation,
-    encode: encodeAlbumItemRequest,
-    responseLimit: albumItemResponseLimit,
-    validate: (operation, request, raw) => validateAlbumItemResponse(operation, request as never, raw),
-  });
+  return albumClientOn(createSharingHttpClient<SharedAlbumItemOperation>(options, ALBUM_ITEM_WIRE));
+}
+
+/** The same client on another transport (the Mac app's native session). */
+export function createSharedAlbumClientOnTransport(transport: SharingTransport): SharedAlbumClient {
+  return albumClientOn(createSharingClientOnTransport(transport, ALBUM_ITEM_WIRE));
+}
+
+function albumClientOn(core: SharingHttpClient<SharedAlbumItemOperation>): SharedAlbumClient {
   return {
     scope: core.scope,
     async request(operation, request, requestOptions) {

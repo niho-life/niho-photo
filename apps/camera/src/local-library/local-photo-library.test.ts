@@ -297,7 +297,7 @@ describe("capabilities", () => {
       flags: true,
     });
     expect(LOCAL_CLOSED_CAPABILITIES.flags).toBe(false);
-    await expect(library.rollout()).resolves.toEqual({ crop: true, mobileEditing: false });
+    await expect(library.rollout()).resolves.toEqual({ crop: true, mobileEditing: false, sharedAlbums: false });
   });
 
   it("waits a little while the startup check runs and stays closed when the sidecars are unavailable", async () => {

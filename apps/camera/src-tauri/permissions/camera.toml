@@ -72,3 +72,8 @@ commands.allow = ["camera_hosted_folders_list", "camera_hosted_folders_add", "ca
 identifier = "allow-camera-hosted-connector"
 description = "Allows only the hidden hosted Mac connector window to list, stat, open and read regular files below registered folders read-only by opaque root ID and relative path (no symlinks, no '..', nothing outside the registered folder, no writes, no commands), hash a file natively with its identity checked before and after, read and replace its vault (one JSON item in the Keychain, at most 64 KiB), hold and release an idle-sleep assertion while it works, and answer the sleep notice. No absolute path is accepted or returned."
 commands.allow = ["camera_hosted_connector_roots", "camera_hosted_connector_root_status", "camera_hosted_connector_list", "camera_hosted_connector_stat", "camera_hosted_connector_open", "camera_hosted_connector_read", "camera_hosted_connector_close", "camera_hosted_connector_hash", "camera_hosted_connector_vault_read", "camera_hosted_connector_vault_write", "camera_hosted_connector_power_hold", "camera_hosted_connector_power_release", "camera_hosted_connector_sleep_ready"]
+
+[[permission]]
+identifier = "allow-camera-photo-sharing"
+description = "同梱のmain画面だけに、共有アルバム（/cloud/sharing/v1）の通信を許可する。画面は route の表で作った path・query・body・冪等 key だけを渡し、native が固定の origin と build 設定の上流 prefix・native 認証を付ける（BFF だけの保留の招待の経路は送らない）。upload の ticket は native に留め、画面へは代わりの handle を返す。完成写真の bytes（raw IPC、200MiB まで）を native が ticket の先へ送り、完成写真・thumbnail は SHA-256 と長さを確かめてから 1MiB ずつ返す。token・URL・path は受け渡さない。"
+commands.allow = ["camera_sharing_status", "camera_sharing_request", "camera_sharing_upload", "camera_sharing_content_open", "camera_sharing_content_read", "camera_sharing_content_close"]

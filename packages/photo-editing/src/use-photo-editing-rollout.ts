@@ -5,7 +5,7 @@ import { useEffect, useState } from "react";
 import type { PhotoLibrary, PhotoLibraryRollout } from "./library/photo-library";
 
 /** 読めるまで・読めなかったときは全部出さない（受入前の機能を誤って出さない）。 */
-export const PHOTO_EDITING_ROLLOUT_OFF: PhotoLibraryRollout = { crop: false, mobileEditing: false };
+export const PHOTO_EDITING_ROLLOUT_OFF: PhotoLibraryRollout = { crop: false, mobileEditing: false, sharedAlbums: false };
 
 /**
  * 写真編集の受入まで拠点を絞る機能（F9 移行元設計）を、写真の出どころ（接続口 `PhotoLibrary` の `rollout`。クラウドは拠点ごと）から
