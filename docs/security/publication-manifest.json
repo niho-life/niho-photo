@@ -10185,8 +10185,8 @@
     },
     {
       "path": "AGENTS.md",
-      "sha256": "c2769156b40cf4b98dbdd6bc9ab83255fef71ad0fc464b4d70295ef819643b52",
-      "origin": "niho-photo#125 のため新規作成。AI セッション向けの作業ルール（固定の座席 niho-photo-1〜8・root は main 専用・共通の検証と公開 manifest の決まり）。外部の文章・コードを含まない。"
+      "sha256": "c2ac5b86062bf311dbc615d78acef9d4eba8465c187acefbe71ba7e4c2e5992d",
+      "origin": "niho-photo#125 のため新規作成。AI セッション向けの作業ルール（固定の座席 niho-photo-1〜8・root は main 専用・共通の検証と公開 manifest の決まり）。外部の文章・コードを含まない。\n変更理由: cleanなtopic branchを再利用し既存refを保護する座席ルールへ更新"
     },
     {
       "path": "apps/camera/account-contract.json",
@@ -11052,6 +11052,11 @@
       "path": "docs/mockups/niho-photo-lightroom-layout-v2.html",
       "sha256": "344a5136603798fb1185f26d65267b8b7ba3c1b8cafa3faed36e68392f278c8b",
       "origin": "NIHO所有の画面案を公開用に再作成。出典 niho-app afff6aa10ddc652e8bb4fc69dd561fe02bb1e5c0 の idea/mock/niho-photo-lightroom-layout-v2.html、原本 SHA-256 12e4f8a1bc4be31da5dc46a310f60138f3007650db3cae6a84e73bed4f2548c8。個人プロフィール画像と未監査画像を除き、既存公開fixtureとアプリアイコンに置換。認証・保存・写真処理は行わない。"
+    },
+    {
+      "path": "docs/panes/panes-workflow.md",
+      "sha256": "bcb7d3200cb06f143e151267094c09efd6140274069795a400ff35ecf3a8ffea",
+      "origin": "公開開発手順として新規作成。固定座席の状態判定、clean branchの再利用、branch ref保持を記載。秘密・実データを含まない。\n変更理由: branchがあるだけで使用中とする誤判定を改め、座席の準備と解放方法を明記"
     },
     {
       "path": "docs/releases/manifest-v1.schema.json",
@@ -14085,8 +14090,8 @@
     },
     {
       "path": "scripts/ci/seat.test.mjs",
-      "sha256": "50a702ca0402e5a5b772ec9033e09a48e9642168839c21eeaa8dcb85650e34e8",
-      "origin": "niho-photo#125 のため新規作成。scripts/seat.mjs の座席番号・topic・空き・解放の判定の単体テスト。\n変更理由: detach した座席でも、どこにも push していない commit を数えて、空きにしない・空けない（#149 のレビュー）"
+      "sha256": "4b6432e26e5ecda16a7684687dfce7c74aefa4f90091c02f2fcac2fac7bfd19b",
+      "origin": "niho-photo#125 のため新規作成。scripts/seat.mjs の座席番号・topic・空き・解放の判定の単体テスト。\n変更理由: detach した座席でも、どこにも push していない commit を数えて、空きにしない・空けない（#149 のレビュー）\n変更理由: branch refを保持する再利用可否の契約を検証\n変更理由: branchの有無とdirty状態の組合せを検証"
     },
     {
       "path": "scripts/ci/verify-publication-script.test.mjs",
@@ -14255,8 +14260,8 @@
     },
     {
       "path": "scripts/seat.mjs",
-      "sha256": "fd17e3373bbb0159ece354514c1f5783fc79970ac626c3998b58abb5a009ab5f",
-      "origin": "niho-photo#125 のため新規作成。固定の座席（root の clone の隣の worktree）の空きの確認・topic branch の作成・解放を行う開発用の道具。外部コードを含まない。\n変更理由: detach した座席でも、どこにも push していない commit を数えて、空きにしない・空けない（#149 のレビュー）"
+      "sha256": "6398c802a5e225cdda2fe0686896bf53614357b7fd6a530a7c8f4b457101c953",
+      "origin": "niho-photo#125 のため新規作成。固定の座席（root の clone の隣の worktree）の空きの確認・topic branch の作成・解放を行う開発用の道具。外部コードを含まない。\n変更理由: detach した座席でも、どこにも push していない commit を数えて、空きにしない・空けない（#149 のレビュー）\n変更理由: cleanなtopic branchを残して新しい座席作業へ安全に切替\n変更理由: branch refを保った切替時にpushを必須としない案内へ修正"
     },
     {
       "path": "sdk/README.md",
