@@ -1,6 +1,9 @@
 import { PHOTO_CLOUD_PATH_PREFIX } from "../../../../packages/photo-cloud-library/src/wire.ts";
 
-/** Use for the fixed Photo BFF client only; provider uploads keep their own transport. */
+/** The same-origin BFF prefixes whose 401 means the Photo session ended: personal photos and shared albums. */
+const PHOTO_BFF_PATH_PREFIXES = [`${PHOTO_CLOUD_PATH_PREFIX}/`, "/cloud/sharing/v1/"] as const;
+
+/** Use for the fixed Photo BFF clients only; provider uploads keep their own transport. */
 export function createPhotoWebCloudFetch(options: {
   readonly origin: string;
   readonly scopeSignal: AbortSignal;
@@ -14,7 +17,7 @@ export function createPhotoWebCloudFetch(options: {
     try {
       const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url, origin);
       cloudRequest = url.origin === origin && url.username === "" && url.password === ""
-        && url.pathname.startsWith(`${PHOTO_CLOUD_PATH_PREFIX}/`);
+        && PHOTO_BFF_PATH_PREFIXES.some((prefix) => url.pathname.startsWith(prefix));
     } catch {
       // The actual transport still validates its input; malformed URLs confer no notification authority.
     }

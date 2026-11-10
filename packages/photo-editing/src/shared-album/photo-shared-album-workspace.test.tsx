@@ -64,6 +64,7 @@ function fakePort(overrides: Partial<PhotoSharedAlbumPort> = {}): PhotoSharedAlb
     removeMember: vi.fn(async () => undefined),
     leave: vi.fn(async () => undefined),
     addFile: vi.fn(async () => ({ ok: true as const })),
+    replaceFile: vi.fn(async () => ({ ok: true as const })),
     save: vi.fn(async () => ({ failed: 0 })),
     remove: vi.fn(async () => ({ failed: 0 })),
     join: vi.fn(async () => ({ kind: "joined" as const, albumId: PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId })),
@@ -243,6 +244,92 @@ describe("PhotoSharedAlbumWorkspace", () => {
     await act(async () => root.render(<PhotoSharedAlbumWorkspace port={unusable} invite={{ kind: "held" }} />));
     await flush();
     expect(container.querySelector("h1")?.textContent).toBe("このリンクは使えません");
+  });
+
+  it("offers 写真から選ぶ only with the user's library, adds the picked photos and reads the album again", async () => {
+    const plain = fakePort();
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={plain} />));
+    await flush();
+    await act(async () => (Array.from(container.querySelectorAll("ul button"))[0] as HTMLButtonElement).click());
+    await flush();
+    // Without a library, 追加 picks files directly (no menu).
+    expect(buttonByText("追加", container)?.getAttribute("aria-haspopup")).toBeNull();
+    act(() => root.unmount());
+    root = createRoot(container);
+
+    let failures = 1;
+    const port = fakePort({
+      libraryPhotos: vi.fn(async () => ({ items: [{ photoId: "photo-1", thumbnailUrl: null, label: "IMG_1.JPG" }, { photoId: "photo-2", thumbnailUrl: null, label: "IMG_2.JPG" }], next: null })),
+      addLibraryPhotos: vi.fn(async (_albumId: string, photoIds: readonly string[]) => ({ failedPhotoIds: failures-- > 0 ? photoIds.slice(-1) : [] })),
+    });
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} />));
+    await flush();
+    await act(async () => (Array.from(container.querySelectorAll("ul button"))[0] as HTMLButtonElement).click());
+    await flush();
+    const add = buttonByText("追加", container);
+    expect(add?.getAttribute("aria-haspopup")).toBe("menu");
+    await act(async () => {
+      add?.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+      add?.click();
+    });
+    await flush();
+    await act(async () => buttonByText("写真から選ぶ")?.click());
+    await flush();
+    const tiles = Array.from(document.body.querySelectorAll<HTMLButtonElement>("ul[aria-label='写真から選ぶ'] button"));
+    await act(async () => tiles[0]?.click());
+    await act(async () => tiles[1]?.click());
+    const reads = vi.mocked(port.openAlbum).mock.calls.length;
+    await act(async () => buttonByText("2枚を追加")?.click());
+    await flush();
+    expect(port.addLibraryPhotos).toHaveBeenCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, ["photo-1", "photo-2"], expect.any(AbortSignal));
+    expect(vi.mocked(port.openAlbum).mock.calls.length).toBeGreaterThan(reads);
+    // photo-2 was not added: the line offers to try that photo only (photo-1 is in the album already).
+    expect(container.querySelector("[role='alert']")).not.toBeNull();
+    await act(async () => buttonByText("再試行", container)?.click());
+    await flush();
+    expect(port.addLibraryPhotos).toHaveBeenLastCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, ["photo-2"], expect.any(AbortSignal));
+    expect(port.addLibraryPhotos).toHaveBeenCalledTimes(2);
+    expect(container.querySelector("[role='alert']")).toBeNull();
+  });
+
+  it("replaces an own finished photo through the same upload queue and shows its progress", async () => {
+    const own = { ...photoSharedAlbumFixtureItems()[1], addedBy: { userId: "fixture-self", displayName: "自分", isSelf: true }, kind: "fileUpload" as const, state: "published" as const };
+    let finish!: (result: { readonly ok: true }) => void;
+    const port = fakePort({
+      openAlbum: vi.fn(async () => opened({ items: [own], permissions: { ...OWNER_PERMISSIONS } })),
+      replaceFile: vi.fn(async () => await new Promise<{ readonly ok: true }>((resolve) => { finish = resolve; })),
+    });
+    await act(async () => root.render(<PhotoSharedAlbumWorkspace port={port} />));
+    await flush();
+    await act(async () => (Array.from(container.querySelectorAll("ul button"))[0] as HTMLButtonElement).click());
+    await flush();
+    await act(async () => (Array.from(container.querySelectorAll("ul button"))[0] as HTMLButtonElement).click());
+    await flush();
+    const input = container.querySelector<HTMLInputElement>("input[accept='image/jpeg']");
+    if (!input) throw new Error("input not found");
+    vi.spyOn(input, "click").mockImplementation(() => undefined);
+    const more = Array.from(container.querySelectorAll("button")).find((button) => button.getAttribute("aria-label") === "その他");
+    if (!more) throw new Error("more menu not found");
+    await act(async () => {
+      more.dispatchEvent(new PointerEvent("pointerdown", { bubbles: true, button: 0 }));
+      more.click();
+    });
+    await flush();
+    const replace = buttonByText("差し替え", document.body);
+    if (!replace) throw new Error("replace not found");
+    await act(async () => replace.click());
+    const file = new File(["b"], "replacement.jpg", { type: "image/jpeg" });
+    Object.defineProperty(input, "files", { configurable: true, value: [file] });
+    await act(async () => { input.dispatchEvent(new Event("change", { bubbles: true })); });
+    await flush();
+    expect(port.replaceFile).toHaveBeenCalledWith(PHOTO_SHARED_ALBUM_FIXTURE_ALBUM.albumId, own.itemId, file, expect.any(AbortSignal));
+    expect(port.addFile).not.toHaveBeenCalled();
+    expect(container.textContent).toContain("replacement.jpg");
+    const reads = vi.mocked(port.openAlbum).mock.calls.length;
+    await act(async () => finish({ ok: true }));
+    await flush();
+    // The album is read again after the replacement settles.
+    expect(vi.mocked(port.openAlbum).mock.calls.length).toBeGreaterThan(reads);
   });
 
   it("shows the album as ended when it can no longer be opened, and creates an album by name", async () => {

@@ -44,3 +44,13 @@ export {
 export { createPersonalCloudRenderSource } from "./personal-cloud-source";
 export { createTicketUploader, type CreateTicketUploaderOptions, type RenderOutputUploader } from "./ticket-upload";
 export { createRenderJobMockServer, type CreateRenderJobMockServerOptions, type RenderJobMockItem, type RenderJobMockServer } from "./render-mock";
+export { createBrowserRenderJobClient, type BrowserRenderJobClient } from "./render-client";
+export {
+  RENDER_JOB_OPERATIONS,
+  encodeRenderJobRequest,
+  isRenderJobOperation,
+  renderJobResponseLimit,
+  validateRenderJobRequest,
+  validateRenderJobResponse,
+} from "./render-wire";
+export { createBrowserRenderJobRunner, type BrowserRenderJobRunner, type CreateBrowserRenderJobRunnerOptions } from "./browser-runner";

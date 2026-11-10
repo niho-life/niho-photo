@@ -157,6 +157,17 @@ export function photoSharedAlbumItemSavable(item: Pick<PhotoSharedAlbumItem, "st
 }
 
 /**
+ * 自分が足した完成写真（JPEG のファイル）は、選び直した JPEG に差し替えられる。端末で描く写真（本人のライブラリ・補正）は補正の
+ * 保存で自動で差し替わるので対象にしない（B00 `decideReplaceStart`）。
+ */
+export function photoSharedAlbumItemReplaceable(
+  item: Pick<PhotoSharedAlbumItem, "kind" | "state" | "addedBy">,
+  album: Pick<PhotoSharedAlbum, "role" | "accessEnded">,
+): boolean {
+  return photoSharedAlbumCanAdd(album) && item.kind === "fileUpload" && item.addedBy.isSelf && photoSharedAlbumItemSavable(item);
+}
+
+/**
  * 見せる項目。削除した項目は出さない。準備中の項目はオーナーと追加者にだけ見せる（server も同じ範囲で返す。ここでは
  * 混入した古い値を出さないための二重の絞り込み）。
  */

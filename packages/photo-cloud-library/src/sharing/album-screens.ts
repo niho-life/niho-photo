@@ -28,7 +28,12 @@ import type {
   PhotoStorageLocation,
   PhotoStorageLocationKind,
 } from "niho-photo-editing/shared-album/photo-shared-album-model";
-import type { PhotoSharedAlbumPermissions, PhotoSharedAlbumPort } from "niho-photo-editing/shared-album/photo-shared-album-port";
+import type {
+  PhotoSharedAlbumAddResult,
+  PhotoSharedAlbumLibraryPage,
+  PhotoSharedAlbumPermissions,
+  PhotoSharedAlbumPort,
+} from "niho-photo-editing/shared-album/photo-shared-album-port";
 
 import { readJpegCaptureFields } from "../render-executor/jpeg-metadata";
 import { createTicketUploader } from "../render-executor/ticket-upload";
@@ -94,7 +99,25 @@ export interface CreateSharedAlbumScreensPortOptions {
   /** Whether the "originals stay on this device" note was shown (default: this session only). */
   readonly originalsNote?: { readonly shown: () => boolean; readonly markShown: () => void };
   readonly objectUrls?: { readonly create: (blob: Blob) => string; readonly revoke: (url: string) => void };
+  /** The signed-in user's own library, for 「写真から選ぶ」 (absent: adding is files only). */
+  readonly library?: SharedAlbumScreensLibrary;
+  /** This device's render-job runner (B07), told about added and on-screen photos it holds (absent: none here). */
+  readonly renderJobs?: SharedAlbumRenderJobsHook;
   readonly now?: () => number;
+}
+
+/** The user's own library as 「写真から選ぶ」 reads it. */
+export interface SharedAlbumScreensLibrary {
+  readonly libraryId: string;
+  list(cursor: string | null, signal: AbortSignal): Promise<PhotoSharedAlbumLibraryPage>;
+}
+
+/** What the screens tell this device's render-job runner. */
+export interface SharedAlbumRenderJobsHook {
+  /** New jobs may be waiting for this device (photos were just added). */
+  wake(): void;
+  /** This device's own photos on screen that are still being prepared: rendered first. */
+  prioritize(photos: readonly { readonly libraryId: string; readonly photoId: string }[]): void;
 }
 
 const MAX_THUMBNAILS = 400;
@@ -284,6 +307,50 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
     return results;
   }
 
+  /** 「写真から選ぶ」: the user's own library photos become preparing items rendered by the device that holds them. */
+  function libraryMethods(library: SharedAlbumScreensLibrary): Pick<PhotoSharedAlbumPort, "libraryPhotos" | "addLibraryPhotos"> {
+    return {
+      async libraryPhotos(cursor, signal) {
+        return await library.list(cursor, live(signal));
+      },
+      async addLibraryPhotos(albumId, photoIds, signal) {
+        const results = await options.items.addLibraryPhotos(albumId, photoIds.map((photoId) => ({ libraryId: library.libraryId, photoId })), live(signal));
+        if (results.some((result) => result.ok)) {
+          fullAlbums.delete(albumId);
+          options.renderJobs?.wake();
+        }
+        if (results.some((result) => !result.ok && isSharingErrorEnvelope(result.error) && result.error.error.code === "quota_exceeded")) fullAlbums.set(albumId, now());
+        return { failedPhotoIds: results.filter((result) => !result.ok).map((result) => result.target) };
+      },
+    };
+  }
+
+  /** A picked file prepared on this device and sent (added or replacing); failures as the screens' reasons. */
+  async function sendFile(albumId: string, file: File, send: (prepared: PreparedAlbumFile) => Promise<void>): Promise<PhotoSharedAlbumAddResult> {
+    let prepared: PreparedAlbumFile;
+    try {
+      prepared = await prepareFile(file);
+    } catch (error) {
+      if (error instanceof SharedAlbumFileError) return { ok: false, reason: fileReason(error) };
+      throw error;
+    }
+    try {
+      await send(prepared);
+      fullAlbums.delete(albumId);
+      return { ok: true };
+    } catch (error) {
+      if (!isSharingErrorEnvelope(error)) return { ok: false, reason: null };
+      const code = error.error.code;
+      if (code === "quota_exceeded") {
+        fullAlbums.set(albumId, now());
+        return { ok: false, reason: "albumFull" };
+      }
+      if (code === "not_found" || code === "role_forbidden" || code === "item_removed") return { ok: false, reason: "accessEnded" };
+      if (code === "content_rejected" || code === "unsupported_format") return { ok: false, reason: "unsupported" };
+      return { ok: false, reason: null };
+    }
+  }
+
   /** A refusal that ends the invite (not a lost answer, a rate limit or a short outage). */
   const definiteRefusal = (error: unknown): boolean =>
     isSharingErrorEnvelope(error) && !error.error.retryable && SHARING_ERROR_RECOVERY[error.error.code] !== "retrySameKey";
@@ -321,6 +388,13 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
         ...(album.cover ? [album.cover.renditionId] : []),
       ]);
       loadedItems.set(albumId, items);
+      // This device's own photos in this album that are still being prepared are rendered first.
+      if (options.renderJobs) {
+        const preparing = items.flatMap((item) => (item.addedBy.isSelf && (item.state === "preparing" || item.state === "updatePending")
+          && item.source?.kind === "libraryPhoto" ? [{ libraryId: item.source.libraryId, photoId: item.source.photoId }] : []));
+        options.renderJobs.prioritize(preparing);
+        if (preparing.length > 0) options.renderJobs.wake();
+      }
       const known = seen.get(albumId);
       const marks = newMarks.get(albumId) ?? new Set<string>();
       for (const item of items) {
@@ -366,28 +440,17 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
       await options.membership.leave(albumId, live(signal));
     },
     async addFile(albumId, file, signal) {
-      let prepared: PreparedAlbumFile;
-      try {
-        prepared = await prepareFile(file);
-      } catch (error) {
-        if (error instanceof SharedAlbumFileError) return { ok: false, reason: fileReason(error) };
-        throw error;
-      }
-      try {
+      return await sendFile(albumId, file, async (prepared) => {
         await options.items.addFile(albumId, prepared, live(signal));
-        fullAlbums.delete(albumId);
-        return { ok: true };
-      } catch (error) {
-        if (!isSharingErrorEnvelope(error)) return { ok: false, reason: null };
-        const code = error.error.code;
-        if (code === "quota_exceeded") {
-          fullAlbums.set(albumId, now());
-          return { ok: false, reason: "albumFull" };
-        }
-        if (code === "not_found" || code === "role_forbidden" || code === "item_removed") return { ok: false, reason: "accessEnded" };
-        if (code === "content_rejected" || code === "unsupported_format") return { ok: false, reason: "unsupported" };
-        return { ok: false, reason: null };
-      }
+      });
+    },
+    async replaceFile(albumId, itemId, file, signal) {
+      // The revision the screen last read; a newer one on the server answers revision_conflict (tried again by the user).
+      const item = (loadedItems.get(albumId) ?? []).find((entry) => entry.id === itemId);
+      if (!item) return { ok: false, reason: null };
+      return await sendFile(albumId, file, async (prepared) => {
+        await options.items.replaceFile(albumId, { id: item.id, revision: item.revision }, prepared, live(signal));
+      });
     },
     async save(albumId, itemIds, signal) {
       const wanted = new Set(itemIds);
@@ -424,6 +487,7 @@ export function createSharedAlbumScreensPort(options: CreateSharedAlbumScreensPo
         throw error;
       }
     },
+    ...(options.library ? libraryMethods(options.library) : {}),
     async storageLocations(signal) {
       if (options.storageLocations) return await options.storageLocations(live(signal));
       return [{ locationId: "nihoCloud", kind: "nihoCloud", name: null, hostedMacStatus: null, usage: null }];
@@ -465,6 +529,8 @@ export interface CreateBrowserSharedAlbumScreensPortOptions {
   readonly saveFile: (name: string, file: Blob, signal: AbortSignal) => Promise<void>;
   readonly storageLocations?: (signal: AbortSignal) => Promise<readonly PhotoStorageLocation[]>;
   readonly originalsNote?: { readonly shown: () => boolean; readonly markShown: () => void };
+  readonly library?: SharedAlbumScreensLibrary;
+  readonly renderJobs?: SharedAlbumRenderJobsHook;
   readonly now?: () => number;
 }
 
@@ -482,6 +548,8 @@ export function createBrowserSharedAlbumScreensPort(options: CreateBrowserShared
     prepareFile: prepareBrowserAlbumFile,
     ...(options.storageLocations ? { storageLocations: options.storageLocations } : {}),
     ...(options.originalsNote ? { originalsNote: options.originalsNote } : {}),
+    ...(options.library ? { library: options.library } : {}),
+    ...(options.renderJobs ? { renderJobs: options.renderJobs } : {}),
   });
   return {
     ...port,

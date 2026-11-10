@@ -216,8 +216,10 @@ function snapshotDownloadBudget(value: unknown): Readonly<CreatePhotoWebRuntimeO
 /** Every operation the shared-album screens call (B08 #249). */
 const SHARED_ALBUM_PORT_METHODS = [
   "listAlbums", "createAlbum", "openAlbum", "people", "copyInviteLink", "revokeInviteLink", "changeRole", "removeMember",
-  "leave", "addFile", "save", "remove", "join", "joinHeld", "storageLocations", "originalsNoteShown", "markOriginalsNoteShown", "dispose",
+  "leave", "addFile", "replaceFile", "save", "remove", "join", "joinHeld", "storageLocations", "originalsNoteShown", "markOriginalsNoteShown", "dispose",
 ] as const;
+/** Offered together or not at all (「写真から選ぶ」 needs both). */
+const SHARED_ALBUM_PORT_LIBRARY_METHODS = ["libraryPhotos", "addLibraryPhotos"] as const;
 
 export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): PhotoWebRuntime {
   const configuredEnvironment = options.environment ?? defaultEnvironment();
@@ -525,7 +527,9 @@ export function createPhotoWebRuntime(options: CreatePhotoWebRuntimeOptions): Ph
       const sharedAlbums = candidate.sharedAlbums;
       // Fail closed: a port missing any operation the screens call is not accepted.
       if (sharedAlbums !== undefined && (typeof sharedAlbums !== "object" || sharedAlbums === null
-        || SHARED_ALBUM_PORT_METHODS.some((method) => typeof (sharedAlbums as unknown as Record<string, unknown>)[method] !== "function"))) return null;
+        || SHARED_ALBUM_PORT_METHODS.some((method) => typeof (sharedAlbums as unknown as Record<string, unknown>)[method] !== "function")
+        || new Set(SHARED_ALBUM_PORT_LIBRARY_METHODS.map((method) => typeof (sharedAlbums as unknown as Record<string, unknown>)[method])).size !== 1
+        || !["function", "undefined"].includes(typeof (sharedAlbums as unknown as Record<string, unknown>).libraryPhotos))) return null;
       if (expected !== null && (
         candidate.actorId !== expected.actorId
         || candidate.key !== expected.key
