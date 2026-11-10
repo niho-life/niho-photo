@@ -39,3 +39,7 @@ node --test scripts/ci/account-contract.test.mjs
 ```
 
 mockは合成tokenだけを使い、productionでHTTP宛先を有効化するfeatureを用意しない。新しい安全契約の正は [native-account-v2.json](contract/native-account-v2.json)。Rust/TSとPhotoのdigest pinをCIで照合する。Docs側による同じv2の採用、双方CI連動、本番APIと署名済みアプリのE2E受入は別の統合条件である。
+
+## 共有アルバムの native 通信（Epic #240 / B08 #249）
+
+Camera は共有アルバム（`/cloud/sharing/v1`）も本人クラウド v2 と同じ authority で送る（`photo_sharing_request`・`photo_sharing_upload`・`photo_sharing_content`）。宛先は固定の origin と、build の設定で与える上流の prefix（`Config::with_sharing_prefix`。`/api/` で始まる固定の path）だけで、未設定なら `NotConfigured`。画面からは route の表の path・query・body・冪等 key だけを受け、`..`・区切りを復号する segment・BFF だけの経路を拒む。応答の upload の ticket は native に取り出して `https://upload.native.invalid/<handle>` の代わりを返し、ほかに token・URL が残れば拒む。完成写真は ticket の先へ 8MiB ずつ送り、download は宣言の SHA-256・長さ・形式と照合する。

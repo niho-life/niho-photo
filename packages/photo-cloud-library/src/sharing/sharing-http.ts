@@ -119,3 +119,42 @@ export function createSharingHttpClient<Op extends string>(options: CreateSharin
   scope = new PersonalPhotoScope<null>(client, options.identity, now);
   return client;
 }
+
+/**
+ * Where a shared client's requests go when it is not the browser session: e.g. the Mac app's native session, which
+ * keeps the credential and upload tickets in native code. One exchange is one route of the table; the transport
+ * returns the status and the parsed JSON (at most `limit` bytes) and never retries by itself.
+ */
+export interface SharingTransport {
+  readonly scope: SharingSessionScope;
+  exchange(encoded: EncodedSharingRequest<string>, limit: number, signal: AbortSignal): Promise<{ readonly status: number; readonly value: unknown }>;
+  /** A GET whose answer is a bounded content stream. */
+  stream(encoded: EncodedSharingRequest<SharingOperation>, range: PhotoByteRange | undefined, signal: AbortSignal): Promise<PhotoContent>;
+  dispose(): void;
+}
+
+/** The same encode/validate as the browser client, on another transport. */
+export function createSharingClientOnTransport<Op extends string>(transport: SharingTransport, wire: SharingWire<Op>): SharingHttpClient<Op> {
+  let disposed = false;
+  return {
+    scope: transport.scope,
+    async send(operation, request, signal, idempotencyKey) {
+      if (disposed) throw new PersonalPhotoCloudError("disposed");
+      if (!wire.supports(operation)) throw new PersonalPhotoCloudError("unsupported");
+      const encoded = wire.encode(operation, request, idempotencyKey);
+      const { status, value } = await transport.exchange(encoded, wire.responseLimit(operation), signal);
+      if (status < 200 || status >= 300) throw parseSharingError(value, status);
+      if (status !== 200) throw new PersonalPhotoCloudError("invalid_response");
+      return wire.validate(operation, request, value);
+    },
+    async stream(encoded, range, signal) {
+      if (disposed) throw new PersonalPhotoCloudError("disposed");
+      return await transport.stream(encoded, range, signal);
+    },
+    dispose() {
+      if (disposed) return;
+      disposed = true;
+      transport.dispose();
+    },
+  };
+}

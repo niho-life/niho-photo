@@ -5,9 +5,12 @@
  */
 export {
   createBrowserSharedAlbumClient,
+  createSharedAlbumClientOnTransport,
   type CreateBrowserSharedAlbumClientOptions,
   type SharedAlbumClient,
 } from "./album-client";
+export { createSharingClientOnTransport, type SharingTransport } from "./sharing-http";
+export { type EncodedSharingRequest } from "./membership-wire";
 export {
   SharedAlbumFileError,
   createSharedAlbumItems,
@@ -39,6 +42,7 @@ export {
 } from "./album-screens";
 export {
   createBrowserSharedAlbumMembershipClient,
+  createSharedAlbumMembershipClientOnTransport,
   type CreateBrowserSharedAlbumMembershipClientOptions,
   type SharedAlbumMembershipClient,
 } from "./membership-client";

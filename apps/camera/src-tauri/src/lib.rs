@@ -42,6 +42,7 @@ mod mask_detection;
 mod mask_surfaces;
 mod photo_bench;
 mod photo_cloud;
+mod photo_sharing;
 mod photos;
 mod presets;
 #[cfg(any(feature = "official-updates", test))]
@@ -122,6 +123,7 @@ pub fn run() {
       // フォルダは最初の「フォルダを追加」か覚えたフォルダの一覧まで読まない。現像の sidecar は裏で 1 回だけ確かめる
       account::install(app.handle());
       photo_cloud::install(app.handle());
+      photo_sharing::install(app.handle());
       library::install(app.handle());
       photos::install(app.handle());
       cloud_copy::install(app.handle());
@@ -155,6 +157,12 @@ pub fn run() {
       photo_cloud::camera_photo_content_close,
       photo_cloud::camera_photo_content_cancel,
       photo_cloud::camera_photo_original_save,
+      photo_sharing::camera_sharing_status,
+      photo_sharing::camera_sharing_request,
+      photo_sharing::camera_sharing_upload,
+      photo_sharing::camera_sharing_content_open,
+      photo_sharing::camera_sharing_content_read,
+      photo_sharing::camera_sharing_content_close,
       cloud_copy::camera_photo_copy_recover,
       cloud_copy::camera_photo_copy_start,
       cloud_copy::camera_photo_copy_status,

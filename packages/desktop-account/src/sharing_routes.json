@@ -1,0 +1,229 @@
+{
+  "comment": "Shared-album operations the Mac native session may send (generated from @niho/photo-library-sharing-contract SHARING_ROUTES; packages/photo-cloud-library/test/sharing-native-routes.test.ts checks they match).",
+  "routes": [
+    {
+      "operation": "storage.get",
+      "method": "GET",
+      "path": "/storage",
+      "query": [],
+      "body": null,
+      "idempotencyKey": false
+    },
+    {
+      "operation": "albums.list",
+      "method": "GET",
+      "path": "/albums",
+      "query": [
+        "cursor",
+        "limit"
+      ],
+      "body": null,
+      "idempotencyKey": false
+    },
+    {
+      "operation": "albums.get",
+      "method": "GET",
+      "path": "/albums/{albumId}",
+      "query": [],
+      "body": null,
+      "idempotencyKey": false
+    },
+    {
+      "operation": "albums.create",
+      "method": "POST",
+      "path": "/albums",
+      "query": [],
+      "body": [
+        "name"
+      ],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "albums.rename",
+      "method": "POST",
+      "path": "/albums/{albumId}/rename",
+      "query": [],
+      "body": [
+        "expectedRevision",
+        "name"
+      ],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "albums.delete",
+      "method": "DELETE",
+      "path": "/albums/{albumId}",
+      "query": [
+        "expectedRevision"
+      ],
+      "body": null,
+      "idempotencyKey": true
+    },
+    {
+      "operation": "albumItems.list",
+      "method": "GET",
+      "path": "/albums/{albumId}/items",
+      "query": [
+        "cursor",
+        "limit"
+      ],
+      "body": null,
+      "idempotencyKey": false
+    },
+    {
+      "operation": "albumItems.get",
+      "method": "GET",
+      "path": "/albums/{albumId}/items/{itemId}",
+      "query": [],
+      "body": null,
+      "idempotencyKey": false
+    },
+    {
+      "operation": "albumItems.addPhoto",
+      "method": "POST",
+      "path": "/albums/{albumId}/photo-items",
+      "query": [],
+      "body": [
+        "source"
+      ],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "albumItems.addFile",
+      "method": "POST",
+      "path": "/albums/{albumId}/file-items",
+      "query": [],
+      "body": [
+        "rendition"
+      ],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "albumItems.replace",
+      "method": "POST",
+      "path": "/albums/{albumId}/items/{itemId}/replace",
+      "query": [],
+      "body": [
+        "expectedRevision",
+        "content"
+      ],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "albumItems.commitUpload",
+      "method": "POST",
+      "path": "/albums/{albumId}/uploads/{uploadId}/commit",
+      "query": [],
+      "body": [],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "albumItems.cancelUpload",
+      "method": "POST",
+      "path": "/albums/{albumId}/uploads/{uploadId}/cancel",
+      "query": [],
+      "body": [],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "albumItems.renewUpload",
+      "method": "POST",
+      "path": "/albums/{albumId}/uploads/{uploadId}/renew",
+      "query": [],
+      "body": [],
+      "idempotencyKey": false
+    },
+    {
+      "operation": "albumItems.remove",
+      "method": "DELETE",
+      "path": "/albums/{albumId}/items/{itemId}",
+      "query": [],
+      "body": null,
+      "idempotencyKey": true
+    },
+    {
+      "operation": "albumItems.download",
+      "method": "GET",
+      "path": "/albums/{albumId}/items/{itemId}/renditions/{renditionId}/content",
+      "query": [
+        "variant"
+      ],
+      "body": null,
+      "idempotencyKey": false
+    },
+    {
+      "operation": "invites.list",
+      "method": "GET",
+      "path": "/albums/{albumId}/invites",
+      "query": [],
+      "body": null,
+      "idempotencyKey": false
+    },
+    {
+      "operation": "invites.create",
+      "method": "POST",
+      "path": "/albums/{albumId}/invites",
+      "query": [],
+      "body": [
+        "role"
+      ],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "invites.revoke",
+      "method": "POST",
+      "path": "/albums/{albumId}/invites/{inviteLinkId}/revoke",
+      "query": [],
+      "body": [],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "invites.join",
+      "method": "POST",
+      "path": "/invites/join",
+      "query": [],
+      "body": [
+        "secret"
+      ],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "members.list",
+      "method": "GET",
+      "path": "/albums/{albumId}/members",
+      "query": [
+        "cursor",
+        "limit"
+      ],
+      "body": null,
+      "idempotencyKey": false
+    },
+    {
+      "operation": "members.changeRole",
+      "method": "POST",
+      "path": "/albums/{albumId}/members/{membershipId}/role",
+      "query": [],
+      "body": [
+        "expectedRevision",
+        "role"
+      ],
+      "idempotencyKey": true
+    },
+    {
+      "operation": "members.remove",
+      "method": "DELETE",
+      "path": "/albums/{albumId}/members/{membershipId}",
+      "query": [],
+      "body": null,
+      "idempotencyKey": true
+    },
+    {
+      "operation": "members.leave",
+      "method": "POST",
+      "path": "/albums/{albumId}/leave",
+      "query": [],
+      "body": [],
+      "idempotencyKey": true
+    }
+  ]
+}
