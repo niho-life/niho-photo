@@ -5,7 +5,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 ## 位置づけ
 
 - 非公開側のサーバーは、この契約を photo-sdk の `niho-photo-library-sharing-contract`（SDK 0.1.11 以降、release manifest schema 4。入口は `.`・`./policy`・`./routes`）から取り込む（[SDK の構成](../../sdk/README.md)）。
-- 本人専用の [`@niho/photo-personal-cloud-contract` v2](personal-photo-cloud.md) は変更しない。v2 は本人専用・5GiB・`albums: false` のまま動く。共有は v2 の owner の読み替えや `false` の置換ではなく、追加契約 v1 で扱う。
+- 本人専用の [`@niho/photo-personal-cloud-contract` v2](personal-photo-cloud.md) の機能と型は変更しない。v2 は本人専用・5GiB・`albums: false` のまま動き、共有は追加契約 v1 で扱う。owner方針（2026-11-11）では、この5GiBを個人v2と共有領域で合算する。最終判定は既存backendで行い、現在のv1/v2 usage responseだけでは合算値を示せないため、集計契約の更新と実装が済むまでrolloutしない。
 - v1 は v2 の型を再利用する。#195 の `UploadTicket`・`PhotoContent`、#196 の `RecipeDocument`・`RecipeConflict`、#197 の `RenderCapability` を別に定義しない。
 - 公開契約に実HTTP route・DB schema・内部locator・資格情報を入れない。request は入れ子まで閉じた形で、想定外の key は無視せず `invalid_request` にする（`SHARING_REQUEST_SHAPES`・`CONNECTOR_REQUEST_SHAPES`）。body の owner・role・revision・path を認可の証明にしない。recipe の settings だけは #196 の validator が検査する open JSON。
 
@@ -241,7 +241,9 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - `nihoCloudLibraryFromPersonalV2`: 本人の v2 library を `nihoCloud` として投影する。v2 の値は変えない。v2 が `albums: true` などに変わっていたら拒否する。
 - `personalV2ScopeFor`: v2 の scope は本人の有効な `nihoCloud` library だけ。常設Mac・端末内・共有アルバム経由のアクセスは null。
 - `renderBindingFromPersonalV2`: NIHO クラウドの写真の描画束縛（v2 の原本は不変なので source 世代は1）。
-- 容量: v2 の 5GiB は NIHO クラウドの原本と mask だけ。プレビュー・常設Mac library の mask・完成写真・一時書き出しは owner の `SharedStorageUsage` に計上し、その上限は server の方針で決める（Epic §14）。v2 の枠を他の範囲へ当てない。
+- 容量（owner方針 2026-11-11）: owner単位の5GiBを個人v2と共有領域で合算する。個人v2の原本・mask、共有preview・hosted library mask・完成写真・書き出し一時領域に加え、両経路の予約容量も同じ残量判定へ含める。書込み・差替え・render確定は既存backendが全項目の予約を含めて原子的に判定し、v2とsharingの両APIで同じ残量を使う。個人原本、mask、完成写真は容量整理で削除しない。再生成できる古いpreviewだけをcache eviction対象にでき、必要時は元データを持つMacが稼働してから再生成する。
+- 公開契約の追従条件: 現在のv2 `QuotaUsage` とv1 `SharedStorageUsage` は別々の使用量を返し、v1は共有容量を個人5GiBとは別枠と記述している。owner向けstorage responseに合算後の使用量・予約量・残量を表す追加契約を設け、既存SDK/APIとの互換移行とprivate backendを同時に完了してからcombined quotaを有効にする。現行wire shapeだけで「5GiB合算済み」と表示・判定しない。
+- download費用（owner方針 2026-11-11）: owner単位で月間download上限を持ち、共有メンバーの配信bytesもownerへ算入する。100GiB/月を初期案とし、3ユーザーの実測とGCS/BFFの経路別費用を確認して配布前に確定する。新しい課金は導入しない。
 
 ## 公開・非公開の責務と writer
 
