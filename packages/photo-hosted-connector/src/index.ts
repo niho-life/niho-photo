@@ -5,6 +5,7 @@ export { createJobRunner, type JobRunner, type JobStepResult } from "./jobs.ts";
 export { bufferingHasher, localKeyFor, randomSecret, sha256Bytes, sha256Text } from "./crypto.ts";
 export type {
   Clock,
+  ConnectorStorageScope,
   ConnectorTransport,
   CredentialVault,
   DirectoryEntry,

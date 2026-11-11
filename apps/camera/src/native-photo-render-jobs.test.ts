@@ -16,7 +16,7 @@ const actor: VerifiedPhotoActor = {
   sessionId: "synthetic-session",
   sessionEpoch: "synthetic-epoch",
   transport: "mac-bearer",
-  expiresAt: "2026-11-11T00:00:00.000Z",
+  expiresAt: "2099-11-11T00:00:00.000Z",
 };
 
 describe("native Mac render-job runner", () => {

@@ -94,6 +94,16 @@ export function createHostedConnector(options: HostedConnectorOptions) {
   const heartbeat = async (target: Pick<HostConnectorClient, "request">, state: "online" | "sleeping", signal: AbortSignal) =>
     target.request("connector.heartbeat", { state, renderer, replicaRevision: await options.replica.revision() }, { signal });
   const probe = (signal: AbortSignal) => (target: Pick<HostConnectorClient, "request">) => heartbeat(target, "online", signal);
+  const setStorageScope = async () => {
+    const paired = await credentials.paired();
+    if (paired) {
+      await Promise.all([
+        options.index.setScope?.(paired),
+        options.replica.setScope?.(paired),
+      ]);
+    }
+    return paired;
+  };
 
   /** Runs an authenticated step; a refused credential either finishes a lost rotation or ends in revoked. */
   const authenticated = async <T>(signal: AbortSignal, run: () => Promise<T>): Promise<T> => {
@@ -167,10 +177,11 @@ export function createHostedConnector(options: HostedConnectorOptions) {
 
   return {
     async status(): Promise<ConnectorStatus> {
+      const paired = await setStorageScope();
       return {
         phase: await refreshPhase(),
-        replica: (await credentials.paired()) ? replicaSync.status() : null,
-        index: (await credentials.paired()) ? await indexer.progress() : null,
+        replica: paired ? replicaSync.status() : null,
+        index: paired ? await indexer.progress() : null,
         jobs: jobTotals,
         lastTickAt,
       };
@@ -189,6 +200,11 @@ export function createHostedConnector(options: HostedConnectorOptions) {
     /** One bounded cycle. Throws revoked (and stays revoked) when NIHO refuses the device. */
     async tick(signal: AbortSignal): Promise<TickResult> {
       if ((await refreshPhase()) !== "active") return { phase };
+      const paired = await setStorageScope();
+      if (!paired) {
+        phase = "unpaired";
+        return { phase };
+      }
       const hold = await options.power.hold("sync");
       try {
         const beat = await authenticated(signal, () => heartbeat(client, "online", signal));
@@ -222,7 +238,7 @@ export function createHostedConnector(options: HostedConnectorOptions) {
     /** System sleep is coming: tell NIHO (best effort). The caller aborts the running tick. */
     async willSleep(signal: AbortSignal) {
       sleeping = true;
-      if ((await options.vault.read()).credential) await heartbeat(client, "sleeping", signal).catch(() => undefined);
+      if (await setStorageScope()) await heartbeat(client, "sleeping", signal).catch(() => undefined);
       await refreshPhase();
     },
     /** After wake the next tick continues from the checkpoint and pulls only the replica diff. */
@@ -239,6 +255,8 @@ export function createHostedConnector(options: HostedConnectorOptions) {
      */
     async recoverIndex(signal: AbortSignal) {
       if ((await refreshPhase()) !== "active") throw new ConnectorError("not_paired");
+      const paired = await setStorageScope();
+      if (!paired) throw new ConnectorError("not_paired");
       const { located, scanner } = await locate(signal);
       const report = await recoverLocalIndex({ store: options.replica, scanner, signal });
       const entries: LocalIndexEntry[] = [];

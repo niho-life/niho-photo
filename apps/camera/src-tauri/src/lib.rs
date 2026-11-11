@@ -214,6 +214,7 @@ pub fn run() {
       hosted_connector::camera_hosted_folders_remove,
       hosted_connector::camera_hosted_agent_status,
       hosted_connector::camera_hosted_connector_roots,
+      hosted_connector::camera_hosted_connector_index_store,
       hosted_connector::camera_hosted_connector_root_status,
       hosted_connector::camera_hosted_connector_list,
       hosted_connector::camera_hosted_connector_stat,

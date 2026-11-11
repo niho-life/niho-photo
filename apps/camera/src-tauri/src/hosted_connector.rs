@@ -13,17 +13,18 @@
 //!   process が同時に動いたら、lock を取れなかった方は取れるまで待つ（取った方が終われば引き継ぐ）。
 //! - 接続用ソフトの窓を閉じた・読み直したら、その窓が持っていた休止の抑止と開いたファイルを native が全部外す。
 
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::{Read, Write};
 use std::os::fd::AsRawFd;
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::{Condvar, Mutex, MutexGuard};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::{Arc, Condvar, Mutex, MutexGuard};
 use std::time::Duration;
 
 use serde::{Deserialize, Serialize};
-use serde_json::Value;
+use serde_json::{json, Value};
+use sha2::{Digest, Sha256};
 use tauri::{Emitter, Manager};
 
 use crate::error::{internal, invalid_request, parse_request, run_blocking, CameraError, INTERNAL_MESSAGE};
@@ -45,6 +46,7 @@ const CONNECTOR_PAGE: &str = "hosted-connector.html";
 const MAIN_WINDOW_LABEL: &str = "main";
 const ROOTS_FILE: &str = "hosted-connector/roots.json";
 const CONNECTOR_LOCK_FILE: &str = "hosted-connector/connector.lock";
+const HOSTED_INDEX_DIRECTORY: &str = "hosted-connector/index";
 /// lock を持つ別の process が終わるのを確かめる間隔。
 const LOCK_RETRY: Duration = Duration::from_secs(15);
 const MAX_ROOTS: usize = 64;
@@ -52,6 +54,10 @@ const MAX_OPEN_FILES: usize = 8;
 const READ_CHUNK_BYTES: usize = 4 << 20;
 const MAX_VAULT_BYTES: usize = 64 * 1024;
 const MAX_HOLDS: usize = 16;
+const MAX_INDEX_ENTRY_BYTES: u64 = 1 << 20;
+const MAX_INDEX_SHARD_BYTES: u64 = 32 << 20;
+const MAX_INDEX_BATCH_BYTES: usize = 128 << 20;
+const MAX_INDEX_RESPONSE_BYTES: usize = 256 << 20;
 
 pub mod hosted_code {
   /// 登録したフォルダの実体に届かない（未 mount・差し替え）
@@ -140,6 +146,8 @@ struct Holds {
 pub struct HostedConnectorState {
   roots: Mutex<Vec<RegisteredRoot>>,
   roots_path: Option<PathBuf>,
+  index_path: Option<PathBuf>,
+  index_store_lock: Arc<Mutex<()>>,
   files: Mutex<OpenFiles>,
   holds: Mutex<Holds>,
   sleep: SleepGate,
@@ -153,10 +161,13 @@ pub struct HostedConnectorState {
 impl HostedConnectorState {
   fn new(data_dir: Option<PathBuf>) -> Self {
     let roots_path = data_dir.as_ref().map(|dir| dir.join(ROOTS_FILE));
+    let index_path = data_dir.as_ref().map(|dir| dir.join(HOSTED_INDEX_DIRECTORY));
     let roots = roots_path.as_deref().map(load_roots).unwrap_or_default();
     Self {
       roots: Mutex::new(roots),
       roots_path,
+      index_path,
+      index_store_lock: Arc::new(Mutex::new(())),
       files: Mutex::default(),
       holds: Mutex::default(),
       sleep: SleepGate::default(),
@@ -243,6 +254,344 @@ fn save_roots(path: &Path, roots: &[RegisteredRoot]) -> Result<(), CameraError> 
     .and_then(|()| file.sync_all())
     .map_err(|_| internal())?;
   std::fs::rename(&temporary, path).map_err(|_| internal())
+}
+
+static NEXT_INDEX_TEMP: AtomicU64 = AtomicU64::new(0);
+
+fn private_directory(path: &Path) -> Result<(), CameraError> {
+  use std::os::unix::fs::PermissionsExt;
+  std::fs::create_dir_all(path).map_err(|_| internal())?;
+  let metadata = std::fs::symlink_metadata(path).map_err(|_| internal())?;
+  if metadata.file_type().is_symlink() || !metadata.is_dir() {
+    return Err(internal());
+  }
+  std::fs::set_permissions(path, std::fs::Permissions::from_mode(0o700)).map_err(|_| internal())
+}
+
+fn hosted_index_scope(base: &Path, connector_id: &str, library_id: &str) -> Result<PathBuf, CameraError> {
+  if connector_id.is_empty() || library_id.is_empty() || connector_id.len() > 256 || library_id.len() > 256 {
+    return Err(invalid_request());
+  }
+  let material = format!("{}:{connector_id}{}:{library_id}", connector_id.len(), library_id.len());
+  let digest = Sha256::digest(material.as_bytes());
+  let name = digest.iter().map(|byte| format!("{byte:02x}")).collect::<String>();
+  Ok(base.join(name))
+}
+
+fn valid_local_key(local_key: &str) -> bool {
+  local_key.len() == 67
+    && local_key.starts_with("lk-")
+    && local_key[3..]
+      .bytes()
+      .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+}
+
+fn hosted_index_entry_path(scope: &Path, local_key: &str) -> Result<PathBuf, CameraError> {
+  if !valid_local_key(local_key) {
+    return Err(invalid_request());
+  }
+  Ok(scope.join("entries").join(format!("{}.json", &local_key[3..5])))
+}
+
+fn read_hosted_index_shard(scope: &Path, shard: &str) -> Result<BTreeMap<String, Value>, CameraError> {
+  if shard.len() != 2
+    || !shard
+      .bytes()
+      .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+  {
+    return Err(internal());
+  }
+  let path = scope.join("entries").join(format!("{shard}.json"));
+  let Some(value) = read_private_json(&path, MAX_INDEX_SHARD_BYTES)? else {
+    return Ok(BTreeMap::new());
+  };
+  let entries: BTreeMap<String, Value> = serde_json::from_value(value).map_err(|_| internal())?;
+  for (local_key, entry) in &entries {
+    if !valid_local_key(local_key)
+      || &local_key[3..5] != shard
+      || entry.get("localKey").and_then(Value::as_str) != Some(local_key)
+    {
+      return Err(internal());
+    }
+    if serde_json::to_vec(entry).map_err(|_| internal())?.len() as u64 > MAX_INDEX_ENTRY_BYTES {
+      return Err(internal());
+    }
+  }
+  Ok(entries)
+}
+
+fn read_private_json(path: &Path, max_bytes: u64) -> Result<Option<Value>, CameraError> {
+  use std::os::unix::fs::OpenOptionsExt;
+  let mut options = std::fs::OpenOptions::new();
+  options.read(true).custom_flags(libc::O_NOFOLLOW);
+  let mut file = match options.open(path) {
+    Ok(file) => file,
+    Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(None),
+    Err(_) => return Err(internal()),
+  };
+  let metadata = file.metadata().map_err(|_| internal())?;
+  if !metadata.is_file() || metadata.len() > max_bytes {
+    return Err(internal());
+  }
+  let mut bytes = Vec::with_capacity(metadata.len() as usize);
+  file.read_to_end(&mut bytes).map_err(|_| internal())?;
+  if bytes.len() as u64 > max_bytes {
+    return Err(internal());
+  }
+  serde_json::from_slice(&bytes).map(Some).map_err(|_| internal())
+}
+
+fn write_private_json(path: &Path, value: &Value, max_bytes: usize) -> Result<(), CameraError> {
+  use std::os::unix::fs::OpenOptionsExt;
+  let parent = path.parent().ok_or_else(internal)?;
+  private_directory(parent)?;
+  let bytes = serde_json::to_vec(value).map_err(|_| internal())?;
+  if bytes.len() > max_bytes {
+    return Err(invalid_request());
+  }
+  let file_name = path.file_name().ok_or_else(internal)?.to_string_lossy();
+  let mut temporary = None;
+  for _ in 0..8 {
+    let nonce = NEXT_INDEX_TEMP.fetch_add(1, Ordering::Relaxed);
+    let candidate = parent.join(format!(".{file_name}.{}.{}.tmp", std::process::id(), nonce));
+    match std::fs::OpenOptions::new()
+      .write(true)
+      .create_new(true)
+      .mode(0o600)
+      .open(&candidate)
+    {
+      Ok(mut file) => {
+        let write = file.write_all(&bytes).and_then(|()| file.sync_all());
+        if write.is_err() {
+          let _ = std::fs::remove_file(&candidate);
+          return Err(internal());
+        }
+        temporary = Some(candidate);
+        break;
+      }
+      Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => continue,
+      Err(_) => return Err(internal()),
+    }
+  }
+  let temporary = temporary.ok_or_else(internal)?;
+  if std::fs::rename(&temporary, path).is_err() {
+    let _ = std::fs::remove_file(temporary);
+    return Err(internal());
+  }
+  File::open(parent)
+    .and_then(|directory| directory.sync_all())
+    .map_err(|_| internal())
+}
+
+fn read_hosted_index_entry(scope: &Path, local_key: &str) -> Result<Option<Value>, CameraError> {
+  hosted_index_entry_path(scope, local_key)?;
+  let shard = read_hosted_index_shard(scope, &local_key[3..5])?;
+  Ok(shard.get(local_key).cloned())
+}
+
+fn hosted_index_entries(scope: &Path) -> Result<Vec<Value>, CameraError> {
+  let directory = scope.join("entries");
+  private_directory(&directory)?;
+  let mut paths = std::fs::read_dir(&directory)
+    .map_err(|_| internal())?
+    .map(|entry| entry.map(|entry| entry.path()).map_err(|_| internal()))
+    .collect::<Result<Vec<_>, _>>()?;
+  paths.sort();
+  let mut values = Vec::new();
+  let mut total = 0usize;
+  for path in paths {
+    let Some(name) = path.file_name().and_then(|name| name.to_str()) else {
+      continue;
+    };
+    let Some(shard) = name.strip_suffix(".json") else {
+      continue;
+    };
+    if shard.len() != 2
+      || !shard
+        .bytes()
+        .all(|byte| byte.is_ascii_hexdigit() && !byte.is_ascii_uppercase())
+    {
+      continue;
+    }
+    for value in read_hosted_index_shard(scope, shard)?.into_values() {
+      total = total.saturating_add(serde_json::to_vec(&value).map_err(|_| internal())?.len());
+      if total > MAX_INDEX_RESPONSE_BYTES {
+        return Err(internal());
+      }
+      values.push(value);
+    }
+  }
+  Ok(values)
+}
+
+fn hosted_index_photo_map(scope: &Path) -> Option<BTreeMap<String, String>> {
+  let value = read_private_json(&scope.join("photo-ids.json"), MAX_INDEX_RESPONSE_BYTES as u64).ok()??;
+  let map: BTreeMap<String, String> = serde_json::from_value(value).ok()?;
+  map
+    .iter()
+    .all(|(photo_id, local_key)| !photo_id.is_empty() && valid_local_key(local_key))
+    .then_some(map)
+}
+
+fn rebuild_hosted_index_photo_map(scope: &Path) -> Result<BTreeMap<String, String>, CameraError> {
+  let mut map = BTreeMap::new();
+  for entry in hosted_index_entries(scope)? {
+    let Some(photo_id) = entry.get("photoId").and_then(Value::as_str) else {
+      continue;
+    };
+    let Some(local_key) = entry.get("localKey").and_then(Value::as_str) else {
+      return Err(internal());
+    };
+    if photo_id.is_empty() || !valid_local_key(local_key) {
+      return Err(internal());
+    }
+    if map
+      .insert(photo_id.to_owned(), local_key.to_owned())
+      .is_some_and(|previous| previous != local_key)
+    {
+      return Err(internal());
+    }
+  }
+  write_private_json(&scope.join("photo-ids.json"), &json!(map), MAX_INDEX_RESPONSE_BYTES)?;
+  Ok(map)
+}
+
+fn hosted_index_store_operation(scope: &Path, request: IndexStoreRequest) -> Result<Value, CameraError> {
+  match request.operation.as_str() {
+    "get" => {
+      let local_key = request.local_key.as_deref().ok_or_else(invalid_request)?;
+      Ok(read_hosted_index_entry(scope, local_key)?.unwrap_or(Value::Null))
+    }
+    "byPhotoId" => {
+      let photo_id = request
+        .photo_id
+        .as_deref()
+        .filter(|value| !value.is_empty())
+        .ok_or_else(invalid_request)?;
+      let map = match hosted_index_photo_map(scope) {
+        Some(map) => map,
+        None => rebuild_hosted_index_photo_map(scope)?,
+      };
+      if let Some(local_key) = map.get(photo_id) {
+        if let Some(entry) = read_hosted_index_entry(scope, local_key)? {
+          if entry.get("photoId").and_then(Value::as_str) == Some(photo_id) {
+            return Ok(entry);
+          }
+        }
+      }
+      let map = rebuild_hosted_index_photo_map(scope)?;
+      match map.get(photo_id) {
+        Some(local_key) => Ok(read_hosted_index_entry(scope, local_key)?.unwrap_or(Value::Null)),
+        None => Ok(Value::Null),
+      }
+    }
+    "put" => {
+      let entries = request.entries.ok_or_else(invalid_request)?;
+      if entries.len() > 100_000 {
+        return Err(invalid_request());
+      }
+      let mut total = 0usize;
+      let mut grouped: BTreeMap<String, Vec<(String, Option<String>, Value)>> = BTreeMap::new();
+      for entry in entries {
+        let local_key = entry
+          .get("localKey")
+          .and_then(Value::as_str)
+          .ok_or_else(invalid_request)?;
+        if !valid_local_key(local_key) || !entry.is_object() {
+          return Err(invalid_request());
+        }
+        let next_photo_id = match entry.get("photoId") {
+          Some(Value::Null) => None,
+          Some(Value::String(value)) if !value.is_empty() => Some(value.as_str()),
+          _ => return Err(invalid_request()),
+        };
+        let bytes = serde_json::to_vec(&entry).map_err(|_| internal())?;
+        total = total.saturating_add(bytes.len());
+        if bytes.len() > MAX_INDEX_ENTRY_BYTES as usize || total > MAX_INDEX_BATCH_BYTES {
+          return Err(invalid_request());
+        }
+        grouped.entry(local_key[3..5].to_owned()).or_default().push((
+          local_key.to_owned(),
+          next_photo_id.map(str::to_owned),
+          entry,
+        ));
+      }
+      let mut photo_map = None;
+      let mut photo_map_changed = false;
+      for (shard_id, changes) in grouped {
+        let mut shard = read_hosted_index_shard(scope, &shard_id)?;
+        for (local_key, next_photo_id, entry) in changes {
+          let previous = shard
+            .get(&local_key)
+            .and_then(|previous| previous.get("photoId").and_then(Value::as_str).map(str::to_owned));
+          if previous != next_photo_id {
+            if photo_map.is_none() {
+              photo_map = Some(match hosted_index_photo_map(scope) {
+                Some(map) => map,
+                None => rebuild_hosted_index_photo_map(scope)?,
+              });
+            }
+            let map = photo_map.as_mut().ok_or_else(internal)?;
+            if let Some(previous) = previous {
+              if map.get(&previous).is_some_and(|key| key == &local_key) {
+                map.remove(&previous);
+              }
+            }
+            if let Some(photo_id) = next_photo_id {
+              if map.get(&photo_id).is_some_and(|existing| existing != &local_key) {
+                return Err(internal());
+              }
+              map.insert(photo_id, local_key.clone());
+            }
+            photo_map_changed = true;
+          }
+          shard.insert(local_key, entry);
+        }
+        let path = scope.join("entries").join(format!("{shard_id}.json"));
+        write_private_json(&path, &json!(shard), MAX_INDEX_SHARD_BYTES as usize)?;
+      }
+      if photo_map_changed {
+        let photo_map = photo_map.ok_or_else(internal)?;
+        write_private_json(
+          &scope.join("photo-ids.json"),
+          &json!(photo_map),
+          MAX_INDEX_RESPONSE_BYTES,
+        )?;
+      }
+      Ok(Value::Null)
+    }
+    "entries" => Ok(Value::Array(hosted_index_entries(scope)?)),
+    "checkpoint" => Ok(read_private_json(&scope.join("checkpoint.json"), 8 << 20)?.unwrap_or(Value::Null)),
+    "setCheckpoint" => {
+      match request.checkpoint {
+        Some(Value::Null) | None => match std::fs::remove_file(scope.join("checkpoint.json")) {
+          Ok(()) => {}
+          Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+          Err(_) => return Err(internal()),
+        },
+        Some(checkpoint) => write_private_json(&scope.join("checkpoint.json"), &checkpoint, 8 << 20)?,
+      }
+      Ok(Value::Null)
+    }
+    "clear" => {
+      let entries = scope.join("entries");
+      match std::fs::remove_dir_all(&entries) {
+        Ok(()) => {}
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+        Err(_) => return Err(internal()),
+      }
+      private_directory(&entries)?;
+      for name in ["photo-ids.json", "checkpoint.json"] {
+        match std::fs::remove_file(scope.join(name)) {
+          Ok(()) => {}
+          Err(error) if error.kind() == std::io::ErrorKind::NotFound => {}
+          Err(_) => return Err(internal()),
+        }
+      }
+      Ok(Value::Null)
+    }
+    _ => Err(invalid_request()),
+  }
 }
 
 fn random_id(prefix: &str) -> Result<String, CameraError> {
@@ -624,6 +973,18 @@ struct VaultRequest {
 
 #[derive(Deserialize)]
 #[serde(rename_all = "camelCase")]
+struct IndexStoreRequest {
+  operation: String,
+  connector_id: Option<String>,
+  library_id: Option<String>,
+  local_key: Option<String>,
+  photo_id: Option<String>,
+  entries: Option<Vec<Value>>,
+  checkpoint: Option<Value>,
+}
+
+#[derive(Deserialize)]
+#[serde(rename_all = "camelCase")]
 struct HoldRequest {
   reason: String,
 }
@@ -657,6 +1018,31 @@ pub fn camera_hosted_connector_roots(app: tauri::AppHandle) -> Result<Vec<Connec
       .map(|root| ConnectorRoot { id: root.id })
       .collect(),
   )
+}
+
+/// 索引のlocal pathをmain窓へ出さず、pairしたlibrary別のApplication Supportへ保存する。
+#[tauri::command]
+pub async fn camera_hosted_connector_index_store(
+  app: tauri::AppHandle,
+  request: Option<Value>,
+) -> Result<Value, CameraError> {
+  let request: IndexStoreRequest = parse_request(request)?;
+  let current = state(&app)?;
+  let base = current.index_path.clone().ok_or_else(internal)?;
+  let store_lock = Arc::clone(&current.index_store_lock);
+  run_blocking(move || {
+    let _guard = lock(&store_lock);
+    if request.operation == "health" {
+      private_directory(&base)?;
+      return Ok(Value::Null);
+    }
+    let connector_id = request.connector_id.as_deref().ok_or_else(invalid_request)?;
+    let library_id = request.library_id.as_deref().ok_or_else(invalid_request)?;
+    let scope = hosted_index_scope(&base, connector_id, library_id)?;
+    private_directory(&scope)?;
+    hosted_index_store_operation(&scope, request)
+  })
+  .await
 }
 
 #[tauri::command]

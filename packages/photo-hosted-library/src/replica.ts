@@ -21,6 +21,11 @@ export interface ReplicaBatch {
   /** Verified mask bytes for every mask upsert in `changes`, keyed by the change id. */
   readonly maskBytes: ReadonlyMap<string, Uint8Array>;
 }
+/** Owner scope for durable replica state. */
+export interface ReplicaStorageScope {
+  readonly connectorId: string;
+  readonly libraryId: string;
+}
 /** Staged rebuild from a snapshot. The previous replica stays intact until commit swaps it atomically. */
 export interface ReplicaReplacement {
   append(changes: readonly ReplicaChange[], maskBytes: ReadonlyMap<string, Uint8Array>): Promise<void>;
@@ -29,6 +34,8 @@ export interface ReplicaReplacement {
 }
 /** Durable storage on the Mac (journal + snapshot). Implemented by the connector (B03). */
 export interface ReplicaStore {
+  /** Optional for in-memory/test stores; durable stores use this to isolate each NIHO library. */
+  setScope?(scope: ReplicaStorageScope): Promise<void>;
   /** NIHO revision the durable replica reflects; 0 when empty. */
   revision(): Promise<number>;
   /** Must reject with store_conflict unless the stored revision equals batch.fromRevision. */
