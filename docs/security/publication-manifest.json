@@ -12199,8 +12199,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/album-wire.ts",
-      "sha256": "d96fd08a2f527650eec02c7c5fdd0a6fbe1698556ea53de2b068b1297178e2a3",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映"
+      "sha256": "0616691999b795a1d126e8b02e8cd5342f94833383ea530c31b48186fb55843e",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映\n変更理由: レビューで指摘された旧容量超過アカウントのstorage.get読取り互換を維持"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/contract.ts",
@@ -12314,8 +12314,8 @@
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-album-client.test.ts",
-      "sha256": "a6d94394072e6a87e8dff585c2d6203d20ef548755b6b933e783fc44e32f5d92",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映"
+      "sha256": "51d7f1da37b441fa94f0834282fab4f3f1a9d86375dd512772d161ccbf14c755",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映\n変更理由: 旧storage.get容量超過時の0クランプ回帰テストを追加"
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-album-items.test.ts",

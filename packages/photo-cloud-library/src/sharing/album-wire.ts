@@ -438,8 +438,7 @@ function validateStorage(raw: unknown): void {
     : storage.reservedBytes as number;
   if (!Number.isSafeInteger(parts) || !Number.isSafeInteger(used) || !Number.isSafeInteger(reserved)
     || !Number.isSafeInteger(used + reserved)
-    || used !== storage.usedBytes || reserved !== storage.reservedBytes
-    || (!hasCombinedUsage && used + reserved > (storage.quotaBytes as number))) invalidResponse();
+    || used !== storage.usedBytes || reserved !== storage.reservedBytes) invalidResponse();
   const available = Math.max(0, (storage.quotaBytes as number) - used - reserved);
   if (storage.availableBytes !== available) invalidResponse();
 }

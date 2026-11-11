@@ -53,7 +53,7 @@ async function caught(promise: Promise<unknown>): Promise<unknown> {
 }
 
 describe("browser shared album client (B12)", () => {
-  it("validates combined owner usage and accepts legacy storage responses only within their declared quota", () => {
+  it("validates combined owner usage and preserves zero-clamped legacy over-quota reads", () => {
     const combined = {
       owner: { type: "user", userId: "owner-user" }, quotaBytes: 100,
       usedBytes: 80, previewBytes: 10, maskBytes: 5, renditionBytes: 5, exportStagingBytes: 0,
@@ -72,6 +72,11 @@ describe("browser shared album client (B12)", () => {
     expect(validateAlbumItemResponse("storage.get", {}, legacy)).toEqual(legacy);
     expect(() => validateAlbumItemResponse("storage.get", {}, { ...legacy, availableBytes: 0 }))
       .toThrowError(new PersonalPhotoCloudError("invalid_response"));
+
+    const legacyOverQuota = {
+      ...legacy, quotaBytes: 15, availableBytes: 0,
+    };
+    expect(validateAlbumItemResponse("storage.get", {}, legacyOverQuota)).toEqual(legacyOverQuota);
   });
 
   it("sends albums and items on the contract's routes and streams a full-size download with a range", async () => {
