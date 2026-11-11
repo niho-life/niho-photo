@@ -3,6 +3,7 @@ export {
   type CreateHostedReplicaSyncOptions,
   type HostedReplicaSync,
   type ReplicaBatch,
+  type ReplicaStorageScope,
   type ReplicaRecord,
   type ReplicaReplacement,
   type ReplicaStatus,

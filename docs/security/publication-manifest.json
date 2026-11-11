@@ -56,7 +56,7 @@
         "path": "apps/camera/package.json",
         "sha256": "c8a02fb7558712e146296e67114a29f704677064714dd4d5e87697c906756b07"
       },
-      "outputSha256": "dafe30a7374dcdde2e1e3c57b5e0b1bf3b1c75e145032805b4a2c6276bccf857",
+      "outputSha256": "60a36ae6eee5abaea01662029ec01a624de2013d06f2deeac563b9068b17530e",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "Issue #3のpublic OAuth/PKCE、ローカル専用UI、安全契約と公開依存を新規接続。実issuer・署名検証器が未契約のため本番接続は無効。",
@@ -65,7 +65,8 @@
         "repository URLをniho-lifeへ移管",
         "公開repoに写真選択のMac自動E2E runnerを追加するnpm scriptを公開。",
         "公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。",
-        "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加"
+        "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加",
+        "Mac接続用のHosted Libraryと共有契約を直接依存へ追加"
       ]
     },
     {
@@ -76,7 +77,7 @@
         "path": "apps/camera/README.md",
         "sha256": "d0e1f198e83893a73cd3d84122debf76ad9755e00a5fc5e1b69c242daec8d4eb"
       },
-      "outputSha256": "cd352d7d56095eb3a6be52082b4469ad3bf3d20658a154967e3fc00f476917f1",
+      "outputSha256": "298a96849992a1aa377f58f19d18c6525897578fcf6ecafe814cb29f6431a6c1",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "フォルダと個別写真の利用方法、公開契約、および許可するネイティブコマンドを明記",
@@ -94,7 +95,8 @@
         "Issue #210の自動E2EにMac mini重処理guardとMac Studio実行手順を追記。",
         "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加",
         "Photo #244 / B03 実装後レビューの指摘（接続用ソフトのprocessを1つにする・窓の資源の解放・休止の答えのticket）を反映",
-        "#264 を base に追いつかせたマージで manifest を更新"
+        "#264 を base に追いつかせたマージで manifest を更新",
+        "B01/B03の索引・replica永続保存場所と起動条件を記載"
       ]
     },
     {
@@ -288,7 +290,7 @@
         "path": "apps/camera/src-tauri/permissions/camera.toml",
         "sha256": "3dabde32b43f01f12b93d48f2000a51a55abf48cc5866df2daa6dda9f31edae0"
       },
-      "outputSha256": "5501b267bf46be7401e874bdae50a80ff6e7667147d08372003aa8cb827c1ed0",
+      "outputSha256": "18f0d6a40ec9b4cdae9516dddd4f298ac3528518123d84ea30b89b8c0829c7d6",
       "modifications": [
         "共有形式フィルターを使う複数写真pickerと参照削除コマンドを同梱UIの権限内に追加 / 選択写真専用commandのbundle permissionを追加。",
         "Issue #3のpublic OAuth/PKCE、ローカル専用UI、安全契約と公開依存を新規接続。実issuer・署名検証器が未契約のため本番接続は無効。",
@@ -311,7 +313,8 @@
         "本人クラウド明示コピーの競合・取消修正と正式SDKの派生PNG検証を反映",
         "PR232のMac接続を単一のdurable mask barrierへ統合し固定keys・scope・実SDK能力を検証",
         "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加",
-        "#264 を base に追いつかせたマージで manifest を更新"
+        "#264 を base に追いつかせたマージで manifest を更新",
+        "隠し接続窓だけにlibrary別索引保存commandを追加"
       ]
     },
     {
@@ -506,7 +509,7 @@
         "path": "apps/camera/src-tauri/src/lib.rs",
         "sha256": "e6415b3d0633bb4753761b89f8860fffcfa9b67f95832ab971bd9b13eebaaffc"
       },
-      "outputSha256": "83a1c14a1edbc35b80ac8300106baba856ad7dbb77f3688b5efba1f570d18f24",
+      "outputSha256": "eb31d203cabbbbf0afdbd514df9b49373c33328ce6eb31343361b14601b114db",
       "modifications": [
         "公開SSOTのローカルMac実行に独立化。認証・非公開API/構成参照の削除、workspace依存・公開校正配置・合成テスト・無署名ビルド契約へ調整。",
         "共有形式フィルターを使う複数写真pickerと参照削除コマンドを同梱UIの権限内に追加 / 選択写真専用commandをinvoke handlerへ登録。",
@@ -537,7 +540,8 @@
         "PR232のMac接続を単一のdurable mask barrierへ統合し固定keys・scope・実SDK能力を検証",
         "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加",
         "Photo #244 / B03 実装後レビューの指摘（接続用ソフトのprocessを1つにする・窓の資源の解放・休止の答えのticket）を反映",
-        "#264 を base に追いつかせたマージで manifest を更新"
+        "#264 を base に追いつかせたマージで manifest を更新",
+        "Hosted connector index store commandを登録"
       ]
     },
     {
@@ -10345,8 +10349,8 @@
     },
     {
       "path": "apps/camera/src-tauri/src/hosted_connector.rs",
-      "sha256": "4057e57174ea1c793a2c03af25ae6303f36992455d3e2dfbff2b4bf098c7a54d",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+      "sha256": "fe1ad6d099fb8ba920045b10b5560741e15c24eb673f8da5c0d3183a7d97971f",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B03のlocal indexをprivate shard fileへ原子的に保存"
     },
     {
       "path": "apps/camera/src-tauri/src/mask_detection_tests.rs",
@@ -10440,8 +10444,8 @@
     },
     {
       "path": "apps/camera/src/hosted-connector/mac-hosted-connector.ts",
-      "sha256": "9f3e4e436938fdca52049a0b81ecf4e29205d8472be12256b5167252dfca83ca",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+      "sha256": "f4e6db01e60e173b67b28321213f0762120c3d9997aed13996d18c710d9f59e8",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 永続storeを接続し保存不成立時はconnectorを起動しない"
     },
     {
       "path": "apps/camera/src/hosted-connector/native-ports.test.ts",
@@ -10452,6 +10456,11 @@
       "path": "apps/camera/src/hosted-connector/native-ports.ts",
       "sha256": "1ff663213d7899eb83bf4b72a8db6cd749f9fc5a7d2711be6418cd048214f860",
       "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+    },
+    {
+      "path": "apps/camera/src/hosted-connector/persistent-stores.ts",
+      "sha256": "1cf3304c8b8c834e41f3618c12b9794a51cf0b52c950cf94e8586c00e77098fb",
+      "origin": "公開Issue #242/#244のため新規作成。Mac hosted connector のlocal index native portと、library単位に分離したpath-free replica IndexedDB storeを接続する。実写真・秘密・内部情報を含まない。\n変更理由: Mac native索引の初回読込をcacheし、書込不確定時はcacheを破棄して再読込する"
     },
     {
       "path": "apps/camera/src/local-library/local-photo-library-mask-surfaces.test.ts",
@@ -11090,8 +11099,8 @@
     },
     {
       "path": "package-lock.json",
-      "sha256": "c88cd2ccb5a2f01b1d0ff0baeae6db7d91b0d6379cac573eef5a0d808a15e929",
-      "origin": "公開SDKのReact 19型consumer smokeだけで使う開発依存のlockfile。runtime依存を変更しない。\n変更理由: 依存追加なしでPhoto session workspace linkとpackage metadataをnpmで同期\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02・SDK profileのmain lockを保持し、検証済みPhoto Webの3 lock entryとworkspace登録だけを統合。\n変更理由: C02の公開workspaceと固定hashおよびIndexedDB試験依存をintegrityで固定する\n変更理由: 既存固定依存だけで本人補正同期workspaceを登録\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: 共有契約packageとworkspace依存をlockへ登録。\n変更理由: B01 #242 の常設Macライブラリcore packageをroot workspace・Photo editing CI scopeへ登録。\n変更理由: Photo #244 / B03 の常設Mac接続用ソフト core（photo-hosted-connector）を workspace・lock・Photo editing CI scope へ登録\n変更理由: Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加"
+      "sha256": "7309ee812ed7ede63f4b6b7a2caff00bf5c21a279e2ae1c017f1ba5a44846aa8",
+      "origin": "公開SDKのReact 19型consumer smokeだけで使う開発依存のlockfile。runtime依存を変更しない。\n変更理由: 依存追加なしでPhoto session workspace linkとpackage metadataをnpmで同期\n変更理由: C04メディアpackageと公式SDK固定依存をworkspaceおよび必須CIへ登録\n変更理由: C02本人クラウドadapterと共通編集口の実データ整合・対象CIを登録\n変更理由: C02・SDK profileのmain lockを保持し、検証済みPhoto Webの3 lock entryとworkspace登録だけを統合。\n変更理由: C02の公開workspaceと固定hashおよびIndexedDB試験依存をintegrityで固定する\n変更理由: 既存固定依存だけで本人補正同期workspaceを登録\n変更理由: 公開済み修復を通常mergeで保持し、Mac bootstrapと原本保存の追加差分を統合。\n変更理由: 既存Web connectionとapplication入口を共有クラウドへ接続し、写真変更後に容量snapshotを再取得する。\n変更理由: C08: Photo Web署名付きreleaseの追加と、公式SDK 0.1.9の配布・静的build証跡を固定\n変更理由: 共有契約packageとworkspace依存をlockへ登録。\n変更理由: B01 #242 の常設Macライブラリcore packageをroot workspace・Photo editing CI scopeへ登録。\n変更理由: Photo #244 / B03 の常設Mac接続用ソフト core（photo-hosted-connector）を workspace・lock・Photo editing CI scope へ登録\n変更理由: Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychain・休止の抑止と検知・フォルダ登録・read-only読出し）を追加\n変更理由: Hosted Libraryと共有契約のworkspace依存を固定"
     },
     {
       "path": "package.json",
@@ -13680,8 +13689,8 @@
     },
     {
       "path": "packages/photo-hosted-connector/README.md",
-      "sha256": "453a0bf72023aaf76846b8a9203ace04220e584d6986ec5ca62c64a426645ad1",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+      "sha256": "eb26a12f40fac2e46e9019753730979546e371c80c5ff5ffdf8e12d1b95796d2",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: Mac用LocalIndexStoreとB01 ReplicaStoreの永続実装を記載"
     },
     {
       "path": "packages/photo-hosted-connector/src/credentials.ts",
@@ -13695,8 +13704,8 @@
     },
     {
       "path": "packages/photo-hosted-connector/src/index.ts",
-      "sha256": "9479cbea16127961059020bae2fcd7a142639bc6fe5d1c3332eefb33858bb244",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+      "sha256": "cec3a9642450b607fb80c92009c73361cb34f69efea41be2d665351be4b30bac",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: library別connector storage scope型を公開"
     },
     {
       "path": "packages/photo-hosted-connector/src/indexer.ts",
@@ -13710,13 +13719,13 @@
     },
     {
       "path": "packages/photo-hosted-connector/src/ports.ts",
-      "sha256": "4a9d157bc8b55229637e70e60854a8414070c4d522f5fcfb2cecef73d2c3fe97",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序"
+      "sha256": "3157f2b825c7371280551e38ad2fd52d416794ecf4e9a5f611b3dcfdab1e34d2",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序\n変更理由: LocalIndexStoreにpair先scopeを設定するportを追加"
     },
     {
       "path": "packages/photo-hosted-connector/src/service.ts",
-      "sha256": "a2e7f00f71a573b7c0ecf21054329c56e0759b7c782fcfad899d735d4fbe179c",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序"
+      "sha256": "8cc0326d4980abd971b97e7b6780a006d3596d75899bd1355e88fca67a56b4a4",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのOS非依存core・Node adapter・合成計測・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 修正NIHO索引の再試行キーと除外写真の原本読取順序\n変更理由: pairしたconnector/libraryでindexとreplica storeをscope"
     },
     {
       "path": "packages/photo-hosted-connector/test-support/fake-niho.ts",
@@ -13790,8 +13799,8 @@
     },
     {
       "path": "packages/photo-hosted-library/src/index.ts",
-      "sha256": "172944f1235a9ff55cf0633c6533efbda417f8ddc6fd3bbe1b9ab01bfc53d9cf",
-      "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+      "sha256": "30b6537968a975af69d6c611bb889d749d3d98618bf27cdcd42d13fa1cb6c7d0",
+      "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: durable replica storage scope型を公開"
     },
     {
       "path": "packages/photo-hosted-library/src/portability.ts",
@@ -13800,8 +13809,8 @@
     },
     {
       "path": "packages/photo-hosted-library/src/replica.ts",
-      "sha256": "fdab88688f7eb4684c4581c9d2b6fd797edca0664188f485ede6d957adcf4935",
-      "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B01: validate replica snapshots and export hashes\n変更理由: 上限で未完了の差分同期を次回へ引き継ぐ"
+      "sha256": "60b2fa44ad806eb5764534a8c94779ae02a92dfe38dcf732262bcc4ab04a64dc",
+      "origin": "Photo #242 / B01 の常設Macライブラリの控え同期・索引復旧・export/restoreの共通coreと合成mock・試験として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B01: validate replica snapshots and export hashes\n変更理由: 上限で未完了の差分同期を次回へ引き継ぐ\n変更理由: ReplicaStoreにpair先scopeを設定するportを追加"
     },
     {
       "path": "packages/photo-hosted-library/src/shared.ts",

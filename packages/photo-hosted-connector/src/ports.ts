@@ -116,6 +116,11 @@ export interface LocalIndexEntry {
   /** NIHO's recorded SHA-256 for an original that was unavailable during an index rebuild: checked on its first hash. */
   readonly verifyAgainst: string | null;
 }
+/** Owner scope for durable connector state. A re-paired library must not reuse another library's photo IDs or replica. */
+export interface ConnectorStorageScope {
+  readonly connectorId: string;
+  readonly libraryId: string;
+}
 export interface ScanCheckpoint {
   readonly scan: number;
   /** Directories still to list, as (rootId, relativeDir). */
@@ -127,6 +132,8 @@ export interface ScanCheckpoint {
 }
 /** Local index of this Mac (macOS: a file in Application Support). Rebuildable with recoverLocalIndex. */
 export interface LocalIndexStore {
+  /** Optional for in-memory/test stores; durable stores use this to isolate each NIHO library. */
+  setScope?(scope: ConnectorStorageScope): Promise<void>;
   get(localKey: string): Promise<LocalIndexEntry | null>;
   byPhotoId(photoId: string): Promise<LocalIndexEntry | null>;
   put(entries: readonly LocalIndexEntry[]): Promise<void>;

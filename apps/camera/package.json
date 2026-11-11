@@ -35,7 +35,9 @@
     "@niho/photo-cloud-session": "*",
     "@niho/photo-cloud-sync": "*",
     "@niho/photo-cloud-media": "*",
-    "@niho/photo-personal-cloud-contract": "*"
+    "@niho/photo-personal-cloud-contract": "*",
+    "@niho/photo-hosted-library": "*",
+    "@niho/photo-library-sharing-contract": "*"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.3.3",

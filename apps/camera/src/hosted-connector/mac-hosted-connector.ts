@@ -8,6 +8,7 @@
 import { bufferingHasher, createHostedConnector, type HostedConnectorOptions } from "@niho/photo-hosted-connector";
 
 import type { Invoke, Listen } from "../camera-bridge";
+import { createPersistentHostedConnectorStores } from "./persistent-stores";
 import {
   createNativePower,
   createNativeRootFileSystem,
@@ -19,7 +20,8 @@ import {
 } from "./native-ports";
 
 /** trusted host が渡すもの（Mac の native の口以外）。 */
-export type MacHostedConnectorRuntime = Pick<HostedConnectorOptions, "transport" | "index" | "replica" | "executors" | "uploader">;
+export type MacHostedConnectorRuntime = Pick<HostedConnectorOptions, "transport" | "executors" | "uploader">
+  & Partial<Pick<HostedConnectorOptions, "index" | "replica">>;
 
 /** tick の間隔（休止から戻ったときは待たずに続ける）。 */
 export const HOSTED_CONNECTOR_INTERVAL_MS = 30_000;
@@ -27,6 +29,7 @@ export const HOSTED_CONNECTOR_INTERVAL_MS = 30_000;
 export type MacHostedConnectorStart =
   | { readonly state: "notConfigured" }
   | { readonly state: "noFolders" }
+  | { readonly state: "storageUnavailable" }
   | { readonly state: "running"; readonly loop: HostedConnectorLoop; stop(): void };
 
 export async function startMacHostedConnector(options: {
@@ -41,11 +44,22 @@ export async function startMacHostedConnector(options: {
   if (!runtime) return { state: "notConfigured" };
   const roots = await readRegisteredRoots(invoke);
   if (!roots.length) return { state: "noFolders" };
+  let persistent: Awaited<ReturnType<typeof createPersistentHostedConnectorStores>> | null = null;
+  if (!runtime.index || !runtime.replica) {
+    try {
+      persistent = await createPersistentHostedConnectorStores(invoke);
+    } catch {
+      // Do not run against an in-memory store: a restart must preserve both the index and canonical replica.
+      return { state: "storageUnavailable" };
+    }
+  }
   const connector = createHostedConnector({
     ...runtime,
     vault: createNativeVault(invoke),
     fs: createNativeRootFileSystem(invoke),
     roots,
+    index: runtime.index ?? (persistent as NonNullable<typeof persistent>).index,
+    replica: runtime.replica ?? (persistent as NonNullable<typeof persistent>).replica,
     // 索引の hash は native（fs.hash）。ここは描画 job の executor が読んだ bytes の照合だけに使う
     hasher: bufferingHasher,
     power: createNativePower(invoke),

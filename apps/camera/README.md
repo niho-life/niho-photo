@@ -42,6 +42,7 @@ cargo test --locked --manifest-path packages/desktop-photo/Cargo.toml
 - **接続用ソフトの窓**: 表示しない窓（`hosted-connector.html`）で core を動かします。隠れていても止まらないよう WebKit の throttling を外します。この窓のコマンド（`camera_hosted_connector_*`）は `capabilities/hosted-connector.json` でこの窓だけに許し、main 窓には許しません（`command_acl_tests.rs`）。動かす process は 1 つだけで（Application Support の `hosted-connector/connector.lock` の advisory lock）、launchd の常駐と開いた画面の process が重なったら、lock を取れなかった方は取った方が終わるまで待って引き継ぎます。登録したフォルダが変わったら窓を読み直して組み立て直し、窓を閉じた・読み直したときは、その窓の休止の抑止と開いたファイルを native が全部外します。
 - **ファイルの読み出し**: 登録したフォルダは real path と device・inode に固定し、差し替え・symlink への置き換え・未 mount を「届かない」として扱います。その下は directory の descriptor から 1 要素ずつ `openat(O_NOFOLLOW)` で辿り、`..`・symlink・通常ファイル以外を拒みます。書き込み・command の実行はしません。索引の SHA-256 は native で読み、開いた時と読み終えた時の大きさ・device と inode・ns 精度の mtime と ctime が違えば捨てます（原本の bytes は画面へ渡しません。描画 job の executor だけが読みます）。path は native の外へ出しません。
 - **端末資格**: core の vault（端末資格・登録中と回転中の秘密・`localKey` の salt）を Keychain の 1 項目に置きます。
+- **索引と正本の控え**: 相対pathを含む索引と走査checkpointは、隠し接続窓だけに許可したnative command経由でApplication Supportへ保存し、connector/libraryの組ごとに分離します。pathを含まないNIHO replicaはpersistent IndexedDBへ保存します。replicaの差分batchはIndexedDB transactionで適用し、snapshotは世代を組み立ててからactive generationを切り替えます。どちらかの保存先が利用できないときはメモリ保存へfallbackせず、connectorを起動しません。
 - **休止**: job・同期・走査の間だけ `PreventUserIdleSystemSleep` の assertion を持ちます。休止の前は接続用ソフトへ ticket 付きで知らせ、同じ ticket の答え（NIHO へ `sleeping` を送り終えた）を最長 8 秒待ってから休止を許し、復帰したら続きから（控えは差分だけ）進めます。
 - **フォルダの登録**: main 窓の header の入口から、既存の copy 定数だけで一覧・追加（ネイティブの選択ダイアログ）・外すを行います。接続先を持つ trusted host が `hostedFolders` を渡したときだけ出します。
 
@@ -49,11 +50,11 @@ cargo test --locked --manifest-path packages/desktop-photo/Cargo.toml
 | --- | --- | --- |
 | `camera_hosted_folders_list` / `_add` / `_remove` | main | 登録したフォルダの ID・名前・今読めるか、追加、外す |
 | `camera_hosted_agent_status` | main | LaunchAgent の登録の状態 |
-| `camera_hosted_connector_roots` / `_root_status` / `_list` / `_stat` / `_open` / `_read` / `_close` / `_hash` | 接続用ソフト | 登録したフォルダの下を read-only で読む |
+| `camera_hosted_connector_roots` / `_index_store` / `_root_status` / `_list` / `_stat` / `_open` / `_read` / `_close` / `_hash` | 接続用ソフト | 登録したフォルダの下を read-only で読み、相対pathを含む索引をApplication Supportへ保存 |
 | `camera_hosted_connector_vault_read` / `_vault_write` | 接続用ソフト | Keychain の vault |
 | `camera_hosted_connector_power_hold` / `_power_release` / `_sleep_ready` | 接続用ソフト | 休止の抑止と、休止の知らせへの答え |
 
-公開の build は接続先（正本 API の transport）と保存先（索引・控え）を持たないので、接続用ソフトは動かず、登録の入口も出しません。これらと描画の executor（B07 #248）は、それぞれが揃った後に `startMacHostedConnector` へ渡します。
+公開の build は接続先（正本 API の transport）と描画の executor（B07 #248）を持たないので、接続用ソフトは動かず、登録の入口も出しません。非公開の trusted host が揃った transport と executor を `startMacHostedConnector` へ渡すと、索引と控えにはこの persistent store を使います。
 
 ## 共有アルバムの native 通信（Epic #240 / B08 #249）
 
