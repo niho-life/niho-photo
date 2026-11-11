@@ -14329,8 +14329,8 @@
     },
     {
       "path": "apps/camera/src/native-photo-render-jobs.test.ts",
-      "sha256": "8cc586625de86723652fc219a5db569815f9286a2b1fd3de0e5a2f4190315d44",
-      "origin": "NIHO作成 (niho-photo #248): synthetic test for native render-job route, library scope, and lazy renderer."
+      "sha256": "7354e97af7babf9da0075f2f6f61ffbfb4ba4dbbaf63a1fbee385bbe1269ab75",
+      "origin": "NIHO作成 (niho-photo #248): synthetic test for native render-job route, library scope, and lazy renderer.\n変更理由: 共有レンダージョブの合成資格期限を固定未来日にし日付経過でCIが壊れないようにする"
     },
     {
       "path": "packages/photo-cloud-library/test/render-client-transport.test.ts",
