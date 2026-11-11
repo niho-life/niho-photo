@@ -423,13 +423,22 @@ function validateItemMutation(operation: "albumItems.addPhoto" | "albumItems.add
 }
 
 function validateStorage(raw: unknown): void {
-  const keys = ["owner", "quotaBytes", "usedBytes", "previewBytes", "maskBytes", "renditionBytes", "exportStagingBytes", "reservedBytes", "availableBytes"];
-  const storage = exactRecord(raw, keys, keys);
+  const requiredKeys = ["owner", "quotaBytes", "usedBytes", "previewBytes", "maskBytes", "renditionBytes", "exportStagingBytes", "reservedBytes", "availableBytes"];
+  const optionalKeys = ["personalBytes", "personalReservedBytes", "sharedReservedBytes"];
+  const storage = exactRecord(raw, [...requiredKeys, ...optionalKeys], requiredKeys);
   const owner = exactRecord(storage.owner, ["type", "userId"], ["type", "userId"]);
   if (owner.type !== "user" || !isOpaqueWireId(owner.userId)) invalidResponse();
-  for (const key of keys.slice(1)) if (!safeNonNegative(storage[key])) invalidResponse();
+  for (const key of requiredKeys.slice(1)) if (!safeNonNegative(storage[key])) invalidResponse();
+  const hasCombinedUsage = optionalKeys.some((key) => storage[key] !== undefined);
+  if (hasCombinedUsage && optionalKeys.some((key) => !safeNonNegative(storage[key]))) invalidResponse();
   const parts = ["previewBytes", "maskBytes", "renditionBytes", "exportStagingBytes"].reduce((sum, key) => sum + (storage[key] as number), 0);
-  if (parts !== storage.usedBytes) invalidResponse();
-  const available = Math.max(0, (storage.quotaBytes as number) - (storage.usedBytes as number) - (storage.reservedBytes as number));
+  const used = parts + (hasCombinedUsage ? (storage.personalBytes as number) : 0);
+  const reserved = hasCombinedUsage
+    ? (storage.personalReservedBytes as number) + (storage.sharedReservedBytes as number)
+    : storage.reservedBytes as number;
+  if (!Number.isSafeInteger(parts) || !Number.isSafeInteger(used) || !Number.isSafeInteger(reserved)
+    || !Number.isSafeInteger(used + reserved)
+    || used !== storage.usedBytes || reserved !== storage.reservedBytes) invalidResponse();
+  const available = Math.max(0, (storage.quotaBytes as number) - used - reserved);
   if (storage.availableBytes !== available) invalidResponse();
 }

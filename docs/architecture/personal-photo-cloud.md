@@ -6,7 +6,7 @@ Epic [#192](https://github.com/niho-life/niho-photo/issues/192)、C00 [#193](htt
 
 - NIHO photoは独立した写真編集製品。Macのログイン不要・無料のローカル編集と書き出しを維持し、利用者が選んだ写真だけを明示操作でコピーする。Macの原本・補正を移動/削除せず、自動uploadしない。
 - 同じNIHO本人のMacアプリ、Macブラウザ、iPhone Safari/PWAが同じ原本と補正を扱う。拠点所属・ホスト権限・PWA追加は利用条件にしない。
-- 本人枠は **5 × 1024³ = 5,368,709,120 bytes**、表示5GB。端末・拠点ごとに増やさず、超過課金を追加しない。
+- owner枠は **5 × 1024³ = 5,368,709,120 bytes**、表示5GB。個人v2の原本・maskとBYOS共有領域を合算し、端末・拠点ごとに増やさず、超過課金を追加しない。
 - 原本・owner・予約/使用量・補正revision/競合・即時purgeは既存の非公開NIHO本人写真backendが正本。DTO/read modelはここから構成する。Editorのphoto-storeへ二重原本書込み・二重quota・別owner台帳を作らない。
 - NIHO editorは文書製品。ページ画像はページ添付資産であり、Photoライブラリ・容量・補正と共有しない。旧Editor写真画面を受入面・配布先にしない。
 - 削除は即時purge。ゴミ箱・復元・猶予期間を追加しない。他人の招待・公開リンク、自前サーバー/Tailscale保存先は対象外。
@@ -76,7 +76,7 @@ canonical本人IDは検証済みNIHO userから導く。メール・拠点ID・J
 
 | 対象 | 契約 |
 | --- | --- |
-| 本人枠 | `usedBytes = originalBytes + maskBytes`、`availableBytes = quotaBytes - usedBytes - reservedBytes`、`0 <= used + reserved <= 5,368,709,120` |
+| owner枠 | `usedBytes = originalBytes + maskBytes + sharedBytes`、`reservedBytes = personalReservedBytes + sharedReservedBytes`、`availableBytes = max(0, quotaBytes - usedBytes - reservedBytes)`。新規予約は合算5,368,709,120 bytes以内。既存データが上限超過なら読み取りを維持し、残量0で追加を拒否する |
 | 原本/mask | 再生成できないbinaryを同じ本人枠に算入。mask台帳は現行backendで不足しC03で追加。別DBへ逃がさない |
 | 予約/検証中 | `reservedBytes`に算入。original/maskを同じowner lockで原子的に予約。遅着workerがcommitできる間は回収しない |
 | 物理削除待ち | `pendingPurgeBytes`はusedの内数。非表示だけで空きを戻さず、固定generation削除確認後に一度だけ解放 |

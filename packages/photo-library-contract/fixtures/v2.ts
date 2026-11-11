@@ -95,6 +95,7 @@ export const library: PersonalPhotoLibrary = {
     quotaBytes: PHOTO_LIMITS.quotaBytes, usedBytes: original.sizeBytes + mask.sizeBytes,
     originalBytes: original.sizeBytes, maskBytes: mask.sizeBytes,
     pendingPurgeBytes: 0, reservedBytes: original.sizeBytes,
+    sharedBytes: 0, sharedReservedBytes: 0,
     availableBytes: PHOTO_LIMITS.quotaBytes - original.sizeBytes * 2 - mask.sizeBytes,
   },
   capabilities: {
@@ -122,7 +123,8 @@ export const emptyLibrary: PersonalPhotoLibrary = {
   ...library, revision: 0,
   usage: {
     quotaBytes: PHOTO_LIMITS.quotaBytes, usedBytes: 0, originalBytes: 0, maskBytes: 0,
-    pendingPurgeBytes: 0, reservedBytes: 0, availableBytes: PHOTO_LIMITS.quotaBytes,
+    pendingPurgeBytes: 0, reservedBytes: 0, sharedBytes: 0, sharedReservedBytes: 0,
+    availableBytes: PHOTO_LIMITS.quotaBytes,
   },
 };
 export const emptyPage: PhotoPage = {

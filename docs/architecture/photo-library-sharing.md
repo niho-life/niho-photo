@@ -5,7 +5,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 ## 位置づけ
 
 - 非公開側のサーバーは、この契約を photo-sdk の `niho-photo-library-sharing-contract`（SDK 0.1.11 以降、release manifest schema 4。入口は `.`・`./policy`・`./routes`）から取り込む（[SDK の構成](../../sdk/README.md)）。
-- 本人専用の [`@niho/photo-personal-cloud-contract` v2](personal-photo-cloud.md) の機能と型は変更しない。v2 は本人専用・5GiB・`albums: false` のまま動き、共有は追加契約 v1 で扱う。owner方針（2026-11-11）では、この5GiBを個人v2と共有領域で合算する。最終判定は既存backendで行い、現在のv1/v2 usage responseだけでは合算値を示せないため、集計契約の更新と実装が済むまでrolloutしない。
+- 本人専用の [`@niho/photo-personal-cloud-contract` v2](personal-photo-cloud.md) のlibrary・photo・capabilityは本人専用、`albums: false` のまま動き、共有操作は追加契約 v1 で扱う。owner方針（2026-11-11）では5GiBを個人v2と共有領域で合算する。v2 usageは任意の`sharedBytes`/`sharedReservedBytes`、v1 storageは任意の個人/共有内訳を返し、旧応答も読み取れる。最終判定は既存backendが行う。
 - v1 は v2 の型を再利用する。#195 の `UploadTicket`・`PhotoContent`、#196 の `RecipeDocument`・`RecipeConflict`、#197 の `RenderCapability` を別に定義しない。
 - 公開契約に実HTTP route・DB schema・内部locator・資格情報を入れない。request は入れ子まで閉じた形で、想定外の key は無視せず `invalid_request` にする（`SHARING_REQUEST_SHAPES`・`CONNECTOR_REQUEST_SHAPES`）。body の owner・role・revision・path を認可の証明にしない。recipe の settings だけは #196 の validator が検査する open JSON。
 
@@ -97,7 +97,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - 完成済み JPEG の直接追加は元写真への参照を持たず、自動では差し替えない。
 - 確定する bytes の metadata は、許可した項目（撮影日時 `capturedAt`・`capturedAtOffset`、向き `orientation: 1`、色 profile `colorProfile`）だけ。それ以外の項目は、位置情報・機材シリアル・元のパスに限らず（機材名・レンズ・ソフトウェア・未知の項目・入れ子も）確定を拒否する（`findDisallowedRenditionMetadata`、`content_rejected`）か、サーバーが `sanitizeRenditionMetadata` で作り直した bytes を確定する。download のファイル名に元のファイル名やパスを使わない。
 - byte が届く前の確定は、v2 と同じ `upload_state_conflict`（409）。upload を続けてから確定し直す。アルバムの upload の ticket は `albumItems.renewUpload`（v2 の `uploads.renew` と同じ形。mutation ではない）で取り直し、取り消して上げ直さない。
-- 共有人数で完成写真を複製しない。容量はアルバムの owner の共有容量（`SharedStorageUsage`）に算入する。追加のときに容量が足りなければ `quota_exceeded`、描いた後の予約で足りなければ項目を `quotaExceeded` で待たせる。
+- 共有人数で完成写真を複製しない。容量はownerの5GiB合算枠（個人v2と`SharedStorageUsage`）に算入する。追加のときに容量が足りなければ `quota_exceeded`、描いた後の予約で足りなければ項目を `quotaExceeded` で待たせる。
 - アルバム名は 1〜100 文字（Unicode の code point で数える。空白だけは不可。サーバーと同じ規則）。
 
 ## 招待リンク
@@ -242,7 +242,7 @@ Epic [#240](https://github.com/niho-life/niho-photo/issues/240)、B00 [#241](htt
 - `personalV2ScopeFor`: v2 の scope は本人の有効な `nihoCloud` library だけ。常設Mac・端末内・共有アルバム経由のアクセスは null。
 - `renderBindingFromPersonalV2`: NIHO クラウドの写真の描画束縛（v2 の原本は不変なので source 世代は1）。
 - 容量（owner方針 2026-11-11）: owner単位の5GiBを個人v2と共有領域で合算する。個人v2の原本・mask、共有preview・hosted library mask・完成写真・書き出し一時領域に加え、両経路の予約容量も同じ残量判定へ含める。書込み・差替え・render確定は既存backendが全項目の予約を含めて原子的に判定し、v2とsharingの両APIで同じ残量を使う。個人原本、mask、完成写真は容量整理で削除しない。再生成できる古いpreviewだけをcache eviction対象にでき、必要時は元データを持つMacが稼働してから再生成する。
-- 公開契約の追従条件: 現在のv2 `QuotaUsage` とv1 `SharedStorageUsage` は別々の使用量を返し、v1は共有容量を個人5GiBとは別枠と記述している。owner向けstorage responseに合算後の使用量・予約量・残量を表す追加契約を設け、既存SDK/APIとの互換移行とprivate backendを同時に完了してからcombined quotaを有効にする。現行wire shapeだけで「5GiB合算済み」と表示・判定しない。
+- 契約移行: v2 `QuotaUsage` とv1 `SharedStorageUsage` は合算内訳を任意フィールドとして追加し、旧応答との互換を維持する。private backendが両方のusage responseへ合算値を出し、全reserve/commitが同じowner lockで直列化されてからcombined quotaを有効にする。任意フィールドのない応答を合算済みと解釈しない。
 - download費用（owner方針 2026-11-11）: owner単位で月間download上限を持ち、共有メンバーの配信bytesもownerへ算入する。100GiB/月を初期案とし、3ユーザーの実測とGCS/BFFの経路別費用を確認して配布前に確定する。新しい課金は導入しない。
 
 ## 公開・非公開の責務と writer

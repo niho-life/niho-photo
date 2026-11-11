@@ -1,9 +1,9 @@
 /**
- * Compatibility adapter between the unchanged personal v2 port and this contract.
+ * Compatibility adapter between the personal v2 port and this contract.
  *
  * Direction is one way: a personal v2 library can appear as a `nihoCloud` library and as an album source.
  * Nothing here turns a hosted library, a shared album or another user's access into a v2 scope, rewrites the v2
- * owner, flips v2 `albums: false`, or applies the v2 5 GiB pool to shared storage.
+ * owner, or flips v2 `albums: false`. The owner quota is shared by personal v2 and BYOS shared storage.
  */
 import { PHOTO_LIBRARY_CONTRACT_VERSION } from "../../photo-library-contract/src/v2.ts";
 import type {
@@ -19,10 +19,8 @@ export const PERSONAL_V2_COMPATIBILITY = {
   personalContractVersion: PHOTO_LIBRARY_CONTRACT_VERSION,
   /** v2 capability flags stay false. Sharing is discovered only through this contract. */
   personalCapabilities: { albums: false, publicSharing: false },
-  /** The v2 5 GiB pool covers nihoCloud originals and masks only, exactly as before. */
-  personalQuotaScope: "nihoCloudOriginalsAndMasks",
-  /** Hosted previews, renditions and export staging are charged to SharedStorageUsage of the owner. */
-  sharedQuotaScope: "ownerSharedStorage",
+  /** One 5 GiB owner pool covers nihoCloud originals/masks and BYOS shared binaries/reservations. */
+  ownerQuotaScope: "personalV2AndSharedStorage",
   /** v2 originals are immutable; a different original is a different photo. */
   personalSourceGeneration: 1,
 } as const;

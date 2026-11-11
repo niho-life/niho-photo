@@ -52,6 +52,9 @@ export function validateLibrary(value: PersonalPhotoLibrary, ownerId: string, li
 
 export function validateUsage(value: QuotaUsage): QuotaUsage {
   if (!isRecord(value)) invalid();
+  const hasSharedUsage = value.sharedBytes !== undefined || value.sharedReservedBytes !== undefined;
+  const sharedBytes = hasSharedUsage ? value.sharedBytes : 0;
+  const sharedReservedBytes = hasSharedUsage ? value.sharedReservedBytes : 0;
   const numbers = [
     value.quotaBytes,
     value.usedBytes,
@@ -60,14 +63,23 @@ export function validateUsage(value: QuotaUsage): QuotaUsage {
     value.pendingPurgeBytes,
     value.reservedBytes,
     value.availableBytes,
+    ...(hasSharedUsage ? [sharedBytes, sharedReservedBytes] : []),
   ];
+  const personalUsedBytes = value.originalBytes + value.maskBytes;
+  const totalUsedBytes = personalUsedBytes + (sharedBytes as number);
+  const totalReservedBytes = value.reservedBytes;
   if (
     !numbers.every(safeNonNegative) ||
     value.quotaBytes !== PHOTO_LIMITS.quotaBytes ||
-    value.usedBytes !== value.originalBytes + value.maskBytes ||
-    value.pendingPurgeBytes > value.usedBytes ||
-    value.usedBytes + value.reservedBytes > value.quotaBytes ||
-    value.availableBytes !== value.quotaBytes - value.usedBytes - value.reservedBytes
+    !Number.isSafeInteger(personalUsedBytes) ||
+    !Number.isSafeInteger(totalUsedBytes) ||
+    !Number.isSafeInteger(totalUsedBytes + totalReservedBytes) ||
+    value.usedBytes !== totalUsedBytes ||
+    value.pendingPurgeBytes > value.originalBytes + value.maskBytes ||
+    (hasSharedUsage && (value.sharedBytes === undefined || value.sharedReservedBytes === undefined
+      || value.sharedReservedBytes > value.reservedBytes)) ||
+    (!hasSharedUsage && totalUsedBytes + totalReservedBytes > value.quotaBytes) ||
+    value.availableBytes !== Math.max(0, value.quotaBytes - value.usedBytes - value.reservedBytes)
   ) {
     invalid();
   }
