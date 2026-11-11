@@ -8,6 +8,7 @@ import {
   recipeConflict,
   recipeConflictPage,
 } from "../../photo-library-contract/fixtures/v2.ts";
+import { PHOTO_LIMITS } from "../../photo-library-contract/src/v2.ts";
 import { nihoCloudLibraryFromPersonalV2 } from "../src/compat-v2.ts";
 import { ALBUM_PERMISSIONS } from "../src/v1.ts";
 import type {
@@ -307,11 +308,15 @@ export const revokedInviteLink: InviteLink = { ...inviteLink, revoked: true, rev
 
 // --- Storage, render jobs, exports -----------------------------------------------------------------------
 
-/** Separate owner-charged pool; its quota is server policy, not the personal 5 GiB. */
+/** Combined 5 GiB owner pool; personal originals/masks and shared assets/reservations are both included. */
 export const sharedStorage: SharedStorageUsage = {
-  owner: { type: "user", userId: USERS.owner }, quotaBytes: 1024 ** 3,
-  usedBytes: 65536 + 4096 + 3 * 8 * 1024 ** 2, previewBytes: 65536, maskBytes: 4096, renditionBytes: 3 * 8 * 1024 ** 2,
-  exportStagingBytes: 0, reservedBytes: 8 * 1024 ** 2, availableBytes: 1024 ** 3 - 65536 - 4096 - 4 * 8 * 1024 ** 2,
+  owner: { type: "user", userId: USERS.owner }, quotaBytes: PHOTO_LIMITS.quotaBytes,
+  usedBytes: 128 * 1024 ** 2 + 65536 + 4096 + 3 * 8 * 1024 ** 2,
+  previewBytes: 65536, maskBytes: 4096, renditionBytes: 3 * 8 * 1024 ** 2,
+  exportStagingBytes: 0, personalBytes: 128 * 1024 ** 2,
+  personalReservedBytes: 16 * 1024 ** 2, sharedReservedBytes: 8 * 1024 ** 2,
+  reservedBytes: 24 * 1024 ** 2,
+  availableBytes: PHOTO_LIMITS.quotaBytes - 128 * 1024 ** 2 - 65536 - 4096 - 3 * 8 * 1024 ** 2 - 24 * 1024 ** 2,
 };
 export const renderJob: RenderJob = {
   id: IDS.job, purpose: { kind: "albumItem", albumId: IDS.album, itemId: IDS.ownerItem, itemRevision: 1 },

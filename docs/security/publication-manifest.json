@@ -10959,8 +10959,8 @@
     },
     {
       "path": "docs/architecture/personal-photo-cloud.md",
-      "sha256": "3d7485790178a112a0b23fd65f893a382be7df1baedf17bdaae7656163c9d696",
-      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消\n変更理由: 親sessionと通常refreshを区別し端末間の独立性と失効時の旧scope破棄を明確化\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。\n変更理由: native失効時はWASM読込より先に旧renderer宣言を失効させる\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: 競合ID直接取得と本人Photo境界を接続契約へ追加\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記"
+      "sha256": "927e2568227b07f755a8beaa405aad459c5551d66603588715bc65a9819dc90f",
+      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 独立レビューで指摘された認証世代・削除retry・stream取得・能力交差writerの曖昧さを解消\n変更理由: 親sessionと通常refreshを区別し端末間の独立性と失効時の旧scope破棄を明確化\n変更理由: 実renderer能力の宣言と既存Worker経由の取得を追加。描画処理を変えず、未対応・破棄中は能力を閉じる。\n変更理由: mask feature・実効mask・非空種類の整合を必須にし、mask非対応runtimeの能力宣言を閉じる回帰を追加。\n変更理由: native失効時はWASM読込より先に旧renderer宣言を失効させる\n変更理由: C00の実能力と補正中立性を正式SDK0.1.9で配布する\n変更理由: 競合ID直接取得と本人Photo境界を接続契約へ追加\n変更理由: 本人cloudのcurrent asset読取とSDK共通mask検証を接続し、名前付き版を今回対象外へ明記\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映"
     },
     {
       "path": "docs/architecture/personal-photo-mac.md",
@@ -10979,8 +10979,8 @@
     },
     {
       "path": "docs/architecture/photo-library-sharing.md",
-      "sha256": "e02131cd8a14641372392e93ba5de30529b986397db8c0b497f6636f778f4392",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 経路decodeの検査範囲とBFF・serverの責務を明確化。\n変更理由: Portable exportの取得経路とworking copy送信契約を追記。\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加\n変更理由: B00のcookie境界文書をmainと統合\n変更理由: Record owner-approved combined quota, preview eviction, and download cap before rollout"
+      "sha256": "8e34f067a7131045d930ca17c57454fe535a22bffe49532d108bd6b5d19b09be",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 経路decodeの検査範囲とBFF・serverの責務を明確化。\n変更理由: Portable exportの取得経路とworking copy送信契約を追記。\n変更理由: Photo #241 / B00 の契約v1をphoto-sdkの次のrelease（schema 4、niho-photo-library-sharing-contract）の対象に登録\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加\n変更理由: B00のcookie境界文書をmainと統合\n変更理由: Record owner-approved combined quota, preview eviction, and download cap before rollout\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映"
     },
     {
       "path": "docs/ci/public-ci.md",
@@ -12199,8 +12199,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/album-wire.ts",
-      "sha256": "333ae34dfcf798c0f2e8fb78d036c3061d38b4343d6e22c58025b583cd2360d3",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "d96fd08a2f527650eec02c7c5fdd0a6fbe1698556ea53de2b068b1297178e2a3",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映"
     },
     {
       "path": "packages/photo-cloud-library/src/sharing/contract.ts",
@@ -12244,8 +12244,8 @@
     },
     {
       "path": "packages/photo-cloud-library/src/validation.ts",
-      "sha256": "808eb2463c52e2500177a302a747affea4657c9b1c45592d87c5cd2aa1d28d0e",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02 HTTP境界で実uploadと完全recipe candidateを閉じた上限で検証する\n変更理由: transportだけ既知envelope分を許可しrecipeとmetadataのroot深さ32は維持\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証"
+      "sha256": "11199359c37dc9317eb4f4b1dea2261cd15586d0eae568f71c70069955a7aa30",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: C02 HTTP境界で実uploadと完全recipe candidateを閉じた上限で検証する\n変更理由: transportだけ既知envelope分を許可しrecipeとmetadataのroot深さ32は維持\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映"
     },
     {
       "path": "packages/photo-cloud-library/src/wire.ts",
@@ -12254,8 +12254,8 @@
     },
     {
       "path": "packages/photo-cloud-library/test/adapter.test.ts",
-      "sha256": "027bf8c6522d89828dc018275d853b168371d1f02a5451df96a3519d87f6d7ef",
-      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証"
+      "sha256": "2d6c725dfbfc6d0f1f45bfd43cb0269ef987872b2c1a1aaf202ae0d178b8939b",
+      "origin": "NIHO所有の新規C02 v2本人クラウドadapterと対象試験・設定。C00公開契約と既存共通PhotoLibrary/SDKを再利用。旧Editor v1のHTTP配置・quota・trashは移植せず、合成fixtureだけを使用。実写真・資格情報・内部URLを含まない。\n変更理由: 完全補正のdurable draftと固定再送・競合選択の世代境界を実装し検証\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映"
     },
     {
       "path": "packages/photo-cloud-library/test/content-delete.test.ts",
@@ -12314,8 +12314,8 @@
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-album-client.test.ts",
-      "sha256": "86f322781e2021a7ce5a9d33e95d15c1e17b31ca6c1bd3260428dae9483da112",
-      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。"
+      "sha256": "a6d94394072e6a87e8dff585c2d6203d20ef548755b6b933e783fc44e32f5d92",
+      "origin": "NIHO所有の公開sourceとして新規作成。Epic #240 B12 #254 の共有アルバムの項目（3種類の追加・差し替え・削除・保存）の client、UI向けの操作、合成 server と回帰試験。判定は B00 の公開契約の policy を使う。合成の ID・表示名・JPEG だけを使い、秘密、内部URL、実写真、個人情報、第三者提供資産を含まない。\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映"
     },
     {
       "path": "packages/photo-cloud-library/test/sharing-album-items.test.ts",
@@ -13874,8 +13874,8 @@
     },
     {
       "path": "packages/photo-library-contract/fixtures/v2.ts",
-      "sha256": "066bea5bddec705161c6065b4e52393827415213bf60e0f70999908fe680cd3b",
-      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。 公開済み niho-life/niho-editor source 9c57b4698e755e025ab4bb53361a42421557722c の packages/photo-library-contract/fixtures/v1.ts (SHA-256 eab8d98608c8db01a9c5a0dbb4975a78d27b8a662e656bc41a4c2cb19c272c0e) を一度監査抽出し、Photo v2・即時purge・200MiB/30分/60件・transport非依存へ変更。以後Photo側だけで保守する。\n変更理由: 競合ID取得の型付き合成応答fixtureを追加"
+      "sha256": "9c9529c1565b9e04d75b465585561e3726ced75d903989b17596ab31eb7ef51c",
+      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。 公開済み niho-life/niho-editor source 9c57b4698e755e025ab4bb53361a42421557722c の packages/photo-library-contract/fixtures/v1.ts (SHA-256 eab8d98608c8db01a9c5a0dbb4975a78d27b8a662e656bc41a4c2cb19c272c0e) を一度監査抽出し、Photo v2・即時purge・200MiB/30分/60件・transport非依存へ変更。以後Photo側だけで保守する。\n変更理由: 競合ID取得の型付き合成応答fixtureを追加\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映"
     },
     {
       "path": "packages/photo-library-contract/operation-coverage.json",
@@ -13899,8 +13899,8 @@
     },
     {
       "path": "packages/photo-library-contract/src/v2.ts",
-      "sha256": "c0dca5fed75867db8edccfd66aa7a2a57c0b920d0756c2ed3b99bb954f618e08",
-      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。 公開済み niho-life/niho-editor source 9c57b4698e755e025ab4bb53361a42421557722c の packages/photo-library-contract/src/v1.ts (SHA-256 63b2209fb0b03c42f19f16ab0b18b168fa6c540d6b8064b3f2ed1476a29502c0) を一度監査抽出し、Photo v2・即時purge・200MiB/30分/60件・transport非依存へ変更。以後Photo側だけで保守する。\n変更理由: retry/CASを伴うmutationの冪等keyと捕捉scopeを型で必須化する\n変更理由: server由来session世代と削除冪等性を明記しcontentをdomain rangeとbounded streamへ統一\n変更理由: 既存backendのopaque IDと親session失効世代を明記し通常refresh時のscope維持を確定\n変更理由: 履歴ページ数に依存しない競合ID取得operationを追加"
+      "sha256": "7c95e81d9539f369ddf522e0ba1a08341c502cd463c13f319e3738bcd5457fd9",
+      "origin": "Photo #193 / C00 の本人クラウド契約・合成fixture・未接続API対応表・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。 公開済み niho-life/niho-editor source 9c57b4698e755e025ab4bb53361a42421557722c の packages/photo-library-contract/src/v1.ts (SHA-256 63b2209fb0b03c42f19f16ab0b18b168fa6c540d6b8064b3f2ed1476a29502c0) を一度監査抽出し、Photo v2・即時purge・200MiB/30分/60件・transport非依存へ変更。以後Photo側だけで保守する。\n変更理由: retry/CASを伴うmutationの冪等keyと捕捉scopeを型で必須化する\n変更理由: server由来session世代と削除冪等性を明記しcontentをdomain rangeとbounded streamへ統一\n変更理由: 既存backendのopaque IDと親session失効世代を明記し通常refresh時のscope維持を確定\n変更理由: 履歴ページ数に依存しない競合ID取得operationを追加\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映"
     },
     {
       "path": "packages/photo-library-contract/tsconfig.json",
@@ -13924,8 +13924,8 @@
     },
     {
       "path": "packages/photo-library-sharing-contract/fixtures/v1.ts",
-      "sha256": "8adad34917ee31c553bc20025d7f7a9eb97e633221fe70675b089bae5a837231",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 追加したupload operationの合成応答を登録。\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加"
+      "sha256": "48d862c725662d51642cb3069ac0514b40579b877365d517433c1f3b6ed7ac7b",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 追加したupload operationの合成応答を登録。\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映"
     },
     {
       "path": "packages/photo-library-sharing-contract/operation-coverage.json",
@@ -13944,8 +13944,8 @@
     },
     {
       "path": "packages/photo-library-sharing-contract/src/compat-v2.ts",
-      "sha256": "209d32c5cea249b3722bc99316b26e31335ce75c78bb64f7ab7699b362364828",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。"
+      "sha256": "f32156b7d883494d4e80864c4554c6784bd39200526c19b00c2b060f25038eec",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映"
     },
     {
       "path": "packages/photo-library-sharing-contract/src/policy.ts",
@@ -13959,13 +13959,13 @@
     },
     {
       "path": "packages/photo-library-sharing-contract/src/v1.ts",
-      "sha256": "475ac657a833a1a2c90cb222b7dcb98c8f94060423497be54bc9a6a642992ea0",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: portable content streamと世代束縛uploadを追加。\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加"
+      "sha256": "7a9282706acd80ebc10ac2aad224930e7c544bbea10e3d2de393df0886757dd4",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: portable content streamと世代束縛uploadを追加。\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映"
     },
     {
       "path": "packages/photo-library-sharing-contract/test/contract.test.mjs",
-      "sha256": "69284089ac4f03c9a99692abd94b913bdd312e682c8717c913ad7796039dcbc6",
-      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: レシピ保存のreplica状態をacknowledgedRevisionで照合。\n変更理由: portable export streamを契約fixture検査から除外。\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加"
+      "sha256": "db6ce2e03ce2a89e61699f2a86e7ee7a6fc28d9b8656dbb9be55ba3990e6369d",
+      "origin": "Photo #241 / B00 の保管場所・共有アルバム・完成写真の公開契約・合成fixture・負例・検証として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: レシピ保存のreplica状態をacknowledgedRevisionで照合。\n変更理由: portable export streamを契約fixture検査から除外。\n変更理由: Photo #241 / B00 にB12 #262の提案（アルバムuploadのticket更新・追加者の権限喪失時の遷移・metadataの許可リスト・byte前の確定のupload_state_conflict）を反映\n変更理由: Photo #241 / B00 に未ログインで開いた招待の保留（BFFだけの2経路・負例）とアルバムのmemberCountを追加\n変更理由: 個人Photoと共有アルバムのowner合算5GiB容量契約を反映"
     },
     {
       "path": "packages/photo-library-sharing-contract/test/routes.test.mjs",

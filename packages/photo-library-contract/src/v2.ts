@@ -94,18 +94,25 @@ export interface PhotoCapabilityContext {
   readonly host: RenderCapability;
 }
 
-/** User-visible binary quota; reproducible derivatives and bounded JSON are overhead. */
+/** User-visible owner quota shared by personal v2 and BYOS shared albums. */
 export interface QuotaUsage {
+  /** Owner-wide limit. Personal originals/masks and shared album binaries use this same pool. */
   readonly quotaBytes: number;
-  /** All retained originals + mask surfaces, including pending physical purge. */
+  /** Total retained personal + shared binaries, including personal data pending physical purge. */
   readonly usedBytes: number;
+  /** Retained personal originals, including pending physical purge. */
   readonly originalBytes: number;
+  /** Personal mask surfaces, including pending physical purge. */
   readonly maskBytes: number;
   /** Included in usedBytes until the immutable generation is confirmed deleted. */
   readonly pendingPurgeBytes: number;
-  /** Includes verification leases; never expire it while a stale worker can commit. */
+  /** Personal and shared upload reservations; never expire personal leases while a stale worker can commit. */
   readonly reservedBytes: number;
   readonly availableBytes: number;
+  /** Shared-album previews, masks, completed renditions and export staging included in usedBytes. */
+  readonly sharedBytes?: number;
+  /** Shared-album upload reservations included in reservedBytes. */
+  readonly sharedReservedBytes?: number;
 }
 
 export interface PersonalPhotoLibrary {

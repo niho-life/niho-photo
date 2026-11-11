@@ -264,8 +264,8 @@ test("the personal v2 contract stays unchanged and only maps one way", () => {
     lifecycle: "active", metadataRevision: personalLibrary.revision, metadataAuthority: "niho", originals: "niho", port: "personalCloudV2",
   });
   assert(!("usage" in projected));
-  assert.equal(PERSONAL_V2_COMPATIBILITY.personalQuotaScope, "nihoCloudOriginalsAndMasks");
-  assert.notEqual(fixtures.sharedStorage.quotaBytes, PHOTO_LIMITS.quotaBytes);
+  assert.equal(PERSONAL_V2_COMPATIBILITY.ownerQuotaScope, "personalV2AndSharedStorage");
+  assert.equal(fixtures.sharedStorage.quotaBytes, PHOTO_LIMITS.quotaBytes);
   assert.throws(() => nihoCloudLibraryFromPersonalV2({ ...personalLibrary, capabilities: { ...personalLibrary.capabilities, albums: true } }), PersonalV2CompatibilityError);
   assert.throws(() => nihoCloudLibraryFromPersonalV2({ ...personalLibrary, contractVersion: 3 }), PersonalV2CompatibilityError);
 
@@ -285,11 +285,12 @@ test("the personal v2 contract stays unchanged and only maps one way", () => {
   assert.throws(() => renderBindingFromPersonalV2(maskedPhoto, { ...personalLibrary.capabilities.renderer, engines: ["niho-1"] }), PersonalV2CompatibilityError);
 });
 
-test("shared storage is a separate owner pool with exact arithmetic", () => {
+test("shared storage reports the combined owner pool with exact arithmetic", () => {
   const usage = fixtures.sharedStorage;
   for (const value of Object.values(usage)) if (typeof value === "number") assert(Number.isSafeInteger(value) && value >= 0);
-  assert.equal(usage.usedBytes, usage.previewBytes + usage.maskBytes + usage.renditionBytes + usage.exportStagingBytes);
-  assert.equal(usage.availableBytes, usage.quotaBytes - usage.usedBytes - usage.reservedBytes);
+  assert.equal(usage.usedBytes, usage.personalBytes + usage.previewBytes + usage.maskBytes + usage.renditionBytes + usage.exportStagingBytes);
+  assert.equal(usage.reservedBytes, usage.personalReservedBytes + usage.sharedReservedBytes);
+  assert.equal(usage.availableBytes, Math.max(0, usage.quotaBytes - usage.usedBytes - usage.reservedBytes));
   assert.equal(usage.owner.userId, fixtures.USERS.owner);
   const need = { availableBytes: 0, requiredBytes: 8 * 1024 ** 2 };
   assert.deepEqual(quotaExceededError("member", "synthetic-request", need), fixtures.memberQuotaError.error);

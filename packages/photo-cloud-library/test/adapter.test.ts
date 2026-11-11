@@ -11,10 +11,42 @@ import {
 import type { PhotoOperationMap } from "@niho/photo-personal-cloud-contract";
 
 import { PersonalPhotoCloudError } from "../src/index";
+import { validateUsage } from "../src/validation";
 import { deepEqual, jsonStructuralFingerprint } from "../src/protocol";
 import { FakeClient, FakeIdentity, defaultActor, makeHandle } from "./support";
 
 describe("personal photo cloud adapter", () => {
+  it("accepts combined owner usage, keeps old usage readable, and floors over-quota legacy data at zero", () => {
+    const usage = page.usage;
+    expect(validateUsage(usage)).toBe(usage);
+    const legacy = { ...usage };
+    delete (legacy as { sharedBytes?: number }).sharedBytes;
+    delete (legacy as { sharedReservedBytes?: number }).sharedReservedBytes;
+    expect(validateUsage(legacy)).toEqual(legacy);
+
+    expect(validateUsage({
+      quotaBytes: 5 * 1024 ** 3,
+      usedBytes: 5 * 1024 ** 3 + 1,
+      originalBytes: 5 * 1024 ** 3,
+      maskBytes: 0,
+      pendingPurgeBytes: 0,
+      reservedBytes: 0,
+      availableBytes: 0,
+      sharedBytes: 1,
+      sharedReservedBytes: 0,
+    })).toMatchObject({ availableBytes: 0 });
+
+    expect(() => validateUsage({ ...legacy, sharedReservedBytes: 0 })).toThrowError(
+      new PersonalPhotoCloudError("invalid_response"),
+    );
+    expect(() => validateUsage({
+      ...legacy,
+      usedBytes: 5 * 1024 ** 3 + 1,
+      originalBytes: 5 * 1024 ** 3 + 1,
+      availableBytes: 0,
+    })).toThrowError(new PersonalPhotoCloudError("invalid_response"));
+  });
+
   it("validates identity, preserves same-parent refresh caches, and invalidates late responses", async () => {
     const mismatched = new FakeIdentity(defaultActor({ userId: IDS.userB }));
     expect(() => makeHandle(new FakeClient(), mismatched)).toThrowError(new PersonalPhotoCloudError("invalid_identity"));

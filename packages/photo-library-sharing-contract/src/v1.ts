@@ -1,7 +1,8 @@
 /**
  * Photo library storage + shared album port v1 (Epic #240 / B00 #241).
  *
- * Additive to `@niho/photo-personal-cloud-contract` v2, which stays unchanged and personal-only. This is a
+ * Additive to `@niho/photo-personal-cloud-contract` v2, whose library and photo capabilities stay personal-only.
+ * Its usage response has an optional combined-owner breakdown so older v2 clients remain compatible. This is a
  * client/connector port: no HTTP routes, DB schema, storage locators, credentials or production enablement.
  * Shared shapes from #195 (upload ticket, content stream), #196 (full recipe, conflicts) and #197 (renderer
  * capability) are reused from v2 rather than redefined.
@@ -702,24 +703,33 @@ export interface MemberJoinedEvent {
 }
 
 // ---------------------------------------------------------------------------------------------------------
-// Owner-charged storage outside the personal v2 pool
+// Owner-charged storage shared with personal v2
 
 /**
- * Hosted previews, renditions and export staging, charged to the library/album owner (Epic §3). `quotaBytes` is
- * server policy decided under Epic §14 and is never defaulted to the personal v2 5 GiB pool. Members never see it.
+ * Hosted previews, masks, renditions and export staging, charged to the library/album owner (Epic §3). When the
+ * combined owner quota fields are present, `quotaBytes`, `usedBytes`, `reservedBytes` and `availableBytes` cover
+ * both personal v2 and shared storage. Older servers may omit all three breakdown fields. Members never receive
+ * this owner-level usage.
  */
 export interface SharedStorageUsage {
   readonly owner: UserRef;
   readonly quotaBytes: number;
-  /** previewBytes + maskBytes + renditionBytes + exportStagingBytes. */
+  /** Personal bytes plus the shared components below when personalBytes is present. */
   readonly usedBytes: number;
+  /** Shared previews, masks, renditions and export staging. */
   readonly previewBytes: number;
   /** Mask surfaces of hosted libraries; unlike previews they cannot be regenerated. */
   readonly maskBytes: number;
   readonly renditionBytes: number;
   readonly exportStagingBytes: number;
+  /** Personal originals and masks included in usedBytes for the combined owner quota. */
+  readonly personalBytes?: number;
+  /** Personal reservations included in reservedBytes for the combined owner quota. */
+  readonly personalReservedBytes?: number;
+  /** Shared-album reservations included in reservedBytes for the combined owner quota. */
+  readonly sharedReservedBytes?: number;
   readonly reservedBytes: number;
-  /** quotaBytes - usedBytes - reservedBytes. */
+  /** quotaBytes - usedBytes - reservedBytes, floored at zero if existing data exceeds the new combined limit. */
   readonly availableBytes: number;
 }
 
