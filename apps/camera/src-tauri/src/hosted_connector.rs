@@ -516,39 +516,48 @@ fn hosted_index_store_operation(scope: &Path, request: IndexStoreRequest) -> Res
           entry,
         ));
       }
-      let mut photo_map = match hosted_index_photo_map(scope) {
-        Some(map) => map,
-        None => rebuild_hosted_index_photo_map(scope)?,
-      };
+      let mut photo_map = None;
+      let mut photo_map_changed = false;
       for (shard_id, changes) in grouped {
         let mut shard = read_hosted_index_shard(scope, &shard_id)?;
         for (local_key, next_photo_id, entry) in changes {
-          if let Some(previous) = shard
+          let previous = shard
             .get(&local_key)
-            .and_then(|previous| previous.get("photoId").and_then(Value::as_str).map(str::to_owned))
-          {
-            if next_photo_id.as_deref() != Some(previous.as_str())
-              && photo_map.get(&previous).is_some_and(|key| key == &local_key)
-            {
-              photo_map.remove(&previous);
+            .and_then(|previous| previous.get("photoId").and_then(Value::as_str).map(str::to_owned));
+          if previous != next_photo_id {
+            if photo_map.is_none() {
+              photo_map = Some(match hosted_index_photo_map(scope) {
+                Some(map) => map,
+                None => rebuild_hosted_index_photo_map(scope)?,
+              });
             }
-          }
-          if let Some(photo_id) = next_photo_id {
-            if photo_map.get(&photo_id).is_some_and(|existing| existing != &local_key) {
-              return Err(internal());
+            let map = photo_map.as_mut().ok_or_else(internal)?;
+            if let Some(previous) = previous {
+              if map.get(&previous).is_some_and(|key| key == &local_key) {
+                map.remove(&previous);
+              }
             }
-            photo_map.insert(photo_id, local_key.clone());
+            if let Some(photo_id) = next_photo_id {
+              if map.get(&photo_id).is_some_and(|existing| existing != &local_key) {
+                return Err(internal());
+              }
+              map.insert(photo_id, local_key.clone());
+            }
+            photo_map_changed = true;
           }
           shard.insert(local_key, entry);
         }
         let path = scope.join("entries").join(format!("{shard_id}.json"));
         write_private_json(&path, &json!(shard), MAX_INDEX_SHARD_BYTES as usize)?;
       }
-      write_private_json(
-        &scope.join("photo-ids.json"),
-        &json!(photo_map),
-        MAX_INDEX_RESPONSE_BYTES,
-      )?;
+      if photo_map_changed {
+        let photo_map = photo_map.ok_or_else(internal)?;
+        write_private_json(
+          &scope.join("photo-ids.json"),
+          &json!(photo_map),
+          MAX_INDEX_RESPONSE_BYTES,
+        )?;
+      }
       Ok(Value::Null)
     }
     "entries" => Ok(Value::Array(hosted_index_entries(scope)?)),

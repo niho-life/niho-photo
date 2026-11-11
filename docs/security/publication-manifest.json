@@ -10349,8 +10349,8 @@
     },
     {
       "path": "apps/camera/src-tauri/src/hosted_connector.rs",
-      "sha256": "fe1ad6d099fb8ba920045b10b5560741e15c24eb673f8da5c0d3183a7d97971f",
-      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B03のlocal indexをprivate shard fileへ原子的に保存"
+      "sha256": "91286e19b77617887ff0284ab5bb2622f4bb5eb650b81980df3b4262b7be8842",
+      "origin": "Photo #244 / B03 の常設Mac接続用ソフトのMac native部分（launchd常駐・Keychainの端末資格・休止の抑止と検知・フォルダ登録画面・登録フォルダのread-only読出し）として作成。NIHO所有、第三者素材・実写真・実ユーザー・資格情報・内部URLを含まない。\n変更理由: B03のlocal indexをprivate shard fileへ原子的に保存\n変更理由: PR review: avoid rewriting photo ID map for hash-only updates"
     },
     {
       "path": "apps/camera/src-tauri/src/mask_detection_tests.rs",
@@ -10459,8 +10459,8 @@
     },
     {
       "path": "apps/camera/src/hosted-connector/persistent-stores.ts",
-      "sha256": "1cf3304c8b8c834e41f3618c12b9794a51cf0b52c950cf94e8586c00e77098fb",
-      "origin": "公開Issue #242/#244のため新規作成。Mac hosted connector のlocal index native portと、library単位に分離したpath-free replica IndexedDB storeを接続する。実写真・秘密・内部情報を含まない。\n変更理由: Mac native索引の初回読込をcacheし、書込不確定時はcacheを破棄して再読込する"
+      "sha256": "f98c3626c079ca9ac59e94f771bb707d9a071ebeb323ceeb47706ef7022d87a0",
+      "origin": "公開Issue #242/#244のため新規作成。Mac hosted connector のlocal index native portと、library単位に分離したpath-free replica IndexedDB storeを接続する。実写真・秘密・内部情報を含まない。\n変更理由: Mac native索引の初回読込をcacheし、書込不確定時はcacheを破棄して再読込する\n変更理由: PR review: bound native index recovery batches"
     },
     {
       "path": "apps/camera/src/local-library/local-photo-library-mask-surfaces.test.ts",

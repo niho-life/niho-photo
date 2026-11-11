@@ -12,6 +12,8 @@ import { HostedLibraryError, type ReplicaRecord, type ReplicaReplacement, type R
 
 const DATABASE_NAME = "niho-photo-hosted-connector";
 const DATABASE_VERSION = 1;
+const MAX_NATIVE_INDEX_BATCH_ENTRIES = 5_000;
+const MAX_NATIVE_INDEX_BATCH_BYTES = 32 << 20;
 const STORES = {
   replicaRecords: "replicaRecords",
   replicaMasks: "replicaMasks",
@@ -29,6 +31,27 @@ type ReplicaRecordRow = Readonly<{
   record: ReplicaRecord;
 }>;
 type ReplicaMaskRow = Readonly<{ scope: string; generation: string; id: string; bytes: Uint8Array }>;
+
+function* nativeIndexBatches(entries: readonly LocalIndexEntry[]): Generator<readonly LocalIndexEntry[]> {
+  const encoder = new TextEncoder();
+  let batch: LocalIndexEntry[] = [];
+  let batchBytes = 2; // JSON array brackets.
+  for (const entry of entries) {
+    const entryBytes = encoder.encode(JSON.stringify(entry)).byteLength;
+    const nextBytes = batchBytes + entryBytes + (batch.length > 0 ? 1 : 0); // Comma between entries.
+    if (entryBytes + 2 > MAX_NATIVE_INDEX_BATCH_BYTES) {
+      throw new RangeError("hosted connector index entry exceeds the native batch limit");
+    }
+    if (batch.length > 0 && (batch.length >= MAX_NATIVE_INDEX_BATCH_ENTRIES || nextBytes > MAX_NATIVE_INDEX_BATCH_BYTES)) {
+      yield batch;
+      batch = [];
+      batchBytes = 2;
+    }
+    batch.push(entry);
+    batchBytes += entryBytes + (batch.length > 1 ? 1 : 0);
+  }
+  if (batch.length > 0) yield batch;
+}
 
 function transaction(db: IDBDatabase, names: string[], mode: IDBTransactionMode): IDBTransaction {
   try {
@@ -88,9 +111,20 @@ function createNativeLocalIndexStore(invoke: Invoke): LocalIndexStore {
   let loadPromise: Promise<void> | null = null;
   let entryCache = new Map<string, LocalIndexEntry>();
   let photoIds = new Map<string, string>();
-  const request = (operation: string, payload: Record<string, unknown> = {}) => {
-    if (!scope) throw new Error("hosted connector storage scope is not paired");
-    return { request: { operation, connectorId: scope.connectorId, libraryId: scope.libraryId, ...payload } };
+  const request = (
+    operation: string,
+    payload: Record<string, unknown> = {},
+    requestedScope = scope,
+  ) => {
+    if (!requestedScope) throw new Error("hosted connector storage scope is not paired");
+    return {
+      request: {
+        operation,
+        connectorId: requestedScope.connectorId,
+        libraryId: requestedScope.libraryId,
+        ...payload,
+      },
+    };
   };
   const ensureLoaded = async () => {
     if (loaded) return;
@@ -141,19 +175,22 @@ function createNativeLocalIndexStore(invoke: Invoke): LocalIndexStore {
       await ensureLoaded();
       const capturedScope = scope;
       try {
-        await invoke("camera_hosted_connector_index_store", request("put", { entries: nextEntries }));
+        for (const entries of nativeIndexBatches(nextEntries)) {
+          if (scope !== capturedScope) throw new Error("hosted connector storage scope changed during write");
+          await invoke("camera_hosted_connector_index_store", request("put", { entries }, capturedScope));
+          if (scope !== capturedScope) throw new Error("hosted connector storage scope changed during write");
+          for (const entry of entries) {
+            const previous = entryCache.get(entry.localKey);
+            if (previous?.photoId && previous.photoId !== entry.photoId && photoIds.get(previous.photoId) === entry.localKey) {
+              photoIds.delete(previous.photoId);
+            }
+            entryCache.set(entry.localKey, entry);
+            if (entry.photoId) photoIds.set(entry.photoId, entry.localKey);
+          }
+        }
       } catch (error) {
         if (capturedScope) invalidate(capturedScope);
         throw error;
-      }
-      if (scope !== capturedScope) throw new Error("hosted connector storage scope changed during write");
-      for (const entry of nextEntries) {
-        const previous = entryCache.get(entry.localKey);
-        if (previous?.photoId && previous.photoId !== entry.photoId && photoIds.get(previous.photoId) === entry.localKey) {
-          photoIds.delete(previous.photoId);
-        }
-        entryCache.set(entry.localKey, entry);
-        if (entry.photoId) photoIds.set(entry.photoId, entry.localKey);
       }
     },
     async *entries() {
